@@ -291,7 +291,7 @@ export function SessionContextMenu({
 
   return (
     <div
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-50 select-none [-webkit-touch-callout:none]"
       onPointerDown={onClose}
       onContextMenu={(event) => {
         event.preventDefault()
@@ -301,7 +301,7 @@ export function SessionContextMenu({
       <div
         role="menu"
         aria-label="Chat actions"
-        className="fixed flex w-64 flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        className="fixed flex w-64 select-none [-webkit-touch-callout:none] flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         style={{ left, top }}
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.stopPropagation()}

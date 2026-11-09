@@ -1,13 +1,31 @@
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import type { ChatLoopService } from "../services/chat-loops.js";
 
+const ACTIONS: Record<string, string> = { "loop.goal": "Loop goal set.", "loop.check": "Loop checked.", "loop.pause": "Loop paused.", "loop.resume": "Loop resumed." };
+const clip = (text: string, max = 240) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+/** Human-readable loop summary for tool cards; the full state stays in data. */
+export function describeLoop(tool: string, loop: unknown): string {
+  const action = ACTIONS[tool];
+  if (!loop || typeof loop !== "object") return action ? `${action} No loop goal is set for this chat.` : "No loop goal is set for this chat.";
+  const state = loop as { goal?: string; criteria?: unknown[]; status?: string; iteration?: number; revision?: number; summary?: string; nextMessage?: string; evidence?: unknown[] };
+  const lines = [
+    `${action ? `${action} ` : ""}Status: ${state.status ?? "unknown"} · revision ${state.revision ?? 0} · turn ${state.iteration ?? 0}`,
+    `Goal: ${clip(state.goal ?? "")}`,
+    `Criteria: ${state.criteria?.length ?? 0} · evidence: ${state.evidence?.length ?? 0}`,
+  ];
+  if (state.summary) lines.push(`Progress: ${clip(state.summary)}`);
+  if (state.nextMessage) lines.push(`Next: ${clip(state.nextMessage)}`);
+  return lines.join("\n");
+}
+
 export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
   type LoopInput = { goal: string; criteria: string[]; executionCriteria?: number[]; revision: number; outcome: "continue" | "complete" | "waiting"; summary: string; nextMessage?: string; evidence?: string[]; executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }> };
-  const execute = (run: (input: LoopInput, context: ToolContext) => unknown) => async (input: unknown, context: ToolContext): Promise<ToolResult> => {
+  const execute = (tool: string, run: (input: LoopInput, context: ToolContext) => unknown) => async (input: unknown, context: ToolContext): Promise<ToolResult> => {
     try {
       if (!context.userId || (context.threadId && context.threadId !== context.sessionId)) throw new Error("Loop tools require an authenticated chat; thread workers cannot start chat loops");
       const data = await run(input as LoopInput, context);
-      return { ok: true, message: "Chat loop updated.", data };
+      return { ok: true, message: describeLoop(tool, data), data };
     } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "Loop operation failed" }; }
   };
   const base = { page: "chat" as const, risk: "low" as const, defaultConsentLevel: "none" as const, tier: "standard" as const, category: "meta" as const, source: "builtin" as const };
@@ -20,13 +38,13 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
         criteria: { type: "array", minItems: 1, maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
         executionCriteria: { type: "array", maxItems: 20, description: "Zero-based indices of criteria requiring a successful tracked terminal execution at completion. Use only for criteria verifiable by a terminal command.", items: { type: "number" } },
       }, required: ["goal", "criteria"] },
-      execute: execute((input, ctx) => service.goal(ctx.sessionId, input.goal, input.criteria, ctx.userId, input.executionCriteria)),
+      execute: execute("loop.goal", (input, ctx) => service.goal(ctx.sessionId, input.goal, input.criteria, ctx.userId, input.executionCriteria)),
     },
     {
       ...base, name: "loop.status", displayName: "Chat loop status",
       description: "Read this chat's loop goal, acceptance criteria, current revision, progress, next message and verification evidence.",
       parameters: { type: "object", properties: {} },
-      execute: execute((_input, ctx) => service.get(ctx.sessionId, ctx.userId)),
+      execute: execute("loop.status", (_input, ctx) => service.get(ctx.sessionId, ctx.userId)),
     },
     {
       ...base, name: "loop.check", displayName: "Check loop goal",
@@ -38,13 +56,13 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
         nextMessage: { type: "string", maxLength: 8000 },
         evidence: { type: "array", maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
       }, required: ["revision", "outcome", "summary"] },
-      execute: execute((input, ctx) => service.checkMonitored(ctx.sessionId, input, ctx.userId, ctx.apiKeys, ctx.signal)),
+      execute: execute("loop.check", (input, ctx) => service.checkMonitored(ctx.sessionId, input, ctx.userId, ctx.apiKeys, ctx.signal)),
     },
     ...(["pause", "resume"] as const).map(action => ({
       ...base, name: `loop.${action}`, displayName: `${action === "pause" ? "Pause" : "Resume"} chat loop`,
       description: action === "pause" ? "Pause automatic continuation after the current turn. The goal and progress remain saved." : "Resume this chat's saved goal loop after the user requests continuation. Does not bypass pending questions or approvals.",
       parameters: { type: "object" as const, properties: {} },
-      execute: execute((_input, ctx) => service.control(ctx.sessionId, action, ctx.userId)),
+      execute: execute(`loop.${action}`, (_input, ctx) => service.control(ctx.sessionId, action, ctx.userId)),
     })),
   ];
 }

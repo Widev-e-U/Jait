@@ -820,6 +820,34 @@ describe("mcp-server", () => {
     });
   });
 
+  it("passes the authenticated user's saved API keys into MCP tool context", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const registry = new ToolRegistry();
+    const userId = "user-keys";
+    sessionService.create({ userId, name: "Keys", projectPath: "/tmp/keys" });
+    const token = await signAuthToken({ id: userId, username: "alice" }, "test-secret");
+    let captured: Record<string, string> | undefined;
+    registry.register({
+      name: "surfaces.start", description: "Start a surface", tier: "standard", category: "surfaces", source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute(_input, context) { captured = context.apiKeys; return { ok: true, message: "ok" }; },
+    });
+    const userService = { getSettings: (id: string) => ({ apiKeys: id === userId ? { JEV_API_KEY: "secret-key" } : {} }) } as unknown as UserService;
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService, userService, config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as any });
+
+    const response = await app.inject({
+      method: "POST", url: "/mcp",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "surfaces.start", arguments: {} } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(captured).toEqual({ JEV_API_KEY: "secret-key" });
+  });
+
   it("uses the global last active session for unauthenticated local MCP tool calls", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

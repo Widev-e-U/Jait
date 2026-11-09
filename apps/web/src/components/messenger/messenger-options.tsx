@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMessenger } from './messenger-provider'
 import { messengerError } from '@/lib/messenger/model'
+import { TeamsConnectionCard } from './teams-connection-card'
 
 const BRIDGES = [
   ['WhatsApp', 'whatsappbot'], ['Telegram', 'telegrambot'], ['Signal', 'signalbot'], ['Teams', 'teamsbot'],
@@ -72,6 +73,8 @@ export function MessengerOptions({ onBack, onOpenConversation }: {
         </form>
         <p className="text-xs text-muted-foreground">Teams tenant coverage depends on the installed bridge and each organization’s policies.</p>
       </section>
+
+      <TeamsConnectionCard className={card} />
 
       <section aria-label="Assistant access" className={card}>
         <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={snapshot.assistantAccess} disabled={!ready} onChange={event => store.setAssistantAccess(event.target.checked)} />Allow assistant access</label>

@@ -11,7 +11,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 import { AcpProvider, type AcpProviderConfig } from "../providers/acp-provider.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ClaudeRateLimitInfo, ProviderUsageService } from "./provider-usage.js";
-import { fetchCodexRateLimits } from "./provider-quota-fetchers.js";
+import { fetchClaudeUsage, fetchCodexRateLimits } from "./provider-quota-fetchers.js";
 
 export interface ProviderAccountRecord {
   id: string;
@@ -101,6 +101,22 @@ export class ProviderAccountService {
         this.usageService?.recordCodexRateLimits(account.id, response);
       } catch (error) {
         errors[account.id] = error instanceof Error ? error.message : "Codex usage refresh failed";
+      }
+    }));
+    await Promise.all(this.list(userId).filter(account => account.providerType === "claude-code").map(async account => {
+      // Remote nodes record their own snapshots from live rate-limit events.
+      if (account.nodeId !== "gateway") return;
+      try {
+        for (const window of await fetchClaudeUsage(join(this.accountHome(account.id), ".claude"))) {
+          this.usageService?.recordClaudeRateLimit(account.id, account.providerType, {
+            status: window.utilization >= 1 ? "rejected" : "allowed",
+            rateLimitType: window.type,
+            utilization: window.utilization,
+            ...(window.resetsAt != null ? { resetsAt: window.resetsAt } : {}),
+          });
+        }
+      } catch (error) {
+        errors[account.id] = error instanceof Error ? error.message : "Claude usage refresh failed";
       }
     }));
     await Promise.all(this.list(userId).filter(account => account.providerType === "opencode").map(async account => {

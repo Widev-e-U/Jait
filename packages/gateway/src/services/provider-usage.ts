@@ -96,6 +96,28 @@ export class ProviderUsageService {
   }
 
   recordClaudeRateLimit(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
+    // Claude reports every window's utilization in unifiedWindows; the top-level
+    // fields only describe the representative window and often lack utilization.
+    const windows = info.unifiedWindows;
+    if (windows && typeof windows === "object" && !Array.isArray(windows)) {
+      const { unifiedWindows: _windows, ...rest } = info;
+      for (const [type, window] of Object.entries(windows as Record<string, { utilization?: unknown; resetsAt?: unknown }>)) {
+        if (!window || typeof window !== "object") continue;
+        const representative = type === info.rateLimitType;
+        this.recordClaudeWindow(accountId, providerType, {
+          ...rest,
+          status: representative ? info.status : (typeof window.utilization === "number" && window.utilization >= 1 ? "rejected" : "allowed"),
+          rateLimitType: type as ClaudeRateLimitInfo["rateLimitType"],
+          utilization: typeof window.utilization === "number" ? window.utilization : undefined,
+          resetsAt: typeof window.resetsAt === "number" ? window.resetsAt : undefined,
+        });
+      }
+      if (info.rateLimitType && info.rateLimitType in windows) return;
+    }
+    this.recordClaudeWindow(accountId, providerType, info);
+  }
+
+  private recordClaudeWindow(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
     const rateLimitType = info.rateLimitType ?? "unknown";
     const updatedAt = new Date().toISOString();
     const resetsAt = typeof info.resetsAt === "number" ? new Date(info.resetsAt * 1000).toISOString() : null;

@@ -1047,7 +1047,7 @@ export function summarizeCollapsedToolCalls(calls: ToolCallInfo[]): string {
   if (calls.length === 0) return '0 tool calls'
 
   const counts = new Map<string, number>()
-  for (const call of calls) {
+  for (const call of calls.map(canonicalizeExecuteCall)) {
     const category = getCollapsedToolCategory(call.tool)
     counts.set(category, (counts.get(category) ?? 0) + 1)
   }
@@ -1061,7 +1061,7 @@ export function getToolCallWrapperIconKind(calls: ToolCallInfo[]): 'terminal' | 
   let hasMcp = false
   let hasWeb = false
 
-  for (const call of calls) {
+  for (const call of calls.map(canonicalizeExecuteCall)) {
     const normalized = normalizeTool(call.tool)
     const displayTool = getJaitMcpToolName(normalized) ?? normalized
     if (displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) return 'terminal'
@@ -3910,6 +3910,20 @@ function TodoToolListView({
   )
 }
 
+/**
+ * Claude Code (ACP) reports a shell call with the command line as its tool
+ * name and `kind: "execute"` in the args, where Codex sends `tool: "execute"`.
+ * Fold the former into the latter so both get the same terminal card body.
+ */
+function canonicalizeExecuteCall(call: ToolCallInfo): ToolCallInfo {
+  if (call.tool === 'execute') return call
+  const args = call.args
+  if (!args || typeof args !== 'object' || args.kind !== 'execute') return call
+  const command = typeof args.command === 'string' ? args.command : typeof args.title === 'string' ? args.title : null
+  if (command === null || call.tool !== command) return call
+  return { ...call, tool: 'execute' }
+}
+
 function ToolCallCardInner({
   call,
   childCalls,
@@ -3922,7 +3936,7 @@ function ToolCallCardInner({
   hideTopConnector = false,
   hideBottomConnector = false,
 }: ToolCallCardProps) {
-  call = coalesceQuestionCalls([call])[0]
+  call = canonicalizeExecuteCall(coalesceQuestionCalls([call])[0])
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   // Cards created mid-stream (pending/running) mount open underneath the

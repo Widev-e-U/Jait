@@ -1,4 +1,4 @@
-import { Mic, MicOff, PhoneOff, RotateCcw, Sparkles } from 'lucide-react'
+import { Mic, MicOff, PhoneOff, RotateCcw, Ear } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipHint } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { useVoiceAssistant } from '@/hooks/useVoiceAssistant'
@@ -51,7 +51,7 @@ export function VoiceMicButtonMobile({ voiceOverlayOpen, wakeWord, wakeWordEnabl
               <Mic className="mr-2 h-4 w-4" />Start voice conversation
             </DropdownMenuItem>
             {wakeWord.isSupported && <DropdownMenuItem disabled={!canStartVoice && !wakeWordEnabled} onSelect={toggleWakeWord}>
-              <Sparkles className="mr-2 h-4 w-4" />{wakeLabelText}
+              <Ear className="mr-2 h-4 w-4" />{wakeLabelText}
             </DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -65,7 +65,7 @@ export function VoiceMicButtonMobile({ voiceOverlayOpen, wakeWord, wakeWordEnabl
         {wakeWord.isSupported && <TooltipHint content={wakeWord.error ?? wakeLabel(wakeWord, wakeWordEnabled)}><button onClick={toggleWakeWord} disabled={!canStartVoice && !wakeWordEnabled} aria-label={wakeLabelText} aria-pressed={wakeWordEnabled}
 
           className={`flex h-10 w-6 items-center justify-center rounded-lg transition-colors ${wakeWord.error ? 'text-destructive' : wakeWordEnabled ? 'text-sky-500' : 'text-muted-foreground'}`}>
-          <Sparkles className={`h-4 w-4 ${wakeWord.isListening || wakeWord.isChecking ? 'motion-safe:animate-pulse' : ''}`} />
+          <Ear className={`h-4 w-4 ${wakeWord.isListening || wakeWord.isChecking ? 'motion-safe:animate-pulse' : ''}`} />
         </button></TooltipHint>}
       </div>
     </div>
@@ -123,7 +123,7 @@ export function VoiceWakeWordPill({ voiceOverlayOpen, wakeWord, wakeWordEnabled,
       {wakeWord.isSupported && <Tooltip>
         <TooltipTrigger asChild><button onClick={toggleWakeWord} disabled={!canStartVoice && !wakeWordEnabled} aria-pressed={wakeWordEnabled} aria-label={wakeWordEnabled ? 'Disable wake word' : 'Enable wake word'}
           className={`ui-pill cursor-pointer transition-colors ${wakeWord.error && wakeWordEnabled ? 'text-destructive' : wakeWordEnabled ? 'text-sky-500' : 'text-muted-foreground'}`}>
-          <Sparkles className="h-3 w-3" /><span className="text-xs">{!canStartVoice && wakeWordEnabled ? 'Sign in for wake word' : wakeLabel(wakeWord, wakeWordEnabled)}</span>
+          <Ear className="h-3 w-3" /><span className="text-xs">{!canStartVoice && wakeWordEnabled ? 'Sign in for wake word' : wakeLabel(wakeWord, wakeWordEnabled)}</span>
         </button></TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-72">{wakeWord.error && wakeWordEnabled ? wakeWord.error : wakeWordEnabled
           ? 'Say “Hey Jait” to start. Ambiguous phrases may be checked by your configured System One model; browser speech recognition may use its provider.'

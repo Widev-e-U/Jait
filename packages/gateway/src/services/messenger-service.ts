@@ -264,6 +264,10 @@ class Connection {
   private presenceProbes = new Map<string, number>();
   /** `m.direct` account data: room id -> the single direct counterpart. */
   private direct = new Map<string, string>();
+  /** Timestamp up to which a room counts as read, per room. */
+  private readMarkers = new Map<string, number>();
+  /** Memoised unread counts, keyed by room id and invalidated per event. */
+  private unreadMemo = new Map<string, { signature: string; unread: number }>();
   private history: MessengerHistory | null = null;
   private retryTimer?: ReturnType<typeof setTimeout>;
   private work: Promise<unknown> = Promise.resolve();
@@ -287,14 +291,66 @@ class Connection {
     this.presence.clear();
     this.presenceProbes.clear();
     this.direct.clear();
+    this.readMarkers.clear();
+    this.unreadMemo.clear();
   }
-  /** Merge cached presence into a room summary before it leaves the gateway. */
+  /** Position of the user's own read receipt in the timeline. */
+  private readPosition(room: Room): number {
+    const self = this.session?.userId;
+    if (!self) return 0;
+    let position = this.readMarkers.get(room.summary.id) ?? 0;
+    for (const users of Object.values(room.receipts)) {
+      const own = users[self];
+      if (own?.ts) position = Math.max(position, own.ts);
+    }
+    return position;
+  }
+
+  /**
+   * Unread messages per room, derived from the loaded timeline rather than from
+   * `unread_notifications`. Synapse only counts mentions and direct messages
+   * there, so rooms fed by bridges (Teams, WhatsApp, …) never report unread
+   * state and Jait would never notify about them.
+   */
+  private unreadCount(room: Room): number {
+    const self = this.session?.userId;
+    if (!self) return 0;
+    const last = room.events.at(-1);
+    let read = this.readPosition(room);
+    if (read === 0) {
+      // First sighting of a room without any read receipt: treat the loaded
+      // history as read so bridged backlogs neither flood the badge nor fire
+      // notifications for messages that arrived while Jait was offline.
+      read = last?.origin_server_ts ?? 0;
+      this.readMarkers.set(room.summary.id, read);
+    }
+    const signature = `${last?.event_id ?? ''}:${room.events.length}:${read}`;
+    const memo = this.unreadMemo.get(room.summary.id);
+    if (memo?.signature === signature) return memo.unread;
+    let unread = 0;
+    for (const event of room.events) {
+      if (event.type !== 'm.room.message' && event.type !== 'm.sticker') continue;
+      if (!event.sender || event.sender === self) continue;
+      if (event.unsigned?.redacted_because) continue;
+      if (event.content?.['m.relates_to']?.rel_type === 'm.replace') continue;
+      if ((event.origin_server_ts ?? 0) > read) unread += 1;
+    }
+    this.unreadMemo.set(room.summary.id, { signature, unread });
+    return unread;
+  }
+
+  /** Merge cached presence and derived unread state into a room summary. */
   private roomSummary(room: Room): MessengerRoom {
+    const unread = this.unreadCount(room);
+    const base: MessengerRoom = {
+      ...room.summary,
+      unread: room.summary.markedUnread ? Math.max(unread, 1) : unread,
+    };
     const peer = room.peer;
-    if (!peer) return room.summary;
+    if (!peer) return base;
     const cached = this.presence.get(peer.userId);
     return {
-      ...room.summary,
+      ...base,
       peer: {
         ...peer,
         presence: cached?.presence ?? 'unknown',
@@ -1022,8 +1078,16 @@ class Connection {
             [this.session!.userId]: { ts: Date.now() },
           };
         }
-        if (!body.eventId || eventIndex === room!.events.length - 1)
-          room!.summary.unread = 0;
+        // Reading a specific message only clears everything up to it; reading
+        // the latest one (or the room as a whole) clears the whole room.
+        const readTs = body.eventId
+          ? (room!.events[eventIndex]?.origin_server_ts ?? Date.now())
+          : Date.now();
+        this.readMarkers.set(
+          id,
+          Math.max(this.readMarkers.get(id) ?? 0, readTs),
+        );
+        room!.summary.unread = this.unreadCount(room!);
       }
       await client.doRequest(
         'PUT',

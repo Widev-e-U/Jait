@@ -7,6 +7,7 @@ import {
   messengerHomeserver,
 } from '../services/messenger-service.js';
 import type { MessengerBridge } from '../services/messenger-bridge.js';
+import { bridgeStatuses } from '../services/bridge-status.js';
 
 const roomId = z.string().min(3).max(512).startsWith('!');
 const login = z
@@ -92,6 +93,20 @@ export function registerMessengerRoutes(
   app.addHook('onClose', async () => {
     bridge?.setGatewayHandler(undefined);
     await messenger.stop();
+  });
+  app.get('/api/messenger/bridge-status', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    const query = request.query as { refresh?: string };
+    const force = query.refresh === '1' || query.refresh === 'true';
+    return { bridges: await bridgeStatuses(force) };
+  });
+  app.post('/api/messenger/bridge-status', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    return { bridges: await bridgeStatuses(true) };
   });
   app.get('/api/messenger', async (request, reply) => {
     const user = await auth(request, reply);

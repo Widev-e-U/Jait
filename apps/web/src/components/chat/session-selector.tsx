@@ -1,6 +1,6 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
+import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -31,6 +31,7 @@ import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useTouchSidebarDrag } from '@/hooks/useTouchSidebarDrag'
 import {
   DEFAULT_SESSION_SIDEBAR_SPLIT,
   clampSessionSidebarSplit,
@@ -460,6 +461,85 @@ export function SessionSelector({
     return validateProjectMove(projects, draggedId, targetId) === null
   }, [onMoveProject, projects],)
 
+  // Touch screens never fire HTML5 drag events, so mobile rows get a grip
+  // handle that drives the same reorder/move actions from pointer events.
+  type TouchSource =
+    | { kind: 'session'; id: string; projectId: string | null; streaming: boolean; label: string }
+    | { kind: 'project'; id: string; parentId: string | null; label: string }
+  type TouchTarget =
+    | { kind: 'session'; id: string; projectId: string | null; ids: string[] }
+    | { kind: 'project'; id: string; parentId: string | null; isFolder: boolean }
+  type TouchAction =
+    | { type: 'order'; scope: 'sessions' | 'projects'; storeKey: string; ids: string[]; source: string; target: string; after: boolean }
+    | { type: 'move-session'; sessionId: string; to: string | null; dropId: string }
+    | { type: 'move-project'; projectId: string; to: string | null; dropId: string }
+  const touchTargetsRef = useRef(new Map<string, TouchTarget>())
+  const touchDrag = useTouchSidebarDrag<TouchSource, TouchAction>({
+    resolve: (source, key, rect, clientY) => {
+      if (!key || normalizedSearchQuery) return null
+      if (key === 'zone:root' || key === 'zone:personal') {
+        const to = null
+        if (source.kind === 'session') {
+          if (!onMoveSession || source.streaming || source.projectId === null) return null
+          if (key === 'zone:root' && view !== 'combined') return null
+          return { type: 'move-session', sessionId: source.id, to, dropId: key === 'zone:root' ? '__root__' : '__personal__' }
+        }
+        if (key !== 'zone:root' || !onMoveProject || source.parentId === null) return null
+        return { type: 'move-project', projectId: source.id, to, dropId: '__root__' }
+      }
+      const target = touchTargetsRef.current.get(key)
+      if (!target || !rect) return null
+      const after = clientY >= rect.top + rect.height / 2
+      if (source.kind === 'session') {
+        if (target.kind === 'session') {
+          if (target.projectId !== source.projectId || target.id === source.id) return null
+          return { type: 'order', scope: 'sessions', storeKey: `sessions:${target.projectId ?? 'personal'}`, ids: target.ids, source: source.id, target: target.id, after }
+        }
+        if (!onMoveSession || source.streaming || source.projectId === target.id) return null
+        return { type: 'move-session', sessionId: source.id, to: target.id, dropId: target.id }
+      }
+      if (target.kind !== 'project' || target.id === source.id) return null
+      const edge = (clientY - rect.top) / rect.height
+      if (source.parentId === target.parentId && (!target.isFolder || edge < 0.25 || edge > 0.75)) {
+        return { type: 'order', scope: 'projects', storeKey: 'projects', ids: [], source: source.id, target: target.id, after: edge >= 0.5 }
+      }
+      if (target.isFolder && canDropProjectInto(source.id, target.id)) {
+        return { type: 'move-project', projectId: source.id, to: target.id, dropId: target.id }
+      }
+      return null
+    },
+    onPreview: (action) => {
+      if (action?.type === 'order') {
+        setDropTargetId(null)
+        setOrderTarget({ kind: action.scope === 'sessions' ? 'session' : 'project', id: action.target, after: action.after })
+      } else {
+        setOrderTarget(null)
+        setDropTargetId(action?.dropId ?? null)
+      }
+    },
+    onCommit: (action) => {
+      if (action.type === 'order') {
+        const ids = action.scope === 'projects'
+          ? orderSidebarItems(projects, manualOrder.projects).map((item) => item.id)
+          : action.ids
+        saveOrder(action.storeKey, ids, action.source, action.target, action.after)
+      } else if (action.type === 'move-session') onMoveSession?.(action.sessionId, action.to)
+      else onMoveProject?.(action.projectId, action.to)
+    },
+  })
+  const touchHandle = (source: TouchSource) => isMobile ? (
+    <button
+      type="button"
+      aria-label={`Drag ${source.label}`}
+      className="flex h-5 w-4 !min-w-0 shrink-0 touch-none cursor-grab items-center justify-center rounded text-muted-foreground/70 active:text-foreground"
+      onPointerDown={(event) => { cancelLongPress(); touchDrag.start(source, event) }}
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}
+    >
+      <GripVertical className="h-3.5 w-3.5" />
+    </button>
+  ) : null
+
   const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel || onRenameSession)
 
   const [renameTarget, setRenameTarget] = useState<{ sessionId: string; name: string } | null>(null)
@@ -600,6 +680,14 @@ export function SessionSelector({
 
   return (
     <div className="flex flex-col h-full">
+      {touchDrag.active && (
+        <div
+          className="pointer-events-none fixed z-[100] max-w-[70vw] truncate rounded-md border bg-popover px-2 py-1 text-xs shadow-lg"
+          style={{ left: touchDrag.active.x + 12, top: touchDrag.active.y - 14 }}
+        >
+          {touchDrag.active.source.label}
+        </div>
+      )}
       {/* The search field is the whole row: no side padding, no trailing
           action buttons. New projects and chats are created from the section
           headers below. */}
@@ -632,6 +720,7 @@ export function SessionSelector({
                 }`}
                 // Dropping on the section header is the desktop equivalent of
                 // "Move to top level".
+                data-dnd-key="zone:root"
                 onDragOver={(e) => {
                   const kind = getSidebarDragKind(e.dataTransfer.types)
                   if (kind === 'session') {
@@ -745,15 +834,17 @@ export function SessionSelector({
                     ? sortedSessions
                     : sortedSessions.slice(0, visibleSessionLimit)
                   const hasOlderSessions = !normalizedSearchQuery && sortedSessions.length > recentSessions.length
+                  touchTargetsRef.current.set(`project:${project.id}`, { kind: 'project', id: project.id, parentId: project.parentId ?? null, isFolder })
                   return (
                     <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
                     <div
+                      data-dnd-key={`project:${project.id}`}
                       style={orderTarget?.kind === 'project' && orderTarget.id === project.id ? { boxShadow: `inset 0 ${orderTarget.after ? '-2px' : '2px'} 0 hsl(var(--primary))` } : undefined}
-                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      className={`group grid w-full ${isMobile ? 'grid-cols-[auto,auto,minmax(0,1fr),auto]' : 'grid-cols-[auto,minmax(0,1fr),auto]'} items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
-                      draggable={true}
+                      draggable={!isMobile}
                       onDragStart={(e) => {
                         dragProjectRef.current = project.id
                         e.dataTransfer.effectAllowed = 'copyMove'
@@ -842,6 +933,7 @@ export function SessionSelector({
                       }}
                       {...projectRowMenuHandlers(project.id)}
                     >
+                      {touchHandle({ kind: 'project', id: project.id, parentId: project.parentId ?? null, label: project.title || (isFolder ? 'folder' : 'project') })}
                       {hasChildren ? (
                         <button
                           type="button"
@@ -1131,9 +1223,12 @@ export function SessionSelector({
                         {recentSessions.map((session) => {
                           const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)
                           const isStreaming = streamingSessionIds?.has(session.id) ?? false
+                          touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: project.id, ids: sortedSessions.map((item) => item.id) })
                           return (
                             <SessionRow
                               key={session.id}
+                              dndKey={`session:${session.id}`}
+                              dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: project.id, streaming: isStreaming, label: session.name || 'chat' })}
                               session={session}
                               isActive={isActiveSession}
                               isStreaming={isStreaming}
@@ -1142,7 +1237,7 @@ export function SessionSelector({
                               wait={waitBySessionId?.get(session.id)}
                               dragProps={{
                                 ...sessionOrderProps(session.id, project.id, sortedSessions.map((item) => item.id)),
-                                draggable: true,
+                                draggable: !isMobile,
                                 onDragStart: (e) => {
                                   e.dataTransfer.effectAllowed = 'copyMove'
                                   if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
@@ -1260,6 +1355,7 @@ export function SessionSelector({
                     className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
                       dropTargetId === '__personal__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
                     }`}
+                data-dnd-key="zone:personal"
                 onDragOver={(e) => {
                   const kind = getSidebarDragKind(e.dataTransfer.types)
                   if (kind !== 'session' || !onMoveSession) return
@@ -1319,9 +1415,12 @@ export function SessionSelector({
                     {recentPersonalSessions.map((session) => {
                       const isActive = openSessionIds?.has(session.id) ?? (activeProjectId === null && session.id === activeSessionId)
                       const isStreaming = streamingSessionIds?.has(session.id) ?? false
+                  touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: null, ids: orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id) })
                   return (
                     <SessionRow
                       key={session.id}
+                      dndKey={`session:${session.id}`}
+                      dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: null, streaming: isStreaming, label: session.name || 'chat' })}
                       session={session}
                       isActive={isActive}
                       isStreaming={isStreaming}
@@ -1331,7 +1430,7 @@ export function SessionSelector({
                       fallbackLabel="Personal chat"
                       dragProps={{
                         ...sessionOrderProps(session.id, null, orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id)),
-                        draggable: true,
+                        draggable: !isMobile,
                         onDragStart: (e) => {
                           e.dataTransfer.effectAllowed = 'copyMove'
                           if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)

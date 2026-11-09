@@ -1,27 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  X,
-  Trash2,
-  Copy,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Search,
-  ArrowDown,
-  Route,
-  MessageSquareText,
-  Sparkles,
-  Gauge,
-  Wrench,
-  CheckCircle2,
-  AlertCircle,
-  Radio,
-  Terminal,
-  FileText,
-  Globe2,
-  Bot,
-  Clock3,
-} from 'lucide-react'
+import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search, ArrowDown, Route, MessageSquareText, Gauge, Wrench, CheckCircle2, AlertCircle, Radio, Terminal, FileText, Globe2, Bot, Clock3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { clearSSEDebugEvents, useSSEDebugEvents } from './sse-debug-panel'
@@ -119,7 +97,7 @@ function getToolIcon(tool: string) {
 
 function getStepIcon(step: TrajectoryStep) {
   if (step.kind === 'turn') return MessageSquareText
-  if (step.kind === 'assistant') return Sparkles
+  if (step.kind === 'assistant') return Bot
   if (step.kind === 'context') return Gauge
   if (step.kind === 'tool') return getToolIcon(step.tool)
   if (step.kind === 'steering') return Radio

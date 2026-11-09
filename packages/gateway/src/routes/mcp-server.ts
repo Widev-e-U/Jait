@@ -68,6 +68,8 @@ interface McpToolContextOverrides {
   providerId?: string;
   model?: string;
   runtimeMode?: string;
+  /** Server-side user settings keys; never sent to the model. */
+  apiKeys?: Record<string, string>;
 }
 
 type McpToolContent =
@@ -217,6 +219,21 @@ function resolveMcpToolContextOverrides(
 }
 
 async function resolveMcpToolContext(
+  request: FastifyRequest | null,
+  config: AppConfig,
+  sessionService?: SessionService,
+  userService?: UserService,
+  sessionState?: SessionStateService,
+  threadService?: ThreadService,
+  params?: Record<string, unknown>,
+): Promise<McpToolContextOverrides> {
+  const resolved = await resolveMcpIdentityContext(request, config, sessionService, userService, sessionState, threadService, params);
+  // Native chats load user API keys per request; MCP tools (System One, Home Assistant, ...) need the same.
+  const apiKeys = resolved.userId ? userService?.getSettings(resolved.userId).apiKeys : undefined;
+  return apiKeys ? { ...resolved, apiKeys } : resolved;
+}
+
+async function resolveMcpIdentityContext(
   request: FastifyRequest | null,
   config: AppConfig,
   sessionService?: SessionService,
@@ -753,6 +770,7 @@ export async function handleMcpRequest(
         providerId: contextOverrides.providerId,
         model: contextOverrides.model,
         runtimeMode: contextOverrides.runtimeMode,
+        apiKeys: contextOverrides.apiKeys,
         onOutputChunk: onProgress,
       };
 

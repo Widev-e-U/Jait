@@ -12,6 +12,7 @@ import type { LucideIcon } from 'lucide-react'
 import type {
   HTMLAttributes,
   MouseEventHandler,
+  ReactNode,
 } from 'react'
 import { readChatLoop, type SessionWait, type SessionWaitKind } from '@jait/shared'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
@@ -58,6 +59,10 @@ export interface SessionRowProps {
   onRowContextMenu?: MouseEventHandler<HTMLDivElement>
   /** Drag handlers (draggable/onDragStart/onDragEnd) built by the sidebar. */
   dragProps?: Pick<HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd' | 'onDragOver' | 'onDragLeave' | 'onDrop' | 'style'>
+  /** Touch drag handle rendered before the row's status icon. */
+  dragHandle?: ReactNode
+  /** Identifies this row to the touch drag-and-drop hit test. */
+  dndKey?: string
   /** Extra long-press/pointer handlers spread onto the row. */
   longPressProps?: HTMLAttributes<HTMLDivElement>
 }
@@ -113,6 +118,8 @@ export function SessionRow({
   onRowClick,
   onRowContextMenu,
   dragProps,
+  dragHandle,
+  dndKey,
   longPressProps,
 }: SessionRowProps) {
   const chatError = parseSessionChatError(session.metadata)
@@ -125,14 +132,16 @@ export function SessionRow({
   })
   return (
     <div
-      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors ${
+      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${
         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
       }`}
       onClick={onRowClick}
       onContextMenu={onRowContextMenu}
+      data-dnd-key={dndKey}
       {...dragProps}
       {...longPressProps}
     >
+      {dragHandle}
       {wait && waitIcon ? (
         <SessionWaitIcon wait={wait} Icon={waitIcon} />
       ) : isAwaitingAnswer ? (

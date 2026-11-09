@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 export interface CodexRateLimitWindow {
@@ -414,4 +416,59 @@ export function describeOllamaUsageGap(options: {
     return `Signed in to Ollama Cloud as ${signedInAs}${planSuffix}, but this Ollama server does not report subscription usage. Add an Ollama Cloud API key to see quota.`;
   }
   return "This Ollama instance is not signed in to Ollama Cloud, so there is no subscription usage to report.";
+}
+
+export type ClaudeUsageWindowType = "five_hour" | "seven_day" | "seven_day_opus" | "seven_day_sonnet";
+
+export interface ClaudeUsageWindow {
+  type: ClaudeUsageWindowType;
+  /** Fraction of the window used, 0..1. */
+  utilization: number;
+  /** Unix seconds, or null when the provider reports no reset. */
+  resetsAt: number | null;
+}
+
+const CLAUDE_USAGE_WINDOWS: ClaudeUsageWindowType[] = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"];
+
+/** Read the account's own Claude OAuth token (never logged or returned). */
+function readClaudeAccessToken(claudeConfigDir: string): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(join(claudeConfigDir, ".credentials.json"), "utf8")) as {
+      claudeAiOauth?: { accessToken?: unknown; expiresAt?: unknown };
+    };
+    const oauth = parsed.claudeAiOauth;
+    if (typeof oauth?.accessToken !== "string" || !oauth.accessToken) return null;
+    // An expired token is refreshed by the Claude CLI on its next run; do not call with it.
+    if (typeof oauth.expiresAt === "number" && oauth.expiresAt < Date.now()) return null;
+    return oauth.accessToken;
+  } catch {
+    return null;
+  }
+}
+
+/** Side-effect-free read of Claude subscription windows for one account config dir. */
+export async function fetchClaudeUsage(claudeConfigDir: string): Promise<ClaudeUsageWindow[]> {
+  const token = readClaudeAccessToken(claudeConfigDir);
+  if (!token) throw new Error("Claude is not signed in (or its session expired). Start a Claude chat to re-authenticate.");
+  const response = await fetch("https://api.anthropic.com/api/oauth/usage", {
+    headers: { Authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20", Accept: "application/json" },
+    redirect: "error", signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(response.status === 401 || response.status === 403
+    ? "Claude rejected this account's session. Start a Claude chat to re-authenticate."
+    : `Claude usage request failed (${response.status}).`);
+  const body = await response.json() as Record<string, { utilization?: unknown; resets_at?: unknown } | null>;
+  const windows: ClaudeUsageWindow[] = [];
+  for (const type of CLAUDE_USAGE_WINDOWS) {
+    const window = body?.[type];
+    if (!window || typeof window.utilization !== "number" || !Number.isFinite(window.utilization)) continue;
+    const reset = typeof window.resets_at === "string" ? Date.parse(window.resets_at) : NaN;
+    windows.push({
+      type,
+      utilization: Math.max(0, window.utilization / 100),
+      resetsAt: Number.isFinite(reset) ? Math.floor(reset / 1000) : null,
+    });
+  }
+  if (windows.length === 0) throw new Error("Claude returned an unexpected usage response.");
+  return windows;
 }
