@@ -34,6 +34,7 @@ pub mod context_control;
 
 pub mod steering_dispatcher;
 
+pub mod acp_adapter;
 pub mod acp_provider;
 
 pub mod session_idle;

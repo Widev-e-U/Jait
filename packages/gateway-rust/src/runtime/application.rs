@@ -434,7 +434,16 @@ impl Application {
                     projects: Some(auth.worker()),
                     repositories: Some(auth.worker()),
                     network_hosts: Some(auth.worker()),
-                    providers: Some(Default::default()),
+                    providers: Some({
+                        let registry = crate::providers::registry::ProviderRegistry::default();
+                        crate::providers::acp_adapter::register_all(
+                            &registry,
+                            crate::providers::acp_adapter::definitions_from_env(
+                                std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
+                            ),
+                        );
+                        registry
+                    }),
                     nodes: None,
                     clock: crate::time::default_clock(),
                 }
