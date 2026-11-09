@@ -4,6 +4,41 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.967](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.967) — 2026-11-09
+
+- fix(web): stop long-press chat menu selecting text; render Claude terminal cards like Codex — c68bb2a7
+- feat(gateway-rust): serve provider usage summary, surface-scoped project search and MCP api keys — a6791a14
+- feat(gateway-rust): serve provider accounts and usage from the database — b2231000
+- feat(gateway-rust): persist provider API keys in user settings — 2dd26c14
+- feat(gateway-rust): serve /api/providers from the real provider registry — 9b6bde03
+- feat(gateway-rust): register ACP providers in the composed app's registry — 21106884
+- fix(messenger): honour Synapse rate limits when joining Teams invites — 2eae121c
+- fix(messenger): join Teams bridge invites so rooms get labelled — 46e7a35e
+- test(gateway-rust): align schema retry test with verified-retry contract — 2ad4130b
+- style(gateway-rust): rustfmt voice and skills mounts — 7a44378c
+- feat(gateway-rust): deliver consent prompts and decisions to session-bound WebSocket clients — 74d39d07
+- feat(gateway-rust): operator-enabled ACP agent as a consent-routed chat provider — ee24a377
+- feat(gateway-rust): consent-gated terminal.run in the settings chat — b4cdb819
+- feat(gateway-rust): consent-gated file.write in the settings chat with mounted consent routes — bae8dad4
+- feat(gateway-rust): mount scoped read-only file.read tool in the settings chat — 50623efc
+- feat(gateway-rust): run chat on the user's saved OpenAI-compatible settings — 79af37be
+- feat(gateway-rust): mount skills router on a discovered registry — e6c6b70f
+- feat(gateway-rust): wire DB-backed voice settings and env-granted STT transport — c281dcdb
+- feat(gateway-rust): mount voice router in the composed application — b5b8b2f4
+- feat(gateway-rust): mount environment and calendar routers on real services — 8eaf3a6a
+- feat(gateway-rust): mount code-graph and update routers on real services — 2e543e83
+- feat(gateway-rust): serve the built web UI and gate non-loopback bind behind a config flag — 1c9e2b81
+- feat(gateway-rust): mount assistant profiles, architecture and user questions routers — e9f523b8
+- feat(gateway-rust): mount git, plans, proposals and repositories routers — bf39aa36
+- feat(gateway-rust): mount filesystem and secrets routers in the composed application — 7b1b9479
+- feat(gateway-rust): mount threads and reminders routers in the composed application — 66f88687
+- feat(gateway-rust): inventory distinguishes unmounted routers — 443909b4
+- feat(gateway-rust): add generated API inventory tooling — c6ad1621
+- chore: checkpoint current migration work — 1c3c4cff
+- fix(gateway-rust): repair migration verification blockers — 49e987a8
+- fix: mark changed Rust parity claims pending — a945587e
+- feat: advance gateway migration and workbench updates — 460f95d4
+
 ## [v0.1.966](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.966) — 2026-11-03
 
 - fix(gateway): stop the desktop shell from reporting slow shutdowns as failures — 43d04a25
