@@ -316,12 +316,10 @@ impl Application {
         let jwt_secret = config.jwt_secret;
         let secrets_key = jwt_secret.clone();
         let provider_registry = crate::providers::registry::ProviderRegistry::default();
-        crate::providers::acp_adapter::register_all(
-            &provider_registry,
-            crate::providers::acp_adapter::definitions_from_env(
-                std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
-            ),
+        let acp_definitions = crate::providers::acp_adapter::definitions_from_env(
+            std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
         );
+        crate::providers::acp_adapter::register_all(&provider_registry, acp_definitions.clone());
         let (mut auth, database_owner) = tokio::task::spawn_blocking(move || {
             let owner = acquire_database_owner(&database_path)?;
             let database = db::open_database(&database_path)?;
@@ -424,13 +422,20 @@ impl Application {
             .merge(crate::routes::providers::router(
                 crate::routes::providers::ProviderRoutes {
                     auth: auth.clone(),
-                    directory: None,
+                    directory: Some(Arc::new(
+                        crate::providers::db_accounts::DbProviderDirectory::new(
+                            &auth,
+                            provider_registry.clone(),
+                            acp_definitions,
+                            &state_dir,
+                        )?,
+                    )),
                     providers: Some(Arc::new(
                         crate::providers::registry_runtime::RegistryRuntime(
                             provider_registry.clone(),
                         ),
                     )),
-                    usage: None,
+                    usage: Some(Arc::new(crate::providers::db_accounts::DbUsageStore::new(&auth))),
                     settings: Some(Arc::new(crate::routes::providers::DbSettingsStore::new(&auth))),
                     probes: None,
                 },

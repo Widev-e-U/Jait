@@ -152,30 +152,45 @@ pub trait ProviderDirectory: Send + Sync {
         None
     }
     /// TS `list(userId)`; already redacted by the implementation.
-    fn list_accounts(&self, _user: &str) -> Result<Vec<Value>, StoreError> {
-        Ok(Vec::new())
+    fn list_accounts(&self, _user: &str) -> BoxFuture<'static, Result<Vec<Value>, StoreError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
     /// TS `get(accountId, userId)`.
-    fn get_account(&self, _id: &str, _user: &str) -> Option<Value> {
-        None
+    fn get_account(&self, _id: &str, _user: &str) -> BoxFuture<'static, Option<Value>> {
+        Box::pin(async { None })
     }
     /// TS `create(userId, body)`.
-    fn create_account(&self, _user: &str, _body: &Map<String, Value>) -> Result<Value, StoreError> {
-        Err(StoreError::Unavailable(
-            "Provider accounts are unavailable".into(),
-        ))
+    fn create_account(
+        &self,
+        _user: &str,
+        _body: &Map<String, Value>,
+    ) -> BoxFuture<'static, Result<Value, StoreError>> {
+        Box::pin(async {
+            Err(StoreError::Unavailable(
+                "Provider accounts are unavailable".into(),
+            ))
+        })
     }
     /// TS `rename(accountId, userId, label)`.
-    fn rename_account(&self, _id: &str, _user: &str, _label: &str) -> Result<Value, StoreError> {
-        Err(StoreError::Unavailable(
-            "Provider accounts are unavailable".into(),
-        ))
+    fn rename_account(
+        &self,
+        _id: &str,
+        _user: &str,
+        _label: &str,
+    ) -> BoxFuture<'static, Result<Value, StoreError>> {
+        Box::pin(async {
+            Err(StoreError::Unavailable(
+                "Provider accounts are unavailable".into(),
+            ))
+        })
     }
     /// TS `delete(accountId, userId)`.
-    fn delete_account(&self, _id: &str, _user: &str) -> Result<bool, StoreError> {
-        Err(StoreError::Unavailable(
-            "Provider accounts are unavailable".into(),
-        ))
+    fn delete_account(&self, _id: &str, _user: &str) -> BoxFuture<'static, Result<bool, StoreError>> {
+        Box::pin(async {
+            Err(StoreError::Unavailable(
+                "Provider accounts are unavailable".into(),
+            ))
+        })
     }
     /// TS `connectOpencodeGo(...)`.
     fn connect_opencode_go(
@@ -311,8 +326,8 @@ pub trait ProviderRuntime: Send + Sync {
 /// TS `deps.providerUsageService` and `readUsageSummary(userId, refresh)`.
 pub trait UsageStore: Send + Sync {
     /// TS `listForUser(accountIds)`.
-    fn list_for_user(&self, _account_ids: &[String]) -> Vec<Value> {
-        Vec::new()
+    fn list_for_user(&self, _user: &str, _account_ids: &[String]) -> BoxFuture<'static, Vec<Value>> {
+        Box::pin(async { Vec::new() })
     }
     /// TS `readUsageSummary(userId, refresh)`; the payload is redacted here.
     fn summary(&self, _user: &str, _refresh: bool) -> BoxFuture<'static, Result<Value, String>> {
@@ -757,7 +772,7 @@ async fn list_accounts(State(state): State<ProviderRoutes>, headers: HeaderMap) 
     };
     let (accounts, provider_types) = match state.directory.as_ref() {
         Some(directory) => (
-            directory.list_accounts(&user.id).unwrap_or_default(),
+            directory.list_accounts(&user.id).await.unwrap_or_default(),
             directory.refresh_types(),
         ),
         None => (Vec::new(), Vec::new()),
@@ -795,7 +810,7 @@ async fn create_account(
     if let Err(response) = valid_account_create(&map) {
         return response;
     }
-    match directory.create_account(&user.id, &map) {
+    match directory.create_account(&user.id, &map).await {
         Ok(account) => auth::response(201, redact_value(&account)),
         Err(error) => error.into_response(),
     }
@@ -823,7 +838,7 @@ async fn rename_account(
         Ok(label) => label,
         Err(response) => return response,
     };
-    match directory.rename_account(&id, &user.id, &label) {
+    match directory.rename_account(&id, &user.id, &label).await {
         Ok(account) => ok_json(account),
         Err(error) => error.into_response(),
     }
@@ -842,7 +857,7 @@ async fn delete_account(
         Ok(directory) => directory.clone(),
         Err(response) => return response,
     };
-    match directory.delete_account(&id, &user.id) {
+    match directory.delete_account(&id, &user.id).await {
         Ok(true) => ok_json(json!({ "ok": true })),
         Ok(false) => fail(404, "Provider account not found"),
         Err(error) => error.into_response(),
@@ -871,7 +886,7 @@ async fn connect_opencode_go(
         Value::Object(map) => map,
         _ => return fail(400, "Invalid request body"),
     };
-    if directory.get_account(&id, &user.id).is_none() {
+    if directory.get_account(&id, &user.id).await.is_none() {
         return fail(404, "Provider account not found");
     }
     match directory.connect_opencode_go(&id, &user.id, &map).await {
@@ -889,10 +904,11 @@ async fn list_usage(State(state): State<ProviderRoutes>, headers: HeaderMap) -> 
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let account_ids: Vec<String> = state
-        .directory
-        .as_ref()
-        .and_then(|directory| directory.list_accounts(&user.id).ok())
+    let listed = match state.directory.as_ref() {
+        Some(directory) => directory.list_accounts(&user.id).await.ok(),
+        None => None,
+    };
+    let account_ids: Vec<String> = listed
         .unwrap_or_default()
         .into_iter()
         .filter_map(|account| {
@@ -903,11 +919,10 @@ async fn list_usage(State(state): State<ProviderRoutes>, headers: HeaderMap) -> 
         })
         .take(MAX_USAGE_ACCOUNTS)
         .collect();
-    let usage = state
-        .usage
-        .as_ref()
-        .map(|usage| usage.list_for_user(&account_ids))
-        .unwrap_or_default();
+    let usage = match state.usage.as_ref() {
+        Some(usage) => usage.list_for_user(&user.id, &account_ids).await,
+        None => Vec::new(),
+    };
     ok_json(json!({
         "usage": usage.into_iter().map(|row| redact_value(&row)).collect::<Vec<_>>(),
     }))
@@ -1087,9 +1102,11 @@ async fn list_providers(
             provider_entry(&info, icon.as_deref())
         })
         .collect();
-    let accounts = directory
-        .as_ref()
-        .and_then(|directory| directory.list_accounts(&user.id).ok())
+    let listed = match directory.as_ref() {
+        Some(directory) => directory.list_accounts(&user.id).await.ok(),
+        None => None,
+    };
+    let accounts = listed
         .unwrap_or_default()
         .into_iter()
         .map(|account| {
@@ -1386,6 +1403,60 @@ async fn list_models(
             "models": models.into_iter().map(|model| redact_value(&model)).collect::<Vec<_>>(),
         })),
         Err(error) => fail(502, redact_text(&error)),
+    }
+}
+
+/// Persists provider API keys in the user's `user_settings` row.
+pub struct DbSettingsStore {
+    db: crate::db::worker::DatabaseWorker,
+}
+
+impl DbSettingsStore {
+    pub fn new(auth: &AuthState) -> Self {
+        Self { db: auth.worker() }
+    }
+}
+
+impl SettingsStore for DbSettingsStore {
+    fn api_keys(&self, user: &str) -> BoxFuture<'static, Map<String, Value>> {
+        let (db, user) = (self.db.clone(), user.to_owned());
+        Box::pin(async move {
+            db.run(move |db| Ok(crate::services::users::UserService::new(db).get_settings(&user)?))
+                .await
+                .map(|settings| {
+                    settings
+                        .api_keys
+                        .into_iter()
+                        .map(|(key, value)| (key, Value::String(value)))
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+    fn update_api_keys(
+        &self,
+        user: &str,
+        keys: Map<String, Value>,
+    ) -> BoxFuture<'static, Result<(), String>> {
+        let (db, user) = (self.db.clone(), user.to_owned());
+        Box::pin(async move {
+            let keys = keys
+                .into_iter()
+                .filter_map(|(key, value)| value.as_str().map(|v| (key, v.to_owned())))
+                .collect();
+            db.run(move |db| {
+                crate::services::users::UserService::new(db).update_settings(
+                    &user,
+                    crate::services::users::UserSettingsPatch {
+                        api_keys: Some(keys),
+                        ..Default::default()
+                    },
+                )?;
+                Ok(())
+            })
+            .await
+            .map_err(|error| error.to_string())
+        })
     }
 }
 
@@ -1722,59 +1793,5 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(status(&error.into_response()), expected);
         }
-    }
-}
-
-/// Persists provider API keys in the user's `user_settings` row.
-pub struct DbSettingsStore {
-    db: crate::db::worker::DatabaseWorker,
-}
-
-impl DbSettingsStore {
-    pub fn new(auth: &AuthState) -> Self {
-        Self { db: auth.worker() }
-    }
-}
-
-impl SettingsStore for DbSettingsStore {
-    fn api_keys(&self, user: &str) -> BoxFuture<'static, Map<String, Value>> {
-        let (db, user) = (self.db.clone(), user.to_owned());
-        Box::pin(async move {
-            db.run(move |db| Ok(crate::services::users::UserService::new(db).get_settings(&user)?))
-                .await
-                .map(|settings| {
-                    settings
-                        .api_keys
-                        .into_iter()
-                        .map(|(key, value)| (key, Value::String(value)))
-                        .collect()
-                })
-                .unwrap_or_default()
-        })
-    }
-    fn update_api_keys(
-        &self,
-        user: &str,
-        keys: Map<String, Value>,
-    ) -> BoxFuture<'static, Result<(), String>> {
-        let (db, user) = (self.db.clone(), user.to_owned());
-        Box::pin(async move {
-            let keys = keys
-                .into_iter()
-                .filter_map(|(key, value)| value.as_str().map(|v| (key, v.to_owned())))
-                .collect();
-            db.run(move |db| {
-                crate::services::users::UserService::new(db).update_settings(
-                    &user,
-                    crate::services::users::UserSettingsPatch {
-                        api_keys: Some(keys),
-                        ..Default::default()
-                    },
-                )?;
-                Ok(())
-            })
-            .await
-            .map_err(|error| error.to_string())
-        })
     }
 }

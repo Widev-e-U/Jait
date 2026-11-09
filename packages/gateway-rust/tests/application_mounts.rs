@@ -1220,3 +1220,85 @@ async fn providers_list_the_registered_acp_adapters() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn provider_settings_persist_through_the_real_store() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/provider-usage/ollama/session");
+    let anon = client
+        .post(&url)
+        .json(&serde_json::json!({"session": null}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let cleared = client
+        .post(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"session": null}))
+        .send()
+        .await
+        .unwrap();
+    let status = cleared.status();
+    let body = cleared.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("\"ok\":true"), "{body}");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn provider_accounts_and_usage_are_served_from_the_database() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    for path in ["/api/provider-accounts", "/api/provider-usage"] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path}");
+    }
+    let token = token(&client, &base).await;
+    let accounts = client
+        .get(format!("{base}/api/provider-accounts"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let status = accounts.status();
+    let body: serde_json::Value = accounts.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["accounts"], serde_json::json!([]));
+    let usage = client
+        .get(format!("{base}/api/provider-usage"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let status = usage.status();
+    let body: serde_json::Value = usage.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["usage"], serde_json::json!([]));
+    let missing = client
+        .delete(format!("{base}/api/provider-accounts/nope"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
