@@ -341,10 +341,14 @@ impl Application {
         // The settings factory needs the opened auth state, so it is built here on request.
         let factory = match (factory, settings_chat) {
             (Some(factory), _) => Some(factory),
-            (None, true) => Some(Arc::new(super::chat_settings::SettingsChatFactory::new(
-                auth.clone(),
-                consent.clone(),
-            )) as Arc<dyn ChatFactory>),
+            (None, true) => Some(Arc::new(
+                super::chat_settings::SettingsChatFactory::new(
+                    auth.clone(),
+                    consent.clone(),
+                    config.project_root.clone(),
+                )
+                .with_acp(super::chat_settings::SettingsChatFactory::acp_from_env()),
+            ) as Arc<dyn ChatFactory>),
             (None, false) => None,
         };
         let chat = factory

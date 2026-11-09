@@ -921,3 +921,108 @@ async fn chat_terminal_command_waits_for_consent_then_runs_or_never_starts() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn acp_chat_turn_routes_agent_permission_through_consent() {
+    let script = r#"read a; printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}'
+read b; printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"agent"}}'
+read c
+printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{"title":"Delete everything"},"options":[{"optionId":"yes","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}'
+read d
+case "$d" in *'"yes"'*) word=approved;; *) word=denied;; esac
+printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agent","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"agent %s"}}}}\n' "$word"
+printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}'
+read keep"#;
+    // SAFETY: only this test sets the operator ACP variables, before the app is built.
+    unsafe {
+        std::env::set_var("JAIT_ACP_COMMAND", "/bin/sh");
+        std::env::set_var("JAIT_ACP_ARGS", serde_json::json!(["-c", script]).to_string());
+    }
+    let (base, stop, task, dir) = start_seeded(false, |_| {}).await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    // Without the opt-in the ACP agent is never used, and selecting it needs no model.
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"api_keys": {"JAIT_CHAT_PROVIDER": "acp"}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    for (action, expected) in [("reject", "agent denied"), ("approve", "agent approved")] {
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let turn = {
+            let (client, base, token) = (client.clone(), base.clone(), token.clone());
+            let body = serde_json::json!({"sessionId": session["id"], "content": "go"});
+            tokio::spawn(async move {
+                client
+                    .post(format!("{base}/api/chat"))
+                    .bearer_auth(&token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+            })
+        };
+        let mut pending = None;
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                pending = Some(first.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let Some(pending) = pending else {
+            let body = tokio::time::timeout(Duration::from_secs(5), turn).await;
+            panic!("the agent's permission request must reach consent: {body:?}");
+        };
+        assert_eq!(pending["toolName"], "Delete everything");
+        let decided = client
+            .post(format!(
+                "{base}/api/consent/{}/{action}",
+                pending["id"].as_str().unwrap()
+            ))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decided.status(), 200);
+        let streamed = tokio::time::timeout(Duration::from_secs(20), turn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(streamed.contains(expected), "{action}: {streamed}");
+    }
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
