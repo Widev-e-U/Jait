@@ -2,17 +2,14 @@
 //!
 //! Credentials come only from the user's stored `api_keys` (never from the environment or the
 //! request), and the model is exactly the one the user selected: a turn without a selected model
-//! fails instead of falling back to a backend default. Tools are not mounted yet.
-use super::chat_turn::{TurnConfig, TurnProvider, TurnTools};
+//! fails instead of falling back to a backend default. Only read-only `file.read` is mounted (see chat_tools).
+use super::chat_turn::{TurnConfig, TurnProvider};
 use crate::{
     execution::process_runner::ProcessCancellation,
     providers::openai_stream::{EventSink, OpenAiHttp, ParsedStream, StreamFailure},
     routes::auth::AuthState,
     routes::chat::{ChatFactory, PreparedChat},
-    security::{
-        consent_executor::{ToolExecutionContext, ToolResult},
-        http_auth::AuthUser,
-    },
+    security::http_auth::AuthUser,
     services::{
         jait_llm::{JaitLlmConfig, ResolveJaitLlmOptions, resolve_jait_llm_config},
         jait_models::JaitBackend,
@@ -57,18 +54,6 @@ impl TurnProvider for Model {
     }
 }
 
-struct NoTools;
-impl TurnTools for NoTools {
-    fn execute<'a>(
-        &'a self,
-        _name: &'a str,
-        _input: &'a Value,
-        _context: &'a ToolExecutionContext,
-    ) -> BoxFuture<'a, Result<ToolResult, String>> {
-        Box::pin(async { Ok(ToolResult::message(false, "No execution tools are mounted")) })
-    }
-}
-
 impl ChatFactory for SettingsChatFactory {
     fn prepare(
         &self,
@@ -91,10 +76,11 @@ impl ChatFactory for SettingsChatFactory {
                 jait_backend: JaitBackend::parse(&settings.jait_backend),
                 strict_model: true,
             })?;
+            let (tools, executor) = super::chat_tools::read_only_tools(&user.id, &session.id)?;
             Ok(PreparedChat {
                 config: TurnConfig {
                     model: resolved.openai_model.clone(),
-                    tools: vec![],
+                    tools,
                     max_rounds: 4,
                     max_tool_calls: 4,
                     max_history_bytes: 1024 * 1024,
@@ -108,7 +94,7 @@ impl ChatFactory for SettingsChatFactory {
                         &session.id,
                     )?,
                 }),
-                tools: Arc::new(NoTools),
+                tools: executor,
             })
         })
     }
