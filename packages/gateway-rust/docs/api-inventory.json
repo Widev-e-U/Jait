@@ -1,11 +1,11 @@
 {
   "summary": {
     "httpTotal": 417,
-    "router-unmounted": 180,
-    "native-tested": 131,
+    "router-unmounted": 175,
+    "native-tested": 135,
     "missing": 98,
-    "native-untested": 8,
-    "nativeTestedPct": 31.4,
+    "native-untested": 9,
+    "nativeTestedPct": 32.4,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1627,7 +1627,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/voice.rs"
     },
     {
@@ -1866,7 +1866,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/voice.rs"
     },
     {
@@ -3547,7 +3547,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-untested",
       "rustFile": "routes/voice.rs"
     },
     {
@@ -3556,7 +3556,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/voice.rs"
     },
     {
@@ -3565,7 +3565,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/voice.rs"
     },
     {

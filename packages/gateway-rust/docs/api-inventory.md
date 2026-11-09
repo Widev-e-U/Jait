@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 180,
-  "native-tested": 131,
+  "router-unmounted": 175,
+  "native-tested": 135,
   "missing": 98,
-  "native-untested": 8,
-  "nativeTestedPct": 31.4,
+  "native-untested": 9,
+  "nativeTestedPct": 32.4,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -201,7 +201,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/update/check` | native-tested | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-tested | routes/user-questions.ts |
 | GET | `/api/voice-assistant/status` | missing | server.ts |
-| GET | `/api/voice/state/:sessionId` | router-unmounted | routes/voice.ts |
+| GET | `/api/voice/state/:sessionId` | native-tested | routes/voice.ts |
 | GET | `/health` | router-unmounted | routes/health.ts |
 | GET | `/mcp` | router-unmounted | routes/mcp-server.ts |
 | GET | `/mcp/sse` | router-unmounted | routes/mcp-server.ts |
@@ -228,7 +228,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | PATCH | `/api/sessions/:id/state` | native-tested | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | router-unmounted | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | routes/threads.ts |
-| PATCH | `/api/voice/state/:sessionId` | router-unmounted | routes/voice.ts |
+| PATCH | `/api/voice/state/:sessionId` | native-tested | routes/voice.ts |
 | POST | `/api/agent-control/halt` | router-unmounted | routes/agent-control.ts |
 | POST | `/api/agent-control/resume` | router-unmounted | routes/agent-control.ts |
 | POST | `/api/agents/:agentId/github-app/installation` | router-unmounted | routes/agent-github-apps.ts |
@@ -421,9 +421,9 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/update/apply` | native-tested | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-tested | routes/user-questions.ts |
 | POST | `/api/user-questions/requests/:id/submit` | native-tested | routes/user-questions.ts |
-| POST | `/api/voice/speak` | router-unmounted | routes/voice.ts |
-| POST | `/api/voice/transcribe` | router-unmounted | routes/voice.ts |
-| POST | `/api/voice/transcribe-audio` | router-unmounted | routes/voice.ts |
+| POST | `/api/voice/speak` | native-untested | routes/voice.ts |
+| POST | `/api/voice/transcribe` | native-tested | routes/voice.ts |
+| POST | `/api/voice/transcribe-audio` | native-tested | routes/voice.ts |
 | POST | `/api/voice/wake-candidate` | missing | routes/voice.ts |
 | POST | `/hooks/agent` | router-unmounted | routes/hooks.ts |
 | POST | `/hooks/wake` | router-unmounted | routes/hooks.ts |

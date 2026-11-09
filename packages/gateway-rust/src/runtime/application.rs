@@ -24,6 +24,7 @@ use crate::{
         threads::ThreadRoutes,
         update::UpdateRoutes,
         user_questions::UserQuestionRoutes,
+        voice::{VoiceRouteConfig, VoiceRoutes},
     },
     runtime::Gateway,
     services::calendar::service::CalendarService,
@@ -378,6 +379,7 @@ impl Application {
             )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
+            .merge(VoiceRoutes::new(auth.clone(), VoiceRouteConfig::from_env()).router())
             .merge(
                 EnvironmentRoutes {
                     auth: auth.clone(),

@@ -372,3 +372,34 @@ async fn environment_and_calendar_are_served_and_authenticated() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn voice_is_served_and_authenticated() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    // Node parity: state routes are unauthenticated. transcribe-audio needs a settings
+    // source and STT transport that are not wired yet, so it answers 501 (not 404).
+    let unwired = client
+        .post(format!("{base}/api/voice/transcribe-audio"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unwired.status(), 501);
+    let token = token(&client, &base).await;
+    let state = client
+        .get(format!("{base}/api/voice/state/s1"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(state.status(), 200);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
