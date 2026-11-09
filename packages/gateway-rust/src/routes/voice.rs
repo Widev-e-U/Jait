@@ -143,9 +143,7 @@ impl VoiceSettingsSource for DbVoiceSettings {
             let id = user.id.clone();
             let settings = self
                 .db
-                .run(move |db| {
-                    Ok(crate::services::users::UserService::new(db).get_settings(&id)?)
-                })
+                .run(move |db| Ok(crate::services::users::UserService::new(db).get_settings(&id)?))
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(VoiceSettings {

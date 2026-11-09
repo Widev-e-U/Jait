@@ -12,7 +12,10 @@ use crate::routes::auth::AuthState;
 use crate::routes::skills::{SkillRecord, SkillRoutes, ToolStatus};
 
 fn scan_dirs(project_root: &Path, home: &Path, state: Option<&str>) -> Vec<(PathBuf, SkillSource)> {
-    let mut dirs = vec![(project_root.join("packages/gateway/skills"), SkillSource::Bundled)];
+    let mut dirs = vec![(
+        project_root.join("packages/gateway/skills"),
+        SkillSource::Bundled,
+    )];
     if let Ok(user) = user_skills_dir(home, state) {
         dirs.push((user, SkillSource::User));
     }
@@ -31,7 +34,10 @@ pub fn composed_skill_routes(
     state: Option<&str>,
 ) -> SkillRoutes {
     let mut registry = SkillRegistry::default();
-    if let Err(error) = registry.discover(&scan_dirs(project_root, home, state), &ProcessCancellation::default()) {
+    if let Err(error) = registry.discover(
+        &scan_dirs(project_root, home, state),
+        &ProcessCancellation::default(),
+    ) {
         eprintln!("skills: discovery failed: {error}");
     }
     let records: Arc<Vec<(String, SkillRecord)>> = Arc::new(
@@ -51,7 +57,12 @@ pub fn composed_skill_routes(
     )));
     let find = {
         let records = records.clone();
-        move |id: &str| records.iter().find(|(k, _)| k == id).map(|(_, v)| v.clone())
+        move |id: &str| {
+            records
+                .iter()
+                .find(|(k, _)| k == id)
+                .map(|(_, v)| v.clone())
+        }
     };
     SkillRoutes {
         auth,
@@ -65,15 +76,20 @@ pub fn composed_skill_routes(
         },
         set_enabled: Arc::new(move |id, enabled| {
             let record = find(id).ok_or("Skill not found")?;
-            record
-                .lock()
-                .map_err(|_| "Skill record lock poisoned")?["enabled"] = serde_json::json!(enabled);
+            record.lock().map_err(|_| "Skill record lock poisoned")?["enabled"] =
+                serde_json::json!(enabled);
             Ok(())
         }),
         check_tools: Arc::new(move |value| {
             let skill: Skill = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-            let status = bins.lock().map_err(|_| "Bin cache lock poisoned")?.check(&skill);
-            Ok(ToolStatus { satisfied: status.satisfied, missing: status.missing })
+            let status = bins
+                .lock()
+                .map_err(|_| "Bin cache lock poisoned")?
+                .check(&skill);
+            Ok(ToolStatus {
+                satisfied: status.satisfied,
+                missing: status.missing,
+            })
         }),
         install_tool: Arc::new(|_, _| {
             Box::pin(async {

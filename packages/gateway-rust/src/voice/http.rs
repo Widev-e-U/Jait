@@ -664,27 +664,44 @@ pub async fn configured_from_env(
     let expires = SystemTime::now() + Duration::from_secs(30 * 24 * 3600);
     let mut grants = Vec::new();
     let mut add = async |endpoint: &str, credential: Credential, private: bool| {
-        let Ok(url) = Url::parse(endpoint) else { return };
+        let Ok(url) = Url::parse(endpoint) else {
+            return;
+        };
         let (Some(host), Some(port)) = (url.host_str(), url.port_or_known_default()) else {
             return;
         };
         let host = host.trim_matches(['[', ']']).to_string();
-        let Ok(found) = tokio::net::lookup_host((host.as_str(), port)).await else { return };
+        let Ok(found) = tokio::net::lookup_host((host.as_str(), port)).await else {
+            return;
+        };
         let mut ips: Vec<IpAddr> = found.map(|a| a.ip()).collect();
         ips.sort();
         ips.dedup();
         ips.truncate(16);
-        if let Ok(grant) =
-            DestinationGrant::configured(endpoint, ips, credential, expires, "gateway".into(), private)
-        {
+        if let Ok(grant) = DestinationGrant::configured(
+            endpoint,
+            ips,
+            credential,
+            expires,
+            "gateway".into(),
+            private,
+        ) {
             grants.push(grant);
         }
     };
     if let Some(url) = &config.whisper_url {
-        add(&format!("{}/transcribe", url.trim_end_matches('/')), Credential::None, true).await;
+        add(
+            &format!("{}/transcribe", url.trim_end_matches('/')),
+            Credential::None,
+            true,
+        )
+        .await;
     }
     if let Some(key) = &config.openai_api_key {
-        let base = config.openai_base_url.as_deref().unwrap_or("https://api.openai.com/v1");
+        let base = config
+            .openai_base_url
+            .as_deref()
+            .unwrap_or("https://api.openai.com/v1");
         add(
             &format!("{}/audio/transcriptions", base.trim_end_matches('/')),
             Credential::Bearer(key.clone()),
