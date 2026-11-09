@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 175,
-  "native-tested": 135,
+  "router-unmounted": 172,
+  "native-tested": 138,
   "missing": 98,
   "native-untested": 9,
-  "nativeTestedPct": 32.4,
+  "nativeTestedPct": 33.1,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -177,7 +177,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/sessions/:sessionId/trajectory` | missing | routes/chat.ts |
 | GET | `/api/sessions/last-active` | native-tested | routes/sessions.ts |
 | GET | `/api/sessions/streaming` | missing | routes/chat.ts |
-| GET | `/api/skills` | router-unmounted | routes/skills.ts |
+| GET | `/api/skills` | native-tested | routes/skills.ts |
 | GET | `/api/store/packages` | native-tested | routes/store.ts |
 | GET | `/api/store/skills` | native-tested | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-tested | routes/store.ts |
@@ -226,7 +226,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | PATCH | `/api/repos/:id/pull-requests/:number` | router-unmounted | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | routes/sessions.ts |
-| PATCH | `/api/skills/:id` | router-unmounted | routes/skills.ts |
+| PATCH | `/api/skills/:id` | native-tested | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | routes/threads.ts |
 | PATCH | `/api/voice/state/:sessionId` | native-tested | routes/voice.ts |
 | POST | `/api/agent-control/halt` | router-unmounted | routes/agent-control.ts |
@@ -399,7 +399,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/sessions/:sessionId/retry-tool` | missing | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/steer` | missing | routes/chat.ts |
 | POST | `/api/sessions/:id/viewed` | native-tested | routes/sessions.ts |
-| POST | `/api/skills/:id/install-tool` | router-unmounted | routes/skills.ts |
+| POST | `/api/skills/:id/install-tool` | native-tested | routes/skills.ts |
 | POST | `/api/store/skills/:slug/install` | native-tested | routes/store.ts |
 | POST | `/api/team-rooms` | missing | routes/team-chat.ts |
 | POST | `/api/team-rooms/:id/messages` | missing | routes/team-chat.ts |

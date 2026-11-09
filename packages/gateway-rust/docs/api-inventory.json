@@ -1,11 +1,11 @@
 {
   "summary": {
     "httpTotal": 417,
-    "router-unmounted": 175,
-    "native-tested": 135,
+    "router-unmounted": 172,
+    "native-tested": 138,
     "missing": 98,
     "native-untested": 9,
-    "nativeTestedPct": 32.4,
+    "nativeTestedPct": 33.1,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1416,7 +1416,7 @@
       "nodeFiles": [
         "routes/skills.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/skills.rs"
     },
     {
@@ -1848,7 +1848,7 @@
       "nodeFiles": [
         "routes/skills.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/skills.rs"
     },
     {
@@ -3361,7 +3361,7 @@
       "nodeFiles": [
         "routes/skills.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/skills.rs"
     },
     {

@@ -20,8 +20,21 @@ async fn start_with_web(
     tokio::task::JoinHandle<()>,
     std::path::PathBuf,
 ) {
+    start_seeded(web, |_| {}).await
+}
+
+async fn start_seeded(
+    web: bool,
+    seed: impl FnOnce(&std::path::Path),
+) -> (
+    String,
+    tokio::sync::oneshot::Sender<()>,
+    tokio::task::JoinHandle<()>,
+    std::path::PathBuf,
+) {
     let dir = std::env::temp_dir().join(format!("jait-mounts-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
+    seed(&dir);
     let web_root = web.then(|| {
         let root = dir.join("web");
         std::fs::create_dir_all(root.join("assets")).unwrap();
@@ -409,5 +422,67 @@ async fn voice_is_served_and_authenticated() {
         .await
         .unwrap()
         .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn skills_are_discovered_toggled_and_authenticated() {
+    let (base, stop, task, dir) = start_seeded(false, |dir| {
+        let skill = dir.join(".jait/skills/demo");
+        std::fs::create_dir_all(&skill).unwrap();
+        std::fs::write(
+            skill.join("SKILL.md"),
+            "---\nname: Demo\ndescription: A demo skill\n---\nBody\n",
+        )
+        .unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    assert_eq!(
+        client.get(format!("{base}/api/skills")).send().await.unwrap().status(),
+        401
+    );
+    let token = token(&client, &base).await;
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/skills"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let demo = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "demo")
+        .unwrap_or_else(|| panic!("demo skill missing: {list}"));
+    assert_eq!(demo["source"], "project");
+    assert_eq!(demo["enabled"], true);
+    let toggled: serde_json::Value = client
+        .patch(format!("{base}/api/skills/demo"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"enabled": false}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(toggled["enabled"], false);
+    let missing = client
+        .patch(format!("{base}/api/skills/nope"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"enabled": true}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }

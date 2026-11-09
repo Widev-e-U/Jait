@@ -8,6 +8,8 @@ pub mod command;
 
 pub mod application;
 
+pub mod skills_mount;
+
 pub mod chat_turn;
 
 pub mod chat_store;

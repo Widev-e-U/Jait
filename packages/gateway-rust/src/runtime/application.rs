@@ -387,6 +387,15 @@ impl Application {
             .merge(RepositoryRoutes::new(auth.clone()).router())
             .merge(voice.router())
             .merge(
+                super::skills_mount::composed_skill_routes(
+                    auth.clone(),
+                    &config.project_root,
+                    &std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| config.project_root.clone()),
+                    state_dir.to_str(),
+                )
+                .router(),
+            )
+            .merge(
                 EnvironmentRoutes {
                     auth: auth.clone(),
                     assistants: Some(auth.worker()),
