@@ -38,6 +38,27 @@ import type { MessengerHistory } from './messenger-history.js';
 import { getStateDirectory } from '../state-directory.js';
 
 const MAX_EVENTS = 10000;
+// Synapse delivers an invite only once per membership change, so a join that is
+// rejected is never retried by the homeserver. Stay inside its limiter instead.
+const TEAMS_JOIN_INTERVAL_MS = 1000;
+const TEAMS_JOIN_MAX_ATTEMPTS = 4;
+const TEAMS_JOIN_MAX_BACKOFF_MS = 60_000;
+function teamsRetryAfterMs(error: unknown): number | undefined {
+  if (typeof error !== 'object' || !error) return undefined;
+  const failure = error as {
+    errcode?: unknown;
+    retryAfterMs?: unknown;
+    data?: { retry_after_ms?: unknown };
+  };
+  if (failure.errcode !== 'M_LIMIT_EXCEEDED') return undefined;
+  const reported =
+    typeof failure.retryAfterMs === 'number'
+      ? failure.retryAfterMs
+      : failure.data?.retry_after_ms;
+  return typeof reported === 'number' && Number.isFinite(reported) && reported >= 0
+    ? Math.min(Math.max(reported, TEAMS_JOIN_INTERVAL_MS), TEAMS_JOIN_MAX_BACKOFF_MS)
+    : TEAMS_JOIN_INTERVAL_MS;
+}
 const MAX_MEDIA = 20 * 1024 * 1024;
 /** How long a presence answer is reused before asking the homeserver again. */
 const PRESENCE_TTL = 30_000;
@@ -787,6 +808,7 @@ class Connection {
   }
   private joiningTeams = new Set<string>();
   private teamsJoinQueue: string[] = [];
+  private teamsJoinAttempts = new Map<string, number>();
   private teamsJoinRunning = false;
   private joinTeamsInvite(roomId: string, state: Event[] | undefined) {
     const client = this.client;
@@ -811,15 +833,38 @@ class Connection {
     this.teamsJoinRunning = true;
     try {
       while (this.teamsJoinQueue.length) {
-        const roomId = this.teamsJoinQueue.shift() as string;
+        const client = this.client;
+        const roomId = this.teamsJoinQueue[0] as string;
+        if (!client) break;
+        let wait = TEAMS_JOIN_INTERVAL_MS;
         try {
-          await this.client?.joinRoom(roomId);
-        } catch {
-          // Left in place for the next sync to retry.
-        } finally {
+          await client.joinRoom(roomId);
+          this.teamsJoinQueue.shift();
           this.joiningTeams.delete(roomId);
+          this.teamsJoinAttempts.delete(roomId);
+        } catch (error) {
+          const retryAfter = teamsRetryAfterMs(error);
+          const attempts = (this.teamsJoinAttempts.get(roomId) ?? 0) + 1;
+          if (retryAfter !== undefined) {
+            // The limiter is shared, so retrying a different room would only
+            // spend the same budget. Keep this room at the head and wait.
+            wait = retryAfter;
+          } else if (attempts < TEAMS_JOIN_MAX_ATTEMPTS) {
+            this.teamsJoinAttempts.set(roomId, attempts);
+            this.teamsJoinQueue.shift();
+            this.teamsJoinQueue.push(roomId);
+            wait = Math.min(
+              TEAMS_JOIN_MAX_BACKOFF_MS,
+              TEAMS_JOIN_INTERVAL_MS * 2 ** attempts,
+            );
+          } else {
+            this.teamsJoinAttempts.delete(roomId);
+            this.teamsJoinQueue.shift();
+            this.joiningTeams.delete(roomId);
+          }
         }
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (!this.teamsJoinQueue.length) break;
+        await new Promise((resolve) => setTimeout(resolve, wait));
       }
     } finally {
       this.teamsJoinRunning = false;
