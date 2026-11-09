@@ -56,7 +56,7 @@ impl Gateway {
         Self::bind_router(config, router).await
     }
     pub(super) async fn bind_router(config: GatewayConfig, router: Router) -> io::Result<Self> {
-        if !config.address.ip().is_loopback() {
+        if !config.address.ip().is_loopback() && !config.allow_non_loopback {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "migration gateway requires loopback",
@@ -305,6 +305,7 @@ mod tests {
         let gateway = Gateway::bind_router(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             Router::new(),
         )
@@ -367,6 +368,7 @@ mod tests {
         let gateway = Gateway::bind_router(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             Router::new(),
         )

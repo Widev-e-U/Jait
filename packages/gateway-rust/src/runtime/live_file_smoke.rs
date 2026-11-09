@@ -224,12 +224,14 @@ async fn live_ollama_file_edit() {
     let app = Application::bind_with_chat(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         ApplicationConfig {
             database_path: work.join("isolated.sqlite"),
             project_root: work.clone(),
             jwt_secret: uuid::Uuid::new_v4().to_string(),
             cors_origin: String::new(),
+            web_root: None,
             health: None,
         },
         Some(Arc::new(SmokeFactory {

@@ -31,5 +31,7 @@ pub mod api_contracts;
 /// Inactive WebSocket transport; callers must supply trusted authority and supervise shutdown.
 pub mod ws_transport;
 
+pub mod web_ui;
+
 #[cfg(all(test, target_os = "linux"))]
 mod live_file_smoke;

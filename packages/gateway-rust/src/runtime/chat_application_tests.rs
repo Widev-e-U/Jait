@@ -69,12 +69,14 @@ async fn start(
     let application = Application::bind_with_chat(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         ApplicationConfig {
             database_path: path.join("application.sqlite"),
             project_root: path.into(),
             jwt_secret: "fixture-signing-secret".into(),
             cors_origin: String::new(),
+            web_root: None,
             health: None,
         },
         Some(configuration.factory()),

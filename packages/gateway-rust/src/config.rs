@@ -7,6 +7,8 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct GatewayConfig {
     pub address: SocketAddr,
+    /// Explicit opt-in to bind a non-loopback address. Defaults to off.
+    pub allow_non_loopback: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -24,7 +26,12 @@ impl GatewayConfig {
         let host: IpAddr = host
             .parse()
             .map_err(|_| ConfigError("JAIT_RUST_HOST must be a literal loopback IP"))?;
-        if !host.is_loopback() {
+        let allow_non_loopback = match lookup("JAIT_RUST_ALLOW_NON_LOOPBACK").as_deref() {
+            None | Some("") | Some("0") => false,
+            Some("1") => true,
+            _ => return Err(ConfigError("JAIT_RUST_ALLOW_NON_LOOPBACK must be 0 or 1")),
+        };
+        if !host.is_loopback() && !allow_non_loopback {
             return Err(ConfigError(
                 "JAIT_RUST_HOST must be loopback during migration",
             ));
@@ -40,6 +47,7 @@ impl GatewayConfig {
             .map_err(|_| ConfigError("JAIT_RUST_PORT must be an integer from 0 to 65535"))?;
         Ok(Self {
             address: SocketAddr::new(host, port),
+            allow_non_loopback,
         })
     }
 }
@@ -48,6 +56,7 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8220),
+            allow_non_loopback: false,
         }
     }
 }

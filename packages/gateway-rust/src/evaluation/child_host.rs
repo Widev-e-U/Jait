@@ -1136,6 +1136,7 @@ mod tests {
         Gateway::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             HealthState::new(None, HealthSnapshot::default()),
         )

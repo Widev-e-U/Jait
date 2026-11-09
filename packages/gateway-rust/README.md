@@ -1997,6 +1997,13 @@ Node, Bun, or PATH. The reference tests require Bun to execute the real TypeScri
 functions. Build output stays under `.jait/artifacts/`; dependencies are locked
 and compilation is bounded to two jobs.
 
+Composed application (`JAIT_RUST_APPLICATION=1`) options:
+
+- `JAIT_WEB_DIR=/abs/path/to/apps/web/dist` serves the built web UI on the gateway
+  port with an SPA fallback; unclaimed `/api`, `/health` and `/ws` paths stay JSON 404s.
+- `JAIT_RUST_ALLOW_NON_LOOPBACK=1` allows `JAIT_RUST_HOST` to be a non-loopback
+  address. Default is off and the bind stays loopback-only.
+
 ## Verified components
 
 The historical 141-component frozen-source checkpoint covers 141 of the then-364 gateway

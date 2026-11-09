@@ -5,18 +5,18 @@ use crate::{
     db,
     health::{HealthConfig, HealthSnapshot, HealthState},
     routes::{
-        auth::AuthState,
-        filesystem::{BrowseEnvironment, FilesystemRoutes},
         architecture::ArchitectureRoutes,
         assistant_profiles::AssistantProfileRoutes,
+        auth::AuthState,
+        chat::{ChatFactory, ChatRoutes},
+        filesystem::{BrowseEnvironment, FilesystemRoutes},
         git::GitRoutes,
         plans::PlanRoutes,
+        project::ProjectRoutes,
+        reminders::ReminderRoutes,
         repo_proposals::RepoProposalRoutes,
         repositories::RepositoryRoutes,
         secrets::SecretRoutes,
-        chat::{ChatFactory, ChatRoutes},
-        project::ProjectRoutes,
-        reminders::ReminderRoutes,
         sessions::SessionRoutes,
         terminals::TerminalRoutes,
         threads::ThreadRoutes,
@@ -43,6 +43,8 @@ pub struct ApplicationConfig {
     pub jwt_secret: String,
     pub cors_origin: String,
     pub health: Option<HealthConfig>,
+    /// Built web UI directory served on the gateway port; `None` serves no UI.
+    pub web_root: Option<PathBuf>,
 }
 
 impl ApplicationConfig {
@@ -66,6 +68,9 @@ impl ApplicationConfig {
             cors_origin: lookup("CORS_ORIGIN").unwrap_or_default(),
             // Provider activation is separate; do not imply configured model execution.
             health: None,
+            web_root: lookup("JAIT_WEB_DIR")
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from),
         };
         config.validate()?;
         Ok(Some(config))
@@ -80,6 +85,13 @@ impl ApplicationConfig {
         }
         if crate::text::js_trim(&self.jwt_secret).is_empty() {
             return Err("JWT_SECRET is required for the Rust application".into());
+        }
+        if self
+            .web_root
+            .as_ref()
+            .is_some_and(|root| !root.is_absolute())
+        {
+            return Err("JAIT_WEB_DIR must be an absolute directory path".into());
         }
         Ok(())
     }
@@ -218,7 +230,7 @@ impl Application {
     ) -> Result<Self, ApplicationError> {
         config.validate()?;
         // Refuse a non-loopback bind before opening or migrating a database.
-        if !listener.address.ip().is_loopback() {
+        if !listener.address.ip().is_loopback() && !listener.allow_non_loopback {
             return Err("migration gateway requires loopback".into());
         }
         let database_path = config.database_path;
@@ -306,6 +318,13 @@ impl Application {
             );
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
+        }
+        if let Some(root) = config
+            .web_root
+            .as_deref()
+            .filter(|r| r.join("index.html").is_file())
+        {
+            router = router.fallback_service(crate::runtime::web_ui::service(root));
         }
         match Gateway::bind_router(listener, router).await {
             Ok(gateway) => Ok(Self {
@@ -510,12 +529,14 @@ mod ownership_tests {
             let app = Application::bind_with_chat(
                 GatewayConfig {
                     address: "127.0.0.1:0".parse().unwrap(),
+                    allow_non_loopback: false,
                 },
                 ApplicationConfig {
                     database_path: path.clone(),
                     project_root: path.parent().unwrap().to_path_buf(),
                     jwt_secret: "fixture-secret".into(),
                     cors_origin: String::new(),
+                    web_root: None,
                     health: None,
                 },
                 Some(Arc::new(UnusedFactory)),
@@ -559,12 +580,14 @@ mod ownership_tests {
         let app = Application::bind_with_chat(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path.clone(),
                 project_root: path.parent().unwrap().to_path_buf(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
             Some(Arc::new(UnusedFactory)),
@@ -621,12 +644,14 @@ mod ownership_tests {
         let mut app = Application::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path,
                 project_root: root.clone(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
         )
@@ -711,12 +736,14 @@ mod ownership_tests {
         let app = Application::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path,
                 project_root: root.clone(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
         )
@@ -798,12 +825,14 @@ mod ownership_tests {
         let mut app = Application::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path,
                 project_root: root.clone(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
         )
@@ -853,12 +882,14 @@ mod ownership_tests {
         let mut app = Application::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path,
                 project_root: root.clone(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
         )
@@ -900,12 +931,14 @@ mod ownership_tests {
         let app = Application::bind(
             GatewayConfig {
                 address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             ApplicationConfig {
                 database_path: path.clone(),
                 project_root: path.parent().unwrap().to_path_buf(),
                 jwt_secret: "fixture-secret".into(),
                 cors_origin: String::new(),
+                web_root: None,
                 health: None,
             },
         )
@@ -969,10 +1002,12 @@ mod ownership_tests {
             project_root: path.parent().unwrap().to_path_buf(),
             jwt_secret: "fixture-secret".into(),
             cors_origin: String::new(),
+            web_root: None,
             health: None,
         };
         let listener = GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         };
         let first = Application::bind(listener.clone(), config()).await.unwrap();
         first.auth.with_database(|db| {
