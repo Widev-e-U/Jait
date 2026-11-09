@@ -42,7 +42,7 @@ async fn start_seeded(
         std::fs::write(root.join("assets/app.js"), "console.log(1)").unwrap();
         root
     });
-    let app = Application::bind_with_settings_chat(
+    let mut app = Application::bind_with_settings_chat(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
             allow_non_loopback: false,
@@ -57,6 +57,12 @@ async fn start_seeded(
         },
     )
     .await
+    .unwrap();
+    app.mount_websocket(
+        jait_gateway::ws::WsHubConfig::default(),
+        std::num::NonZeroUsize::new(8).unwrap(),
+        Duration::from_secs(5),
+    )
     .unwrap();
     let base = format!("http://{}", app.local_addr().unwrap());
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
@@ -936,7 +942,10 @@ read keep"#;
     // SAFETY: only this test sets the operator ACP variables, before the app is built.
     unsafe {
         std::env::set_var("JAIT_ACP_COMMAND", "/bin/sh");
-        std::env::set_var("JAIT_ACP_ARGS", serde_json::json!(["-c", script]).to_string());
+        std::env::set_var(
+            "JAIT_ACP_ARGS",
+            serde_json::json!(["-c", script]).to_string(),
+        );
     }
     let (base, stop, task, dir) = start_seeded(false, |_| {}).await;
     let client = reqwest::Client::builder()
@@ -1019,6 +1028,157 @@ read keep"#;
             .unwrap();
         assert!(streamed.contains(expected), "{action}: {streamed}");
     }
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Minimal WebSocket client over the gateway's own frame codec.
+struct WsClient(tokio::net::TcpStream);
+
+impl WsClient {
+    async fn connect(base: &str, token: &str) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let host = base.trim_start_matches("http://");
+        let mut stream = tokio::net::TcpStream::connect(host).await.unwrap();
+        let request = format!(
+            "GET /ws?token={token} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(stream.read_u8().await.unwrap());
+        }
+        assert!(String::from_utf8_lossy(&head).starts_with("HTTP/1.1 101"));
+        Self(stream)
+    }
+
+    async fn send(&mut self, message: serde_json::Value) {
+        jait_gateway::ws::write_client_frame(
+            &mut self.0,
+            jait_gateway::ws::OpCode::Text,
+            message.to_string().as_bytes(),
+            [1, 2, 3, 4],
+        )
+        .await
+        .unwrap();
+    }
+
+    /// Next text message, or None if nothing arrives within `wait`.
+    async fn next(&mut self, wait: Duration) -> Option<serde_json::Value> {
+        let frame = tokio::time::timeout(wait, jait_gateway::ws::read_frame(&mut self.0, 1 << 20))
+            .await
+            .ok()?
+            .unwrap()?;
+        serde_json::from_str(frame.text()?).ok()
+    }
+
+    async fn until(&mut self, kind: &str, wait: Duration) -> Option<serde_json::Value> {
+        let deadline = tokio::time::Instant::now() + wait;
+        while let Some(left) = deadline.checked_duration_since(tokio::time::Instant::now()) {
+            let message = self.next(left).await?;
+            if message["type"] == kind {
+                return Some(message);
+            }
+        }
+        None
+    }
+}
+
+#[tokio::test]
+async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
+    let (model_base, _seen) = fake_model_calling(
+        "terminal_run",
+        serde_json::json!({"command": "printf ran > marker.txt"}),
+    )
+    .await;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "k"},
+            "selected_model": "m"
+        }))
+        .send()
+        .await
+        .unwrap();
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut bound = WsClient::connect(&base, &token).await;
+    bound
+        .send(serde_json::json!({"type":"subscribe","sessionId":session["id"]}))
+        .await;
+    assert!(
+        bound
+            .until("session.created", Duration::from_secs(5))
+            .await
+            .is_some()
+    );
+    // Authenticated as the same user but never bound to the session.
+    let mut unbound = WsClient::connect(&base, &token).await;
+    let turn = {
+        let (client, base, token) = (client.clone(), base.clone(), token.clone());
+        let body = serde_json::json!({"sessionId": session["id"], "content": "run it"});
+        tokio::spawn(async move {
+            client
+                .post(format!("{base}/api/chat"))
+                .bearer_auth(&token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+        })
+    };
+    let required = bound
+        .until("consent.required", Duration::from_secs(15))
+        .await
+        .expect("bound client must be told about the pending consent");
+    assert_eq!(required["payload"]["toolName"], "terminal.run");
+    assert_eq!(required["sessionId"], session["id"]);
+    let id = required["payload"]["id"].as_str().unwrap().to_owned();
+    let decided = client
+        .post(format!("{base}/api/consent/{id}/reject"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(decided.status(), 200);
+    let resolved = bound
+        .until("consent.resolved", Duration::from_secs(10))
+        .await
+        .expect("bound client must see the decision");
+    assert_eq!(resolved["payload"]["requestId"], id);
+    assert_eq!(resolved["payload"]["approved"], false);
+    assert!(
+        unbound
+            .until("consent.required", Duration::from_millis(300))
+            .await
+            .is_none(),
+        "a client not bound to the session must not receive its consent prompt"
+    );
+    let _ = tokio::time::timeout(Duration::from_secs(20), turn).await;
+    assert!(!dir.join("marker.txt").exists());
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await

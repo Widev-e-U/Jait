@@ -14,6 +14,7 @@ pub mod chat_settings;
 pub mod chat_tools;
 pub mod chat_acp;
 pub mod consent_mount;
+pub mod consent_ws;
 
 pub mod chat_turn;
 

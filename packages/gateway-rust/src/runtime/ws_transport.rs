@@ -54,6 +54,9 @@ impl WsTransport {
             stop,
         }))
     }
+    pub(crate) fn hub(&self) -> Arc<WsHub> {
+        self.0.hub.clone()
+    }
     /// The router is opt-in. Its path comes from the configured hub.
     pub fn router(&self) -> Router {
         Router::new()

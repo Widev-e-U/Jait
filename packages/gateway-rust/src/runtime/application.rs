@@ -272,6 +272,7 @@ pub struct Application {
     _database_owner: Arc<File>,
     store_supervisor: Option<StoreOwner>,
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
+    consent: Option<crate::security::consent_manager::ConsentManager>,
 }
 
 impl Application {
@@ -473,7 +474,8 @@ impl Application {
             router = router.merge(chat.router());
         }
         if settings_chat {
-            router = router.merge(super::consent_mount::composed_consent_routes(&auth, consent).router());
+            router = router
+                .merge(super::consent_mount::composed_consent_routes(&auth, consent.clone()).router());
         }
         if let Some(root) = config
             .web_root
@@ -491,6 +493,7 @@ impl Application {
                 store_supervisor: None,
                 ws_transport: None,
             }),
+                consent: settings_chat.then_some(consent),
             Err(error) => {
                 auth.shutdown().await?;
                 Err(error.into())
@@ -565,6 +568,9 @@ impl Application {
             max_connections,
         );
         self.gateway.mount_websocket(transport.clone());
+        if let Some(consent) = &self.consent {
+            crate::runtime::consent_ws::spawn(consent.clone(), transport.hub());
+        }
         self.ws_transport = Some(transport.clone());
         Ok(transport)
     }
