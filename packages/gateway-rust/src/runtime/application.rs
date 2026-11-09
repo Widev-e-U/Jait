@@ -340,6 +340,12 @@ impl Application {
         // Project roots come from the project records the same store confirms, so the
         // router needs no separately configured root and cannot be pointed elsewhere.
         let projects = ProjectRoutes::new(auth.clone());
+        let voice_config = VoiceRouteConfig::from_env();
+        let mut voice = VoiceRoutes::new(auth.clone(), voice_config.clone())
+            .with_settings(Arc::new(crate::routes::voice::DbVoiceSettings::new(&auth)));
+        if let Some(stt) = crate::voice::http::configured_from_env(&voice_config).await {
+            voice = voice.with_transcription(Arc::new(stt));
+        }
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -379,7 +385,7 @@ impl Application {
             )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
-            .merge(VoiceRoutes::new(auth.clone(), VoiceRouteConfig::from_env()).router())
+            .merge(voice.router())
             .merge(
                 EnvironmentRoutes {
                     auth: auth.clone(),

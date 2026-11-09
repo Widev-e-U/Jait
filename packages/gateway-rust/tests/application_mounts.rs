@@ -380,15 +380,23 @@ async fn voice_is_served_and_authenticated() {
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    // Node parity: state routes are unauthenticated. transcribe-audio needs a settings
-    // source and STT transport that are not wired yet, so it answers 501 (not 404).
-    let unwired = client
+    // Node parity: the 501 probe precedes auth, so without a configured STT transport this is 501.
+    let anonymous = client
         .post(format!("{base}/api/voice/transcribe-audio"))
         .send()
         .await
         .unwrap();
-    assert_eq!(unwired.status(), 501);
+    assert!([401, 501].contains(&anonymous.status().as_u16()));
     let token = token(&client, &base).await;
+    let unconfigured = client
+        .post(format!("{base}/api/voice/transcribe-audio"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    // Empty audio is rejected (400) when the operator env configured a provider, else 501.
+    assert!([400, 501].contains(&unconfigured.status().as_u16()));
     let state = client
         .get(format!("{base}/api/voice/state/s1"))
         .bearer_auth(&token)

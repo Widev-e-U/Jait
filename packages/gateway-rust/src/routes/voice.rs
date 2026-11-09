@@ -123,7 +123,37 @@ impl VoiceSettings {
 
 /// Settings provider. Mirrors the `settings = users.getSettings(user.id)` call.
 pub trait VoiceSettingsSource: Send + Sync {
-    fn settings(&self, user: &AuthUser) -> Result<VoiceSettings, String>;
+    fn settings<'a>(&'a self, user: &'a AuthUser) -> crate::voice::VoiceFuture<'a, VoiceSettings>;
+}
+
+/// Reads `stt_provider` and `api_keys` from the persisted user settings.
+pub struct DbVoiceSettings {
+    db: crate::db::worker::DatabaseWorker,
+}
+
+impl DbVoiceSettings {
+    pub fn new(auth: &AuthState) -> Self {
+        Self { db: auth.worker() }
+    }
+}
+
+impl VoiceSettingsSource for DbVoiceSettings {
+    fn settings<'a>(&'a self, user: &'a AuthUser) -> crate::voice::VoiceFuture<'a, VoiceSettings> {
+        Box::pin(async move {
+            let id = user.id.clone();
+            let settings = self
+                .db
+                .run(move |db| {
+                    Ok(crate::services::users::UserService::new(db).get_settings(&id)?)
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(VoiceSettings {
+                stt_provider: Some(settings.stt_provider),
+                api_keys: settings.api_keys,
+            })
+        })
+    }
 }
 
 /// Consent manager host — same contract the TS `ConsentManager` fulfils.
@@ -469,7 +499,7 @@ impl VoiceRoutes {
                 json!({ "error": "VALIDATION_ERROR", "details": "audioBase64 is required" }),
             );
         }
-        let settings = match settings_source.settings(&user) {
+        let settings = match settings_source.settings(&user).await {
             Ok(settings) => settings,
             Err(_) => return auth::internal_error(),
         };
@@ -893,9 +923,12 @@ mod tests {
     }
 
     impl VoiceSettingsSource for FakeSettings {
-        fn settings(&self, user: &AuthUser) -> Result<VoiceSettings, String> {
+        fn settings<'a>(
+            &'a self,
+            user: &'a AuthUser,
+        ) -> crate::voice::VoiceFuture<'a, VoiceSettings> {
             assert_eq!(user.id, "owner");
-            Ok(self.settings.clone())
+            Box::pin(async move { Ok(self.settings.clone()) })
         }
     }
 

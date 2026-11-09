@@ -654,3 +654,53 @@ mod tests {
         assert!(validated_headers(&request, &grant).is_err());
     }
 }
+
+/// Builds the STT transport from operator environment configuration only. User settings never
+/// confer a destination: each configured endpoint is resolved once here and pinned. Returns
+/// `None` when no remote provider is configured.
+pub async fn configured_from_env(
+    config: &crate::routes::voice::VoiceRouteConfig,
+) -> Option<ConfiguredSttHttp> {
+    let expires = SystemTime::now() + Duration::from_secs(30 * 24 * 3600);
+    let mut grants = Vec::new();
+    let mut add = async |endpoint: &str, credential: Credential, private: bool| {
+        let Ok(url) = Url::parse(endpoint) else { return };
+        let (Some(host), Some(port)) = (url.host_str(), url.port_or_known_default()) else {
+            return;
+        };
+        let host = host.trim_matches(['[', ']']).to_string();
+        let Ok(found) = tokio::net::lookup_host((host.as_str(), port)).await else { return };
+        let mut ips: Vec<IpAddr> = found.map(|a| a.ip()).collect();
+        ips.sort();
+        ips.dedup();
+        ips.truncate(16);
+        if let Ok(grant) =
+            DestinationGrant::configured(endpoint, ips, credential, expires, "gateway".into(), private)
+        {
+            grants.push(grant);
+        }
+    };
+    if let Some(url) = &config.whisper_url {
+        add(&format!("{}/transcribe", url.trim_end_matches('/')), Credential::None, true).await;
+    }
+    if let Some(key) = &config.openai_api_key {
+        let base = config.openai_base_url.as_deref().unwrap_or("https://api.openai.com/v1");
+        add(
+            &format!("{}/audio/transcriptions", base.trim_end_matches('/')),
+            Credential::Bearer(key.clone()),
+            false,
+        )
+        .await;
+    }
+    if let Some(key) = &config.elevenlabs_api_key {
+        let endpoint = config
+            .elevenlabs_stt_url
+            .as_deref()
+            .unwrap_or("https://api.elevenlabs.io/v1/speech-to-text");
+        add(endpoint, Credential::ElevenLabs(key.clone()), false).await;
+    }
+    if grants.is_empty() {
+        return None;
+    }
+    ConfiguredSttHttp::new(grants, 4).ok()
+}
