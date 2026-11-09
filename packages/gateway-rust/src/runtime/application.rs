@@ -8,8 +8,10 @@ use crate::{
         auth::AuthState,
         chat::{ChatFactory, ChatRoutes},
         project::ProjectRoutes,
+        reminders::ReminderRoutes,
         sessions::SessionRoutes,
         terminals::TerminalRoutes,
+        threads::ThreadRoutes,
     },
     runtime::Gateway,
 };
@@ -232,7 +234,9 @@ impl Application {
             .merge(auth.clone().router())
             .merge(sessions.router())
             .merge(terminals.router())
-            .merge(projects.router());
+            .merge(projects.router())
+            .merge(ThreadRoutes::new(auth.clone()).router())
+            .merge(ReminderRoutes::new(auth.clone()).router());
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
         }

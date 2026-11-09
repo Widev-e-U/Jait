@@ -5,10 +5,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 274,
-  "native-tested": 45,
+  "router-unmounted": 260,
+  "native-tested": 59,
   "missing": 98,
-  "nativeTestedPct": 10.8,
+  "nativeTestedPct": 14.1,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -28,14 +28,14 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/messenger` | missing | routes/messenger.ts |
 | DELETE | `/api/mobile/push-devices/:deviceId` | router-unmounted | routes/mobile.ts |
 | DELETE | `/api/nodes/:id/credential` | missing | server.ts |
-| DELETE | `/api/persona-agents/:id` | router-unmounted | routes/threads.ts |
+| DELETE | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | DELETE | `/api/plans/:id` | router-unmounted | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | router-unmounted | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | router-unmounted | routes/browser-devtools.ts |
 | DELETE | `/api/projects/:id` | missing | routes/projects.ts |
 | DELETE | `/api/projects/archived` | missing | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | router-unmounted | routes/providers.ts |
-| DELETE | `/api/reminders/:id` | router-unmounted | routes/reminders.ts |
+| DELETE | `/api/reminders/:id` | native-tested | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | router-unmounted | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | router-unmounted | routes/repositories.ts |
 | DELETE | `/api/secrets/:id` | router-unmounted | routes/secrets.ts |
@@ -43,7 +43,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | DELETE | `/api/store/skills/:slug` | native-tested | routes/store.ts |
 | DELETE | `/api/terminals/:id` | native-tested | routes/terminals.ts |
-| DELETE | `/api/threads/:id` | router-unmounted | routes/threads.ts |
+| DELETE | `/api/threads/:id` | native-tested | routes/threads.ts |
 | DELETE | `/mcp` | router-unmounted | routes/mcp-server.ts |
 | GET | `/` | missing | server.ts |
 | GET | `/api/agent-control` | router-unmounted | routes/agent-control.ts |
@@ -110,7 +110,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/network/nodes` | router-unmounted | routes/network.ts |
 | GET | `/api/network/scan/latest` | router-unmounted | routes/network.ts |
 | GET | `/api/network/topology` | router-unmounted | routes/network.ts |
-| GET | `/api/persona-agents` | router-unmounted | routes/threads.ts |
+| GET | `/api/persona-agents` | native-tested | routes/threads.ts |
 | GET | `/api/plans/:id` | router-unmounted | routes/plans.ts |
 | GET | `/api/plugins` | router-unmounted | routes/plugins.ts |
 | GET | `/api/plugins/:id` | router-unmounted | routes/plugins.ts |
@@ -140,8 +140,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/providers` | router-unmounted | routes/providers.ts |
 | GET | `/api/providers/:id/auth/status` | router-unmounted | routes/providers.ts |
 | GET | `/api/providers/:id/models` | router-unmounted | routes/providers.ts |
-| GET | `/api/reminders` | router-unmounted | routes/reminders.ts |
-| GET | `/api/reminders/export.md` | router-unmounted | routes/reminders.ts |
+| GET | `/api/reminders` | native-tested | routes/reminders.ts |
+| GET | `/api/reminders/export.md` | native-tested | routes/reminders.ts |
 | GET | `/api/repos` | router-unmounted | routes/repositories.ts |
 | GET | `/api/repos/:repoId/plans` | router-unmounted | routes/plans.ts |
 | GET | `/api/repos/:repoId/proposals` | router-unmounted | routes/repo-proposals.ts |
@@ -186,10 +186,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/terminals` | native-tested | routes/terminals.ts |
 | GET | `/api/terminals/:id` | native-tested | routes/terminals.ts |
 | GET | `/api/terminals/shells` | native-tested | routes/terminals.ts |
-| GET | `/api/threads` | router-unmounted | routes/threads.ts |
-| GET | `/api/threads/:id` | router-unmounted | routes/threads.ts |
-| GET | `/api/threads/:id/activities` | router-unmounted | routes/threads.ts |
-| GET | `/api/threads/:id/runtime` | router-unmounted | routes/threads.ts |
+| GET | `/api/threads` | native-tested | routes/threads.ts |
+| GET | `/api/threads/:id` | native-tested | routes/threads.ts |
+| GET | `/api/threads/:id/activities` | native-tested | routes/threads.ts |
+| GET | `/api/threads/:id/runtime` | native-tested | routes/threads.ts |
 | GET | `/api/tools` | missing | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-tested | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-tested | routes/sessions.ts |
@@ -219,14 +219,14 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | PATCH | `/api/projects/:id` | missing | routes/projects.ts |
 | PATCH | `/api/projects/:id/state` | missing | routes/projects.ts |
 | PATCH | `/api/provider-accounts/:id` | router-unmounted | routes/providers.ts |
-| PATCH | `/api/reminders/:id` | router-unmounted | routes/reminders.ts |
+| PATCH | `/api/reminders/:id` | native-tested | routes/reminders.ts |
 | PATCH | `/api/repo-proposals/:id` | router-unmounted | routes/repo-proposals.ts |
 | PATCH | `/api/repos/:id` | router-unmounted | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | router-unmounted | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | router-unmounted | routes/skills.ts |
-| PATCH | `/api/threads/:id` | router-unmounted | routes/threads.ts |
+| PATCH | `/api/threads/:id` | native-tested | routes/threads.ts |
 | PATCH | `/api/voice/state/:sessionId` | router-unmounted | routes/voice.ts |
 | POST | `/api/agent-control/halt` | router-unmounted | routes/agent-control.ts |
 | POST | `/api/agent-control/resume` | router-unmounted | routes/agent-control.ts |
@@ -350,7 +350,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/providers/backend/test` | router-unmounted | routes/providers.ts |
 | POST | `/api/providers/models/reset` | router-unmounted | routes/providers.ts |
 | POST | `/api/providers/omniroute/test` | router-unmounted | routes/providers.ts |
-| POST | `/api/reminders` | router-unmounted | routes/reminders.ts |
+| POST | `/api/reminders` | native-tested | routes/reminders.ts |
 | POST | `/api/repos` | router-unmounted | routes/repositories.ts |
 | POST | `/api/repos/:repoId/plans` | router-unmounted | routes/plans.ts |
 | POST | `/api/repos/:repoId/proposals` | router-unmounted | routes/repo-proposals.ts |
@@ -432,7 +432,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | PUT | `/api/agents/:agentId/github-app/intake` | router-unmounted | routes/agent-github-apps.ts |
 | PUT | `/api/architecture` | router-unmounted | routes/architecture.ts |
 | PUT | `/api/mobile/routines/:kind` | router-unmounted | routes/mobile.ts |
-| PUT | `/api/persona-agents/:id` | router-unmounted | routes/threads.ts |
+| PUT | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | router-unmounted | routes/repositories.ts |
 
 ## WS message types (heuristic)

@@ -1,10 +1,10 @@
 {
   "summary": {
     "httpTotal": 417,
-    "router-unmounted": 274,
-    "native-tested": 45,
+    "router-unmounted": 260,
+    "native-tested": 59,
     "missing": 98,
-    "nativeTestedPct": 10.8,
+    "nativeTestedPct": 14.1,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -113,7 +113,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -174,7 +174,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/reminders.rs"
     },
     {
@@ -246,7 +246,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -843,7 +843,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -1098,7 +1098,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/reminders.rs"
     },
     {
@@ -1107,7 +1107,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/reminders.rs"
     },
     {
@@ -1502,7 +1502,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -1511,7 +1511,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -1520,7 +1520,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -1529,7 +1529,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -1793,7 +1793,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/reminders.rs"
     },
     {
@@ -1856,7 +1856,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
@@ -2937,7 +2937,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/reminders.rs"
     },
     {
@@ -3653,7 +3653,7 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/threads.rs"
     },
     {
