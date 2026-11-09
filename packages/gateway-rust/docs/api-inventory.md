@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 210,
-  "native-tested": 102,
+  "router-unmounted": 200,
+  "native-tested": 112,
   "missing": 98,
   "native-untested": 7,
-  "nativeTestedPct": 24.5,
+  "nativeTestedPct": 26.9,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -19,7 +19,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | Method | Path | Status | Node source |
 |---|---|---|---|
 | DELETE | `/api/agents/:agentId/github-app` | router-unmounted | routes/agent-github-apps.ts |
-| DELETE | `/api/assistants/profiles/:id` | router-unmounted | routes/assistant-profiles.ts |
+| DELETE | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | routes/auth.ts |
 | DELETE | `/api/calendar/accounts/:id` | router-unmounted | routes/calendar.ts |
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | router-unmounted | routes/consent.ts |
@@ -50,9 +50,9 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/agent-control` | router-unmounted | routes/agent-control.ts |
 | GET | `/api/agents/:agentId/github-app` | router-unmounted | routes/agent-github-apps.ts |
 | GET | `/api/agents/:agentId/github-app/intake` | router-unmounted | routes/agent-github-apps.ts |
-| GET | `/api/architecture` | router-unmounted | routes/architecture.ts |
-| GET | `/api/assistants/profiles` | router-unmounted | routes/assistant-profiles.ts |
-| GET | `/api/assistants/profiles/:id` | router-unmounted | routes/assistant-profiles.ts |
+| GET | `/api/architecture` | native-tested | routes/architecture.ts |
+| GET | `/api/assistants/profiles` | native-tested | routes/assistant-profiles.ts |
+| GET | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
 | GET | `/api/auth/me` | native-tested | routes/auth.ts |
 | GET | `/api/auth/settings` | native-tested | routes/auth.ts |
 | GET | `/api/auth/settings/env-status` | native-tested | routes/auth.ts |
@@ -199,7 +199,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/trust/levels/:actionType` | router-unmounted | routes/trust.ts |
 | GET | `/api/update/changelog` | router-unmounted | routes/update.ts |
 | GET | `/api/update/check` | router-unmounted | routes/update.ts |
-| GET | `/api/user-questions/requests` | router-unmounted | routes/user-questions.ts |
+| GET | `/api/user-questions/requests` | native-tested | routes/user-questions.ts |
 | GET | `/api/voice-assistant/status` | missing | server.ts |
 | GET | `/api/voice/state/:sessionId` | router-unmounted | routes/voice.ts |
 | GET | `/health` | router-unmounted | routes/health.ts |
@@ -208,7 +208,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/preview/:previewToken/devtools/:grantId/*` | router-unmounted | routes/browser-devtools.ts |
 | GET | `/preview/:previewToken/file/:encodedPath` | missing | server.ts |
 | GET | `/preview/:previewToken/file/:encodedPath/*` | missing | server.ts |
-| PATCH | `/api/assistants/profiles/:id` | router-unmounted | routes/assistant-profiles.ts |
+| PATCH | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
 | PATCH | `/api/auth/settings` | native-tested | routes/auth.ts |
 | PATCH | `/api/auth/settings/tools` | native-tested | routes/auth.ts |
 | PATCH | `/api/channels/:id/config` | router-unmounted | routes/channels.ts |
@@ -236,7 +236,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/agents/:agentId/github-app/setup` | router-unmounted | routes/agent-github-apps.ts |
 | POST | `/api/agents/:agentId/github-app/test` | router-unmounted | routes/agent-github-apps.ts |
 | POST | `/api/agents/:agentId/github-app/verify` | router-unmounted | routes/agent-github-apps.ts |
-| POST | `/api/assistants/profiles` | router-unmounted | routes/assistant-profiles.ts |
+| POST | `/api/assistants/profiles` | native-tested | routes/assistant-profiles.ts |
 | POST | `/api/auth/invitations` | native-tested | routes/auth.ts |
 | POST | `/api/auth/login` | native-tested | routes/auth.ts |
 | POST | `/api/auth/logout` | native-tested | routes/auth.ts |
@@ -419,8 +419,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/tools/execute` | missing | routes/terminals.ts |
 | POST | `/api/trust/levels/:actionType/reset` | router-unmounted | routes/trust.ts |
 | POST | `/api/update/apply` | router-unmounted | routes/update.ts |
-| POST | `/api/user-questions/requests/:id/cancel` | router-unmounted | routes/user-questions.ts |
-| POST | `/api/user-questions/requests/:id/submit` | router-unmounted | routes/user-questions.ts |
+| POST | `/api/user-questions/requests/:id/cancel` | native-tested | routes/user-questions.ts |
+| POST | `/api/user-questions/requests/:id/submit` | native-tested | routes/user-questions.ts |
 | POST | `/api/voice/speak` | router-unmounted | routes/voice.ts |
 | POST | `/api/voice/transcribe` | router-unmounted | routes/voice.ts |
 | POST | `/api/voice/transcribe-audio` | router-unmounted | routes/voice.ts |
@@ -431,7 +431,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/mcp/messages` | router-unmounted | routes/mcp-server.ts |
 | POST | `/mcp/sse` | router-unmounted | routes/mcp-server.ts |
 | PUT | `/api/agents/:agentId/github-app/intake` | router-unmounted | routes/agent-github-apps.ts |
-| PUT | `/api/architecture` | router-unmounted | routes/architecture.ts |
+| PUT | `/api/architecture` | native-tested | routes/architecture.ts |
 | PUT | `/api/mobile/routines/:kind` | router-unmounted | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-tested | routes/repositories.ts |

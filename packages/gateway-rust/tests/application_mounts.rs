@@ -92,3 +92,20 @@ async fn git_plans_proposals_and_repositories_are_served_and_authenticated() {
     let _ = shutdown.send(());
     let _ = task.await;
 }
+
+#[tokio::test]
+async fn profiles_architecture_and_questions_are_served_and_authenticated() {
+    let (base, shutdown, task, _dir) = start().await;
+    let client = reqwest::Client::new();
+    let token = token(&client, &base).await;
+    for path in ["/api/assistants/profiles", "/api/user-questions/requests"] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path}");
+        let ok = client.get(format!("{base}{path}")).bearer_auth(&token).send().await.unwrap();
+        assert_eq!(ok.status(), 200, "{path}");
+    }
+    let anon = client.get(format!("{base}/api/architecture")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let _ = shutdown.send(());
+    let _ = task.await;
+}

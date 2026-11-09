@@ -7,6 +7,8 @@ use crate::{
     routes::{
         auth::AuthState,
         filesystem::{BrowseEnvironment, FilesystemRoutes},
+        architecture::ArchitectureRoutes,
+        assistant_profiles::AssistantProfileRoutes,
         git::GitRoutes,
         plans::PlanRoutes,
         repo_proposals::RepoProposalRoutes,
@@ -18,6 +20,7 @@ use crate::{
         sessions::SessionRoutes,
         terminals::TerminalRoutes,
         threads::ThreadRoutes,
+        user_questions::UserQuestionRoutes,
     },
     runtime::Gateway,
 };
@@ -272,6 +275,15 @@ impl Application {
             .merge(ThreadRoutes::new(auth.clone()).router())
             .merge(ReminderRoutes::new(auth.clone()).router())
             .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
+            .merge(AssistantProfileRoutes { auth: auth.clone() }.router())
+            .merge(ArchitectureRoutes { auth: auth.clone() }.router())
+            .merge(
+                UserQuestionRoutes {
+                    auth: auth.clone(),
+                    questions: Default::default(),
+                }
+                .router(),
+            )
             .merge(PlanRoutes::new(auth.clone()).router())
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
