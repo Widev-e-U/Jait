@@ -20,6 +20,7 @@ use crate::{
         sessions::SessionRoutes,
         terminals::TerminalRoutes,
         threads::ThreadRoutes,
+        update::UpdateRoutes,
         user_questions::UserQuestionRoutes,
     },
     runtime::Gateway,
@@ -172,6 +173,59 @@ impl Drop for ChatOwner {
 // Terminal routes are authenticated by the shared account state and fail closed for
 // non-default sessions. Unix hosts get the real PTY control; other platforms keep the
 // fail-closed default rather than pretending the capability exists.
+/// Code graph on the real database worker. The graphify command and its managed
+/// runtime live under the state directory beside the database; nothing is
+/// provisioned until an index is requested.
+fn composed_code_graph_routes(
+    auth: AuthState,
+    project_root: &std::path::Path,
+    state_dir: &std::path::Path,
+) -> Result<crate::routes::code_graph::CodeGraphRoutes, ApplicationError> {
+    use crate::services::code_graph::{
+        engine::native_executor,
+        runner::{GraphifyRunner, RunnerOptions},
+        runtime::GraphifyRuntime,
+        service::CodeGraphService,
+    };
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut env = std::collections::BTreeMap::new();
+    for key in ["PATH", "HOME", "JAIT_GRAPHIFY_COMMAND"] {
+        if let Ok(value) = std::env::var(key) {
+            env.insert(key.to_owned(), value);
+        }
+    }
+    let execute = native_executor(
+        project_root.to_path_buf(),
+        std::time::Duration::from_secs(3600),
+        2,
+    )
+    .map_err(|error| ApplicationError::from(error.to_string()))?;
+    let runtime = GraphifyRuntime::new(
+        state_dir.to_string_lossy().into_owned(),
+        env.clone(),
+        execute.clone(),
+    );
+    let runner = GraphifyRunner::new(runtime, RunnerOptions::default());
+    let service = Arc::new(CodeGraphService::with_worker(
+        auth.worker(),
+        state_dir
+            .join("data")
+            .join("code-graphs")
+            .to_string_lossy()
+            .into_owned(),
+        home,
+        CodeGraphService::runner_build(runner),
+        CodeGraphService::revision_executor(execute, env),
+    ));
+    Ok(crate::routes::code_graph::CodeGraphRoutes {
+        auth: auth.clone(),
+        backend: Arc::new(crate::routes::code_graph::NativeCodeGraphBackend {
+            service,
+            projects: crate::routes::code_graph::owned_projects_from_auth(auth),
+        }),
+        cwd: project_root.to_string_lossy().into_owned(),
+    })
+}
 fn composed_terminal_routes(auth: AuthState, project_root: &std::path::Path) -> TerminalRoutes {
     let routes =
         TerminalRoutes::new(auth).with_project_root(project_root.to_string_lossy().into_owned());
@@ -233,6 +287,11 @@ impl Application {
         if !listener.address.ip().is_loopback() && !listener.allow_non_loopback {
             return Err("migration gateway requires loopback".into());
         }
+        let state_dir = config
+            .database_path
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .ok_or("database path must have a parent directory")?;
         let database_path = config.database_path;
         let jwt_secret = config.jwt_secret;
         let secrets_key = jwt_secret.clone();
@@ -297,6 +356,23 @@ impl Application {
                 .router(),
             )
             .merge(PlanRoutes::new(auth.clone()).router())
+            .merge(
+                composed_code_graph_routes(
+                    auth.clone(),
+                    &config.project_root,
+                    &state_dir,
+                )?
+                .router(),
+            )
+            .merge(
+                UpdateRoutes {
+                    auth: auth.clone(),
+                    backend: Arc::new(crate::routes::update::ReadOnlyUpdateBackend::new().map_err(|error| ApplicationError::from(error.detail))?),
+                    current_version: env!("CARGO_PKG_VERSION").to_owned(),
+                    systemd_managed: false,
+                }
+                .router(),
+            )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
             .merge(

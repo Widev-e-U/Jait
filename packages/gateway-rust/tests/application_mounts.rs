@@ -284,3 +284,52 @@ async fn non_loopback_bind_requires_the_explicit_flag() {
     drop(app);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn code_graph_and_update_are_served_and_authenticated() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    for path in [
+        "/api/code-graph",
+        "/api/code-graph/snapshot",
+        "/api/update/changelog",
+    ] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth, not 404");
+    }
+    let anon = client
+        .post(format!("{base}/api/update/apply"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let graph = client
+        .get(format!("{base}/api/code-graph"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let status = graph.status();
+    let body = graph.text().await.unwrap();
+    assert!(
+        status != 404 && status != 401 && !status.is_server_error(),
+        "code-graph: {status} {body}"
+    );
+    let apply = client
+        .post(format!("{base}/api/update/apply"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(apply.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

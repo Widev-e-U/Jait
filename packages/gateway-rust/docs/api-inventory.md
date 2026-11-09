@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 200,
-  "native-tested": 112,
+  "router-unmounted": 190,
+  "native-tested": 121,
   "missing": 98,
-  "native-untested": 7,
-  "nativeTestedPct": 26.9,
+  "native-untested": 8,
+  "nativeTestedPct": 29,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -67,8 +67,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/channels` | router-unmounted | routes/channels.ts |
 | GET | `/api/channels/:id/setup` | router-unmounted | routes/channels.ts |
 | GET | `/api/channels/:id/status` | router-unmounted | routes/channels.ts |
-| GET | `/api/code-graph` | router-unmounted | routes/code-graph.ts |
-| GET | `/api/code-graph/snapshot` | router-unmounted | routes/code-graph.ts |
+| GET | `/api/code-graph` | native-tested | routes/code-graph.ts |
+| GET | `/api/code-graph/snapshot` | native-tested | routes/code-graph.ts |
 | GET | `/api/consent/:id` | router-unmounted | routes/consent.ts |
 | GET | `/api/consent/count` | router-unmounted | routes/consent.ts |
 | GET | `/api/consent/pending` | router-unmounted | routes/consent.ts |
@@ -99,7 +99,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/maintenance/runs/:id` | router-unmounted | routes/maintenance.ts |
 | GET | `/api/messenger` | missing | routes/messenger.ts |
 | GET | `/api/messenger/search` | missing | routes/messenger.ts |
-| GET | `/api/mobile-update/check` | router-unmounted | routes/update.ts |
+| GET | `/api/mobile-update/check` | native-tested | routes/update.ts |
 | GET | `/api/mobile/consent/pending` | router-unmounted | routes/mobile.ts |
 | GET | `/api/mobile/devices` | router-unmounted | routes/mobile.ts |
 | GET | `/api/mobile/discovery` | router-unmounted | routes/mobile.ts |
@@ -197,8 +197,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/trust` | router-unmounted | routes/consent.ts |
 | GET | `/api/trust/levels` | router-unmounted | routes/trust.ts |
 | GET | `/api/trust/levels/:actionType` | router-unmounted | routes/trust.ts |
-| GET | `/api/update/changelog` | router-unmounted | routes/update.ts |
-| GET | `/api/update/check` | router-unmounted | routes/update.ts |
+| GET | `/api/update/changelog` | native-tested | routes/update.ts |
+| GET | `/api/update/check` | native-tested | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-tested | routes/user-questions.ts |
 | GET | `/api/voice-assistant/status` | missing | server.ts |
 | GET | `/api/voice/state/:sessionId` | router-unmounted | routes/voice.ts |
@@ -250,10 +250,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/channels/:id/stop` | router-unmounted | routes/channels.ts |
 | POST | `/api/chat` | native-tested | routes/chat.ts |
 | POST | `/api/chat/prewarm` | missing | routes/chat.ts |
-| POST | `/api/code-graph/graphrag/prepare` | router-unmounted | routes/code-graph.ts |
-| POST | `/api/code-graph/index` | router-unmounted | routes/code-graph.ts |
-| POST | `/api/code-graph/path` | router-unmounted | routes/code-graph.ts |
-| POST | `/api/code-graph/query` | router-unmounted | routes/code-graph.ts |
+| POST | `/api/code-graph/graphrag/prepare` | native-untested | routes/code-graph.ts |
+| POST | `/api/code-graph/index` | native-tested | routes/code-graph.ts |
+| POST | `/api/code-graph/path` | native-tested | routes/code-graph.ts |
+| POST | `/api/code-graph/query` | native-tested | routes/code-graph.ts |
 | POST | `/api/consent/:id/approve` | router-unmounted | routes/consent.ts |
 | POST | `/api/consent/:id/approve-all` | router-unmounted | routes/consent.ts |
 | POST | `/api/consent/:id/reject` | router-unmounted | routes/consent.ts |
@@ -418,7 +418,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/threads/:id/stop` | missing | routes/threads.ts |
 | POST | `/api/tools/execute` | missing | routes/terminals.ts |
 | POST | `/api/trust/levels/:actionType/reset` | router-unmounted | routes/trust.ts |
-| POST | `/api/update/apply` | router-unmounted | routes/update.ts |
+| POST | `/api/update/apply` | native-tested | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-tested | routes/user-questions.ts |
 | POST | `/api/user-questions/requests/:id/submit` | native-tested | routes/user-questions.ts |
 | POST | `/api/voice/speak` | router-unmounted | routes/voice.ts |
