@@ -3,8 +3,9 @@
 //! `file.read` and `file.write` run on a registry owned by a dedicated thread (the registry is
 //! `Rc`-based) behind `ConsentAwareExecutor`. Both go through `ScopedFileRoot` (openat2 beneath the
 //! project root, no symlinks), so the model cannot leave the project. `file.read` needs no consent;
-//! `file.write` replaces an existing file only and waits for the user's approval on the shared
-//! `ConsentManager` (served at /api/consent). Patch, list, terminal and other tools are not mounted.
+//! `file.write` replaces an existing file only and `terminal.run` runs a one-shot command in the
+//! project root; both wait for approval on the shared `ConsentManager` (served at /api/consent).
+//! Patch, list and persistent-terminal tools are not mounted.
 use super::chat_turn::TurnTool;
 use crate::{
     contracts::bounded_json::Utf16Text,
@@ -16,10 +17,12 @@ use crate::{
     },
     tools::{
         core_io::{HostError, HostPort},
+        core_jait::JaitPort,
         file_tools::{FileTool, create_file_read_tool, create_file_write_tool, metadata},
         registry::{ExecutePort, RegistryContext, RegistryResult, ToolRegistry},
         registry_authority::RegistryAuthority,
         registry_owner::{RegistryOwner, consent_delegate},
+        terminal_tools::TerminalTools,
     },
 };
 use futures_util::future::BoxFuture;
@@ -94,6 +97,53 @@ fn host_port() -> HostPort<Ctx> {
     })
 }
 
+/// One-shot `sh -c` in the project root: bounded output, hard timeout, killed on drop. There is
+/// no persistent terminal behind the chat tool, so a command that outlives its timeout is killed.
+fn terminal_port() -> JaitPort<Ctx> {
+    Arc::new(|method, args, ctx| {
+        Box::pin(async move {
+            if method != "terminalRun" {
+                return Err(HostError::Error("Operation is not available".into()));
+            }
+            let spec = args.first().cloned().unwrap_or(Value::Null);
+            let command = spec["command"].as_str().unwrap_or_default().to_owned();
+            if spec["sudo"].as_bool() == Some(true) || spec["background"].as_bool() == Some(true) {
+                return Err(HostError::Error(
+                    "sudo and background commands are not available in chat".into(),
+                ));
+            }
+            let timeout = std::time::Duration::from_millis(
+                spec["timeoutMs"].as_u64().unwrap_or(60_000).min(120_000),
+            );
+            let root = ctx.capabilities.execution().project_root.clone();
+            let mut child = tokio::process::Command::new("sh");
+            child
+                .arg("-c")
+                .arg(&command)
+                .current_dir(&root)
+                .stdin(std::process::Stdio::null())
+                .kill_on_drop(true);
+            let run = async {
+                let out = child.output().await;
+                out.map(|o| {
+                    let mut text = String::from_utf8_lossy(&o.stdout).into_owned();
+                    text.push_str(&String::from_utf8_lossy(&o.stderr));
+                    (text, o.status.code())
+                })
+            };
+            Ok(Some(match tokio::time::timeout(timeout, run).await {
+                Ok(Ok((output, code))) => {
+                    json!({"output": output, "exitCode": code, "timedOut": false})
+                }
+                Ok(Err(e)) => return Err(HostError::Error(format!("Cannot run command: {e}"))),
+                Err(_) => {
+                    json!({"error": format!("Command timed out after {}ms and was stopped", timeout.as_millis())})
+                }
+            }))
+        })
+    })
+}
+
 fn turn_tool(definition: &Value, fallback: &str) -> TurnTool {
     TurnTool {
         name: definition["name"].as_str().unwrap_or(fallback).into(),
@@ -132,10 +182,17 @@ pub fn project_tools(
     let write_definition = metadata("write")
         .ok_or("file.write definition missing")?
         .clone();
+    let terminal_definition = TerminalTools::<Ctx>::metadata()
+        .as_array()
+        .and_then(|a| a.iter().find(|e| e["name"] == "terminal.run"))
+        .ok_or("terminal.run definition missing")?
+        .clone();
     let turn_tools = vec![
         turn_tool(&read_definition, "file.read"),
         turn_tool(&write_definition, "file.write"),
+        turn_tool(&terminal_definition, "terminal.run"),
     ];
+    let terminal_definition_for_registry = terminal_definition.clone();
     let (handle_tx, handle_rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
         .name("jait-chat-tools".into())
@@ -158,6 +215,25 @@ pub fn project_tools(
                 registry.register(
                     write_definition,
                     execute_port(Rc::new(create_file_write_tool(host_port()))),
+                );
+                let terminal = Rc::new(TerminalTools::new(terminal_port()));
+                registry.register(
+                    terminal_definition_for_registry,
+                    Rc::new(move |_definition, input, ctx| {
+                        let terminal = terminal.clone();
+                        let input = input.value();
+                        Box::pin(async move {
+                            let context = json!({});
+                            let out = terminal.run(&input, &context, ctx).await;
+                            Ok(RegistryResult {
+                                ok: json!(out["ok"].as_bool().unwrap_or(true)),
+                                message: Utf16Text::from(
+                                    out["message"].as_str().unwrap_or_default().to_owned(),
+                                ),
+                                data: out.get("data").cloned(),
+                            })
+                        })
+                    }),
                 );
                 let (owner, handle) =
                     RegistryOwner::new(registry, None, NonZeroUsize::new(8).unwrap());
@@ -195,6 +271,12 @@ pub fn project_tools(
                     ConsentLevel::None,
                     Risk::Low,
                     "Read-only access to files inside the project",
+                ),
+                permission(
+                    "terminal.run",
+                    ConsentLevel::Once,
+                    Risk::High,
+                    "Run a shell command in the project root",
                 ),
                 permission(
                     "file.write",

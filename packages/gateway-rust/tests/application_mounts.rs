@@ -811,3 +811,113 @@ async fn chat_write_waits_for_consent_then_applies_or_leaves_the_file() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn chat_terminal_command_waits_for_consent_then_runs_or_never_starts() {
+    let (model_base, seen) = fake_model_calling(
+        "terminal_run",
+        serde_json::json!({"command": "printf ran > marker.txt"}),
+    )
+    .await;
+    let (base, stop, task, dir) = start_seeded(false, |d| {
+        let _ = d;
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "k"},
+            "selected_model": "m"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    for (action, expected) in [("reject", false), ("approve", true)] {
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let turn = {
+            let (client, base, token) = (client.clone(), base.clone(), token.clone());
+            let body = serde_json::json!({"sessionId": session["id"], "content": "rewrite notes"});
+            tokio::spawn(async move {
+                client
+                    .post(format!("{base}/api/chat"))
+                    .bearer_auth(&token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+            })
+        };
+        let mut pending = None;
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                pending = Some(first.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let pending = pending.expect("write must wait for consent");
+        assert_eq!(pending["toolName"], "terminal.run");
+        assert!(
+            !dir.join("marker.txt").exists(),
+            "command must not start before approval"
+        );
+        let decided = client
+            .post(format!(
+                "{base}/api/consent/{}/{action}",
+                pending["id"].as_str().unwrap()
+            ))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decided.status(), 200);
+        tokio::time::timeout(Duration::from_secs(20), turn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(dir.join("marker.txt").exists(), expected, "after {action}");
+    }
+    assert!(seen.lock().unwrap().len() >= 2);
+    // Without a token the consent queue is not readable.
+    let anonymous = client
+        .get(format!("{base}/api/consent/pending"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), 401);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
