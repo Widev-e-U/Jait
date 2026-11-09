@@ -150,6 +150,17 @@ fn schema_install_is_atomic_and_never_backfills_existing_threads() {
         })
         .unwrap();
     assert_eq!(heads, 0);
+    // A retry on an identical, marked schema verifies it; it never backfills either.
+    install_schema(&db).unwrap();
+    let heads: i64 = db
+        .query_row("SELECT count(*) FROM rust_thread_turn_heads", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(heads, 0);
+    // A missing marker makes the same schema unverifiable, so the retry fails closed.
+    db.execute_batch("DELETE FROM rust_thread_turn_schema_marker_v1")
+        .unwrap();
     assert!(install_schema(&db).is_err());
 }
 
