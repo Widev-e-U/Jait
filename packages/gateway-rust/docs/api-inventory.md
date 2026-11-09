@@ -5,10 +5,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 260,
-  "native-tested": 59,
+  "router-unmounted": 251,
+  "native-tested": 68,
   "missing": 98,
-  "nativeTestedPct": 14.1,
+  "nativeTestedPct": 16.3,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -38,7 +38,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/reminders/:id` | native-tested | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | router-unmounted | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | router-unmounted | routes/repositories.ts |
-| DELETE | `/api/secrets/:id` | router-unmounted | routes/secrets.ts |
+| DELETE | `/api/secrets/:id` | native-tested | routes/secrets.ts |
 | DELETE | `/api/security/checks/:id` | router-unmounted | routes/security-workbench.ts |
 | DELETE | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | DELETE | `/api/store/skills/:slug` | native-tested | routes/store.ts |
@@ -85,9 +85,9 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/email/messages/:id` | router-unmounted | routes/email.ts |
 | GET | `/api/email/oauth/callback` | router-unmounted | routes/email.ts |
 | GET | `/api/environment/snapshot` | router-unmounted | routes/environment.ts |
-| GET | `/api/filesystem/browse` | router-unmounted | routes/filesystem.ts |
-| GET | `/api/filesystem/nodes` | router-unmounted | routes/filesystem.ts |
-| GET | `/api/filesystem/roots` | router-unmounted | routes/filesystem.ts |
+| GET | `/api/filesystem/browse` | native-tested | routes/filesystem.ts |
+| GET | `/api/filesystem/nodes` | native-tested | routes/filesystem.ts |
+| GET | `/api/filesystem/roots` | native-tested | routes/filesystem.ts |
 | GET | `/api/github-apps` | router-unmounted | routes/agent-github-apps.ts |
 | GET | `/api/github/apps/callback` | router-unmounted | routes/agent-github-apps.ts |
 | GET | `/api/jobs` | router-unmounted | routes/jobs.ts |
@@ -153,8 +153,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/screen-share/chat/:chatId` | router-unmounted | routes/screen-share.ts |
 | GET | `/api/screen-share/devices` | router-unmounted | routes/screen-share.ts |
 | GET | `/api/screen-share/state` | router-unmounted | routes/screen-share.ts |
-| GET | `/api/secrets` | router-unmounted | routes/secrets.ts |
-| GET | `/api/secrets/requests` | router-unmounted | routes/secrets.ts |
+| GET | `/api/secrets` | native-tested | routes/secrets.ts |
+| GET | `/api/secrets/requests` | native-tested | routes/secrets.ts |
 | GET | `/api/security/assessments` | router-unmounted | routes/security-assessments.ts |
 | GET | `/api/security/assessments/:id` | router-unmounted | routes/security-assessments.ts |
 | GET | `/api/security/checks/:id` | router-unmounted | routes/security-workbench.ts |
@@ -372,9 +372,9 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/screen-share/start` | router-unmounted | routes/screen-share.ts |
 | POST | `/api/screen-share/stop` | router-unmounted | routes/screen-share.ts |
 | POST | `/api/screen-share/transfer-control` | router-unmounted | routes/screen-share.ts |
-| POST | `/api/secrets` | router-unmounted | routes/secrets.ts |
-| POST | `/api/secrets/requests/:id/cancel` | router-unmounted | routes/secrets.ts |
-| POST | `/api/secrets/requests/:id/submit` | router-unmounted | routes/secrets.ts |
+| POST | `/api/secrets` | native-tested | routes/secrets.ts |
+| POST | `/api/secrets/requests/:id/cancel` | native-tested | routes/secrets.ts |
+| POST | `/api/secrets/requests/:id/submit` | native-tested | routes/secrets.ts |
 | POST | `/api/security/assessments` | router-unmounted | routes/security-assessments.ts |
 | POST | `/api/security/assessments/:id/cancel` | router-unmounted | routes/security-assessments.ts |
 | POST | `/api/security/checks` | router-unmounted | routes/security-workbench.ts |

@@ -51,3 +51,21 @@ async fn threads_and_reminders_are_served_and_authenticated() {
     tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn filesystem_and_secrets_are_served_and_authenticated() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().unwrap();
+    for path in ["/api/filesystem/roots", "/api/secrets"] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth, not 404");
+    }
+    let token = token(&client, &base).await;
+    let roots = client.get(format!("{base}/api/filesystem/roots")).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(roots.status(), 200);
+    let secrets = client.get(format!("{base}/api/secrets")).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(secrets.status(), 200);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

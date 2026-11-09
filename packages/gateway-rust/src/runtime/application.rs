@@ -6,6 +6,8 @@ use crate::{
     health::{HealthConfig, HealthSnapshot, HealthState},
     routes::{
         auth::AuthState,
+        filesystem::{BrowseEnvironment, FilesystemRoutes},
+        secrets::SecretRoutes,
         chat::{ChatFactory, ChatRoutes},
         project::ProjectRoutes,
         reminders::ReminderRoutes,
@@ -159,6 +161,33 @@ fn composed_terminal_routes(auth: AuthState, project_root: &std::path::Path) -> 
     routes
 }
 
+// Filesystem browsing is gateway-local; remote nodes register through the WS hub later.
+fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -> FilesystemRoutes {
+    let mut buffer = [0u8; 256];
+    // SAFETY: the buffer is valid for its length and gethostname NUL-terminates within it.
+    let hostname = unsafe {
+        libc::gethostname(buffer.as_mut_ptr().cast(), buffer.len() - 1);
+        std::ffi::CStr::from_ptr(buffer.as_ptr().cast())
+            .to_string_lossy()
+            .into_owned()
+    };
+    let environment = BrowseEnvironment {
+        home: std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| project_root.to_path_buf()),
+        cwd: project_root.to_path_buf(),
+        hostname,
+        platform: match std::env::consts::OS {
+            "windows" => "win32",
+            "macos" => "darwin",
+            other => other,
+        }
+        .to_owned(),
+        drives: Arc::new(|| Err("drive discovery is unavailable".to_owned())),
+    };
+    FilesystemRoutes::new(auth, environment, None, String::new())
+}
+
 pub struct Application {
     gateway: Gateway,
     auth: AuthState,
@@ -187,6 +216,7 @@ impl Application {
         }
         let database_path = config.database_path;
         let jwt_secret = config.jwt_secret;
+        let secrets_key = jwt_secret.clone();
         let (mut auth, database_owner) = tokio::task::spawn_blocking(move || {
             let owner = acquire_database_owner(&database_path)?;
             let database = db::open_database(&database_path)?;
@@ -236,7 +266,18 @@ impl Application {
             .merge(terminals.router())
             .merge(projects.router())
             .merge(ThreadRoutes::new(auth.clone()).router())
-            .merge(ReminderRoutes::new(auth.clone()).router());
+            .merge(ReminderRoutes::new(auth.clone()).router())
+            .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
+            .merge(
+                SecretRoutes {
+                    auth: auth.clone(),
+                    secret_input: Default::default(),
+                    user_secrets: Some(crate::services::user_secrets::UserSecretService::new(
+                        &secrets_key,
+                    )),
+                }
+                .router(),
+            );
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
         }
