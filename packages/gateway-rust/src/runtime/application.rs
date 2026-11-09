@@ -315,6 +315,13 @@ impl Application {
         let database_path = config.database_path;
         let jwt_secret = config.jwt_secret;
         let secrets_key = jwt_secret.clone();
+        let provider_registry = crate::providers::registry::ProviderRegistry::default();
+        crate::providers::acp_adapter::register_all(
+            &provider_registry,
+            crate::providers::acp_adapter::definitions_from_env(
+                std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
+            ),
+        );
         let (mut auth, database_owner) = tokio::task::spawn_blocking(move || {
             let owner = acquire_database_owner(&database_path)?;
             let database = db::open_database(&database_path)?;
@@ -414,6 +421,20 @@ impl Application {
                     systemd_managed: false,
                 }
                 .router(),
+            .merge(crate::routes::providers::router(
+                crate::routes::providers::ProviderRoutes {
+                    auth: auth.clone(),
+                    directory: None,
+                    providers: Some(Arc::new(
+                        crate::providers::registry_runtime::RegistryRuntime(
+                            provider_registry.clone(),
+                        ),
+                    )),
+                    usage: None,
+                    settings: None,
+                    probes: None,
+                },
+            ))
             )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
@@ -434,16 +455,7 @@ impl Application {
                     projects: Some(auth.worker()),
                     repositories: Some(auth.worker()),
                     network_hosts: Some(auth.worker()),
-                    providers: Some({
-                        let registry = crate::providers::registry::ProviderRegistry::default();
-                        crate::providers::acp_adapter::register_all(
-                            &registry,
-                            crate::providers::acp_adapter::definitions_from_env(
-                                std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
-                            ),
-                        );
-                        registry
-                    }),
+                    providers: Some(provider_registry.clone()),
                     nodes: None,
                     clock: crate::time::default_clock(),
                 }

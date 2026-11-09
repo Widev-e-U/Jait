@@ -1186,3 +1186,37 @@ async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn providers_list_the_registered_acp_adapters() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client
+        .get(format!("{base}/api/providers"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let ok = client
+        .get(format!("{base}/api/providers"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let status = ok.status();
+    let body = ok.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    for id in ["codex", "claude-code", "pi", "muse"] {
+        assert!(body.contains(&format!("\"{id}\"")), "{id} missing: {body}");
+    }
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
