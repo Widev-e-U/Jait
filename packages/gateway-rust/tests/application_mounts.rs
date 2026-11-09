@@ -599,6 +599,16 @@ async fn fake_tool_model() -> (
     String,
     std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
 ) {
+    fake_model_calling("file_read", serde_json::json!({"path": "notes.txt"})).await
+}
+
+async fn fake_model_calling(
+    tool: &'static str,
+    arguments: serde_json::Value,
+) -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+) {
     use axum::{Router, routing::post};
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let log = seen.clone();
@@ -606,6 +616,7 @@ async fn fake_tool_model() -> (
         "/v1/chat/completions",
         post(move |body: axum::Json<serde_json::Value>| {
             let log = log.clone();
+            let arguments = arguments.clone();
             async move {
                 let tool_text = body.0["messages"]
                     .as_array()
@@ -613,7 +624,10 @@ async fn fake_tool_model() -> (
                     .map(|m| m["content"].to_string());
                 log.lock().unwrap().push(body.0.clone());
                 let sse = match tool_text {
-                    None => "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"file_read\",\"arguments\":\"{\\\"path\\\":\\\"notes.txt\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n".to_owned(),
+                    None => format!(
+                        "data: {}\n\ndata: [DONE]\n\n",
+                        serde_json::json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":tool,"arguments":arguments.to_string()}}]},"finish_reason":"tool_calls"}]})
+                    ),
                     Some(t) => format!(
                         "data: {}\n\ndata: [DONE]\n\n",
                         serde_json::json!({"choices":[{"delta":{"content":format!("tool said: {t}")},"finish_reason":"stop"}]})
@@ -675,6 +689,121 @@ async fn chat_turn_reads_a_project_file_through_the_consent_executor() {
     let calls = seen.lock().unwrap().clone();
     assert_eq!(calls.len(), 2, "{calls:?}");
     assert_eq!(calls[0]["tools"][0]["function"]["name"], "file_read");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn chat_write_waits_for_consent_then_applies_or_leaves_the_file() {
+    let (model_base, seen) = fake_model_calling(
+        "file_write",
+        serde_json::json!({"path": "notes.txt", "content": "rewritten"}),
+    )
+    .await;
+    let (base, stop, task, dir) = start_seeded(false, |d| {
+        std::fs::write(d.join("notes.txt"), "original").unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "k"},
+            "selected_model": "m"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    for (action, expected) in [("reject", "original"), ("approve", "rewritten")] {
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let turn = {
+            let (client, base, token) = (client.clone(), base.clone(), token.clone());
+            let body = serde_json::json!({"sessionId": session["id"], "content": "rewrite notes"});
+            tokio::spawn(async move {
+                client
+                    .post(format!("{base}/api/chat"))
+                    .bearer_auth(&token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+            })
+        };
+        let mut pending = None;
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                pending = Some(first.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let pending = pending.expect("write must wait for consent");
+        assert_eq!(pending["toolName"], "file.write");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+            "original",
+            "file must not change before approval"
+        );
+        let decided = client
+            .post(format!(
+                "{base}/api/consent/{}/{action}",
+                pending["id"].as_str().unwrap()
+            ))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decided.status(), 200);
+        tokio::time::timeout(Duration::from_secs(20), turn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+            expected,
+            "after {action}"
+        );
+    }
+    assert!(seen.lock().unwrap().len() >= 2);
+    // Without a token the consent queue is not readable.
+    let anonymous = client
+        .get(format!("{base}/api/consent/pending"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), 401);
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await

@@ -2,14 +2,14 @@
 //!
 //! Credentials come only from the user's stored `api_keys` (never from the environment or the
 //! request), and the model is exactly the one the user selected: a turn without a selected model
-//! fails instead of falling back to a backend default. Only read-only `file.read` is mounted (see chat_tools).
+//! fails instead of falling back to a backend default. Only `file.read` and consent-gated `file.write` are mounted (see chat_tools).
 use super::chat_turn::{TurnConfig, TurnProvider};
 use crate::{
     execution::process_runner::ProcessCancellation,
     providers::openai_stream::{EventSink, OpenAiHttp, ParsedStream, StreamFailure},
     routes::auth::AuthState,
     routes::chat::{ChatFactory, PreparedChat},
-    security::http_auth::AuthUser,
+    security::{consent_manager::ConsentManager, http_auth::AuthUser},
     services::{
         jait_llm::{JaitLlmConfig, ResolveJaitLlmOptions, resolve_jait_llm_config},
         jait_models::JaitBackend,
@@ -25,11 +25,13 @@ const PROMPT: &str = "You are Jait, a coding and security workbench assistant. B
 
 pub struct SettingsChatFactory {
     auth: AuthState,
+    consent: ConsentManager,
 }
 
 impl SettingsChatFactory {
-    pub fn new(auth: AuthState) -> Self {
-        Self { auth }
+    /// `consent` is the queue the consent routes serve, so approvals reach waiting tool calls.
+    pub fn new(auth: AuthState, consent: ConsentManager) -> Self {
+        Self { auth, consent }
     }
 }
 
@@ -76,7 +78,8 @@ impl ChatFactory for SettingsChatFactory {
                 jait_backend: JaitBackend::parse(&settings.jait_backend),
                 strict_model: true,
             })?;
-            let (tools, executor) = super::chat_tools::read_only_tools(&user.id, &session.id)?;
+            let (tools, executor) =
+                super::chat_tools::project_tools(&user.id, &session.id, self.consent.clone())?;
             Ok(PreparedChat {
                 config: TurnConfig {
                     model: resolved.openai_model.clone(),

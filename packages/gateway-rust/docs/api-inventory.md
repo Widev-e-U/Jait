@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 172,
-  "native-tested": 138,
+  "router-unmounted": 160,
+  "native-tested": 150,
   "missing": 98,
   "native-untested": 9,
-  "nativeTestedPct": 33.1,
+  "nativeTestedPct": 36,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -22,7 +22,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | routes/auth.ts |
 | DELETE | `/api/calendar/accounts/:id` | native-tested | routes/calendar.ts |
-| DELETE | `/api/consent/pending/:sessionId/approve-all` | router-unmounted | routes/consent.ts |
+| DELETE | `/api/consent/pending/:sessionId/approve-all` | native-tested | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | router-unmounted | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | routes/repo-proposals.ts |
 | DELETE | `/api/jobs/:id` | router-unmounted | routes/jobs.ts |
@@ -69,12 +69,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/channels/:id/status` | router-unmounted | routes/channels.ts |
 | GET | `/api/code-graph` | native-tested | routes/code-graph.ts |
 | GET | `/api/code-graph/snapshot` | native-tested | routes/code-graph.ts |
-| GET | `/api/consent/:id` | router-unmounted | routes/consent.ts |
-| GET | `/api/consent/count` | router-unmounted | routes/consent.ts |
-| GET | `/api/consent/pending` | router-unmounted | routes/consent.ts |
-| GET | `/api/consent/pending/:sessionId` | router-unmounted | routes/consent.ts |
-| GET | `/api/consent/pending/:sessionId/approve-all` | router-unmounted | routes/consent.ts |
-| GET | `/api/consent/policy` | router-unmounted | routes/consent.ts |
+| GET | `/api/consent/:id` | native-tested | routes/consent.ts |
+| GET | `/api/consent/count` | native-tested | routes/consent.ts |
+| GET | `/api/consent/pending` | native-tested | routes/consent.ts |
+| GET | `/api/consent/pending/:sessionId` | native-tested | routes/consent.ts |
+| GET | `/api/consent/pending/:sessionId/approve-all` | native-tested | routes/consent.ts |
+| GET | `/api/consent/policy` | native-tested | routes/consent.ts |
 | GET | `/api/dev-file/:encodedPath` | missing | server.ts |
 | GET | `/api/dev-file/:encodedPath/*` | missing | server.ts |
 | GET | `/api/email/accounts` | router-unmounted | routes/email.ts |
@@ -194,7 +194,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/tools` | missing | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-tested | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-tested | routes/sessions.ts |
-| GET | `/api/trust` | router-unmounted | routes/consent.ts |
+| GET | `/api/trust` | native-tested | routes/consent.ts |
 | GET | `/api/trust/levels` | router-unmounted | routes/trust.ts |
 | GET | `/api/trust/levels/:actionType` | router-unmounted | routes/trust.ts |
 | GET | `/api/update/changelog` | native-tested | routes/update.ts |
@@ -254,10 +254,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/code-graph/index` | native-tested | routes/code-graph.ts |
 | POST | `/api/code-graph/path` | native-tested | routes/code-graph.ts |
 | POST | `/api/code-graph/query` | native-tested | routes/code-graph.ts |
-| POST | `/api/consent/:id/approve` | router-unmounted | routes/consent.ts |
-| POST | `/api/consent/:id/approve-all` | router-unmounted | routes/consent.ts |
-| POST | `/api/consent/:id/reject` | router-unmounted | routes/consent.ts |
-| POST | `/api/consent/pending/:sessionId/approve-all` | router-unmounted | routes/consent.ts |
+| POST | `/api/consent/:id/approve` | native-tested | routes/consent.ts |
+| POST | `/api/consent/:id/approve-all` | native-tested | routes/consent.ts |
+| POST | `/api/consent/:id/reject` | native-tested | routes/consent.ts |
+| POST | `/api/consent/pending/:sessionId/approve-all` | native-tested | routes/consent.ts |
 | POST | `/api/email/accounts` | router-unmounted | routes/email.ts |
 | POST | `/api/email/config/:provider` | router-unmounted | routes/email.ts |
 | POST | `/api/email/images` | router-unmounted | routes/email.ts |

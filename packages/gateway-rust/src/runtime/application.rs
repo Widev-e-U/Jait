@@ -335,11 +335,16 @@ impl Application {
             auth.shutdown().await?;
             return Err(error);
         }
+        // One queue backs both the chat executor and the consent routes, so an approval
+        // reaches the tool call that is waiting on it.
+        let consent = crate::security::consent_manager::ConsentManager::default();
         // The settings factory needs the opened auth state, so it is built here on request.
         let factory = match (factory, settings_chat) {
             (Some(factory), _) => Some(factory),
-            (None, true) => Some(Arc::new(super::chat_settings::SettingsChatFactory::new(auth.clone()))
-                as Arc<dyn ChatFactory>),
+            (None, true) => Some(Arc::new(super::chat_settings::SettingsChatFactory::new(
+                auth.clone(),
+                consent.clone(),
+            )) as Arc<dyn ChatFactory>),
             (None, false) => None,
         };
         let chat = factory
@@ -462,6 +467,9 @@ impl Application {
             );
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
+        }
+        if settings_chat {
+            router = router.merge(super::consent_mount::composed_consent_routes(&auth, consent).router());
         }
         if let Some(root) = config
             .web_root
