@@ -8,7 +8,9 @@ use crate::{
         architecture::ArchitectureRoutes,
         assistant_profiles::AssistantProfileRoutes,
         auth::AuthState,
+        calendar::CalendarRoutes,
         chat::{ChatFactory, ChatRoutes},
+        environment::EnvironmentRoutes,
         filesystem::{BrowseEnvironment, FilesystemRoutes},
         git::GitRoutes,
         plans::PlanRoutes,
@@ -24,6 +26,7 @@ use crate::{
         user_questions::UserQuestionRoutes,
     },
     runtime::Gateway,
+    services::calendar::service::CalendarService,
 };
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use std::{
@@ -375,6 +378,32 @@ impl Application {
             )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
+            .merge(
+                EnvironmentRoutes {
+                    auth: auth.clone(),
+                    assistants: Some(auth.worker()),
+                    projects: Some(auth.worker()),
+                    repositories: Some(auth.worker()),
+                    network_hosts: Some(auth.worker()),
+                    providers: Some(Default::default()),
+                    nodes: None,
+                    clock: crate::time::default_clock(),
+                }
+                .router(),
+            )
+            .merge(
+                CalendarRoutes {
+                    auth: auth.clone(),
+                    calendar: Arc::new(CalendarService::new(
+                        auth.worker(),
+                        crate::services::user_secrets::UserSecretService::new(&secrets_key),
+                        crate::services::calendar::native_transport()
+                            .map_err(ApplicationError::from)?,
+                    )),
+                    public_base: None,
+                }
+                .router(),
+            )
             .merge(
                 GitRoutes::new(auth.clone())
                     .with_user_secrets(Some(crate::services::user_secrets::UserSecretService::new(

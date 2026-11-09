@@ -1,11 +1,11 @@
 {
   "summary": {
     "httpTotal": 417,
-    "router-unmounted": 190,
-    "native-tested": 121,
+    "router-unmounted": 180,
+    "native-tested": 131,
     "missing": 98,
     "native-untested": 8,
-    "nativeTestedPct": 29,
+    "nativeTestedPct": 31.4,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -44,7 +44,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -371,7 +371,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -380,7 +380,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -389,7 +389,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -398,7 +398,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -407,7 +407,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -416,7 +416,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -612,7 +612,7 @@
       "nodeFiles": [
         "routes/environment.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/environment.rs"
     },
     {
@@ -2001,7 +2001,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {
@@ -2010,7 +2010,7 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/calendar.rs"
     },
     {

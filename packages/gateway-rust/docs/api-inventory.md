@@ -5,11 +5,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 417,
-  "router-unmounted": 190,
-  "native-tested": 121,
+  "router-unmounted": 180,
+  "native-tested": 131,
   "missing": 98,
   "native-untested": 8,
-  "nativeTestedPct": 29,
+  "nativeTestedPct": 31.4,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -21,7 +21,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/agents/:agentId/github-app` | router-unmounted | routes/agent-github-apps.ts |
 | DELETE | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | routes/auth.ts |
-| DELETE | `/api/calendar/accounts/:id` | router-unmounted | routes/calendar.ts |
+| DELETE | `/api/calendar/accounts/:id` | native-tested | routes/calendar.ts |
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | router-unmounted | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | router-unmounted | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | routes/repo-proposals.ts |
@@ -58,12 +58,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/auth/settings/env-status` | native-tested | routes/auth.ts |
 | GET | `/api/auth/settings/tools` | native-tested | routes/auth.ts |
 | GET | `/api/browser/screenshot` | missing | server.ts |
-| GET | `/api/calendar/accounts` | router-unmounted | routes/calendar.ts |
-| GET | `/api/calendar/calendars` | router-unmounted | routes/calendar.ts |
-| GET | `/api/calendar/config` | router-unmounted | routes/calendar.ts |
-| GET | `/api/calendar/connect/google` | router-unmounted | routes/calendar.ts |
-| GET | `/api/calendar/events` | router-unmounted | routes/calendar.ts |
-| GET | `/api/calendar/oauth/callback` | router-unmounted | routes/calendar.ts |
+| GET | `/api/calendar/accounts` | native-tested | routes/calendar.ts |
+| GET | `/api/calendar/calendars` | native-tested | routes/calendar.ts |
+| GET | `/api/calendar/config` | native-tested | routes/calendar.ts |
+| GET | `/api/calendar/connect/google` | native-tested | routes/calendar.ts |
+| GET | `/api/calendar/events` | native-tested | routes/calendar.ts |
+| GET | `/api/calendar/oauth/callback` | native-tested | routes/calendar.ts |
 | GET | `/api/channels` | router-unmounted | routes/channels.ts |
 | GET | `/api/channels/:id/setup` | router-unmounted | routes/channels.ts |
 | GET | `/api/channels/:id/status` | router-unmounted | routes/channels.ts |
@@ -85,7 +85,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/email/messages` | router-unmounted | routes/email.ts |
 | GET | `/api/email/messages/:id` | router-unmounted | routes/email.ts |
 | GET | `/api/email/oauth/callback` | router-unmounted | routes/email.ts |
-| GET | `/api/environment/snapshot` | router-unmounted | routes/environment.ts |
+| GET | `/api/environment/snapshot` | native-tested | routes/environment.ts |
 | GET | `/api/filesystem/browse` | native-tested | routes/filesystem.ts |
 | GET | `/api/filesystem/nodes` | native-tested | routes/filesystem.ts |
 | GET | `/api/filesystem/roots` | native-tested | routes/filesystem.ts |
@@ -243,8 +243,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/auth/refresh` | native-tested | routes/auth.ts |
 | POST | `/api/auth/register` | native-tested | routes/auth.ts |
 | POST | `/api/auth/session/bind` | native-tested | routes/auth.ts |
-| POST | `/api/calendar/config/google` | router-unmounted | routes/calendar.ts |
-| POST | `/api/calendar/device/sync` | router-unmounted | routes/calendar.ts |
+| POST | `/api/calendar/config/google` | native-tested | routes/calendar.ts |
+| POST | `/api/calendar/device/sync` | native-tested | routes/calendar.ts |
 | POST | `/api/channels/:id/pair` | router-unmounted | routes/channels.ts |
 | POST | `/api/channels/:id/start` | router-unmounted | routes/channels.ts |
 | POST | `/api/channels/:id/stop` | router-unmounted | routes/channels.ts |

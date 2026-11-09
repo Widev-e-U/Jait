@@ -333,3 +333,42 @@ async fn code_graph_and_update_are_served_and_authenticated() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn environment_and_calendar_are_served_and_authenticated() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    for path in [
+        "/api/environment/snapshot",
+        "/api/calendar/config",
+        "/api/calendar/accounts",
+    ] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth, not 404");
+    }
+    let token = token(&client, &base).await;
+    for path in [
+        "/api/environment/snapshot",
+        "/api/calendar/config",
+        "/api/calendar/accounts",
+    ] {
+        let ok = client
+            .get(format!("{base}{path}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        let status = ok.status();
+        let body = ok.text().await.unwrap();
+        assert_eq!(status, 200, "{path}: {body}");
+    }
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
