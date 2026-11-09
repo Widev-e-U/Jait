@@ -431,7 +431,7 @@ impl Application {
                         ),
                     )),
                     usage: None,
-                    settings: None,
+                    settings: Some(Arc::new(crate::routes::providers::DbSettingsStore::new(&auth))),
                     probes: None,
                 },
             ))

@@ -322,18 +322,17 @@ pub trait UsageStore: Send + Sync {
 
 /// TS `deps.userService` settings access.
 pub trait SettingsStore: Send + Sync {
-    fn get_settings(&self, _user: &str) -> Option<Value> {
-        None
-    }
     /// TS `settings.apiKeys`.
-    fn api_keys(&self, user: &str) -> Map<String, Value> {
-        self.get_settings(user)
-            .and_then(|settings| settings.get("apiKeys").and_then(Value::as_object).cloned())
-            .unwrap_or_default()
+    fn api_keys(&self, _user: &str) -> BoxFuture<'static, Map<String, Value>> {
+        Box::pin(async { Map::new() })
     }
     /// TS `updateSettings(userId, { apiKeys })` -- merged, never wholesale replaced.
-    fn update_api_keys(&self, _user: &str, _keys: Map<String, Value>) -> Result<(), String> {
-        Err("Settings are unavailable".into())
+    fn update_api_keys(
+        &self,
+        _user: &str,
+        _keys: Map<String, Value>,
+    ) -> BoxFuture<'static, Result<(), String>> {
+        Box::pin(async { Err("Settings are unavailable".into()) })
     }
 }
 
@@ -986,7 +985,7 @@ async fn ollama_session(
             return fail(400, redact_text(&error));
         }
     }
-    let mut keys = settings.api_keys(&user.id);
+    let mut keys = settings.api_keys(&user.id).await;
     match session {
         Some(session) => {
             keys.insert("OLLAMA_SESSION_COOKIE".into(), Value::String(session));
@@ -995,7 +994,7 @@ async fn ollama_session(
             keys.remove("OLLAMA_SESSION_COOKIE");
         }
     }
-    match settings.update_api_keys(&user.id, keys) {
+    match settings.update_api_keys(&user.id, keys).await {
         Ok(()) => ok_json(json!({ "ok": true })),
         Err(error) => fail(500, redact_text(&error)),
     }
@@ -1032,9 +1031,9 @@ async fn ollama_api_key(
             "Could not retrieve usage with this key. Check the key and connection, then try again. Your saved key has not changed.",
         );
     }
-    let mut keys = settings.api_keys(&user.id);
+    let mut keys = settings.api_keys(&user.id).await;
     keys.insert("OLLAMA_API_KEY".into(), Value::String(key));
-    match settings.update_api_keys(&user.id, keys) {
+    match settings.update_api_keys(&user.id, keys).await {
         Ok(()) => ok_json(json!({ "ok": true })),
         Err(error) => fail(500, redact_text(&error)),
     }
@@ -1723,5 +1722,59 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(status(&error.into_response()), expected);
         }
+    }
+}
+
+/// Persists provider API keys in the user's `user_settings` row.
+pub struct DbSettingsStore {
+    db: crate::db::worker::DatabaseWorker,
+}
+
+impl DbSettingsStore {
+    pub fn new(auth: &AuthState) -> Self {
+        Self { db: auth.worker() }
+    }
+}
+
+impl SettingsStore for DbSettingsStore {
+    fn api_keys(&self, user: &str) -> BoxFuture<'static, Map<String, Value>> {
+        let (db, user) = (self.db.clone(), user.to_owned());
+        Box::pin(async move {
+            db.run(move |db| Ok(crate::services::users::UserService::new(db).get_settings(&user)?))
+                .await
+                .map(|settings| {
+                    settings
+                        .api_keys
+                        .into_iter()
+                        .map(|(key, value)| (key, Value::String(value)))
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+    fn update_api_keys(
+        &self,
+        user: &str,
+        keys: Map<String, Value>,
+    ) -> BoxFuture<'static, Result<(), String>> {
+        let (db, user) = (self.db.clone(), user.to_owned());
+        Box::pin(async move {
+            let keys = keys
+                .into_iter()
+                .filter_map(|(key, value)| value.as_str().map(|v| (key, v.to_owned())))
+                .collect();
+            db.run(move |db| {
+                crate::services::users::UserService::new(db).update_settings(
+                    &user,
+                    crate::services::users::UserSettingsPatch {
+                        api_keys: Some(keys),
+                        ..Default::default()
+                    },
+                )?;
+                Ok(())
+            })
+            .await
+            .map_err(|error| error.to_string())
+        })
     }
 }
