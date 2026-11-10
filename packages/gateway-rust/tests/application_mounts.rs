@@ -1543,6 +1543,34 @@ async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
 }
 
 #[tokio::test]
+async fn screen_share_is_authenticated_and_capture_fails_closed() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/screen-share/state");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let state = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(state.status(), 200);
+    let capture = client
+        .post(format!("{base}/api/screen-share/capture"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert!(capture.status().is_client_error() || capture.status().is_server_error());
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn network_is_authenticated_and_scans_need_a_scope() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

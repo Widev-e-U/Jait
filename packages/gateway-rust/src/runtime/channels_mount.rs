@@ -103,3 +103,21 @@ pub fn network_routes(
         crate::time::default_clock(),
     ))
 }
+
+/// Screen-share state is tracked in memory. Nothing can reach a host device or capture
+/// the screen yet, so every effect except the broadcast bookkeeping fails closed.
+pub fn screen_share_routes(
+    auth: &crate::routes::auth::AuthState,
+) -> crate::routes::screen_share::ScreenShareRoutes {
+    use crate::routes::screen_share::{ScreenShareEffect, ScreenShareError};
+    crate::routes::screen_share::ScreenShareRoutes {
+        auth: auth.clone(),
+        service: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
+        port: std::sync::Arc::new(|effect| match effect {
+            ScreenShareEffect::Broadcast(_) => Ok(serde_json::Value::Null),
+            _ => Err(ScreenShareError::Message(
+                "Screen sharing is not available in the Rust gateway yet".into(),
+            )),
+        }),
+    }
+}
