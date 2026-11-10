@@ -6,11 +6,10 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 424,
   "mounted-fail-closed": 96,
-  "native-tested": 254,
+  "native-tested": 257,
   "missing": 70,
-  "native-untested": 3,
   "router-unmounted": 1,
-  "nativeTestedPct": 59.9,
+  "nativeTestedPct": 60.6,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -139,7 +138,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/projects/:id/subtree` | native-tested | routes/projects.ts |
 | GET | `/api/projects/archived` | native-tested | routes/projects.ts |
 | GET | `/api/projects/last-active` | native-tested | routes/projects.ts |
-| GET | `/api/projects/search` | native-untested | routes/projects.ts |
+| GET | `/api/projects/search` | native-tested | routes/projects.ts |
 | GET | `/api/provider-accounts` | native-tested | routes/providers.ts |
 | GET | `/api/provider-usage` | native-tested | routes/providers.ts |
 | GET | `/api/provider-usage/summary` | native-tested | routes/providers.ts |
@@ -255,7 +254,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/channels/:id/stop` | mounted-fail-closed | routes/channels.ts |
 | POST | `/api/chat` | native-tested | routes/chat.ts |
 | POST | `/api/chat/prewarm` | missing | routes/chat.ts |
-| POST | `/api/code-graph/graphrag/prepare` | native-untested | routes/code-graph.ts |
+| POST | `/api/code-graph/graphrag/prepare` | native-tested | routes/code-graph.ts |
 | POST | `/api/code-graph/index` | native-tested | routes/code-graph.ts |
 | POST | `/api/code-graph/path` | native-tested | routes/code-graph.ts |
 | POST | `/api/code-graph/query` | native-tested | routes/code-graph.ts |
@@ -428,7 +427,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/update/apply` | native-tested | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-tested | routes/user-questions.ts |
 | POST | `/api/user-questions/requests/:id/submit` | native-tested | routes/user-questions.ts |
-| POST | `/api/voice/speak` | native-untested | routes/voice.ts |
+| POST | `/api/voice/speak` | native-tested | routes/voice.ts |
 | POST | `/api/voice/transcribe` | native-tested | routes/voice.ts |
 | POST | `/api/voice/transcribe-audio` | native-tested | routes/voice.ts |
 | POST | `/api/voice/wake-candidate` | missing | routes/voice.ts |

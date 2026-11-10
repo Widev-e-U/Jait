@@ -501,6 +501,108 @@ async fn voice_is_served_and_authenticated() {
         .await
         .unwrap();
     assert_eq!(state.status(), 200);
+    let blank = client
+        .post(format!("{base}/api/voice/speak"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"text": "   "}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blank.status(), 400);
+    let spoken = client
+        .post(format!("{base}/api/voice/speak"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"text": "hello there"}))
+        .send()
+        .await
+        .unwrap();
+    let status = spoken.status().as_u16();
+    let body = spoken.text().await.unwrap();
+    assert!(
+        status != 404 && status != 401 && status < 500,
+        "voice/speak: {status} {body}"
+    );
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn projects_search_and_graphrag_prepare_are_authenticated_and_scoped() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client
+        .get(format!("{base}/api/projects/search?q=x"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let anon = client
+        .post(format!("{base}/api/code-graph/graphrag/prepare"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let blank: serde_json::Value = client
+        .get(format!("{base}/api/projects/search?q="))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(blank["projects"].as_array().unwrap().is_empty());
+    let created = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title":"findable-alpha","rootPath": dir.to_str().unwrap()}))
+        .send()
+        .await
+        .unwrap();
+    assert!(created.status().is_success(), "{}", created.status());
+    let found: serde_json::Value = client
+        .get(format!("{base}/api/projects/search?q=findable"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(found["projects"].as_array().unwrap().len(), 1);
+    let none: serde_json::Value = client
+        .get(format!("{base}/api/projects/search?q=zzz-nothing"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(none["projects"].as_array().unwrap().is_empty());
+    // a root outside the caller's projects is never prepared
+    let outside = client
+        .post(format!("{base}/api/code-graph/graphrag/prepare"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"workspaceRoot": "/etc"}))
+        .send()
+        .await
+        .unwrap();
+    let status = outside.status().as_u16();
+    let body = outside.text().await.unwrap();
+    assert!(
+        [400, 403, 404, 409, 503].contains(&status),
+        "graphrag/prepare outside projects: {status} {body}"
+    );
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await

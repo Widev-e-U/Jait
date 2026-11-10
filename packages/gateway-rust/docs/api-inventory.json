@@ -2,11 +2,10 @@
   "summary": {
     "httpTotal": 424,
     "mounted-fail-closed": 96,
-    "native-tested": 254,
+    "native-tested": 257,
     "missing": 70,
-    "native-untested": 3,
     "router-unmounted": 1,
-    "nativeTestedPct": 59.9,
+    "nativeTestedPct": 60.6,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1084,7 +1083,7 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "rustFile": "routes/projects.rs"
     },
     {
@@ -2115,7 +2114,7 @@
       "nodeFiles": [
         "routes/code-graph.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "rustFile": "routes/code_graph.rs"
     },
     {
@@ -3631,7 +3630,7 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "rustFile": "routes/voice.rs"
     },
     {
