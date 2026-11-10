@@ -4,15 +4,15 @@
 
 # Jait
 
-**AI-assisted network and cybersecurity, under your control.**
+**Your personal Agent harness.**
 
-Jait — Just Another Intelligent Tool — is a local-first security workbench for networks you own or are authorized to assess. The direction is clear: discover assets, understand exposure, investigate weaknesses, prioritize fixes, and verify improvements with evidence.
+Jait — Just Another Intelligent Tool — is a local-first agent harness you run yourself. It connects the model of your choice to real tools — terminals, SSH, filesystem, browser, scheduling, memory, messaging, and more — with live output and consent controls, across web, desktop, and mobile. Use it for coding, automation, research, home and homelab management, network and security work, or anything else you want an agent to help with.
 
-Today, Jait supplies the foundation: network discovery, SSH, live terminals, filesystem and browser tools, local state, scheduling, consent controls, and sessions across web, desktop, and mobile. Dedicated scanner adapters, enforceable assessment scope, unified findings, and remediation verification are planned. The existing network scan is discovery, not a comprehensive vulnerability assessment.
+Security is one of the things Jait can do, not what Jait is. Network discovery and scoped assessment tooling ship as one capability among many; see the [vision](docs/vision.md) and [security roadmap](docs/security-roadmap.md). The existing network scan is discovery, not a comprehensive vulnerability assessment.
 
-The first proving ground is the maintainer's own home network and homelab. See the [vision](docs/vision.md) and [security roadmap](docs/security-roadmap.md) for proposed tools and a staged pilot.
+New here, or comparing agent projects? See [**What is Jait?**](docs/what-is-jait.md) for a capability summary and what Jait is not.
 
-> This is an early open-source project. Help us build repeatable assessments with clear evidence and honest coverage limits.
+> This is an early open-source project. Expect rough edges, and help us shape a general-purpose, user-controlled agent harness.
 
 <p align="center">
   <a href="https://github.com/Widev-e-U/Jait/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/Widev-e-U/Jait/ci.yml?branch=main&label=typecheck&style=for-the-badge" alt="Typecheck"></a>
@@ -26,12 +26,12 @@ The first proving ground is the maintainer's own home network and homelab. See t
 
 ## Why Jait
 
-Jait brings security investigation and practical action into one visible workflow:
+Jait brings agent capabilities and practical action into one visible workflow:
 
-- **Work in your environment** — discover local hosts, inspect services over SSH, and run tools through your own gateway and trusted nodes.
-- **Use the model you choose** — CLI engines or API/local providers help plan and explain investigations. Cloud providers receive the context sent to them; use a local provider when that context must stay local.
+- **Work in your environment** — run terminals, edit files, drive a browser, reach machines over SSH, and use tools through your own gateway and trusted nodes.
+- **Use the model you choose** — CLI engines or API/local providers help plan and carry out your work. Cloud providers receive the context sent to them; use a local provider when that context must stay local.
 - **Keep operator control** — live tool output, consent controls, durable sessions, and scheduled work support review and follow-through across devices.
-- **Build toward verified improvement** — the roadmap adds bounded Nmap scans, protocol and configuration checks, evidence-backed findings, curated Nuclei/Trivy integrations, and before/after verification. Coding tools remain available to prepare and validate fixes.
+- **Do a lot with one harness** — coding, automation, scheduling, memory, messaging, and network and security assessment (bounded scans, evidence-backed findings, before/after verification) share the same sessions, tools, and consent model.
 
 ---
 

@@ -1,8 +1,8 @@
 # Jait Vision
 
-Jait — Just Another Intelligent Tool — is a local-first workbench for AI-assisted network and cybersecurity.
+Jait — Just Another Intelligent Tool — is your personal agent harness: a local-first system that connects the model you choose to real tools — terminals, filesystem, browser, SSH, scheduling, memory, messaging — under your control and with visible, consentful execution.
 
-Jait helps people understand and secure networks they own or are authorized to assess: discover assets, examine exposure, investigate weaknesses, prioritize fixes, and verify the result. The first proving ground is the maintainer's own home network and homelab. The initial audience is technically curious owners, homelab operators, and small IT teams.
+The long-term vision is a general-purpose harness capable of a lot, not a single-purpose tool. Network and security assessment is one capability among many; the security workbench below is a first deep domain built on the harness. The initial audience is technically curious owners, homelab operators, developers, and small IT teams.
 
 ## The Product Promise
 
@@ -16,7 +16,7 @@ Today Jait has a Bun/TypeScript gateway, web/desktop/mobile clients, local SQLit
 
 The dedicated assessment workbench now provides explicit IPv4 scopes, bounded TCP inventory, native TLS/HTTP/SSH checks, read-only host audits, fixed Nmap and reviewed Nuclei profiles, offline Trivy snapshots, and Wazuh/Suricata alert-file import. Network → Security checks exposes evidence, findings, remediation and rollback plans, repeated verification, redacted export, and expiring scheduled network checks. Scanner binaries and the optional Trivy vulnerability database are operator-provided dependencies. These are conservative first profiles, not exhaustive engine integrations. The existing network scan primarily discovers machines and Jait nodes; it is not a comprehensive vulnerability assessment.
 
-Coding and general automation remain supporting capabilities: they help investigate software, inspect configuration, prepare fixes, and run checks. New product investment centers on network and cybersecurity outcomes.
+Coding, automation, and other general capabilities are first-class parts of the harness, alongside the security workbench.
 
 ## The Security Workflow
 

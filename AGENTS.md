@@ -1,9 +1,10 @@
 # Repository Guidelines
 
 ## Product Direction
-Jait is a local-first workbench for AI-assisted network and cybersecurity. Prioritize discovering assets, understanding exposure, investigating weaknesses, preparing fixes, and verifying improvements on owned or explicitly authorized networks. The first proving ground is the maintainer's home network and homelab. Coding and general automation support this security workflow. Read `docs/vision.md` and `docs/security-roadmap.md` when planning product work.
+Jait is your personal agent harness: a local-first system connecting the user's chosen model to real tools (terminal, filesystem, browser, SSH, scheduling, memory, messaging) with visible, consent-controlled execution. It is general-purpose, not a security-only tool; network and security assessment is one capability among many. Read `docs/vision.md` and `docs/security-roadmap.md` when planning product work.
 
 ## Security Assessment Guidelines
+These apply when working on the security assessment capability.
 - Build dedicated typed security tools around established engines; skills and free-form shell prompts alone do not enforce assessment boundaries.
 - Record authorized targets, exclusions, methods, expiry, and execution node/vantage point. Enforce scope across tools, routes, nodes, DNS resolution, redirects, template callbacks, and scheduled jobs. Reachability or a private IP does not imply authorization.
 - Default to low-impact discovery and read-only checks with target, rate, concurrency, duration, output, and cancellation limits. Apply authorization appropriate to intrusive testing and system changes; reuse existing consent paths.

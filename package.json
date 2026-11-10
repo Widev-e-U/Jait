@@ -3,7 +3,7 @@
   "version": "0.1.82",
   "private": true,
   "type": "module",
-  "description": "Just Another Intelligent Tool \u2014 AI-assisted network and cybersecurity",
+  "description": "Just Another Intelligent Tool \u2014 Your personal Agent harness",
   "license": "MIT",
   "author": "JakobWl",
   "homepage": "https://jait.dev",
@@ -14,10 +14,10 @@
   "keywords": [
     "ai",
     "agent",
-    "cybersecurity",
+    "agent-harness",
     "local-first",
     "terminal",
-    "network-security"
+    "automation"
   ],
   "workspaces": [
     "packages/*",
