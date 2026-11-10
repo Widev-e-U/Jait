@@ -80,6 +80,8 @@ async fn token(client: &reqwest::Client, base: &str) -> String {
     let r: serde_json::Value = client
         .post(format!("{base}/api/auth/register"))
         .json(&serde_json::json!({"username":"mounter","password":"correct-horse-1"}))
+        // password hashing is slow when every test in the file registers at once
+        .timeout(Duration::from_secs(60))
         .send()
         .await
         .unwrap()
