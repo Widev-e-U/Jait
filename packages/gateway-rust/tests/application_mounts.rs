@@ -1210,7 +1210,7 @@ async fn providers_list_the_registered_acp_adapters() {
     let status = ok.status();
     let body = ok.text().await.unwrap();
     assert_eq!(status, 200, "{body}");
-    for id in ["codex", "claude-code", "pi", "muse"] {
+    for id in ["jait", "codex", "claude-code", "pi", "muse"] {
         assert!(body.contains(&format!("\"{id}\"")), "{id} missing: {body}");
     }
     stop.send(()).unwrap();

@@ -320,6 +320,11 @@ impl Application {
             std::env::var("JAIT_ACP_PROVIDERS").ok().as_deref(),
         );
         crate::providers::acp_adapter::register_all(&provider_registry, acp_definitions.clone());
+        // The native agent loop is always available, as in the Node gateway.
+        provider_registry.register(Arc::new(crate::providers::jait_provider::JaitProvider::new(
+            NonZeroU16::new(8).unwrap(),
+            1024,
+        )?));
         let (mut auth, database_owner) = tokio::task::spawn_blocking(move || {
             let owner = acquire_database_owner(&database_path)?;
             let database = db::open_database(&database_path)?;
