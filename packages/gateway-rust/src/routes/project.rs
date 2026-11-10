@@ -97,7 +97,21 @@ fn confine(root: &Path, relative: &str) -> Option<PathBuf> {
         }
     }
     let root = root.canonicalize().ok()?;
-    out.starts_with(&root).then_some(out)
+    if !out.starts_with(&root) {
+        return None;
+    }
+    // The lexical check does not see symlinks: resolve the deepest existing ancestor and require
+    // it to stay inside the real root, so a link inside the project cannot lead out of it.
+    let mut existing = out.as_path();
+    while existing.symlink_metadata().is_err() {
+        existing = existing.parent()?;
+    }
+    // A dangling link has no canonical form; treat it as an escape rather than write through it.
+    existing
+        .canonicalize()
+        .ok()?
+        .starts_with(&root)
+        .then_some(out)
 }
 
 #[derive(Clone)]

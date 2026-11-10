@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 424,
     "mounted-fail-closed": 92,
-    "native-tested": 238,
-    "missing": 83,
-    "native-untested": 10,
+    "native-tested": 246,
+    "missing": 70,
+    "native-untested": 15,
     "router-unmounted": 1,
-    "nativeTestedPct": 56.1,
+    "nativeTestedPct": 58,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -976,7 +976,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "GET",
@@ -984,7 +985,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "GET",
@@ -992,7 +994,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "GET",
@@ -1000,7 +1003,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "GET",
@@ -1008,7 +1012,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "GET",
@@ -2774,7 +2779,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-untested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2782,7 +2788,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-untested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2790,7 +2797,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-untested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2798,7 +2806,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-untested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2806,7 +2815,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2814,7 +2824,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-untested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2822,7 +2833,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",
@@ -2846,7 +2858,8 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/project.rs"
     },
     {
       "method": "POST",

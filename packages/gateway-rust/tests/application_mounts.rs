@@ -2356,3 +2356,142 @@ async fn browser_devtools_refuse_without_a_browser_host() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn project_files_are_served_for_the_owner_and_stay_inside_the_root() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let root = dir.join("proj-files");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/a.txt"), "alpha-marker").unwrap();
+    let outside = dir.join("outside-secret");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("secret.txt"), "top-secret").unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
+
+    let anon = client
+        .get(format!("{base}/api/project/list"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401, "project files need login");
+
+    let token = token(&client, &base).await;
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "Files", "rootPath": root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().expect("project id").to_owned();
+    let q = |route: &str, path: &str| {
+        client
+            .get(format!(
+                "{base}/api/project/{route}?{}",
+                url::form_urlencoded::Serializer::new(String::new())
+                    .append_pair("projectId", &id)
+                    .append_pair("path", path)
+                    .finish()
+            ))
+            .bearer_auth(&token)
+    };
+
+    let list: serde_json::Value = q("list", "src").send().await.unwrap().json().await.unwrap();
+    assert_eq!(list["entries"][0]["name"], "a.txt");
+    let read: serde_json::Value = q("read", "src/a.txt")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(read["content"], "alpha-marker");
+    let stat: serde_json::Value = q("stat", "src/a.txt")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(stat["isFile"], true);
+
+    // lexical escape and a symlink inside the project that leads outside are both refused
+    for path in ["../outside-secret/secret.txt", "link/secret.txt", "link"] {
+        let r = q("read", path).send().await.unwrap();
+        assert_eq!(r.status(), 400, "{path} must be refused");
+    }
+    let through_link = client
+        .post(format!("{base}/api/project/write"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"projectId": id, "path": "link/new.txt", "content": "x"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(through_link.status(), 400);
+    assert!(
+        !outside.join("new.txt").exists(),
+        "write must not leave the project"
+    );
+
+    let wrote = client
+        .post(format!("{base}/api/project/write"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"projectId": id, "path": "src/b.txt", "content": "beta"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(wrote.status(), 200);
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/b.txt")).unwrap(),
+        "beta"
+    );
+
+    // another user cannot reach this project's files
+    let invite: serde_json::Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: serde_json::Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&serde_json::json!({"username":"intruder","password":"correct-horse-2","invitation":invite["invitation"]}))
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other_token = other["access_token"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no second token: {other}"))
+        .to_owned();
+    let stolen = client
+        .get(format!(
+            "{base}/api/project/read?projectId={id}&path=src/a.txt"
+        ))
+        .bearer_auth(&other_token)
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        stolen.status() == 404 || stolen.status() == 403,
+        "got {}",
+        stolen.status()
+    );
+
+    let _ = stop.send(());
+    let _ = task.await;
+}
