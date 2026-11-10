@@ -213,6 +213,9 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/runtime", get(runtime))
             .route("/api/sessions/{id}/loop", get(session_loop))
             .route("/api/sessions/{id}/fork", post(session_fork))
+            .route("/api/sessions/{id}/plan", get(session_plan))
+            .route("/api/sessions/{id}/plan/reject", post(session_plan))
+            .route("/api/chat/prewarm", post(prewarm))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -808,6 +811,92 @@ async fn session_fork(
     match forked {
         Ok(Some(branch)) => response(201, serde_json::to_value(branch).unwrap_or(Value::Null)),
         Ok(None) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        ),
+        Err(_) => auth::internal_error(),
+    }
+}
+/// Plan mode is not implemented natively, so no session can hold a pending plan.
+/// After the ownership check this answers exactly as Node does without one.
+async fn session_plan(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    let owner = user.id.clone();
+    let found = state
+        .auth
+        .with_database(move |db| {
+            Ok(SessionService::new(db)
+                .get(&session, Some(&owner))?
+                .is_some())
+        })
+        .await;
+    match found {
+        Ok(true) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"No pending plan for this session"}),
+        ),
+        Ok(false) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        ),
+        Err(_) => auth::internal_error(),
+    }
+}
+/// Pre-warming is an optimisation only. This gateway starts provider sessions
+/// per turn, so it never warms one and says so, which clients treat as a no-op.
+async fn prewarm(State(state): State<ChatRoutes>, request: Request) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let payload = match body(&state, request).await {
+        Ok(payload) => payload,
+        Err(error) => return *error,
+    };
+    let session = match payload["sessionId"].as_str() {
+        Some(id) if !id.is_empty() => id.to_owned(),
+        _ => {
+            return response(
+                400,
+                json!({"error":"VALIDATION_ERROR","details":"sessionId is required"}),
+            );
+        }
+    };
+    let provider = payload["provider"].as_str().unwrap_or_default();
+    if provider.is_empty() || provider == "jait" {
+        return response(
+            200,
+            json!({"status":"skipped","reason":"not-a-cli-provider"}),
+        );
+    }
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    let owner = user.id.clone();
+    let found = state
+        .auth
+        .with_database(move |db| {
+            Ok(SessionService::new(db)
+                .get(&session, Some(&owner))?
+                .is_some())
+        })
+        .await;
+    match found {
+        Ok(true) => response(
+            200,
+            json!({"status":"skipped","reason":"prewarm-unavailable"}),
+        ),
+        Ok(false) => response(
             404,
             json!({"error":"NOT_FOUND","details":"Session not found"}),
         ),

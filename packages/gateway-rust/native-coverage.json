@@ -4449,7 +4449,7 @@
       "review": "2026-02-14 audit verdict PARTIAL: Bounded search/index port complete but consumed only by unmounted routes/project.rs and project_watcher; no production composer reaches it.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": "ProjectRoutes is now mounted by runtime/application.rs and reaches local project search. End-to-end production search evidence is still required; surfaceId and non-local execution nodes return NOT_SUPPORTED, so complete the corresponding authorized surface and node paths before claiming parity."
+      "remaining": "Local project search and gateway-local surfaceId search (ScopedProjectSearch bound to the terminal SurfaceRegistry, owner/session/root revalidated) are mounted in runtime/application.rs; focused tests: application_serves_owned_project_search_through_production_router and routes::project::search_tests::surface_search_serves_only_running_surfaces_owned_by_the_caller. Still open: non-local execution nodes (and remote surfaces) return NOT_SUPPORTED because production has no node transport host for ScopedProjectSearch::remote_request/accept_remote. Needs human certification; reviewed_at and evidence unset."
     },
     {
       "reference": "packages/gateway/src/services/project-state.ts",

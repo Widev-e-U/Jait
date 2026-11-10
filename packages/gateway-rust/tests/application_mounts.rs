@@ -3364,3 +3364,91 @@ async fn thread_stop_and_interrupt_respect_ownership_and_session_state() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_plan_and_prewarm_respect_auth_and_ownership() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = session["id"].as_str().unwrap();
+    assert_eq!(
+        client
+            .get(format!("{base}/api/sessions/{id}/plan"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let plan = client
+        .get(format!("{base}/api/sessions/{id}/plan"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(plan.status(), 404);
+    let body: serde_json::Value = plan.json().await.unwrap();
+    assert_eq!(body["details"], "No pending plan for this session");
+    let reject = client
+        .post(format!("{base}/api/sessions/{id}/plan/reject"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reject.status(), 404);
+    let missing = client
+        .get(format!("{base}/api/sessions/nope/plan"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let prewarm = |body: serde_json::Value| {
+        let request = client
+            .post(format!("{base}/api/chat/prewarm"))
+            .bearer_auth(&token)
+            .json(&body);
+        async move { request.send().await.unwrap() }
+    };
+    assert_eq!(prewarm(serde_json::json!({})).await.status(), 400);
+    let skipped = prewarm(serde_json::json!({"sessionId": id, "provider": "jait"})).await;
+    assert_eq!(skipped.status(), 200);
+    let skipped: serde_json::Value = skipped.json().await.unwrap();
+    assert_eq!(skipped["reason"], "not-a-cli-provider");
+    assert_eq!(
+        prewarm(serde_json::json!({"sessionId": "nope", "provider": "codex"}))
+            .await
+            .status(),
+        404
+    );
+    let warm: serde_json::Value =
+        prewarm(serde_json::json!({"sessionId": id, "provider": "codex"}))
+            .await
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(warm["status"], "skipped");
+    let anon = client
+        .post(format!("{base}/api/chat/prewarm"))
+        .json(&serde_json::json!({"sessionId": id}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

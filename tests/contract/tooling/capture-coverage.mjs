@@ -64,6 +64,7 @@ manifest.summary.retained_test_declarations=manifest.retained_test_files.reduce(
 for (const field of ['test_files','source_files']) for (const file of manifest[field]) {
  const old=previous?.[field]?.find(item=>item.path===file.path && item.fingerprint===file.fingerprint);
  if (!old) continue;
+ if (old.mapping_proposal !== undefined) file.mapping_proposal = old.mapping_proposal;
  const preserve=(next,prior)=>{ for(const key of ['status','rust_cases','parity_review']) if(prior?.[key]!==undefined)next[key]=prior[key]; };
  if(file.cases) for(const test of file.cases) preserve(test,old.cases?.find(item=>item.id===test.id));
  else preserve(file,old);

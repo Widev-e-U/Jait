@@ -10,10 +10,10 @@
     "This inventory does not enumerate route/tool/schema/event contracts or prove gateway behavior."
   ],
   "summary": {
-    "test_files": 379,
-    "test_declarations": 3170,
-    "runtime_source_files": 388,
-    "source_files_without_direct_test_import": 98,
+    "test_files": 380,
+    "test_declarations": 3177,
+    "runtime_source_files": 390,
+    "source_files_without_direct_test_import": 99,
     "rust_verified_declarations": 1512,
     "retained_test_files": 1,
     "retained_test_declarations": 1
@@ -6033,7 +6033,14 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/runtime/server.rs"
+        ],
+        "verdict": "Related Axum graceful drain; no equivalent Rust test pairing established. Node cases cover idle socket close, forced close after grace period, and absent socket helpers. Rust uses a five-second drain timeout; equivalence and forced-close behavior need verification.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/lib/bounded-json.test.ts",
@@ -10301,7 +10308,15 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/providers/context_control.rs",
+          "packages/gateway-rust/src/providers/acp_settlement.rs"
+        ],
+        "verdict": "Proposed partial behavioral pairing: native context control contains compaction eligibility and failure backoff state, while ACP settlement models ordered prompt response effects. No Rust production caller of context control or equivalent composed recovery tests were found; settled failure continuation, user cancellation during compaction, timeout settlement and prevention of overlapping prompts remain unverified. No parity or integration is claimed.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/providers/jait-mcp.test.ts",
@@ -16513,7 +16528,15 @@
           "rust_cases": [],
           "boundary": "http-or-websocket-contract"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/routes/agent_github_apps.rs",
+          "packages/gateway-rust/src/services/github_intake.rs"
+        ],
+        "verdict": "Proposed behavioral pairing: the Node route test sends an invalid signature followed by two valid identical deliveries and checks 401, two 200s and one stored decision. The Rust webhook verifies the signature before invoking its optional intake port, and the intake adapter implements delivery deduplication. The adapter is unmounted and an equivalent composed route-to-storage test and production behavior are not established.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/routes/jobs.test.ts",
@@ -16795,7 +16818,7 @@
     },
     {
       "path": "packages/gateway/src/routes/mcp-server.test.ts",
-      "fingerprint": "c97f34beb7afa3bc",
+      "fingerprint": "5721b60991ddfbe1",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -16814,7 +16837,7 @@
         "packages/gateway/src/tools/team-chat-tools.ts",
         "packages/gateway/src/tools/user-question-tools.ts"
       ],
-      "declaration_count": 24,
+      "declaration_count": 25,
       "cases": [
         {
           "id": "packages/gateway/src/routes/mcp-server.test.ts:32:3",
@@ -17058,6 +17081,20 @@
           "id": "packages/gateway/src/routes/mcp-server.test.ts:823:3",
           "line": 823,
           "column": 3,
+          "name": "passes the authenticated user's saved API keys into MCP tool context",
+          "suite": [
+            "mcp-server"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:851:3",
+          "line": 851,
+          "column": 3,
           "name": "uses the global last active session for unauthenticated local MCP tool calls",
           "suite": [
             "mcp-server"
@@ -17069,8 +17106,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:898:3",
-          "line": 898,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:926:3",
+          "line": 926,
           "column": 3,
           "name": "passes the authenticated user into MCP tool context when a session override is provided",
           "suite": [
@@ -17083,8 +17120,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:957:3",
-          "line": 957,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:985:3",
+          "line": 985,
           "column": 3,
           "name": "uses MCP URL query params as tool context overrides",
           "suite": [
@@ -17097,8 +17134,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1027:3",
-          "line": 1027,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1055:3",
+          "line": 1055,
           "column": 3,
           "name": "uses MCP tool arguments as context overrides",
           "suite": [
@@ -17111,8 +17148,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1112:3",
-          "line": 1112,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1140:3",
+          "line": 1140,
           "column": 3,
           "name": "infers provider, model, and runtime mode from the referenced session state",
           "suite": [
@@ -17125,8 +17162,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1209:3",
-          "line": 1209,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1237:3",
+          "line": 1237,
           "column": 3,
           "name": "resolves a worker's owner and execution context through %s",
           "suite": [
@@ -17139,8 +17176,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1297:3",
-          "line": 1297,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1325:3",
+          "line": 1325,
           "column": 3,
           "name": "persists and broadcasts todo_list updates for MCP todo calls",
           "suite": [
@@ -27158,6 +27195,59 @@
       ]
     },
     {
+      "path": "packages/gateway/src/services/bridge-reauth.test.ts",
+      "fingerprint": "090217ac50c7d0fd",
+      "lane": "security-execution",
+      "direct_source_imports": [
+        "packages/gateway/src/services/bridge-reauth.ts"
+      ],
+      "declaration_count": 3,
+      "cases": [
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:15:3",
+          "line": 15,
+          "column": 3,
+          "name": "returns the refresh token of the Teams web client",
+          "suite": [
+            "pickRefreshToken"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:18:3",
+          "line": 18,
+          "column": 3,
+          "name": "ignores other clients, failures and short tokens",
+          "suite": [
+            "pickRefreshToken"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:27:3",
+          "line": 27,
+          "column": 3,
+          "name": "derives the apply script from the reauth command",
+          "suite": [
+            "applyCommand"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/services/browser-intelligence.test.ts",
       "fingerprint": "87ae5c14e037675a",
       "lane": "native-integrations",
@@ -27209,7 +27299,12 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [],
+        "verdict": "Node-only test: no Rust analogue found for Stagehand selector conversion, unsupported-action rejection or account-key model resolution. Live-view Stagehand extension path configuration is related infrastructure, not an implementation of these cases.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/services/browser-workflows.test.ts",
@@ -27350,7 +27445,15 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/db/schema.rs",
+          "packages/gateway-rust/src/db/migrations.json"
+        ],
+        "verdict": "Node-only workflow service tests; no Rust workflow service or corresponding test analogue found. Schema and migrations contain related tables only; they do not establish validation, scoped persistence, sequential execution, consent, cancellation or interruption recovery.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/services/calendar/google.test.ts",
@@ -27606,7 +27709,7 @@
     },
     {
       "path": "packages/gateway/src/services/chat-loops.test.ts",
-      "fingerprint": "ebd806ed67c9fc40",
+      "fingerprint": "cd8173c71e87d885",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/db/index.ts",
@@ -27616,7 +27719,7 @@
         "packages/gateway/src/services/system-one.ts",
         "packages/gateway/src/tools/loop-tools.ts"
       ],
-      "declaration_count": 23,
+      "declaration_count": 26,
       "cases": [
         {
           "id": "packages/gateway/src/services/chat-loops.test.ts:24:3",
@@ -27804,7 +27907,7 @@
           "id": "packages/gateway/src/services/chat-loops.test.ts:175:3",
           "line": 175,
           "column": 3,
-          "name": "pauses on monitor failure without leaking errors or accepting completion",
+          "name": "keeps running on monitor failure without leaking errors or accepting completion",
           "suite": [
             "persistent chat goal loops"
           ],
@@ -27815,8 +27918,50 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:183:3",
-          "line": 183,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:184:3",
+          "line": 184,
+          "column": 3,
+          "name": "logs the review failure cause server-side and records only the error class",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:194:3",
+          "line": 194,
+          "column": 3,
+          "name": "does not pause continue checkpoints when System One is unavailable",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:205:3",
+          "line": 205,
+          "column": 3,
+          "name": "pauses when completion cannot be reviewed three times in a row",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:216:3",
+          "line": 216,
           "column": 3,
           "name": "does not overwrite pauses or replacement goals during model evaluation",
           "suite": [
@@ -27829,8 +27974,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:198:3",
-          "line": 198,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:231:3",
+          "line": 231,
           "column": 3,
           "name": "pauses after three stalled checkpoints and renews budgets only on explicit resume",
           "suite": [
@@ -27843,8 +27988,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:210:3",
-          "line": 210,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:243:3",
+          "line": 243,
           "column": 3,
           "name": "bounds unchecked turns and total turns even without System One",
           "suite": [
@@ -27857,8 +28002,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:225:3",
-          "line": 225,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:258:3",
+          "line": 258,
           "column": 3,
           "name": "awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints",
           "suite": [
@@ -27871,8 +28016,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:238:3",
-          "line": 238,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:271:3",
+          "line": 271,
           "column": 3,
           "name": "scrubs configured credentials and authorization text from review state",
           "suite": [
@@ -27885,10 +28030,10 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:251:3",
-          "line": 251,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:284:3",
+          "line": 284,
           "column": 3,
-          "name": "pauses oversized review state without sending incomplete criteria",
+          "name": "does not accept oversized review state without sending incomplete criteria",
           "suite": [
             "persistent chat goal loops"
           ],
@@ -27899,8 +28044,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:260:3",
-          "line": 260,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:293:3",
+          "line": 293,
           "column": 3,
           "name": "allows verified completion after previous stalled checkpoints",
           "suite": [
@@ -27913,8 +28058,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:275:3",
-          "line": 275,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:308:3",
+          "line": 308,
           "column": 3,
           "name": "routes configured tool checks through System One and waits for the verdict",
           "suite": [
@@ -27927,8 +28072,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:286:3",
-          "line": 286,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:319:3",
+          "line": 319,
           "column": 3,
           "name": "requires a separate supported verdict for every acceptance criterion",
           "suite": [
@@ -31300,7 +31445,15 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/services/github_intake.rs",
+          "packages/gateway-rust/src/routes/agent_github_apps.rs"
+        ],
+        "verdict": "Proposed pairing: native intake unit tests cover bounded rule validation, owner isolation and durable delivery deduplication, with a worker adapter test. The adapter is explicitly unmounted; Node test coverage of body omission, unmatched sender, unsupported event and missing delivery ID is not established by this pairing. No production integration or parity is claimed.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/services/github-pull-requests.test.ts",
@@ -42248,7 +42401,15 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/runtime/server.rs",
+          "packages/gateway-rust/src/main.rs"
+        ],
+        "verdict": "Node-only desktop shutdown budget regression test: no corresponding native test found for ordering the gateway watchdog, desktop shell backstop and smoke-test kill deadlines or the desktop-host exit-code policy. Rust server has a five-second graceful-drain timeout and native main supplies its shutdown signal, but those mechanisms do not establish the Node desktop process deadlines or exit policy.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/skills/index.test.ts",
@@ -46405,7 +46566,14 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/copy_shell_integration.rs"
+        ],
+        "verdict": "Node-only browser cursor integration test: no native cursor behavior or equivalent browser test found. The opt-in Playwright case checks that agent click position remains visible despite user pointer movement and that the button is clicked. Rust copy_shell_integration copies the Node cursor asset; copying it does not establish native cursor behavior or parity.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/surfaces/browser-runtime.test.ts",
@@ -51716,7 +51884,15 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/tools/browser_tools.rs",
+          "packages/gateway-rust/src/services/live_view_manager.rs"
+        ],
+        "verdict": "Node-only intelligence tool tests: no native browser.observe, browser.extract or browser.check implementation or corresponding behavioral tests found. Native snapshot secret-safe redaction and Stagehand extension setup are related infrastructure only; they do not establish inference access controls, post-inference privacy rechecks, cancellation, error redaction or deterministic checking.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/tools/browser-stagehand.integration.test.ts",
@@ -51779,7 +51955,16 @@
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
-      ]
+      ],
+      "mapping_proposal": {
+        "native_related": [
+          "packages/gateway-rust/src/services/live_view_manager.rs",
+          "tests/contract/tests/gateway_rust_live_view.rs",
+          "packages/gateway-rust/src/db/schema.rs"
+        ],
+        "verdict": "Node-only Stagehand integration tests: no native equivalent found for real browser accessibility discovery and extraction, consent-gated saved workflow replay, inference cancellation and browser recovery. Rust live-view extension path configuration and workflow schema are infrastructure, not a matching integration. The Node suite itself is opt-in, including a separate opt-in live-model case.",
+        "status": "proposed"
+      }
     },
     {
       "path": "packages/gateway/src/tools/browser-tools-collaboration.test.ts",
@@ -67623,7 +67808,7 @@
     },
     {
       "path": "packages/gateway/src/providers/acp-provider.ts",
-      "fingerprint": "122d5bbbdfe1d2c8",
+      "fingerprint": "9da2347df655905a",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/providers/acp-opencode-models.test.ts",
@@ -69268,7 +69453,7 @@
     },
     {
       "path": "packages/gateway/src/routes/mcp-server.ts",
-      "fingerprint": "2aa835a092edce7b",
+      "fingerprint": "017d016dbd371c71",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/mcp-server-image.test.ts",
@@ -69284,229 +69469,12 @@
     },
     {
       "path": "packages/gateway/src/routes/messenger.ts",
-      "fingerprint": "cceccccd0ab36877",
+      "fingerprint": "0301e2c4be668316",
       "lane": "http-tools-config",
       "direct_test_references": [],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-get-messenger",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-post-messenger",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-delete-messenger",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-get-search",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-post-keys",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-post-media",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-unauth-post-command",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-snapshot",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-snapshot-other-owner",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-bad-room",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-login-empty",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-login-insecure",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-login-unknown",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-login-success",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-login-error",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-logout",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-search",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-search-empty",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-search-unknown",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-keys-false",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-keys-true",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-keys-invalid",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-media-false",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-media-true",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-media-invalid",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-send",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-edit",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-react",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-assistantAccess",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-open",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-read",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-attachment",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-join",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-leave",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-earlier",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-unread",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-remove",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-invalid-unknown",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-invalid-bad-room",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-invalid-empty-text",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-invalid-unknown-field",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-invalid-bad-base64",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.messenger-route-command-error",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage.",
-      "parity_review": "Reviewed all Messenger route bindings, auth/owner forwarding, Zod request shapes, no-store responses, service lifecycle/bridge teardown and redacted errors. Forty-three authored Rust-owned Fastify injection cases exercise unauthenticated access to every route, distinct owners, room validation, strict login/search/key/media/command schemas, all twelve command actions, text/key trimming, service forwarding and connect/key/media/command failure redaction. Real JWT auth executes with a synthetic fixture secret. MessengerService and homeserver normalization are stubbed before module loading, so no live Matrix session, persistent login, message, bridge handoff or external request runs. These fixtures certify route boundary behavior only: real homeserver normalization/SSRF, credentials/encryption/key recovery, service ownership internals, attachments near size limits, sync/network behavior and service resume/search/lifecycle failures remain separate gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage."
     },
     {
       "path": "packages/gateway/src/routes/mobile.ts",
@@ -70835,7 +70803,7 @@
     },
     {
       "path": "packages/gateway/src/server.ts",
-      "fingerprint": "3b691d9e5a5ac3b6",
+      "fingerprint": "5020f7ad7901e59a",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/__scratch-pr.test.ts",
@@ -71216,6 +71184,26 @@
       "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
+      "path": "packages/gateway/src/services/bridge-reauth.ts",
+      "fingerprint": "6707569be52d3b19",
+      "lane": "security-execution",
+      "direct_test_references": [
+        "packages/gateway/src/services/bridge-reauth.test.ts"
+      ],
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
+    },
+    {
+      "path": "packages/gateway/src/services/bridge-status.ts",
+      "fingerprint": "7f0fcbeedd5f0dff",
+      "lane": "http-tools-config",
+      "direct_test_references": [],
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage."
+    },
+    {
       "path": "packages/gateway/src/services/browser-intelligence.ts",
       "fingerprint": "69b3b741e8a82831",
       "lane": "native-integrations",
@@ -71432,7 +71420,7 @@
     },
     {
       "path": "packages/gateway/src/services/chat-loops.ts",
-      "fingerprint": "2e7bc9613b9d1999",
+      "fingerprint": "8b0c1d76781a8f19",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/chat-loops.test.ts",
@@ -73339,7 +73327,7 @@
     },
     {
       "path": "packages/gateway/src/services/messenger-service.ts",
-      "fingerprint": "965f55dcc305b961",
+      "fingerprint": "a82c70170d7e699c",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/messenger-service.test.ts"
@@ -74288,52 +74276,20 @@
     },
     {
       "path": "packages/gateway/src/services/provider-accounts.ts",
-      "fingerprint": "84c6d88965167801",
+      "fingerprint": "a897facd04323e8c",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/provider-accounts.test.ts",
         "packages/gateway/src/routes/providers-model-routing.test.ts",
         "packages/gateway/src/services/provider-accounts.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_18_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_37_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_69_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_119_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_145_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProviderAccounts-packages_gateway_src_services_provider_accounts_test_ts_169_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses six Rust-owned account declarations with real isolated SQLite and project-local credential roots: owner-isolated Go usage with synthetic fetch, independent Codex/Claude homes, auth-disabled type filtering, selected-account deletion, remote-node routing without local credentials and duplicate/unknown-type refusal. Adapters are constructed without launching providers. Definition refresh, rename, failed quota fetches and live authentication remain coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/provider-quota-fetchers.ts",
-      "fingerprint": "3f9e538f0048ce04",
+      "fingerprint": "f1296e8da28964be",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/providers-ollama-usage.test.ts",
@@ -74511,7 +74467,7 @@
     },
     {
       "path": "packages/gateway/src/services/provider-usage.ts",
-      "fingerprint": "c30483e2309ba984",
+      "fingerprint": "f0f93b2db4dafb99",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/providers-usage-refresh.test.ts",
@@ -77385,7 +77341,7 @@
     },
     {
       "path": "packages/gateway/src/tools/loop-tools.ts",
-      "fingerprint": "e57d86a756a69602",
+      "fingerprint": "fa56503052ae8acc",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/chat-loops.test.ts"

@@ -1406,6 +1406,79 @@ mod mcp_server {
         .await;
         assert_eq!(result, Value::Null);
     }
+
+    /// Captures the context a tool receives, as `decision.evaluate` would.
+    struct KeyProbe(std::sync::Mutex<Option<Option<HashMap<String, String>>>>);
+
+    impl jait_gateway::routes::mcp_server::McpToolSource for KeyProbe {
+        fn list(&self) -> Vec<jait_gateway::routes::mcp_server::McpToolDescriptor> {
+            vec![jait_gateway::routes::mcp_server::McpToolDescriptor::new(
+                "decision.evaluate",
+            )]
+        }
+        fn get(&self, name: &str) -> Option<jait_gateway::routes::mcp_server::McpToolDescriptor> {
+            self.list().into_iter().find(|tool| tool.name == name)
+        }
+        fn execute<'a>(
+            &'a self,
+            _name: &'a str,
+            _args: Value,
+            ctx: McpToolContext,
+        ) -> futures_util::future::BoxFuture<
+            'a,
+            Result<jait_gateway::routes::mcp_server::McpToolOutcome, String>,
+        > {
+            Box::pin(async move {
+                *self.0.lock().unwrap() = Some(ctx.api_keys.clone());
+                Ok(jait_gateway::routes::mcp_server::McpToolOutcome::text("ok"))
+            })
+        }
+    }
+
+    async fn call_with(ctx: McpToolContext) -> Option<HashMap<String, String>> {
+        let probe = KeyProbe(Default::default());
+        let result = handle_request(
+            &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": "decision_evaluate", "arguments": {}}}),
+            Some(&probe),
+            "2025-06-18",
+            &ctx,
+            tool_set(),
+        )
+        .await;
+        assert_eq!(result["result"]["isError"], json!(false), "{result}");
+        probe.0.lock().unwrap().take().expect("tool executed")
+    }
+
+    #[tokio::test]
+    async fn tool_calls_receive_the_users_saved_api_keys() {
+        let keys = HashMap::from([("JEV_API_KEY".to_string(), "secret-key".to_string())]);
+        let seen = call_with(McpToolContext {
+            session_id: Some("sess-1".into()),
+            user_id: Some("user-1".into()),
+            api_keys: Some(keys.clone()),
+            ..Default::default()
+        })
+        .await;
+        assert_eq!(seen, Some(keys));
+        let unauthenticated = call_with(McpToolContext {
+            session_id: Some("sess-1".into()),
+            ..Default::default()
+        })
+        .await;
+        assert_eq!(unauthenticated, None);
+    }
+
+    #[test]
+    fn debug_output_never_prints_api_keys() {
+        let ctx = McpToolContext {
+            api_keys: Some(HashMap::from([("JEV_API_KEY".into(), "secret-key".into())])),
+            ..Default::default()
+        };
+        let printed = format!("{ctx:?}");
+        assert!(!printed.contains("secret-key"), "{printed}");
+        assert!(printed.contains("has_api_keys: true"), "{printed}");
+    }
 }
 
 // ---------------------------------------------------------------------------
