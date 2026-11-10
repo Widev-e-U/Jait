@@ -1527,7 +1527,12 @@ async fn hooks_require_the_secret_token_and_fail_closed_without_a_runtime() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
     for path in ["/hooks/wake", "/hooks/agent"] {
-        let r = client.post(format!("{base}{path}")).json(&serde_json::json!({})).send().await.unwrap();
+        let r = client
+            .post(format!("{base}{path}"))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(r.status(), 401, "{path} without a token");
         let r = client
             .post(format!("{base}{path}"))
@@ -1547,7 +1552,11 @@ async fn hooks_require_the_secret_token_and_fail_closed_without_a_runtime() {
 async fn email_is_authenticated_and_lists_no_accounts() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
-    let anon = client.get(format!("{base}/api/email/accounts")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/email/accounts"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let r = client
@@ -1566,7 +1575,11 @@ async fn email_is_authenticated_and_lists_no_accounts() {
 async fn trust_levels_are_authenticated_and_listed() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
-    let anon = client.get(format!("{base}/api/trust/levels")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/trust/levels"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let ok = client
@@ -1587,7 +1600,11 @@ async fn trust_levels_are_authenticated_and_listed() {
 async fn agent_control_halts_resumes_and_reports_stop_failure() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
-    let anon = client.get(format!("{base}/api/agent-control")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/agent-control"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let halt: serde_json::Value = client
@@ -1601,7 +1618,10 @@ async fn agent_control_halts_resumes_and_reports_stop_failure() {
         .await
         .unwrap();
     assert_eq!(halt["state"]["halted"], true, "{halt}");
-    assert!(halt["stopError"].as_str().is_some_and(|e| !e.is_empty()), "{halt}");
+    assert!(
+        halt["stopError"].as_str().is_some_and(|e| !e.is_empty()),
+        "{halt}"
+    );
     let resumed: serde_json::Value = client
         .post(format!("{base}/api/agent-control/resume"))
         .bearer_auth(&token)
@@ -1621,7 +1641,11 @@ async fn agent_control_halts_resumes_and_reports_stop_failure() {
 async fn github_apps_are_authenticated_and_fail_closed() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
-    let anon = client.get(format!("{base}/api/github-apps")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/github-apps"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let list: serde_json::Value = client
@@ -1640,7 +1664,11 @@ async fn github_apps_are_authenticated_and_fail_closed() {
         .send()
         .await
         .unwrap();
-    assert!(hook.status().is_client_error() || hook.status().is_server_error(), "{}", hook.status());
+    assert!(
+        hook.status().is_client_error() || hook.status().is_server_error(),
+        "{}",
+        hook.status()
+    );
     drop(stop);
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
@@ -1740,7 +1768,11 @@ async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let anon = client.get(format!("{base}/api/projects")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/projects"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let created = client
@@ -1938,7 +1970,11 @@ async fn security_assessments_require_auth_and_reject_unscoped_runs() {
         .send()
         .await
         .unwrap();
-    assert_eq!(filesystem.status(), 400, "path scope needs an owned project session");
+    assert_eq!(
+        filesystem.status(),
+        400,
+        "path scope needs an owned project session"
+    );
     let unknown = client
         .get(format!("{base}/api/security/assessments/nope"))
         .bearer_auth(&token)
@@ -1947,7 +1983,10 @@ async fn security_assessments_require_auth_and_reject_unscoped_runs() {
         .unwrap();
     assert_eq!(unknown.status(), 404);
     stop.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1972,7 +2011,10 @@ async fn security_workbench_is_authenticated_and_refuses_unavailable_engines() {
         .json()
         .await
         .unwrap();
-    assert!(engines.to_string().len() < 200, "no engines expected: {engines}");
+    assert!(
+        engines.to_string().len() < 200,
+        "no engines expected: {engines}"
+    );
     let unknown = client
         .get(format!("{base}/api/security/checks/nope"))
         .bearer_auth(&token)
@@ -1987,9 +2029,16 @@ async fn security_workbench_is_authenticated_and_refuses_unavailable_engines() {
         .send()
         .await
         .unwrap();
-    assert!(!run.status().is_success(), "check must not run: {}", run.status());
+    assert!(
+        !run.status().is_success(),
+        "check must not run: {}",
+        run.status()
+    );
     stop.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -2001,7 +2050,12 @@ async fn mcp_requires_login_and_lists_no_tools_yet() {
         .build()
         .unwrap();
     let list = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/list"});
-    let anon = client.post(format!("{base}/mcp")).json(&list).send().await.unwrap();
+    let anon = client
+        .post(format!("{base}/mcp"))
+        .json(&list)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let ok = client
@@ -2027,9 +2081,15 @@ async fn mcp_requires_login_and_lists_no_tools_yet() {
         .text()
         .await
         .unwrap();
-    assert!(denied.contains("Unknown tool") || denied.contains("error"), "{denied}");
+    assert!(
+        denied.contains("Unknown tool") || denied.contains("error"),
+        "{denied}"
+    );
     stop.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -2042,17 +2102,31 @@ async fn browser_devtools_refuse_without_a_browser_host() {
         .unwrap();
     let url = format!("{base}/api/preview/devtools");
     let body = serde_json::json!({"sessionId":"s1"});
-    assert_eq!(client.post(&url).json(&body).send().await.unwrap().status(), 401);
+    assert_eq!(
+        client.post(&url).json(&body).send().await.unwrap().status(),
+        401
+    );
     let token = token(&client, &base).await;
-    let created = client.post(&url).bearer_auth(&token).json(&body).send().await.unwrap();
+    let created = client
+        .post(&url)
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(created.status(), 404);
     let forged = client
-        .get(format!("{base}/preview/bogus/devtools/grant/devtools_app.html"))
+        .get(format!(
+            "{base}/preview/bogus/devtools/grant/devtools_app.html"
+        ))
         .send()
         .await
         .unwrap();
     assert!(forged.status().is_client_error(), "{}", forged.status());
     stop.send(()).unwrap();
-    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }

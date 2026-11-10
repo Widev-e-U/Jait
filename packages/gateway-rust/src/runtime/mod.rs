@@ -10,14 +10,14 @@ pub mod application;
 
 pub mod skills_mount;
 
+pub mod channels_mount;
 pub mod chat_acp;
 pub mod chat_settings;
 pub mod chat_tools;
 pub mod consent_mount;
-pub mod mobile_mount;
-pub mod channels_mount;
-pub mod maintenance_mount;
 pub mod consent_ws;
+pub mod maintenance_mount;
+pub mod mobile_mount;
 
 pub mod chat_turn;
 

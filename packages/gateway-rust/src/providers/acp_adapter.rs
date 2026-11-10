@@ -4,11 +4,11 @@
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use futures_util::future::BoxFuture;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::process::Command;
 
 use super::{
-    acp_provider::{build_child_env, AcpProvider, AcpProviderConfig, STRIPPED_ENV_VARS},
+    acp_provider::{AcpProvider, AcpProviderConfig, STRIPPED_ENV_VARS, build_child_env},
     registry::{ProviderAdapter, ProviderRegistry},
 };
 
@@ -234,11 +234,13 @@ mod tests {
         let mut def = default_definitions().remove(0);
         def.config.command = "definitely-not-installed-jait".into();
         let missing = AcpAdapter::new(def);
-        assert!(missing
-            .check_availability()
-            .await
-            .unwrap_err()
-            .contains("definitely-not-installed-jait"));
+        assert!(
+            missing
+                .check_availability()
+                .await
+                .unwrap_err()
+                .contains("definitely-not-installed-jait")
+        );
         let mut remote = default_definitions().remove(0);
         remote.config.execution_node_id = Some("laptop".into());
         assert!(AcpAdapter::new(remote).check_availability().await.is_err());

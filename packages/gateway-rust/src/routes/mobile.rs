@@ -681,7 +681,8 @@ async fn consent_approve(
     };
     let user_id = user.id.clone();
     let decided = tokio::task::spawn_blocking(move || {
-        state.access.consent_request(&id, &user_id) && state.consent.approve(&id, "click", "mobile.approve")
+        state.access.consent_request(&id, &user_id)
+            && state.consent.approve(&id, "click", "mobile.approve")
     })
     .await
     .unwrap_or(false);
@@ -702,7 +703,8 @@ async fn consent_reject(
     };
     let user_id = user.id.clone();
     let decided = tokio::task::spawn_blocking(move || {
-        state.access.consent_request(&id, &user_id) && state.consent.reject(&id, "click", "mobile.reject")
+        state.access.consent_request(&id, &user_id)
+            && state.consent.reject(&id, "click", "mobile.reject")
     })
     .await
     .unwrap_or(false);

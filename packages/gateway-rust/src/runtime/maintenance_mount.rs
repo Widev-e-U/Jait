@@ -2,8 +2,8 @@
 //! Running a check executes repository commands that may mutate files, so the
 //! authority refuses every execution until the consent engine can approve it.
 use crate::{
-    execution::process_runner::{ProcessCancellation, ProcessPool, ProcessRequest},
     db::worker::DatabaseWorker,
+    execution::process_runner::{ProcessCancellation, ProcessPool, ProcessRequest},
     routes::maintenance::MaintenanceBackend,
     runtime::blocking::BlockingLane,
     services::{
@@ -74,14 +74,24 @@ impl MaintenanceBackend for ServiceBackend {
         limit: f64,
     ) -> BoxFuture<'_, Result<Vec<Value>, MaintenanceError>> {
         Box::pin(async move {
-            let limit = if limit.is_finite() { limit.max(0.0) as usize } else { 20 };
+            let limit = if limit.is_finite() {
+                limit.max(0.0) as usize
+            } else {
+                20
+            };
             let runs = self.0.list_runs(job_id, limit).await.map_err(message)?;
             runs.iter().map(json).collect()
         })
     }
     fn get_run(&self, id: String) -> BoxFuture<'_, Result<Option<Value>, MaintenanceError>> {
         Box::pin(async move {
-            self.0.get_run(&id).await.map_err(message)?.as_ref().map(json).transpose()
+            self.0
+                .get_run(&id)
+                .await
+                .map_err(message)?
+                .as_ref()
+                .map(json)
+                .transpose()
         })
     }
     fn run_for_repo(
@@ -92,7 +102,12 @@ impl MaintenanceBackend for ServiceBackend {
         Box::pin(async move {
             let result = self
                 .0
-                .run_for_repo(&repo_id, &job_id, MaintenanceConfig::default(), ProcessCancellation::default())
+                .run_for_repo(
+                    &repo_id,
+                    &job_id,
+                    MaintenanceConfig::default(),
+                    ProcessCancellation::default(),
+                )
                 .await
                 .map_err(message)?;
             json(&result)

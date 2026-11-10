@@ -134,9 +134,17 @@ pub fn hook_routes(auth: &crate::routes::auth::AuthState) -> crate::routes::hook
         .ok()
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple()));
+        .unwrap_or_else(|| {
+            format!(
+                "{}{}",
+                uuid::Uuid::new_v4().simple(),
+                uuid::Uuid::new_v4().simple()
+            )
+        });
     let unavailable: crate::routes::hooks::HookCallback = std::sync::Arc::new(|_| {
-        Box::pin(async { Err("Hook handling is not available in the Rust gateway yet".to_string()) })
+        Box::pin(async {
+            Err("Hook handling is not available in the Rust gateway yet".to_string())
+        })
     });
     crate::routes::hooks::HookRoutes {
         auth: auth.clone(),
@@ -235,9 +243,7 @@ pub async fn security_workbench_routes(
     assessments: &crate::assessments::service::AssessmentRegistry,
     project_root: &std::path::Path,
 ) -> crate::routes::security_workbench::SecurityWorkbenchRoutes {
-    use crate::assessments::workbench::{
-        EngineError, WorkbenchOptions, WorkbenchRegistry,
-    };
+    use crate::assessments::workbench::{EngineError, WorkbenchOptions, WorkbenchRegistry};
     let adapter: crate::assessments::workbench::CheckAdapter = std::sync::Arc::new(|_, _| {
         Box::pin(async {
             Err(EngineError::Unavailable(

@@ -11,12 +11,14 @@ use futures_util::future::BoxFuture;
 use serde_json::{Map, Value, json};
 
 use crate::{
-
     providers::{
         acp_adapter::AcpDefinition,
         registry::{ProviderAdapter, ProviderRegistry},
     },
-    routes::{auth::AuthState, providers::{ProviderDirectory, StoreError, UsageStore}},
+    routes::{
+        auth::AuthState,
+        providers::{ProviderDirectory, StoreError, UsageStore},
+    },
     runtime::blocking::BlockingLane,
     services::{
         provider_accounts::{
@@ -140,7 +142,10 @@ impl ProviderDirectory for DbProviderDirectory {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_owned();
-        let node = body.get("nodeId").and_then(Value::as_str).map(str::to_owned);
+        let node = body
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
         Box::pin(async move {
             service
                 .create(user, provider, &label, node.as_deref())
@@ -200,7 +205,8 @@ impl UsageStore for DbUsageStore {
     /// refreshes (Ollama, OpenCode Go) need the outbound quota fetchers, which
     /// are not ported, so a refresh reports the same stored observations.
     fn summary(&self, user: &str, _refresh: bool) -> BoxFuture<'static, Result<Value, String>> {
-        let (usage, accounts, user) = (self.service.clone(), self.accounts.clone(), user.to_owned());
+        let (usage, accounts, user) =
+            (self.service.clone(), self.accounts.clone(), user.to_owned());
         Box::pin(async move {
             let rows: Vec<Value> = accounts
                 .list(user.clone())

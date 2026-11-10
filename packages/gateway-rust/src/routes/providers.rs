@@ -185,7 +185,11 @@ pub trait ProviderDirectory: Send + Sync {
         })
     }
     /// TS `delete(accountId, userId)`.
-    fn delete_account(&self, _id: &str, _user: &str) -> BoxFuture<'static, Result<bool, StoreError>> {
+    fn delete_account(
+        &self,
+        _id: &str,
+        _user: &str,
+    ) -> BoxFuture<'static, Result<bool, StoreError>> {
         Box::pin(async {
             Err(StoreError::Unavailable(
                 "Provider accounts are unavailable".into(),
@@ -326,7 +330,11 @@ pub trait ProviderRuntime: Send + Sync {
 /// TS `deps.providerUsageService` and `readUsageSummary(userId, refresh)`.
 pub trait UsageStore: Send + Sync {
     /// TS `listForUser(accountIds)`.
-    fn list_for_user(&self, _user: &str, _account_ids: &[String]) -> BoxFuture<'static, Vec<Value>> {
+    fn list_for_user(
+        &self,
+        _user: &str,
+        _account_ids: &[String],
+    ) -> BoxFuture<'static, Vec<Value>> {
         Box::pin(async { Vec::new() })
     }
     /// TS `readUsageSummary(userId, refresh)`; the payload is redacted here.
