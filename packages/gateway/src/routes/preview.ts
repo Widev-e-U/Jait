@@ -100,6 +100,23 @@ export function registerPreviewRoutes(
     return { session };
   });
 
+  app.post("/api/preview/reopen", {
+    schema: { body: { type: "object", additionalProperties: false, required: ["sessionId", "url"],
+      properties: { sessionId: { type: "string", minLength: 1 }, url: { type: "string", minLength: 1, maxLength: 8192 } } } },
+  }, async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { sessionId: string; url: string };
+    const chat = deps.sessionService?.getById(body.sessionId, authUser.id);
+    if (!chat) return reply.status(404).send({ error: "Session not found" });
+    try {
+      const session = await deps.previewService.reopen(body.sessionId, body.url, chat.projectPath ?? null);
+      return { session };
+    } catch (cause) {
+      return reply.status(400).send({ error: cause instanceof Error ? cause.message : "Could not reopen the browser." });
+    }
+  });
+
   app.post("/api/preview/navigate", {
     schema: {
       body: {

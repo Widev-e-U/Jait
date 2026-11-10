@@ -367,6 +367,23 @@ export class PreviewService {
     }, true);
   }
 
+  /** Start a fresh agent browser for a chat whose live browser was stopped, opened at the remembered page. */
+  async reopen(sessionId: string, url: string, projectRoot: string | null): Promise<PreviewSession> {
+    if (!/^https?:\/\//i.test(url)) throw new Error("Cannot reopen the browser without an HTTP/HTTPS page.");
+    const existing = this.sessions.get(sessionId);
+    if (existing) return this.get(sessionId)!;
+    const id = `browser-${sessionId}`;
+    const browser = await this.surfaceRegistry.startSurface("browser", id, { sessionId, projectRoot: projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
+    try {
+      await browser.navigate(url);
+      this.attachAgentBrowser(sessionId, browser, projectRoot ?? undefined, false);
+    } catch (error) {
+      await this.surfaceRegistry.stopSurface(browser.id, "browser-reopen-failed").catch(() => {});
+      throw error;
+    }
+    return this.get(sessionId)!;
+  }
+
   async stop(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;

@@ -28,3 +28,16 @@ export function forgetBrowserPanelState(): void {
   }
   collapsedByConversation.clear()
 }
+
+const urlPrefix = 'jait:browser-last-url:'
+
+/** The last page this chat's browser showed, so a stopped browser can be reopened there. */
+export function readBrowserLastUrl(conversationId?: string | null): string | null {
+  if (!conversationId) return null
+  try { return window.localStorage.getItem(urlPrefix + conversationId) } catch { return null }
+}
+
+export function rememberBrowserLastUrl(conversationId: string | null | undefined, url: string | null | undefined): void {
+  if (!conversationId || !url || !/^https?:\/\//i.test(url)) return
+  try { window.localStorage.setItem(urlPrefix + conversationId, url) } catch { /* Storage is optional. */ }
+}

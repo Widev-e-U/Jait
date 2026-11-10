@@ -4,7 +4,7 @@ import { Bot, GripHorizontal, Hand, Loader2, Maximize2, PictureInPicture2, Rotat
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
-import { readBrowserCollapsed, rememberBrowserCollapsed } from '@/lib/browser-panel-state'
+import { readBrowserCollapsed, readBrowserLastUrl, rememberBrowserCollapsed, rememberBrowserLastUrl } from '@/lib/browser-panel-state'
 import { constrainBrowserWindow, resizeBrowserWindow, type BrowserWindowBox } from '@/lib/browser-window'
 import { getApiUrl } from '@/lib/gateway-url'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -73,6 +73,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const [state, setState] = useState<BrowserState | null>(() => id && liveViewUrl(record?.previewUrl) ? {
     sessionId: id, browserId, url: liveViewUrl(record?.previewUrl), sharedWithAgent: record?.controller === 'agent', verified: false,
   } : null)
+  const [lastUrl, setLastUrl] = useState<string | null>(() => readBrowserLastUrl(id))
   const [busyAction, setBusyAction] = useState<'control' | 'restart' | null>(null)
   const busy = busyAction !== null
   const [error, setError] = useState('')
@@ -185,6 +186,10 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
           setMaximized(false)
           setExpandedState(autoOpen && !(readBrowserCollapsed(id) ?? (session.sharedWithAgent !== true)))
         }
+        if (!cancelled && session?.status === 'ready') {
+          const page = session.metrics?.url ?? session.target
+          if (typeof page === 'string') { rememberBrowserLastUrl(id, page); setLastUrl(page) }
+        }
         if (!cancelled) setState(session?.status === 'ready' ? {
           sessionId: id, browserId: session.browserId, url: liveViewUrl(session.url), sharedWithAgent: session.sharedWithAgent === true, verified: true, currentUrl: session.metrics?.url ?? session.target,
         } : null)
@@ -224,9 +229,10 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     if (!id || busy) return
     setBusyAction('restart'); setError('')
     try {
-      const response = await apiFetch(`${getApiUrl()}/api/preview/restart`, {
+      // A stopped browser is gone from the gateway, so reopen it at the remembered page.
+      const response = await apiFetch(`${getApiUrl()}/api/preview/${state ? 'restart' : 'reopen'}`, {
         method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: id }),
+        body: JSON.stringify(state ? { sessionId: id } : { sessionId: id, url: lastUrl }),
       })
       if (!response.ok) throw new Error('Could not restart the browser. Try again.')
       const { session } = await response.json()
@@ -330,7 +336,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       ))}
       {manipulating && <div className="absolute inset-0 z-40" />}
       <div className={expanded ? `min-h-0 flex-1 ${maximized || fullscreen ? '' : 'rounded-xl [&_[data-browser-layout]]:rounded-xl'}` : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
-        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, menuControls, primaryControl, overflowControl, leading: !maximized && !fullscreen ? (<TooltipHint content="Drag to move · Arrow keys to move">
+        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl ?? lastUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, menuControls, primaryControl, overflowControl, leading: !maximized && !fullscreen ? (<TooltipHint content="Drag to move · Arrow keys to move">
           <button type="button" aria-label="Move browser"
             className="hidden h-8 shrink-0 touch-none items-center text-muted-foreground md:flex md:cursor-move"
             onPointerDown={event => beginGesture(event)} {...gestureEvents}
@@ -347,7 +353,16 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         </TooltipHint>) : undefined }}>
           <div className={`h-full overflow-hidden ${maximized || fullscreen ? '' : 'rounded-b-xl'}`}>{state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
             hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={busy || !state.verified} className={`h-full w-full border-0 bg-white ${maximized || fullscreen ? '' : expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
-            : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}</div>
+            : <div className="space-y-2 p-3 text-muted-foreground">
+              <p>No live browser is available for this chat.</p>
+              {lastUrl && <>
+                <p className="break-all" data-browser-last-url>Last page: {lastUrl}</p>
+                <button type="button" disabled={busy} onClick={() => void restartBrowser()}
+                  className="flex items-center gap-2 rounded border px-2 py-1.5 text-foreground hover:bg-muted disabled:opacity-50">
+                  {busyAction === 'restart' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reload last page
+                </button>
+              </>}
+            </div>}</div>
         </BrowserViewLayout>
       </div>
       {expanded && error && <p role="alert" className={`absolute bottom-0 inset-x-0 ${maximized || fullscreen ? '' : 'rounded-b-xl'} bg-background/95 px-3 py-2 text-destructive`}>{error}</p>}
