@@ -62,3 +62,44 @@ pub fn no_plugins() -> crate::routes::plugins::PluginManagerPort {
         })
     })
 }
+
+/// Network routes on the canonical assessment registry and bounded Docker inventory.
+/// The local view is empty until a native platform view exists; scans still require
+/// an explicit owner-scoped assessment scope.
+pub fn network_routes(
+    auth: &crate::routes::auth::AuthState,
+) -> Result<crate::routes::network::NetworkRoutes, String> {
+    use crate::{
+        assessments::service::{AssessmentOptions, AssessmentRegistry},
+        routes::network::{LocalNetworkSnapshot, LocalNetworkView, NetworkRoutes},
+        services::network_resources::{
+            DockerResourceInventory, LocalDockerRunner, SystemDockerHost,
+        },
+    };
+    let vantage = std::env::var("HOSTNAME")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "gateway".to_string());
+    let registry = AssessmentRegistry::new(AssessmentOptions::new(vantage)?);
+    let local: LocalNetworkView = std::sync::Arc::new(|_| {
+        Box::pin(async {
+            Ok(LocalNetworkSnapshot {
+                interfaces: Vec::new(),
+                local_addresses: Vec::new(),
+                gateway: serde_json::Value::Null,
+                filesystem_nodes: Vec::new(),
+                companion_devices: Vec::new(),
+            })
+        })
+    });
+    let inventory = std::sync::Arc::new(DockerResourceInventory::new(LocalDockerRunner::new(
+        SystemDockerHost::new(),
+    )));
+    Ok(NetworkRoutes::new(
+        auth.clone(),
+        registry,
+        local,
+        inventory,
+        crate::time::default_clock(),
+    ))
+}

@@ -1416,7 +1416,11 @@ async fn channels_are_authenticated_and_report_no_connectors() {
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let anon = client.get(format!("{base}/api/channels")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/channels"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let list: serde_json::Value = client
@@ -1452,7 +1456,6 @@ async fn channels_are_authenticated_and_report_no_connectors() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-
 #[tokio::test]
 async fn plugins_are_authenticated_and_none_are_loaded() {
     let (base, stop, task, dir) = start().await;
@@ -1460,7 +1463,11 @@ async fn plugins_are_authenticated_and_none_are_loaded() {
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let anon = client.get(format!("{base}/api/plugins")).send().await.unwrap();
+    let anon = client
+        .get(format!("{base}/api/plugins"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
     let token = token(&client, &base).await;
     let list: serde_json::Value = client
@@ -1507,6 +1514,45 @@ async fn pull_requests_are_authenticated_and_owner_scoped() {
     let token = token(&client, &base).await;
     let missing = client.get(&url).bearer_auth(&token).send().await.unwrap();
     assert_eq!(missing.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn network_is_authenticated_and_scans_need_a_scope() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/network/interfaces");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let ok = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(ok.status(), 200);
+    let nodes = client
+        .get(format!("{base}/api/network/nodes"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(nodes.status(), 200);
+    let scan = client
+        .post(format!("{base}/api/network/scan"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        scan.status().is_client_error(),
+        "scan without scope: {}",
+        scan.status()
+    );
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await

@@ -476,6 +476,11 @@ impl Application {
             )
             .merge(crate::routes::pull_requests::PullRequestRoutes::new(auth.clone()).router())
             .merge(
+                super::channels_mount::network_routes(&auth)
+                    .map_err(std::io::Error::other)?
+                    .router(),
+            )
+            .merge(
                 crate::routes::plugins::PluginRoutes {
                     auth: auth.clone(),
                     manager: super::channels_mount::no_plugins(),
