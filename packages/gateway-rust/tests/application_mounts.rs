@@ -1544,6 +1544,25 @@ async fn hooks_require_the_secret_token_and_fail_closed_without_a_runtime() {
 }
 
 #[tokio::test]
+async fn email_is_authenticated_and_lists_no_accounts() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client.get(format!("{base}/api/email/accounts")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let r = client
+        .get(format!("{base}/api/email/accounts"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200, "{}", r.text().await.unwrap());
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

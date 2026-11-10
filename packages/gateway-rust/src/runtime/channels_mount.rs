@@ -142,3 +142,56 @@ pub fn hook_routes(auth: &crate::routes::auth::AuthState) -> crate::routes::hook
         on_agent: unavailable,
     }
 }
+
+/// IMAP/SMTP needs an owner-bound, consent-gated protocol host that is not composed yet,
+/// so those sessions fail closed. Gmail/Outlook OAuth and the config endpoints use the
+/// native HTTPS transport.
+struct NoMailProtocol;
+
+impl crate::services::email::imap::MailProtocolHost for NoMailProtocol {
+    fn imap(
+        &self,
+        _: crate::services::email::connection::PinnedMailServer,
+        _: crate::services::email::imap::ProtocolLimits,
+    ) -> BoxFuture<'_, Result<Box<dyn crate::services::email::imap::ImapSession>, String>> {
+        Box::pin(async { Err("IMAP is not available in the Rust gateway yet".to_string()) })
+    }
+    fn smtp(
+        &self,
+        _: crate::services::email::connection::PinnedMailServer,
+        _: crate::services::email::imap::ProtocolLimits,
+        _: Option<crate::services::email::imap::SmtpMessage>,
+    ) -> BoxFuture<'_, Result<Option<String>, String>> {
+        Box::pin(async { Err("SMTP is not available in the Rust gateway yet".to_string()) })
+    }
+    fn parse_mime(
+        &self,
+        _: Vec<u8>,
+        _: usize,
+    ) -> BoxFuture<'_, Result<crate::services::email::imap::ParsedMime, String>> {
+        Box::pin(async { Err("Mail parsing is not available in the Rust gateway yet".to_string()) })
+    }
+}
+
+pub fn email_routes(
+    auth: &crate::routes::auth::AuthState,
+    secrets_key: &str,
+) -> Result<crate::routes::email::EmailRoutes, String> {
+    use crate::services::email::{
+        EmailService, connection::mail_resolver, remote_images, transport::native_transport,
+    };
+    let resolver = mail_resolver();
+    Ok(crate::routes::email::EmailRoutes {
+        auth: auth.clone(),
+        email: std::sync::Arc::new(EmailService::new(
+            auth.worker(),
+            crate::services::user_secrets::UserSecretService::new(secrets_key),
+            native_transport()?,
+            std::sync::Arc::new(NoMailProtocol),
+            resolver.clone(),
+        )),
+        public_base: None,
+        image_resolver: resolver,
+        image_transport: remote_images::native_transport(),
+    })
+}
