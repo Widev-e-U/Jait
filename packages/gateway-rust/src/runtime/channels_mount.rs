@@ -195,3 +195,29 @@ pub fn email_routes(
         image_transport: remote_images::native_transport(),
     })
 }
+
+/// GitHub App credentials, signed state and installation effects have no native host yet.
+/// The listing is empty, every agent is unknown and every other operation is refused,
+/// so a webhook can never be verified against a secret and is rejected.
+pub fn github_app_routes(
+    auth: &crate::routes::auth::AuthState,
+) -> crate::routes::agent_github_apps::GithubAppRoutes {
+    use crate::{services::agent_github_port::GithubOperation as Op, tools::core_io::HostError};
+    crate::routes::agent_github_apps::GithubAppRoutes {
+        auth: auth.clone(),
+        port: std::sync::Arc::new(|op| {
+            Box::pin(async move {
+                match op {
+                    Op::List(_) => Ok(serde_json::json!([])),
+                    Op::PublicBaseUrl => Ok(serde_json::json!("")),
+                    _ => Err(HostError::Error(
+                        "GitHub Apps are not available in the Rust gateway yet".to_string(),
+                    )),
+                }
+            })
+        }),
+        agent_exists: Some(std::sync::Arc::new(|_, _| false)),
+        on_webhook: None,
+        intake: None,
+    }
+}

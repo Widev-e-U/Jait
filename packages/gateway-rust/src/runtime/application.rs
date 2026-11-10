@@ -476,6 +476,7 @@ impl Application {
             )
             .merge(crate::routes::pull_requests::PullRequestRoutes::new(auth.clone()).router())
             .merge(super::channels_mount::screen_share_routes(&auth).router())
+            .merge(super::channels_mount::github_app_routes(&auth).router())
             .merge({
                 // No registry of running agents exists yet, so a halt reports the stop as
                 // failed (a partial result) rather than claiming agents were stopped.

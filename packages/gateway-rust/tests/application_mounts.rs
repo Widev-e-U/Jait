@@ -1618,6 +1618,35 @@ async fn agent_control_halts_resumes_and_reports_stop_failure() {
 }
 
 #[tokio::test]
+async fn github_apps_are_authenticated_and_fail_closed() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client.get(format!("{base}/api/github-apps")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/github-apps"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["configured"], 0, "{list}");
+    let hook = client
+        .post(format!("{base}/api/github/apps/webhook"))
+        .json(&serde_json::json!({"zen":"x"}))
+        .send()
+        .await
+        .unwrap();
+    assert!(hook.status().is_client_error() || hook.status().is_server_error(), "{}", hook.status());
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
