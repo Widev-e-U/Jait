@@ -475,6 +475,30 @@ impl Application {
                 .router(),
             )
             .merge(
+                crate::routes::jobs::JobRoutes {
+                    auth: auth.clone(),
+                    // Scheduled tool execution fails closed until the consent engine
+                    // can approve it; job CRUD and run history are served.
+                    scheduler: crate::scheduler::service::SchedulerService::new(
+                        crate::scheduler::service::SchedulerOptions::new(
+                            auth.worker(),
+                            config.project_root.to_string_lossy().into_owned(),
+                            Arc::new(|_| {
+                                Box::pin(async {
+                                    Err("Scheduled tool execution is not available in the Rust gateway yet".to_string())
+                                })
+                            }),
+                        ),
+                    ),
+                    project_root: config.project_root.to_string_lossy().into_owned(),
+                    clock: crate::time::default_clock(),
+                    providers: Some(provider_registry.clone()),
+                    provider_models: Arc::new(|_| Box::pin(async { Ok(Vec::new()) })),
+                    jait_models: None,
+                }
+                .router(),
+            )
+            .merge(
                 crate::routes::maintenance::MaintenanceRoutes {
                     auth: auth.clone(),
                     backend: Arc::new(

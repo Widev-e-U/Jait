@@ -1356,3 +1356,55 @@ async fn maintenance_runs_are_served_and_execution_needs_consent() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn jobs_are_created_listed_and_removed() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client.get(format!("{base}/api/jobs")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let created = client
+        .post(format!("{base}/api/jobs"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"name":"nightly","cron_expression":"0 3 * * *","job_type":"system_job","tool_name":"gateway.status"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+    let created: serde_json::Value = created.json().await.unwrap();
+    let id = created["id"].as_str().expect("job id").to_string();
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/jobs"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(list.to_string().contains(&id));
+    let providers = client
+        .get(format!("{base}/api/jobs/providers/available"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(providers.status(), 200);
+    let deleted = client
+        .delete(format!("{base}/api/jobs/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert!(deleted.status().is_success());
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
