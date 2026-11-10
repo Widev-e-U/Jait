@@ -26,7 +26,7 @@ import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
 import { TooltipHint } from '@/components/ui/tooltip'
 import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
-import { MessengerHeaderBar } from './messenger-services-bar'
+import { MessengerFilterBar, MessengerHeaderBar, type ChatFilter } from './messenger-services-bar'
 import { hasServiceLogo, ServiceLogo } from './service-logo'
 
 const LIST_MIN = 240
@@ -107,6 +107,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const [search, setSearch] = useUrlSearchState('messenger', 'q', () => new URLSearchParams(window.location.search).get('messageQ') ?? '')
   const [serviceValue, setService] = useUrlSearchState('messenger', 'service')
   const service = serviceValue || 'All'
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -145,7 +146,10 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const groupPositions = messageGroupPositions(messages)
   // Message hits are independent of the conversation-name filter: only the service filter narrows them.
   const searchResults = store.searchLoadedMessages(search).filter(item => excluded.includes(item.roomId) === hiddenOpen && (service === 'All' || snapshot.rooms.some(room => room.id === item.roomId && room.service === service)))
-  const rooms = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
+  const isUnread = (room: MessengerRoom) => room.unread > 0 || !!room.markedUnread
+  const matchesChatFilter = (room: MessengerRoom) => chatFilter === 'all' || (chatFilter === 'unread' ? isUnread(room) : chatFilter === 'direct' ? !!room.peer : (room.kind ?? 'chat') === 'chat' && !room.peer)
+  const unreadCount = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && isUnread(room)).length
+  const rooms = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && matchesChatFilter(room) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
   // Teams (Matrix spaces or bridge workspaces) group their channels instead of listing them flat.
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(() => new Set())
   const toggleTeam = (name: string) => setCollapsedTeams(current => {
@@ -316,6 +320,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
           search={search}
           onSearch={setSearch}
           />
+          <MessengerFilterBar filter={chatFilter} onFilter={setChatFilter} unreadCount={unreadCount} />
           <div className="min-h-0 flex-1 overflow-y-auto">
             {search && <div aria-label="Message search results" className="border-b">
               {searchResults.map(item => <button key={item.roomId + item.message.id} onClick={() => selectRoom(item.roomId)} className="block w-full space-y-1 border-b p-3 text-left text-sm hover:bg-muted/60"><span className="block truncate font-medium">{item.roomName}</span><span className="line-clamp-2 break-words text-xs text-muted-foreground">{item.message.body.slice(0, 300)}</span></button>)}

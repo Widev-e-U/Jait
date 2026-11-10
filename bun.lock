@@ -47,7 +47,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.462",
+      "version": "0.1.465",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.2",
@@ -99,6 +99,7 @@
         "react": "19.2.8",
         "react-dom": "19.2.8",
         "react-force-graph-2d": "^1.29.2",
+        "react-icons": "^5.7.0",
         "react-markdown": "^10.1.0",
         "remark-gfm": "^4.0.1",
         "shiki": "^4.5.0",
@@ -150,7 +151,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.961",
+      "version": "0.1.968",
       "bin": {
         "jait": "./bin/jait.mjs",
         "jait-matrix": "./bin/matrix-stack.mjs",
@@ -216,7 +217,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.108",
+      "version": "0.1.109",
       "dependencies": {
         "zod": "^3.25.76",
       },
@@ -3380,6 +3381,8 @@
     "react-force-graph-2d": ["react-force-graph-2d@1.29.2", "", { "dependencies": { "force-graph": "^1.52", "prop-types": "15", "react-kapsule": "^2.6" }, "peerDependencies": { "react": "*" } }, "sha512-ofAJXlnOufwViZ9YCV8c5S0ZEb2D1pXnD+j2NbVqSzgg217QiycTPrmKQsmODSg6aSssK5BdAX3vhCxM2YmGCQ=="],
 
     "react-hotkeys-hook": ["react-hotkeys-hook@5.2.4", "", { "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-BgKg+A1+TawkYluh5Bo4cTmcgMN5L29uhJbDUQdHwPX+qgXRjIPYU5kIDHyxnAwCkCBiu9V5OpB2mpyeluVF2A=="],
+
+    "react-icons": ["react-icons@5.7.0", "", { "peerDependencies": { "react": "*" } }, "sha512-LBLy340Rzqy6+/yVhZKT3B/QpP1BZaesGqasf09HPOBzRarcDIFH0WwXlXQfE7q7ipxK4MSiC5DIBWURCny6fw=="],
 
     "react-is": ["react-is@17.0.2", "", {}, "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w=="],
 

@@ -4,6 +4,7 @@ import { getAuthToken } from '@/lib/auth-token';
 import { triggerSystemNotification } from '@/lib/system-notifications';
 import { messengerReadLink } from './notification-actions';
 import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
+import { cachedBlob, clearBlobCache } from './blob-cache';
 
 /** Id prefix for messages that only exist locally until the gateway confirms. */
 const LOCAL_ECHO_PREFIX = '~local:';
@@ -425,17 +426,21 @@ export class GatewayMessengerStore implements MessengerStoreApi {
   async attachmentBlob(
     attachment: NonNullable<MessengerMessage['attachment']>,
   ) {
-    const result = await this.request('/media', 'POST', {
-      url: attachment.url,
-      file: attachment.file,
+    return cachedBlob(`att:${attachment.url}`, async () => {
+      const result = await this.request('/media', 'POST', {
+        url: attachment.url,
+        file: attachment.file,
+      });
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      return new Blob([bytes], { type: attachment.mime });
     });
-    const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
-    return new Blob([bytes], { type: attachment.mime });
   }
   async avatarBlob(mxcUrl: string) {
-    const result = await this.request('/media', 'POST', { url: mxcUrl });
-    const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
-    return new Blob([bytes]);
+    return cachedBlob(`avatar:${mxcUrl}`, async () => {
+      const result = await this.request('/media', 'POST', { url: mxcUrl });
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      return new Blob([bytes]);
+    });
   }
   async restoreKeys(recoveryKey: string) {
     await this.request('/keys', 'POST', { recoveryKey });
@@ -444,6 +449,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
   async disconnect() {
     ++this.requestGeneration;
     await this.request('', 'DELETE');
+    clearBlobCache();
     this.roomCache.clear();
     this.optimistic.clear();
     await this.refreshRemote();

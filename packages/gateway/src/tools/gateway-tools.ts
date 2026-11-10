@@ -27,12 +27,19 @@ export function createGatewayStatusTool(deps: {
       const jobs = deps.scheduler?.list() ?? [];
       const enabledJobs = jobs.filter((job) => job.enabled).length;
       const hookEventTypes = deps.hooks?.registeredEventTypes() ?? [];
+      const uptime = Math.floor((Date.now() - deps.startedAt) / 1000);
+      const h = Math.floor(uptime / 3600);
+      const m = Math.floor((uptime % 3600) / 60);
+      const uptimeText = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${uptime % 60}s` : `${uptime}s`;
       return {
         ok: true,
-        message: "Gateway status",
+        message:
+          `Gateway healthy — up ${uptimeText}, ${sessions} active session(s), ${surfaces} surface(s), ` +
+          `${devices} device(s), ${enabledJobs}/${jobs.length} cron job(s) enabled, ` +
+          `${hookEventTypes.length} hook event type(s).`,
         data: {
           healthy: true,
-          uptime: Math.floor((Date.now() - deps.startedAt) / 1000),
+          uptime,
           sessions,
           surfaces,
           devices,

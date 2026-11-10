@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Archive, ArchiveRestore, Search, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, Search, X } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { CenteredBadgeText } from './centered-badge-text'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -130,7 +131,7 @@ function useServiceStates() {
 }
 
 /**
- * The one and only messenger header row: icon-only search toggle on the left, connected
+ * The one and only messenger header row: icon-only search toggle, All chats / Connections buttons, connected
  * provider icons with unread badges on the right, and a hidden-chats button at the end.
  * Tapping the selected provider opens its settings popover (which also resets the filter).
  */
@@ -183,22 +184,24 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
         {active && <button type="button" aria-label="Clear search" onClick={() => onSearch('')} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>}
       </div>
     </div>
-    <div role="tablist" aria-label="Filter by service" className={'flex min-w-0 items-center gap-1 overflow-x-auto py-1 transition-all duration-300 ' + (searching ? '' : 'ml-auto')}>
+    <div className={'flex shrink-0 items-center gap-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out ' + (searching ? 'pointer-events-none max-w-0 opacity-0' : 'max-w-[16rem] opacity-100')}>
+      <button type="button" tabIndex={searching ? -1 : 0} aria-pressed={service === 'All'} onClick={() => onService('All')}
+        className={'h-7 whitespace-nowrap rounded-md border px-2 text-xs font-medium hover:bg-muted ' + (service === 'All' ? 'bg-secondary' : '')}>All chats</button>
+      <button type="button" tabIndex={searching ? -1 : 0} onClick={onOptions}
+        className="h-7 whitespace-nowrap rounded-md border px-2 text-xs font-medium hover:bg-muted">Connections</button>
+    </div>
+    <div role="tablist" aria-label="Filter by service" className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto py-1">
       {items.map(({ name, rooms, unread, state }) => {
         const selected = service === name
         const trigger = <button type="button" role="tab" aria-selected={selected} aria-label={`${name}: ${STATE_LABEL[state]}`}
           onClick={() => { if (selected) setConfigure(name); else onService(name) }}
           className={'relative grid h-8 w-8 shrink-0 place-items-center rounded-full ' + (selected ? 'bg-secondary ring-1 ring-border' : '')}>
-          <ServiceIcon service={name} className="size-6 rounded-md" />
+          <ServiceIcon service={name} className="size-6 rounded-full" />
           {badge(unread)}
         </button>
         return <Popover key={name} open={configure === name} onOpenChange={open => setConfigure(open && selected ? name : null)}>
           <PopoverTrigger asChild>{trigger}</PopoverTrigger>
           <PopoverContent align="end" className="w-[min(20rem,calc(100vw-1rem))]">
-            <div className="mb-2 flex items-center gap-1">
-              {service === name && <button type="button" onClick={() => { onService('All'); setConfigure(null) }} className="flex-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted">All chats</button>}
-              <button type="button" onClick={() => { setConfigure(null); onOptions() }} className="flex-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted">Connections</button>
-            </div>
             <ServicePanel service={name} state={state} rooms={rooms} unread={unread} />
           </PopoverContent>
         </Popover>
@@ -214,5 +217,25 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
       {hiddenOpen ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
       {badge(hiddenCount, 'bg-muted text-muted-foreground')}
     </button>
+  </div>
+}
+
+export type ChatFilter = 'all' | 'unread' | 'direct' | 'groups'
+const EXTRA_FILTERS: { value: 'direct' | 'groups'; label: string }[] = [{ value: 'direct', label: 'Direct' }, { value: 'groups', label: 'Groups' }]
+
+/** Compact second header row with quick list filters, similar to WhatsApp. */
+export function MessengerFilterBar({ filter, onFilter, unreadCount }: { filter: ChatFilter; onFilter: (filter: ChatFilter) => void; unreadCount: number }) {
+  const chip = (active: boolean) => 'h-6 shrink-0 whitespace-nowrap rounded-full border px-2.5 text-xs font-medium hover:bg-muted ' + (active ? 'border-primary/40 bg-primary/15 text-primary' : 'text-muted-foreground')
+  const extra = EXTRA_FILTERS.find(item => item.value === filter)
+  return <div role="group" aria-label="Filter conversations" className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-background px-2">
+    <button type="button" aria-pressed={filter === 'all'} onClick={() => onFilter('all')} className={chip(filter === 'all')}>All</button>
+    <button type="button" aria-pressed={filter === 'unread'} onClick={() => onFilter('unread')} className={chip(filter === 'unread')}>Unread{unreadCount > 0 ? ` ${unreadCount}` : ''}</button>
+    {extra && <button type="button" aria-pressed onClick={() => onFilter('all')} className={chip(true)}>{extra.label}<X className="ml-1 inline h-3 w-3" aria-hidden /></button>}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><button type="button" aria-label="More filters" className={chip(false) + ' grid place-items-center px-1.5'}><ChevronDown className="h-3.5 w-3.5" /></button></DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {EXTRA_FILTERS.map(item => <DropdownMenuItem key={item.value} onSelect={() => onFilter(item.value)}>{item.label}</DropdownMenuItem>)}
+      </DropdownMenuContent>
+    </DropdownMenu>
   </div>
 }

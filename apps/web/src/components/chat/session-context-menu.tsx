@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, ArrowUp, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Pencil, Search, WifiOff } from 'lucide-react'
+import { Archive, ArrowUpToLine, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Pencil, Search, WifiOff } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import type { ProjectRecord } from '@/hooks/useProjects'
@@ -21,7 +21,7 @@ const SUBMENU_CLOSE_DELAY_MS = 180
  */
 export function getSessionContextMenuHeight(options: {
   showRename?: boolean
-  showMoveUp?: boolean
+  showMoveToTop?: boolean
   showOpenInPanel?: boolean
   showMoveSection: boolean
   showStreamingNote: boolean
@@ -31,7 +31,7 @@ export function getSessionContextMenuHeight(options: {
   const ROW_HEIGHT = 30
   let height = 8 // menu padding
   if (options.showRename) height += ROW_HEIGHT
-  if (options.showMoveUp) height += ROW_HEIGHT
+  if (options.showMoveToTop) height += ROW_HEIGHT
   if (options.showOpenInPanel) height += ROW_HEIGHT
   if (options.showMoveSection) {
     height += ROW_HEIGHT // "Move to project" parent row
@@ -214,9 +214,9 @@ export interface SessionContextMenuProps {
   onOpenInPanel?: (sessionId: string, projectId: string | null) => void
   onRename?: (sessionId: string) => void
   /** Moves the chat one slot up in its project / personal list. */
-  onMoveUp?: (sessionId: string) => void
+  onMoveToTop?: (sessionId: string) => void
   /** False when the chat is already first, so there is nowhere to go. */
-  canMoveUp?: boolean
+  canMoveToTop?: boolean
   /**
    * Looks up projects beyond the ones the sidebar has paged in. Without it the
    * picker can only offer the visible projects.
@@ -237,8 +237,8 @@ export function SessionContextMenu({
   onArchiveSession,
   onOpenInPanel,
   onRename,
-  onMoveUp,
-  canMoveUp = true,
+  onMoveToTop,
+  canMoveToTop = true,
   onSearchProjects,
   onClose,
 }: SessionContextMenuProps) {
@@ -330,20 +330,20 @@ export function SessionContextMenu({
           </button>
         )}
 
-        {onMoveUp && (
+        {onMoveToTop && (
           <button
             type="button"
             role="menuitem"
-            disabled={!canMoveUp}
+            disabled={!canMoveToTop}
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             onClick={() => {
-              onMoveUp(sessionId)
+              onMoveToTop(sessionId)
               onClose()
             }}
             onPointerEnter={scheduleSubmenuClose}
           >
-            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate text-xs">Move up</span>
+            <ArrowUpToLine className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate text-xs">Move chat to top</span>
           </button>
         )}
 

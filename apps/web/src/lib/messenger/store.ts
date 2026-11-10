@@ -4,6 +4,7 @@ import type { IEncryptedFile } from 'matrix-encrypt-attachment'
 import { latestConfirmedEvent, roomReadReceipts } from './read-state'
 import { messengerReadLink } from './notification-actions'
 import { triggerSystemNotification, revokeSystemNotification } from '@/lib/system-notifications'
+import { cachedBlob } from './blob-cache'
 import {
   MAX_ATTACHMENT_BYTES, bridgeLabel, isStatusRoom, messengerError, normalizeHomeserver, readSession, roomKind, sessionKey,
   type MessengerMessage, type MessengerRoom, type MessengerSession, type MessengerSnapshot,
@@ -495,7 +496,11 @@ export class MessengerStore {
     else await client.sendMessage(roomId, { ...base, ...media, msgtype: sdk.MsgType.File })
   }
 
-  async attachmentBlob(attachment: NonNullable<MessengerMessage['attachment']>): Promise<Blob> {
+  attachmentBlob(attachment: NonNullable<MessengerMessage['attachment']>): Promise<Blob> {
+    return cachedBlob('att:' + attachment.url, () => this.fetchAttachmentBlob(attachment))
+  }
+
+  private async fetchAttachmentBlob(attachment: NonNullable<MessengerMessage['attachment']>): Promise<Blob> {
     if (!this.client || !this.session) throw new Error('Connect to Matrix first.')
     if (attachment.size && attachment.size > MAX_ATTACHMENT_BYTES) throw new Error('Attachment exceeds the 20 MB preview limit.')
     // Always fetch through the configured homeserver. Never send tokens to an event-supplied URL.

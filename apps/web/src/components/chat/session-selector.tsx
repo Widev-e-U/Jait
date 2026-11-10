@@ -282,11 +282,11 @@ export function SessionSelector({
     })
   }
   const sessionOrderIdsRef = useRef(new Map<string, string[]>())
-  const moveSessionUp = (sessionId: string, projectId: string | null) => {
+  const moveSessionToTop = (sessionId: string, projectId: string | null) => {
     const key = `sessions:${projectId ?? 'personal'}`
     const ids = sessionOrderIdsRef.current.get(key) ?? []
     const index = ids.indexOf(sessionId)
-    if (index > 0) saveOrder(key, ids, sessionId, ids[index - 1]!, false)
+    if (index > 0) saveOrder(key, ids, sessionId, ids[0]!, false)
   }
   const sessionOrderProps = (sessionId: string, projectId: string | null, ids: string[]) => ({
     onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
@@ -576,7 +576,7 @@ export function SessionSelector({
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
       showRename: Boolean(onRenameSession),
-      showMoveUp: true,
+      showMoveToTop: true,
       showOpenInPanel: Boolean(onOpenSessionInPanel),
       showMoveSection: Boolean(onMoveSession),
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
@@ -1504,8 +1504,8 @@ export function SessionSelector({
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
               onRename={onRenameSession ? startRename : undefined}
-              onMoveUp={normalizedSearchQuery ? undefined : (id) => moveSessionUp(id, sessionContextMenu.projectId)}
-              canMoveUp={(sessionOrderIdsRef.current.get(`sessions:${sessionContextMenu.projectId ?? 'personal'}`)?.indexOf(sessionContextMenu.sessionId) ?? 0) > 0}
+              onMoveToTop={normalizedSearchQuery ? undefined : (id) => moveSessionToTop(id, sessionContextMenu.projectId)}
+              canMoveToTop={(sessionOrderIdsRef.current.get(`sessions:${sessionContextMenu.projectId ?? 'personal'}`)?.indexOf(sessionContextMenu.sessionId) ?? 0) > 0}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}
             />
