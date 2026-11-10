@@ -3025,3 +3025,51 @@ async fn voice_assistant_status_and_streaming_sessions_are_served() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn session_runtime_reports_idle_for_owned_sessions_only() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = session["id"].as_str().unwrap();
+    let anon = client
+        .get(format!("{base}/api/sessions/{id}/runtime"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let runtime: serde_json::Value = client
+        .get(format!("{base}/api/sessions/{id}/runtime"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(runtime["running"], false);
+    assert!(runtime["startedAt"].is_null());
+    let missing = client
+        .get(format!("{base}/api/sessions/nosuchsession/runtime"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

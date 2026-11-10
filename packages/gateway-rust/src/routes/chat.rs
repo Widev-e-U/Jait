@@ -210,6 +210,7 @@ impl ChatRoutes {
             .route("/api/chat/cancel", post(cancel))
             .route("/api/sessions/{id}/cancel", post(cancel_path))
             .route("/api/sessions/{id}/messages", get(messages))
+            .route("/api/sessions/{id}/runtime", get(runtime))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -715,6 +716,31 @@ async fn cancel_request(
         })
         .unwrap_or(false);
     response(200, json!({"ok":true,"cancelled":cancelled}))
+}
+/// Lightweight overview polling: whether a native turn is active for an owned session.
+async fn runtime(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    let running = state
+        .active
+        .turns
+        .lock()
+        .unwrap()
+        .get(&session)
+        .is_some_and(|turn| turn.owner == user.id);
+    response(200, json!({"running":running,"startedAt":Value::Null}))
 }
 async fn messages(
     State(state): State<ChatRoutes>,
