@@ -3,8 +3,8 @@
     "httpTotal": 424,
     "mounted-fail-closed": 96,
     "native-tested": 257,
-    "missing": 70,
-    "router-unmounted": 1,
+    "missing": 64,
+    "router-unmounted": 7,
     "nativeTestedPct": 60.6,
     "wsTotal": 35,
     "wsMissing": 27,
@@ -1455,7 +1455,8 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/application.rs"
     },
     {
       "method": "GET",
@@ -1508,7 +1509,8 @@
       "nodeFiles": [
         "routes/team-chat.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/team_chat_mount.rs"
     },
     {
       "method": "GET",
@@ -1516,7 +1518,8 @@
       "nodeFiles": [
         "routes/team-chat.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/team_chat_mount.rs"
     },
     {
       "method": "GET",
@@ -1668,7 +1671,8 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/application.rs"
     },
     {
       "method": "GET",
@@ -3460,7 +3464,8 @@
       "nodeFiles": [
         "routes/team-chat.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/team_chat_mount.rs"
     },
     {
       "method": "POST",
@@ -3468,7 +3473,8 @@
       "nodeFiles": [
         "routes/team-chat.ts"
       ],
-      "status": "missing"
+      "status": "router-unmounted",
+      "rustFile": "runtime/team_chat_mount.rs"
     },
     {
       "method": "POST",

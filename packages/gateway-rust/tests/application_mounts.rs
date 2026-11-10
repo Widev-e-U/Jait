@@ -2987,3 +2987,41 @@ async fn team_rooms_are_stored_per_user_and_authenticated() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn voice_assistant_status_and_streaming_sessions_are_served() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let status = client
+        .get(format!("{base}/api/voice-assistant/status"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(status.status(), 200);
+    let status: serde_json::Value = status.json().await.unwrap();
+    assert!(status["available"].is_boolean());
+    assert!(status["model"].is_string() && status["voice"].is_string());
+    let anon = client
+        .get(format!("{base}/api/sessions/streaming"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let streaming: serde_json::Value = client
+        .get(format!("{base}/api/sessions/streaming"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(streaming["sessionIds"], serde_json::json!([]));
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

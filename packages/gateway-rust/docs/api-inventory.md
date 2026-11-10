@@ -7,8 +7,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
   "httpTotal": 424,
   "mounted-fail-closed": 96,
   "native-tested": 257,
-  "missing": 70,
-  "router-unmounted": 1,
+  "missing": 64,
+  "router-unmounted": 7,
   "nativeTestedPct": 60.6,
   "wsTotal": 35,
   "wsMissing": 27,
@@ -180,14 +180,14 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | missing | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/trajectory` | missing | routes/chat.ts |
 | GET | `/api/sessions/last-active` | native-tested | routes/sessions.ts |
-| GET | `/api/sessions/streaming` | missing | routes/chat.ts |
+| GET | `/api/sessions/streaming` | router-unmounted | routes/chat.ts |
 | GET | `/api/skills` | native-tested | routes/skills.ts |
 | GET | `/api/store/packages` | native-tested | routes/store.ts |
 | GET | `/api/store/skills` | native-tested | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-tested | routes/store.ts |
 | GET | `/api/surfaces` | native-tested | routes/terminals.ts |
-| GET | `/api/team-rooms` | missing | routes/team-chat.ts |
-| GET | `/api/team-rooms/:id` | missing | routes/team-chat.ts |
+| GET | `/api/team-rooms` | router-unmounted | routes/team-chat.ts |
+| GET | `/api/team-rooms/:id` | router-unmounted | routes/team-chat.ts |
 | GET | `/api/terminals` | native-tested | routes/terminals.ts |
 | GET | `/api/terminals/:id` | native-tested | routes/terminals.ts |
 | GET | `/api/terminals/shells` | native-tested | routes/terminals.ts |
@@ -204,7 +204,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/update/changelog` | native-tested | routes/update.ts |
 | GET | `/api/update/check` | native-tested | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-tested | routes/user-questions.ts |
-| GET | `/api/voice-assistant/status` | missing | server.ts |
+| GET | `/api/voice-assistant/status` | router-unmounted | server.ts |
 | GET | `/api/voice/state/:sessionId` | native-tested | routes/voice.ts |
 | GET | `/health` | router-unmounted | routes/health.ts |
 | GET | `/mcp` | mounted-fail-closed | routes/mcp-server.ts |
@@ -407,8 +407,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/sessions/:id/viewed` | native-tested | routes/sessions.ts |
 | POST | `/api/skills/:id/install-tool` | native-tested | routes/skills.ts |
 | POST | `/api/store/skills/:slug/install` | native-tested | routes/store.ts |
-| POST | `/api/team-rooms` | missing | routes/team-chat.ts |
-| POST | `/api/team-rooms/:id/messages` | missing | routes/team-chat.ts |
+| POST | `/api/team-rooms` | router-unmounted | routes/team-chat.ts |
+| POST | `/api/team-rooms/:id/messages` | router-unmounted | routes/team-chat.ts |
 | POST | `/api/terminals` | native-tested | routes/terminals.ts |
 | POST | `/api/terminals/:id/execute` | native-tested | routes/terminals.ts |
 | POST | `/api/terminals/:id/resize` | native-tested | routes/terminals.ts |

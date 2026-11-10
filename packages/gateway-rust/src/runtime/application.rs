@@ -467,6 +467,12 @@ impl Application {
             .merge(RepositoryRoutes::new(auth.clone()).router())
             .merge(voice.router())
             .merge(
+                Router::new()
+                    .route("/api/voice-assistant/status", get(voice_assistant_status))
+                    .route("/api/sessions/streaming", get(sessions_streaming))
+                    .with_state(auth.clone()),
+            )
+            .merge(
                 super::skills_mount::composed_skill_routes(
                     auth.clone(),
                     &config.project_root,
@@ -1531,4 +1537,40 @@ mod ownership_tests {
         drop(owner);
         assert!(acquire_database_owner(&path).is_ok());
     }
+}
+
+/// Reports whether the realtime voice assistant has an OpenAI key; open like the Node route.
+async fn voice_assistant_status() -> axum::response::Response {
+    let env = |name: &str, default: &str| {
+        std::env::var(name)
+            .ok()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| default.to_owned())
+    };
+    Json(serde_json::json!({
+        "available": !env("OPENAI_API_KEY", "").is_empty(),
+        "model": env("OPENAI_REALTIME_MODEL", "gpt-realtime"),
+        "voice": std::env::var("OPENAI_REALTIME_VOICE").unwrap_or_else(|_| "alloy".into()),
+    }))
+    .into_response()
+}
+
+/// Sessions generating a reply right now. The native gateway runs no agent turns yet, so the
+/// authenticated answer is always empty rather than a guess.
+async fn sessions_streaming(
+    State(auth): State<AuthState>,
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    if !auth.origin_allowed(&headers) {
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "ORIGIN_FORBIDDEN"})),
+        )
+            .into_response();
+    }
+    if auth.resolve_user(&headers).is_none() {
+        return crate::routes::auth::denied();
+    }
+    Json(serde_json::json!({"sessionIds": []})).into_response()
 }
