@@ -429,6 +429,7 @@ impl Application {
                 .router(),
             )
             .merge(PlanRoutes::new(auth.clone()).router())
+            .merge(super::team_chat_mount::TeamChatRoutes { auth: auth.clone() }.router())
             .merge(
                 composed_code_graph_routes(auth.clone(), &config.project_root, &state_dir)?
                     .router(),

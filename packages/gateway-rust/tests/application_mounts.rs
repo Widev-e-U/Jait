@@ -2863,3 +2863,127 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     let _ = stop.send(());
     let _ = task.await;
 }
+
+#[tokio::test]
+async fn team_rooms_are_stored_per_user_and_authenticated() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    for (method, path) in [("GET", "/api/team-rooms"), ("POST", "/api/team-rooms")] {
+        let anon = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth");
+    }
+    let token = token(&client, &base).await;
+    let empty: serde_json::Value = client
+        .get(format!("{base}/api/team-rooms"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(empty["rooms"].as_array().unwrap().is_empty());
+    let invalid = client
+        .post(format!("{base}/api/team-rooms"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"name": ""}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), 400);
+    let missing = client
+        .get(format!("{base}/api/team-rooms/no-such-room"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let bad_message = client
+        .post(format!("{base}/api/team-rooms/no-such-room/messages"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "hi", "clientKey": "k1"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_message.status(), 400);
+    // a persona agent the caller owns can anchor a room
+    let agent: serde_json::Value = client
+        .put(format!("{base}/api/persona-agents/lead"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"name": "Lead", "providerId": "p"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let agent_id = agent["id"].as_str().unwrap_or("lead").to_owned();
+    let created = client
+        .post(format!("{base}/api/team-rooms"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"agentId": agent_id}))
+        .send()
+        .await
+        .unwrap();
+    let status = created.status();
+    let body: serde_json::Value = created.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let room = body["room"]["id"].as_str().unwrap().to_owned();
+    let listed: serde_json::Value = client
+        .get(format!("{base}/api/team-rooms"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed["rooms"].as_array().unwrap().len(), 1);
+    let detail: serde_json::Value = client
+        .get(format!("{base}/api/team-rooms/{room}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["room"]["id"], room.as_str());
+    let posted = client
+        .post(format!("{base}/api/team-rooms/{room}/messages"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "hello team", "clientKey": "k1"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(posted.status(), 201);
+    let detail: serde_json::Value = client
+        .get(format!("{base}/api/team-rooms/{room}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        detail["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["content"] == "hello team")
+    );
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
