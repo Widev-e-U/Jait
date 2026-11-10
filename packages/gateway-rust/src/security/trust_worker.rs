@@ -26,6 +26,15 @@ impl TrustWorker {
             persistent,
         })
     }
+    /// Persistent trust on an already-owned database worker, so no second connection
+    /// to the same file exists.
+    pub fn from_worker(worker: DatabaseWorker) -> Self {
+        Self {
+            worker,
+            cache: TrustCache::default(),
+            persistent: true,
+        }
+    }
     async fn run<T: Send + 'static>(
         &self,
         operation: impl FnOnce(&mut TrustEngine<'_>) -> Result<T, OperationError> + Send + 'static,

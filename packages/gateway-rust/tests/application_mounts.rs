@@ -1563,6 +1563,27 @@ async fn email_is_authenticated_and_lists_no_accounts() {
 }
 
 #[tokio::test]
+async fn trust_levels_are_authenticated_and_listed() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client.get(format!("{base}/api/trust/levels")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let ok = client
+        .get(format!("{base}/api/trust/levels"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), 200);
+    let body: serde_json::Value = ok.json().await.unwrap();
+    assert!(body["levels"].is_array(), "{body}");
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
