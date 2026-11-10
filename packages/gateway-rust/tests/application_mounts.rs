@@ -1732,3 +1732,92 @@ async fn network_is_authenticated_and_scans_need_a_scope() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client.get(format!("{base}/api/projects")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let created = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "Parity"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+    let project: serde_json::Value = created.json().await.unwrap();
+    let id = project["id"].as_str().expect("project id").to_owned();
+
+    let fetched = client
+        .get(format!("{base}/api/projects/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), 200);
+
+    let archived = client
+        .delete(format!("{base}/api/projects/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(archived.status(), 200);
+    let body: serde_json::Value = archived.json().await.unwrap();
+    assert_eq!(body["archived"], serde_json::json!([id]), "{body}");
+
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/projects/archived"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(list.to_string().contains(&id), "{list}");
+
+    let restored = client
+        .post(format!("{base}/api/projects/{id}/restore"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(restored.status(), 200);
+
+    client
+        .delete(format!("{base}/api/projects/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let purged = client
+        .delete(format!("{base}/api/projects/archived"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(purged.status(), 200);
+    let body: serde_json::Value = purged.json().await.unwrap();
+    assert_eq!(body["removed"], 1, "{body}");
+    let after: serde_json::Value = client
+        .get(format!("{base}/api/projects/archived"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!after.to_string().contains(&id), "{after}");
+
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -401,6 +401,7 @@ impl Application {
             .merge(sessions.router())
             .merge(terminals.router())
             .merge(projects.router())
+            .merge(crate::routes::projects::ProjectCollectionRoutes::new(auth.clone()).router())
             .merge(ThreadRoutes::new(auth.clone()).router())
             .merge(ReminderRoutes::new(auth.clone()).router())
             .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
