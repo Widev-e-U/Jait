@@ -1584,6 +1584,40 @@ async fn trust_levels_are_authenticated_and_listed() {
 }
 
 #[tokio::test]
+async fn agent_control_halts_resumes_and_reports_stop_failure() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client.get(format!("{base}/api/agent-control")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let halt: serde_json::Value = client
+        .post(format!("{base}/api/agent-control/halt"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"reason":"test"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(halt["state"]["halted"], true, "{halt}");
+    assert!(halt["stopError"].as_str().is_some_and(|e| !e.is_empty()), "{halt}");
+    let resumed: serde_json::Value = client
+        .post(format!("{base}/api/agent-control/resume"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(resumed["state"]["halted"], false, "{resumed}");
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

@@ -476,6 +476,17 @@ impl Application {
             )
             .merge(crate::routes::pull_requests::PullRequestRoutes::new(auth.clone()).router())
             .merge(super::channels_mount::screen_share_routes(&auth).router())
+            .merge({
+                // No registry of running agents exists yet, so a halt reports the stop as
+                // failed (a partial result) rather than claiming agents were stopped.
+                let mut routes = crate::routes::agent_control::AgentControlRoutes::new(auth.clone());
+                routes.stop_running = std::sync::Arc::new(|_| {
+                    Box::pin(async {
+                        Err("Stopping running agents is not available in the Rust gateway yet".to_string())
+                    })
+                });
+                routes.router()
+            })
             .merge(
                 crate::routes::trust::TrustRoutes {
                     auth: auth.clone(),
