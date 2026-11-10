@@ -1,11 +1,12 @@
 {
   "summary": {
-    "httpTotal": 417,
-    "router-unmounted": 160,
-    "native-tested": 150,
-    "missing": 98,
+    "httpTotal": 422,
+    "mounted-fail-closed": 71,
+    "native-tested": 199,
+    "missing": 103,
+    "router-unmounted": 40,
     "native-untested": 9,
-    "nativeTestedPct": 36,
+    "nativeTestedPct": 47.2,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -17,7 +18,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -62,7 +63,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -80,12 +81,20 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
       "method": "DELETE",
       "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/messenger/bridge-reauth/teams",
       "nodeFiles": [
         "routes/messenger.ts"
       ],
@@ -132,7 +141,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -166,7 +175,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -273,7 +282,7 @@
       "nodeFiles": [
         "routes/agent-control.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_control.rs"
     },
     {
@@ -282,7 +291,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -291,7 +300,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -425,7 +434,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -434,7 +443,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -443,7 +452,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -540,7 +549,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -549,7 +558,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -558,7 +567,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -567,7 +576,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -576,7 +585,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -585,7 +594,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -594,7 +603,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -603,7 +612,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -648,7 +657,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -657,7 +666,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -666,7 +675,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -675,7 +684,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -684,7 +693,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -693,7 +702,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -702,7 +711,7 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/maintenance.rs"
     },
     {
@@ -711,12 +720,28 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/maintenance.rs"
     },
     {
       "method": "GET",
       "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/bridge-reauth/teams",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/bridge-status",
       "nodeFiles": [
         "routes/messenger.ts"
       ],
@@ -799,7 +824,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -808,7 +833,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -817,7 +842,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -826,7 +851,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -835,7 +860,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -862,7 +887,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -871,7 +896,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -880,7 +905,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -889,7 +914,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -898,7 +923,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -907,7 +932,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -916,7 +941,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -1045,7 +1070,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1054,7 +1079,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1063,7 +1088,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1072,7 +1097,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1081,7 +1106,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1090,7 +1115,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1144,7 +1169,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -1153,7 +1178,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -1162,7 +1187,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -1189,7 +1214,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -1198,7 +1223,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -1207,7 +1232,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -1574,7 +1599,7 @@
       "nodeFiles": [
         "routes/trust.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/trust.rs"
     },
     {
@@ -1583,7 +1608,7 @@
       "nodeFiles": [
         "routes/trust.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/trust.rs"
     },
     {
@@ -1715,7 +1740,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -1724,7 +1749,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -1742,7 +1767,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -1760,7 +1785,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -1785,7 +1810,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -1821,7 +1846,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -1875,7 +1900,7 @@
       "nodeFiles": [
         "routes/agent-control.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_control.rs"
     },
     {
@@ -1884,7 +1909,7 @@
       "nodeFiles": [
         "routes/agent-control.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_control.rs"
     },
     {
@@ -1893,7 +1918,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -1902,7 +1927,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -1911,7 +1936,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -1920,7 +1945,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -1929,7 +1954,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {
@@ -2019,7 +2044,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -2028,7 +2053,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -2037,7 +2062,7 @@
       "nodeFiles": [
         "routes/channels.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/channels.rs"
     },
     {
@@ -2135,7 +2160,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2144,7 +2169,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2153,7 +2178,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2162,7 +2187,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2171,7 +2196,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2180,7 +2205,7 @@
       "nodeFiles": [
         "routes/email.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/email.rs"
     },
     {
@@ -2414,7 +2439,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -2423,7 +2448,7 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/jobs.rs"
     },
     {
@@ -2432,12 +2457,28 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/maintenance.rs"
     },
     {
       "method": "POST",
       "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/bridge-reauth/teams",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/bridge-status",
       "nodeFiles": [
         "routes/messenger.ts"
       ],
@@ -2526,7 +2567,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -2535,7 +2576,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -2544,7 +2585,7 @@
       "nodeFiles": [
         "routes/network.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/network.rs"
     },
     {
@@ -2596,7 +2637,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -2605,7 +2646,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -2614,7 +2655,7 @@
       "nodeFiles": [
         "routes/plugins.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/plugins.rs"
     },
     {
@@ -2640,7 +2681,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2649,7 +2690,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2658,7 +2699,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2667,7 +2708,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2676,7 +2717,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2685,7 +2726,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2694,7 +2735,7 @@
       "nodeFiles": [
         "routes/preview.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/preview.rs"
     },
     {
@@ -2839,7 +2880,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2848,7 +2889,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2857,7 +2898,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2866,7 +2907,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2875,7 +2916,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2884,7 +2925,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2893,7 +2934,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2902,7 +2943,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2911,7 +2952,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2920,7 +2961,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2929,7 +2970,7 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/providers.rs"
     },
     {
@@ -2974,7 +3015,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -2983,7 +3024,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -2992,7 +3033,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -3001,7 +3042,7 @@
       "nodeFiles": [
         "routes/pull-requests.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/pull_requests.rs"
     },
     {
@@ -3037,7 +3078,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3046,7 +3087,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3063,7 +3104,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3072,7 +3113,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3081,7 +3122,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3090,7 +3131,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3099,7 +3140,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3108,7 +3149,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3117,7 +3158,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3126,7 +3167,7 @@
       "nodeFiles": [
         "routes/screen-share.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/screen_share.rs"
     },
     {
@@ -3511,7 +3552,7 @@
       "nodeFiles": [
         "routes/trust.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/trust.rs"
     },
     {
@@ -3582,7 +3623,7 @@
       "nodeFiles": [
         "routes/hooks.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/hooks.rs"
     },
     {
@@ -3591,7 +3632,7 @@
       "nodeFiles": [
         "routes/hooks.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/hooks.rs"
     },
     {
@@ -3627,7 +3668,7 @@
       "nodeFiles": [
         "routes/agent-github-apps.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/agent_github_apps.rs"
     },
     {

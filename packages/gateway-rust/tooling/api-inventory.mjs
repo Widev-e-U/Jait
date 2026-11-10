@@ -100,7 +100,10 @@ for (const f of walk(rustSrc, ['.rs'])) {
 
 // Modules whose routers the production composition root (runtime/application.rs, Gateway
 // mount_* helpers) actually serves. Everything else is a library router no binary serves yet.
-const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/terminals.rs', 'routes/projects.rs', 'routes/chat.rs', 'routes/store.rs', 'routes/threads.rs', 'routes/reminders.rs', 'routes/filesystem.rs', 'routes/secrets.rs', 'routes/git.rs', 'routes/plans.rs', 'routes/repo_proposals.rs', 'routes/repositories.rs', 'routes/assistant_profiles.rs', 'routes/architecture.rs', 'routes/user_questions.rs', 'routes/code_graph.rs', 'routes/update.rs', 'routes/environment.rs', 'routes/calendar.rs', 'routes/voice.rs', 'routes/skills.rs', 'routes/consent.rs']);
+const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/terminals.rs', 'routes/projects.rs', 'routes/chat.rs', 'routes/store.rs', 'routes/threads.rs', 'routes/reminders.rs', 'routes/filesystem.rs', 'routes/secrets.rs', 'routes/git.rs', 'routes/plans.rs', 'routes/repo_proposals.rs', 'routes/repositories.rs', 'routes/assistant_profiles.rs', 'routes/architecture.rs', 'routes/user_questions.rs', 'routes/code_graph.rs', 'routes/update.rs', 'routes/environment.rs', 'routes/calendar.rs', 'routes/voice.rs', 'routes/skills.rs', 'routes/consent.rs', 'routes/providers.rs', 'routes/pull_requests.rs', 'routes/jobs.rs', 'routes/maintenance.rs', 'routes/trust.rs', 'routes/network.rs', 'routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs']);
+// Mounted, but the production host behind them refuses the effect (no connector, loader, device or backend
+// yet). They are served and tested black-box as fail-closed, and are NOT counted native.
+const FAIL_CLOSED = new Set(['routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs']);
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
   return {
@@ -111,6 +114,8 @@ const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b))
       ? 'missing'
       : !MOUNTED.has(rustFile.get(key))
         ? 'router-unmounted'
+        : FAIL_CLOSED.has(rustFile.get(key))
+        ? 'mounted-fail-closed'
         : isTested(r.path)
           ? 'native-tested'
           : 'native-untested',
