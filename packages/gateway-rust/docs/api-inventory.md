@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 424,
   "mounted-fail-closed": 92,
-  "native-tested": 246,
+  "native-tested": 251,
   "missing": 70,
-  "native-untested": 15,
+  "native-untested": 10,
   "router-unmounted": 1,
-  "nativeTestedPct": 58,
+  "nativeTestedPct": 59.2,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -331,12 +331,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/preview/start` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/preview/stop` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/project/apply-diff` | missing | routes/project.ts |
-| POST | `/api/project/create-directory` | native-untested | routes/project.ts |
-| POST | `/api/project/create-file` | native-untested | routes/project.ts |
-| POST | `/api/project/delete` | native-untested | routes/project.ts |
-| POST | `/api/project/move` | native-untested | routes/project.ts |
+| POST | `/api/project/create-directory` | native-tested | routes/project.ts |
+| POST | `/api/project/create-file` | native-tested | routes/project.ts |
+| POST | `/api/project/delete` | native-tested | routes/project.ts |
+| POST | `/api/project/move` | native-tested | routes/project.ts |
 | POST | `/api/project/open` | native-tested | routes/project.ts |
-| POST | `/api/project/rename` | native-untested | routes/project.ts |
+| POST | `/api/project/rename` | native-tested | routes/project.ts |
 | POST | `/api/project/reveal` | native-tested | routes/project.ts |
 | POST | `/api/project/undo` | missing | routes/project.ts |
 | POST | `/api/project/undo-all` | missing | routes/project.ts |

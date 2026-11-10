@@ -2453,6 +2453,153 @@ async fn project_files_are_served_for_the_owner_and_stay_inside_the_root() {
         "beta"
     );
 
+    // create / rename / move / delete stay inside the root and never touch the root itself
+    let post = |route: &str, body: serde_json::Value| {
+        let mut body = body;
+        body["projectId"] = serde_json::json!(id);
+        client
+            .post(format!("{base}{route}"))
+            .bearer_auth(&token)
+            .json(&body)
+    };
+    let status = |r: reqwest::Response| r.status().as_u16();
+    assert_eq!(
+        status(
+            post(
+                "/api/project/create-directory",
+                serde_json::json!({"path": "made/deep"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        200
+    );
+    assert!(root.join("made/deep").is_dir());
+    assert_eq!(
+        status(
+            post(
+                "/api/project/create-file",
+                serde_json::json!({"path": "made/f.txt", "content": "hi"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        200
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("made/f.txt")).unwrap(),
+        "hi"
+    );
+    assert_eq!(
+        status(
+            post(
+                "/api/project/create-file",
+                serde_json::json!({"path": "made/f.txt"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        400,
+        "no overwrite"
+    );
+    assert_eq!(
+        status(
+            post(
+                "/api/project/create-file",
+                serde_json::json!({"path": "link/c.txt"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        400
+    );
+    assert!(!outside.join("c.txt").exists());
+    assert_eq!(
+        status(
+            post(
+                "/api/project/rename",
+                serde_json::json!({"path": "made/f.txt", "name": "g.txt"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        200
+    );
+    assert!(root.join("made/g.txt").is_file());
+    for name in ["../escaped.txt", "x/y.txt", "..", ""] {
+        let r = post(
+            "/api/project/rename",
+            serde_json::json!({"path": "made/g.txt", "name": name}),
+        )
+        .send()
+        .await
+        .unwrap();
+        assert_eq!(status(r), 400, "rename to {name:?} must be refused");
+    }
+    assert!(root.join("made/g.txt").is_file());
+    assert!(!dir.join("proj-files/../escaped.txt").exists());
+    assert_eq!(
+        status(
+            post(
+                "/api/project/move",
+                serde_json::json!({"path": "made/g.txt", "directory": "src"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        200
+    );
+    assert!(root.join("src/g.txt").is_file());
+    assert_eq!(
+        status(
+            post(
+                "/api/project/move",
+                serde_json::json!({"path": "src/g.txt", "directory": "link"})
+            )
+            .send()
+            .await
+            .unwrap()
+        ),
+        400
+    );
+    assert!(root.join("src/g.txt").is_file());
+    for path in ["", ".", "link/secret.txt"] {
+        let r = post("/api/project/delete", serde_json::json!({"path": path}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(status(r), 400, "delete of {path:?} must be refused");
+    }
+    assert!(root.join("src/a.txt").is_file() && outside.join("secret.txt").is_file());
+    assert_eq!(
+        status(
+            post("/api/project/delete", serde_json::json!({"path": "made"}))
+                .send()
+                .await
+                .unwrap()
+        ),
+        200
+    );
+    assert!(!root.join("made").exists());
+    let found: serde_json::Value = client
+        .get(format!(
+            "{base}/api/project/search?projectId={id}&query=alpha-marker"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(found.to_string().contains("alpha-marker"), "{found}");
+
     // another user cannot reach this project's files
     let invite: serde_json::Value = client
         .post(format!("{base}/api/auth/invitations"))

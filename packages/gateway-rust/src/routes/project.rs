@@ -80,6 +80,11 @@ fn params(uri: &Uri) -> HashMap<String, String> {
 }
 
 /// Lexically normalises `relative` under `root`, rejecting any escape.
+/// True when `path` is the project root itself (after resolving it), which no mutation may target.
+fn is_root(root: &Path, path: &Path) -> bool {
+    root.canonicalize().is_ok_and(|r| path == r)
+}
+
 fn confine(root: &Path, relative: &str) -> Option<PathBuf> {
     let mut out = PathBuf::new();
     let candidate = if Path::new(relative).is_absolute() {
@@ -358,7 +363,10 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
             let Some(target) = confine(&root, &relative) else {
                 return fail(400, "INVALID_PATH", "Path is outside the project root");
             };
-            let result = if target.is_dir() {
+            if is_root(&root, &target) {
+                return fail(400, "INVALID_PATH", "The project root cannot be changed");
+            }
+            let result = if target.is_dir() && !target.is_symlink() {
                 std::fs::remove_dir_all(&target)
             } else {
                 std::fs::remove_file(&target)
@@ -374,11 +382,18 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
             };
             let relative = js_text(body.get("path")).unwrap_or_default();
             let name = js_text(body.get("name")).unwrap_or_default();
-            let (Some(source), Some(destination)) = (
-                confine(&root, &relative),
-                confine(&root, &relative).and_then(|p| p.parent().map(|d| d.join(&name))),
-            ) else {
+            // The new name is one path component: no separators, no `..`, nothing that leaves the parent.
+            let mut parts = Path::new(&name).components();
+            let single = matches!(
+                (parts.next(), parts.next()),
+                (Some(Component::Normal(_)), None)
+            ) && !name.contains(['/', '\\']);
+            let Some(source) = confine(&root, &relative).filter(|p| single && !is_root(&root, p))
+            else {
                 return fail(400, "INVALID_PATH", "Path is outside the project root");
+            };
+            let Some(destination) = source.parent().map(|d| d.join(&name)) else {
+                return fail(400, "INVALID_PATH", "Invalid source path");
             };
             match std::fs::rename(&source, &destination) {
                 Ok(()) => response(200, json!({ "ok": true })),
@@ -396,6 +411,9 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
             else {
                 return fail(400, "INVALID_PATH", "Path is outside the project root");
             };
+            if is_root(&root, &source) {
+                return fail(400, "INVALID_PATH", "The project root cannot be changed");
+            }
             let Some(file_name) = source.file_name() else {
                 return fail(400, "INVALID_PATH", "Invalid source path");
             };
