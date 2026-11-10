@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.968](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.968) — 2026-11-10
+
+- test(web): match four-column project row grid in session selector — dea6a852
+- feat(gateway-rust): chat route coverage and contract evidence — 811f49b0
+- feat(messenger): service bar, bridge re-auth, chat-loop and UI updates — 3e37ab07
+- feat(gateway-rust): thread stop and interrupt with ownership and session-state handling — 8816224f
+- fix(gateway): disable Claude Code native shell so commands use jait.terminal — 15e4daca
+
 ## [v0.1.967](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.967) — 2026-11-09
 
 - fix(web): stop long-press chat menu selecting text; render Claude terminal cards like Codex — c68bb2a7
