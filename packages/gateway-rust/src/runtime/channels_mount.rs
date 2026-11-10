@@ -121,3 +121,24 @@ pub fn screen_share_routes(
         }),
     }
 }
+
+/// Webhook endpoints behind the `HOOK_SECRET` token (a random per-process secret when
+/// unset, which no caller can know). No agent runtime is wired to wake or run yet, so a
+/// correctly authenticated hook is acknowledged by the emitter and then fails closed.
+pub fn hook_routes(auth: &crate::routes::auth::AuthState) -> crate::routes::hooks::HookRoutes {
+    let hook_secret = std::env::var("HOOK_SECRET")
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple()));
+    let unavailable: crate::routes::hooks::HookCallback = std::sync::Arc::new(|_| {
+        Box::pin(async { Err("Hook handling is not available in the Rust gateway yet".to_string()) })
+    });
+    crate::routes::hooks::HookRoutes {
+        auth: auth.clone(),
+        hook_secret,
+        emit: std::sync::Arc::new(|_, _| Ok(())),
+        on_wake: unavailable.clone(),
+        on_agent: unavailable,
+    }
+}

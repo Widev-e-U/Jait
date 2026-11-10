@@ -1523,6 +1523,27 @@ async fn pull_requests_are_authenticated_and_owner_scoped() {
 }
 
 #[tokio::test]
+async fn hooks_require_the_secret_token_and_fail_closed_without_a_runtime() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for path in ["/hooks/wake", "/hooks/agent"] {
+        let r = client.post(format!("{base}{path}")).json(&serde_json::json!({})).send().await.unwrap();
+        assert_eq!(r.status(), 401, "{path} without a token");
+        let r = client
+            .post(format!("{base}{path}"))
+            .header("x-hook-token", "wrong")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 401, "{path} with a wrong token");
+    }
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
