@@ -1494,3 +1494,23 @@ async fn plugins_are_authenticated_and_none_are_loaded() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn pull_requests_are_authenticated_and_owner_scoped() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/repos/missing/pull-requests");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let missing = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(missing.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

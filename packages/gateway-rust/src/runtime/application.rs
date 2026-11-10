@@ -474,6 +474,7 @@ impl Application {
                 }
                 .router(),
             )
+            .merge(crate::routes::pull_requests::PullRequestRoutes::new(auth.clone()).router())
             .merge(
                 crate::routes::plugins::PluginRoutes {
                     auth: auth.clone(),
