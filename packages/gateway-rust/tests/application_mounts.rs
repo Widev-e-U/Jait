@@ -1523,6 +1523,26 @@ async fn pull_requests_are_authenticated_and_owner_scoped() {
 }
 
 #[tokio::test]
+async fn preview_is_authenticated_and_fails_closed_without_a_backend() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/preview/session/missing");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let missing = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert!(matches!(missing.status().as_u16(), 404 | 503));
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn network_is_authenticated_and_scans_need_a_scope() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

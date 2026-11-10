@@ -475,6 +475,8 @@ impl Application {
                 .router(),
             )
             .merge(crate::routes::pull_requests::PullRequestRoutes::new(auth.clone()).router())
+            // No preview port is wired yet, so owned sessions answer 503 instead of 404.
+            .merge(crate::routes::preview::PreviewRoutes::new(auth.clone()).router())
             .merge(
                 super::channels_mount::network_routes(&auth)
                     .map_err(std::io::Error::other)?
