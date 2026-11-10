@@ -1950,3 +1950,109 @@ async fn security_assessments_require_auth_and_reject_unscoped_runs() {
     tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn security_workbench_is_authenticated_and_refuses_unavailable_engines() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/security/workbench");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let history = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(history.status(), 200);
+    let engines: serde_json::Value = client
+        .get(format!("{base}/api/security/engines"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(engines.to_string().len() < 200, "no engines expected: {engines}");
+    let unknown = client
+        .get(format!("{base}/api/security/checks/nope"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert!(unknown.status().is_client_error(), "{}", unknown.status());
+    let run = client
+        .post(format!("{base}/api/security/checks"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"kind":"http","target":"http://127.0.0.1:1"}))
+        .send()
+        .await
+        .unwrap();
+    assert!(!run.status().is_success(), "check must not run: {}", run.status());
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn mcp_requires_login_and_lists_no_tools_yet() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let list = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/list"});
+    let anon = client.post(format!("{base}/mcp")).json(&list).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let ok = client
+        .post(format!("{base}/mcp"))
+        .bearer_auth(&token)
+        .header("accept", "application/json, text/event-stream")
+        .json(&list)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), 200);
+    let text = ok.text().await.unwrap();
+    assert!(text.contains("\"tools\":[]"), "{text}");
+    let call = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"terminal_run","arguments":{}}});
+    let denied = client
+        .post(format!("{base}/mcp"))
+        .bearer_auth(&token)
+        .header("accept", "application/json, text/event-stream")
+        .json(&call)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(denied.contains("Unknown tool") || denied.contains("error"), "{denied}");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn browser_devtools_refuse_without_a_browser_host() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/preview/devtools");
+    let body = serde_json::json!({"sessionId":"s1"});
+    assert_eq!(client.post(&url).json(&body).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let created = client.post(&url).bearer_auth(&token).json(&body).send().await.unwrap();
+    assert_eq!(created.status(), 404);
+    let forged = client
+        .get(format!("{base}/preview/bogus/devtools/grant/devtools_app.html"))
+        .send()
+        .await
+        .unwrap();
+    assert!(forged.status().is_client_error(), "{}", forged.status());
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

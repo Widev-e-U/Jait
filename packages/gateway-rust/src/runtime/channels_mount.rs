@@ -225,3 +225,90 @@ pub fn github_app_routes(
         intake: None,
     }
 }
+
+/// Security workbench on the shared assessment registry. No scanner engine is ported yet:
+/// the engine inventory is empty and every check run is refused as unavailable, so nothing
+/// is probed. History, comparison, decision and report endpoints work on the in-memory
+/// store. The monitor route is not mounted.
+pub async fn security_workbench_routes(
+    auth: &crate::routes::auth::AuthState,
+    assessments: &crate::assessments::service::AssessmentRegistry,
+    project_root: &std::path::Path,
+) -> crate::routes::security_workbench::SecurityWorkbenchRoutes {
+    use crate::assessments::workbench::{
+        EngineError, WorkbenchOptions, WorkbenchRegistry,
+    };
+    let adapter: crate::assessments::workbench::CheckAdapter = std::sync::Arc::new(|_, _| {
+        Box::pin(async {
+            Err(EngineError::Unavailable(
+                "No security scanner engines are available in the Rust gateway yet".into(),
+            ))
+        })
+    });
+    let engines: crate::assessments::workbench::EngineStatus =
+        std::sync::Arc::new(|_| Box::pin(async { Ok(serde_json::json!([])) }));
+    let registry = WorkbenchRegistry::new(
+        assessments.get().await,
+        WorkbenchOptions::new(adapter, engines),
+    );
+    crate::routes::security_workbench::SecurityWorkbenchRoutes {
+        auth: auth.clone(),
+        service: crate::routes::security_workbench::registry_port(registry),
+        monitor: None,
+        project_root: project_root.display().to_string(),
+        request_id: std::sync::Arc::new(|| uuid::Uuid::new_v4().to_string()),
+    }
+}
+
+/// MCP caller resolution on the gateway's own bearer auth and origin policy. Anonymous
+/// callers get the standard login error. No session id is trusted from headers or query:
+/// no tools are exposed yet, so there is nothing to scope.
+struct McpBearerAuth(crate::routes::auth::AuthState);
+
+impl crate::routes::mcp_server::McpAuthenticator for McpBearerAuth {
+    fn resolve<'a>(
+        &'a self,
+        headers: &'a axum::http::HeaderMap,
+        _: &'a std::collections::HashMap<String, String>,
+    ) -> BoxFuture<'a, Result<crate::routes::mcp_server::McpToolContext, axum::response::Response>>
+    {
+        Box::pin(async move {
+            let user = crate::routes::auth::require_user(&self.0, headers)
+                .await
+                .map_err(|response| *response)?;
+            Ok(crate::routes::mcp_server::McpToolContext {
+                user_id: Some(user.id),
+                ..Default::default()
+            })
+        })
+    }
+}
+
+struct NoMcpTools;
+
+impl crate::routes::mcp_server::McpToolSource for NoMcpTools {
+    fn list(&self) -> Vec<crate::routes::mcp_server::McpToolDescriptor> {
+        Vec::new()
+    }
+    fn get(&self, _: &str) -> Option<crate::routes::mcp_server::McpToolDescriptor> {
+        None
+    }
+    fn execute<'a>(
+        &'a self,
+        name: &'a str,
+        _: Value,
+        _: crate::routes::mcp_server::McpToolContext,
+    ) -> BoxFuture<'a, Result<crate::routes::mcp_server::McpToolOutcome, String>> {
+        Box::pin(async move { Err(format!("Unknown tool: {name}")) })
+    }
+}
+
+/// `/mcp*` with authenticated callers and an empty tool list until the native tool
+/// registry is exposed to MCP.
+pub fn mcp_routes(auth: &crate::routes::auth::AuthState) -> axum::Router {
+    crate::routes::mcp_server::router(
+        crate::routes::mcp_server::McpRoutes::new()
+            .with_tools(std::sync::Arc::new(NoMcpTools))
+            .with_auth(std::sync::Arc::new(McpBearerAuth(auth.clone()))),
+    )
+}

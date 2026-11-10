@@ -1,12 +1,12 @@
 {
   "summary": {
-    "httpTotal": 422,
-    "mounted-fail-closed": 71,
+    "httpTotal": 424,
+    "mounted-fail-closed": 92,
     "native-tested": 234,
-    "missing": 85,
-    "router-unmounted": 22,
+    "missing": 87,
     "native-untested": 10,
-    "nativeTestedPct": 55.5,
+    "router-unmounted": 1,
+    "nativeTestedPct": 55.2,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -150,7 +150,7 @@
       "nodeFiles": [
         "routes/browser-devtools.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/browser_devtools.rs"
     },
     {
@@ -222,7 +222,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -267,7 +267,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -744,6 +744,14 @@
     {
       "method": "GET",
       "path": "/api/messenger/bridge-status",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/presence",
       "nodeFiles": [
         "routes/messenger.ts"
       ],
@@ -1287,7 +1295,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -1296,7 +1304,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -1305,7 +1313,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -1314,7 +1322,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -1323,7 +1331,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -1680,7 +1688,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -1689,7 +1697,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -1698,7 +1706,7 @@
       "nodeFiles": [
         "routes/browser-devtools.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/browser_devtools.rs"
     },
     {
@@ -2684,7 +2692,7 @@
       "nodeFiles": [
         "routes/browser-devtools.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/browser_devtools.rs"
     },
     {
@@ -3239,7 +3247,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3248,7 +3256,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3257,7 +3265,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3266,7 +3274,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3275,7 +3283,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3284,7 +3292,7 @@
       "nodeFiles": [
         "routes/security-workbench.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/security_workbench.rs"
     },
     {
@@ -3659,7 +3667,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -3668,7 +3676,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -3677,7 +3685,7 @@
       "nodeFiles": [
         "routes/mcp-server.ts"
       ],
-      "status": "router-unmounted",
+      "status": "mounted-fail-closed",
       "rustFile": "routes/mcp_server.rs"
     },
     {
@@ -3697,6 +3705,14 @@
       ],
       "status": "native-tested",
       "rustFile": "routes/architecture.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/messenger/presence",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
     },
     {
       "method": "PUT",

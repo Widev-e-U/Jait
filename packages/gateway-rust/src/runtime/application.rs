@@ -511,6 +511,21 @@ impl Application {
                     .router(),
             )
             .merge(
+                super::channels_mount::security_workbench_routes(&auth, &assessments, &config.project_root)
+                    .await
+                    .router(),
+            )
+            .merge(super::channels_mount::mcp_routes(&auth))
+            // No browser host or session lookup is wired, so every panel request is refused
+            // (404) until the ferridriver-backed browser service supplies a CDP connection.
+            .merge(
+                crate::routes::browser_devtools::BrowserDevToolsState::new(
+                    auth.clone(),
+                    secrets_key.clone(),
+                )
+                .router(),
+            )
+            .merge(
                 crate::routes::security_assessments::SecurityAssessmentRoutes {
                     auth: auth.clone(),
                     assessments,

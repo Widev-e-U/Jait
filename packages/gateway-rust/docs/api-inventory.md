@@ -4,13 +4,13 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 
 ```json
 {
-  "httpTotal": 422,
-  "mounted-fail-closed": 71,
+  "httpTotal": 424,
+  "mounted-fail-closed": 92,
   "native-tested": 234,
-  "missing": 85,
-  "router-unmounted": 22,
+  "missing": 87,
   "native-untested": 10,
-  "nativeTestedPct": 55.5,
+  "router-unmounted": 1,
+  "nativeTestedPct": 55.2,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -34,7 +34,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | DELETE | `/api/plans/:id` | native-tested | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | mounted-fail-closed | routes/plugins.ts |
-| DELETE | `/api/preview/devtools/:grantId` | router-unmounted | routes/browser-devtools.ts |
+| DELETE | `/api/preview/devtools/:grantId` | mounted-fail-closed | routes/browser-devtools.ts |
 | DELETE | `/api/projects/:id` | native-tested | routes/projects.ts |
 | DELETE | `/api/projects/archived` | native-tested | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | native-tested | routes/providers.ts |
@@ -42,12 +42,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/repo-proposals/:id` | native-tested | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | native-tested | routes/repositories.ts |
 | DELETE | `/api/secrets/:id` | native-tested | routes/secrets.ts |
-| DELETE | `/api/security/checks/:id` | router-unmounted | routes/security-workbench.ts |
+| DELETE | `/api/security/checks/:id` | mounted-fail-closed | routes/security-workbench.ts |
 | DELETE | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | DELETE | `/api/store/skills/:slug` | native-tested | routes/store.ts |
 | DELETE | `/api/terminals/:id` | native-tested | routes/terminals.ts |
 | DELETE | `/api/threads/:id` | native-tested | routes/threads.ts |
-| DELETE | `/mcp` | router-unmounted | routes/mcp-server.ts |
+| DELETE | `/mcp` | mounted-fail-closed | routes/mcp-server.ts |
 | GET | `/` | missing | server.ts |
 | GET | `/api/agent-control` | mounted-fail-closed | routes/agent-control.ts |
 | GET | `/api/agents/:agentId/github-app` | mounted-fail-closed | routes/agent-github-apps.ts |
@@ -102,6 +102,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/messenger` | missing | routes/messenger.ts |
 | GET | `/api/messenger/bridge-reauth/teams` | missing | routes/messenger.ts |
 | GET | `/api/messenger/bridge-status` | missing | routes/messenger.ts |
+| GET | `/api/messenger/presence` | missing | routes/messenger.ts |
 | GET | `/api/messenger/search` | missing | routes/messenger.ts |
 | GET | `/api/mobile-update/check` | native-tested | routes/update.ts |
 | GET | `/api/mobile/consent/pending` | native-tested | routes/mobile.ts |
@@ -162,11 +163,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/secrets/requests` | native-tested | routes/secrets.ts |
 | GET | `/api/security/assessments` | native-tested | routes/security-assessments.ts |
 | GET | `/api/security/assessments/:id` | native-tested | routes/security-assessments.ts |
-| GET | `/api/security/checks/:id` | router-unmounted | routes/security-workbench.ts |
-| GET | `/api/security/checks/:id/report` | router-unmounted | routes/security-workbench.ts |
-| GET | `/api/security/engines` | router-unmounted | routes/security-workbench.ts |
-| GET | `/api/security/findings/:id/plan` | router-unmounted | routes/security-workbench.ts |
-| GET | `/api/security/workbench` | router-unmounted | routes/security-workbench.ts |
+| GET | `/api/security/checks/:id` | mounted-fail-closed | routes/security-workbench.ts |
+| GET | `/api/security/checks/:id/report` | mounted-fail-closed | routes/security-workbench.ts |
+| GET | `/api/security/engines` | mounted-fail-closed | routes/security-workbench.ts |
+| GET | `/api/security/findings/:id/plan` | mounted-fail-closed | routes/security-workbench.ts |
+| GET | `/api/security/workbench` | mounted-fail-closed | routes/security-workbench.ts |
 | GET | `/api/sessions` | native-tested | routes/sessions.ts |
 | GET | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/events` | native-tested | routes/chat.ts |
@@ -207,9 +208,9 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/voice-assistant/status` | missing | server.ts |
 | GET | `/api/voice/state/:sessionId` | native-tested | routes/voice.ts |
 | GET | `/health` | router-unmounted | routes/health.ts |
-| GET | `/mcp` | router-unmounted | routes/mcp-server.ts |
-| GET | `/mcp/sse` | router-unmounted | routes/mcp-server.ts |
-| GET | `/preview/:previewToken/devtools/:grantId/*` | router-unmounted | routes/browser-devtools.ts |
+| GET | `/mcp` | mounted-fail-closed | routes/mcp-server.ts |
+| GET | `/mcp/sse` | mounted-fail-closed | routes/mcp-server.ts |
+| GET | `/preview/:previewToken/devtools/:grantId/*` | mounted-fail-closed | routes/browser-devtools.ts |
 | GET | `/preview/:previewToken/file/:encodedPath` | missing | server.ts |
 | GET | `/preview/:previewToken/file/:encodedPath/*` | missing | server.ts |
 | PATCH | `/api/assistants/profiles/:id` | native-tested | routes/assistant-profiles.ts |
@@ -321,7 +322,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/plugins/:id/enable` | mounted-fail-closed | routes/plugins.ts |
 | POST | `/api/plugins/scan` | mounted-fail-closed | routes/plugins.ts |
 | POST | `/api/preview/access` | missing | server.ts |
-| POST | `/api/preview/devtools` | router-unmounted | routes/browser-devtools.ts |
+| POST | `/api/preview/devtools` | mounted-fail-closed | routes/browser-devtools.ts |
 | POST | `/api/preview/history` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/preview/navigate` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/preview/reload` | mounted-fail-closed | routes/preview.ts |
@@ -384,12 +385,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/secrets/requests/:id/submit` | native-tested | routes/secrets.ts |
 | POST | `/api/security/assessments` | native-tested | routes/security-assessments.ts |
 | POST | `/api/security/assessments/:id/cancel` | native-tested | routes/security-assessments.ts |
-| POST | `/api/security/checks` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/checks/:id/cancel` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/comparisons` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/findings/:id/decision` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/findings/:id/verify` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/monitors` | router-unmounted | routes/security-workbench.ts |
+| POST | `/api/security/checks` | mounted-fail-closed | routes/security-workbench.ts |
+| POST | `/api/security/checks/:id/cancel` | mounted-fail-closed | routes/security-workbench.ts |
+| POST | `/api/security/comparisons` | mounted-fail-closed | routes/security-workbench.ts |
+| POST | `/api/security/findings/:id/decision` | mounted-fail-closed | routes/security-workbench.ts |
+| POST | `/api/security/findings/:id/verify` | mounted-fail-closed | routes/security-workbench.ts |
+| POST | `/api/security/monitors` | mounted-fail-closed | routes/security-workbench.ts |
 | POST | `/api/security/scopes` | native-tested | routes/security-assessments.ts |
 | POST | `/api/sessions` | native-tested | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/approve` | missing | routes/chat.ts |
@@ -433,11 +434,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/voice/wake-candidate` | missing | routes/voice.ts |
 | POST | `/hooks/agent` | mounted-fail-closed | routes/hooks.ts |
 | POST | `/hooks/wake` | mounted-fail-closed | routes/hooks.ts |
-| POST | `/mcp` | router-unmounted | routes/mcp-server.ts |
-| POST | `/mcp/messages` | router-unmounted | routes/mcp-server.ts |
-| POST | `/mcp/sse` | router-unmounted | routes/mcp-server.ts |
+| POST | `/mcp` | mounted-fail-closed | routes/mcp-server.ts |
+| POST | `/mcp/messages` | mounted-fail-closed | routes/mcp-server.ts |
+| POST | `/mcp/sse` | mounted-fail-closed | routes/mcp-server.ts |
 | PUT | `/api/agents/:agentId/github-app/intake` | mounted-fail-closed | routes/agent-github-apps.ts |
 | PUT | `/api/architecture` | native-tested | routes/architecture.ts |
+| PUT | `/api/messenger/presence` | missing | routes/messenger.ts |
 | PUT | `/api/mobile/routines/:kind` | native-tested | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-tested | routes/repositories.ts |
