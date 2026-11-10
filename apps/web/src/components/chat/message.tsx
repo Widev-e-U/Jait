@@ -426,6 +426,35 @@ function MessageInner({
     return parts.join('\n').trim()
   }
 
+  // Reference chips are select-none, so the browser would drop them from a native copy.
+  // Rebuild the clipboard from the segments the selection touches so pasting restores the refs.
+  const handleUserSegmentsCopy = (event: React.ClipboardEvent<HTMLElement>) => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
+    const range = selection.getRangeAt(0)
+    const displaySegments = optimisticUserDisplaySegments ?? userDisplaySegments
+    const picked: UserMessageSegment[] = []
+    event.currentTarget.querySelectorAll<HTMLElement>('[data-user-segment]').forEach((el) => {
+      const segment = displaySegments[Number(el.dataset.userSegment)]
+      if (!segment || !range.intersectsNode(el)) return
+      if (segment.type !== 'text') {
+        picked.push(segment)
+        return
+      }
+      const part = document.createRange()
+      part.selectNodeContents(el)
+      if (part.compareBoundaryPoints(Range.START_TO_START, range) < 0) part.setStart(range.startContainer, range.startOffset)
+      if (part.compareBoundaryPoints(Range.END_TO_END, range) > 0) part.setEnd(range.endContainer, range.endOffset)
+      const text = part.toString()
+      if (text) picked.push({ type: 'text', text })
+    })
+    if (!picked.some(segment => segment.type !== 'text')) return
+    event.preventDefault()
+    event.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(picked))
+    const structured = serializeUserMessageSegmentsForClipboard(picked)
+    if (structured) event.clipboardData.setData(JAIT_REF_MIME, structured)
+  }
+
   const copyToClipboard = async () => {
     const text = buildCopyText()
     if (!text) return
@@ -728,10 +757,9 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 rounded-md border border-border/60 bg-background/95 p-0.5 shadow-sm',
-          // Toolbar sits above the bubble: even at opacity 0 it still receives
-          // pointer events while hovered, so overlaying the message text made
-          // the text unclickable (click-to-edit / lightbox regressions).
-          showSendStatus ? 'right-1 -top-8' : outsideBubble ? 'right-1 -top-6' : 'right-1 -top-5',
+          // Toolbar sits below the bubble, bottom-right: overlaying the message
+          // text made it unclickable (click-to-edit / lightbox regressions).
+          showSendStatus ? 'right-1 -bottom-8' : outsideBubble ? 'right-1 -bottom-6' : 'right-1 -bottom-5',
           'pointer-events-none opacity-0 transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
           copied && 'pointer-events-auto opacity-100',
         )}
@@ -1018,9 +1046,10 @@ function MessageInner({
                     >
                       <div className="min-w-0 space-y-3">
                         <AttachmentList attachments={userAttachments.filter(item => !item.mimeType.startsWith('image/'))} />
-                        <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                        <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]" onCopy={handleUserSegmentsCopy}>
                           {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
                             ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
+                                <span key={`segment-${index}`} data-user-segment={index} className="contents">{
                                 segment.type === 'text' ? (
                                   <span key={`text-${index}`}><MessageText>{segment.text}</MessageText></span>
                                 ) : segment.type === 'image' ? (
@@ -1070,7 +1099,8 @@ function MessageInner({
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
                                   </TooltipHint>
-                                ) : null,
+                                ) : null
+                                }</span>,
                               )
                             : <MessageText>{optimisticUserDisplayText ?? userDisplayText}</MessageText>}
                         </div>

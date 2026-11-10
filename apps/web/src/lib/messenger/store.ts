@@ -601,4 +601,5 @@ export type MessengerStoreApi = Pick<MessengerStore, keyof MessengerStore> & {
   edit?: (roomId: string, eventId: string, text: string) => Promise<void>
   react?: (roomId: string, eventId: string, key: string) => Promise<void>
   remove?: (roomId: string) => Promise<void>
+  setHidden?: (roomId: string, hidden: boolean) => Promise<void>
 }

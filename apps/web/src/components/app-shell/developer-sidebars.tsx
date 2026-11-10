@@ -1,4 +1,4 @@
-import { Boxes, Bug, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { useRef, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
@@ -45,7 +45,6 @@ interface DeveloperSidebarsProps {
   searchResults: ProjectSearchResults | null
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
-  showDebugPanel: boolean
   showSidebar: boolean
   sidebarView: DeveloperSidebarView
   sidebarWidth: number
@@ -79,7 +78,6 @@ interface DeveloperSidebarsProps {
   onShowFewer: () => void
   onShowMore: () => void
   onToggleArchitecture: () => void
-  onToggleDebug: () => void
   onTogglePreview: () => void
   onSelectSidebarView: (view: DeveloperSidebarView) => void
   onSidebarWidthChange: (width: number) => void
@@ -114,7 +112,6 @@ export function DeveloperSidebars({
   searchResults,
   sessionInfo,
   showArchitecture,
-  showDebugPanel,
   showSidebar,
   sidebarView,
   sidebarWidth,
@@ -146,7 +143,6 @@ export function DeveloperSidebars({
   onShowFewer,
   onShowMore,
   onToggleArchitecture,
-  onToggleDebug,
   onTogglePreview,
   onSelectSidebarView,
   onSidebarWidthChange,
@@ -197,9 +193,6 @@ export function DeveloperSidebars({
               { id: 'architecture', label: 'Architecture', icon: Boxes, active: showArchitecture, disabled: authLoading || projectsLoading, onSelect: onToggleArchitecture },
             ] : []),
           ] satisfies ModeSidebarItem[]}
-          bottomItems={[
-            { id: 'trajectory', label: 'Trajectory', icon: Bug, active: showDebugPanel, disabled: !activeSessionId, onSelect: onToggleDebug },
-          ]}
           onOpenSettings={onOpenSettings}
         />
       )}
@@ -273,7 +266,15 @@ export function DeveloperSidebars({
             onPointerMove={(event) => {
               const start = resizeStartRef.current
               if (!start) return
-              setAndStoreSidebarWidth(start.width + event.clientX - start.pointerX)
+              const rawWidth = start.width + event.clientX - start.pointerX
+              if (rawWidth < DEVELOPER_SIDEBAR_MIN_WIDTH - 40) {
+                // Dragged past the minimum: hide the panel (selecting the open view toggles it closed).
+                resizeStartRef.current = null
+                document.documentElement.classList.remove('is-dragging-col-resize')
+                onSelectSidebarView('projects')
+                return
+              }
+              setAndStoreSidebarWidth(rawWidth)
             }}
             onPointerUp={finishSidebarResize}
             onPointerCancel={finishSidebarResize}

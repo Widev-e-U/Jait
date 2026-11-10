@@ -485,6 +485,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const rightClickSelectionRef = useRef<string>('')
   const resolvedTheme = useResolvedTheme()
   const [contextMenu, setContextMenu] = useState<{ left: number; top: number; hasSelection: boolean } | null>(null)
+  const [pasteCapture, setPasteCapture] = useState(false)
+  const pasteCaptureRef = useRef<HTMLInputElement>(null)
   const [contentHeight, setContentHeight] = useState<number | null>(null)
   const autoHeight = minRows != null && maxRows != null
   // Mobile soft-keyboard accessory bar (arrow keys, Ctrl/C, copy/paste, …).
@@ -942,18 +944,31 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
   const handlePaste = useCallback(() => {
     const term = termRef.current
-    const ws = wsRef.current
     if (!term) return
-    void pasteClipboardTextIntoTerminal(navigator.clipboard, (text) => {
-      term.focus()
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
-      }
-    })
     rightClickSelectionRef.current = ''
+    // `term.paste` honours bracketed-paste mode and routes through onData, which queues until the socket is open.
+    void pasteClipboardTextIntoTerminal(navigator.clipboard, (text) => term.paste(text)).then((pasted) => {
+      if (pasted) {
+        setContextMenu(null)
+        term.focus()
+        return
+      }
+      // Reading the clipboard directly is blocked (insecure context or denied permission):
+      // let the user paste into a focused field, which always works via the paste event.
+      setPasteCapture(true)
+      requestAnimationFrame(() => pasteCaptureRef.current?.focus())
+    })
+  }, [])
+
+  const handlePasteCapture = useCallback((event: React.ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault()
+    const text = event.clipboardData.getData('text/plain')
+    const term = termRef.current
+    if (text && term) term.paste(text)
+    setPasteCapture(false)
     setContextMenu(null)
-    term.focus()
-  }, [terminalId])
+    term?.focus()
+  }, [])
 
   const handleSoftKeyData = useCallback((data: string) => {
     const send = sendInputRef.current
@@ -1008,7 +1023,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
             <Copy className="h-3.5 w-3.5" />
             Copy
           </button>
-          {!readOnly && <button
+          {!readOnly && !pasteCapture && <button
             type="button"
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground"
             onClick={handlePaste}
@@ -1016,6 +1031,16 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
             <ClipboardPaste className="h-3.5 w-3.5" />
             Paste
           </button>}
+          {!readOnly && pasteCapture && (
+            <input
+              ref={pasteCaptureRef}
+              readOnly
+              placeholder="Press Ctrl+V to paste"
+              className="mx-2 my-1 w-[160px] rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+              onPaste={handlePasteCapture}
+              onBlur={() => setPasteCapture(false)}
+            />
+          )}
         </div>
       )}
     </div>

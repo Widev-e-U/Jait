@@ -172,12 +172,45 @@ describe("persistent chat goal loops", () => {
       .toMatchObject({ status: "running", monitor: { status: "rejected" } });
   });
 
-  it("pauses on monitor failure without leaking errors or accepting completion", async () => {
+  it("keeps running on monitor failure without leaking errors or accepting completion", async () => {
     vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("private endpoint credentials"));
     const goal = loops.goal(sessionId, "Fix", ["Pass"]);
     const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys);
-    expect(result).toMatchObject({ status: "paused", monitor: { status: "unavailable" } });
+    expect(result).toMatchObject({ status: "running", stalledChecks: 1, monitor: { status: "unavailable" } });
+    expect(result.nextMessage).toContain("completion is not confirmed");
     expect(JSON.stringify(result)).not.toContain("private endpoint");
+  });
+
+  it("logs the review failure cause server-side and records only the error class", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new TypeError("fetch failed: private endpoint"));
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: "Step", nextMessage: "Next" }, undefined, keys);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`chat ${sessionId}`), "TypeError: fetch failed: private endpoint");
+    expect(result.monitor?.reason).toContain("TypeError");
+    expect(JSON.stringify(result)).not.toContain("private endpoint");
+  });
+
+  it("does not pause continue checkpoints when System One is unavailable", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("timeout"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 5; i++) {
+      const goal = loops.get(sessionId)!;
+      const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: `Attempt ${i}`, nextMessage: "Keep going" }, undefined, keys);
+      expect(result).toMatchObject({ status: "running", stalledChecks: 0, monitor: { status: "unavailable" } });
+      loops.finishTurn(sessionId);
+    }
+  });
+
+  it("pauses when completion cannot be reviewed three times in a row", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("down"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 3; i++) {
+      const goal = loops.get(sessionId)!;
+      await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: `Done ${i}`, evidence: ["Test exit 0"] }, undefined, keys);
+      loops.finishTurn(sessionId);
+    }
+    expect(loops.get(sessionId)).toMatchObject({ status: "paused", stalledChecks: 3 });
   });
 
   it("does not overwrite pauses or replacement goals during model evaluation", async () => {
@@ -248,12 +281,12 @@ describe("persistent chat goal loops", () => {
     expect(state).toContain("[REDACTED]");
   });
 
-  it("pauses oversized review state without sending incomplete criteria", async () => {
+  it("does not accept oversized review state without sending incomplete criteria", async () => {
     const evaluate = vi.spyOn(systemOne, "evaluateDecision");
     const goal = loops.goal(sessionId, "Fix", Array.from({ length: 20 }, () => "x".repeat(2000)));
     const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete",
       summary: "Done", evidence: Array.from({ length: 20 }, () => "Reported test passed") }, undefined, keys);
-    expect(result).toMatchObject({ status: "paused", monitor: { status: "unavailable" } });
+    expect(result).toMatchObject({ status: "running", monitor: { status: "unavailable" } });
     expect(evaluate).not.toHaveBeenCalled();
   });
 

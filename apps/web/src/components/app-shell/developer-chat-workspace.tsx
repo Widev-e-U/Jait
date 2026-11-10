@@ -325,6 +325,18 @@ export function DeveloperChatWorkspace({
   // The floating git-diff pill hides as soon as its right edge would come
   // within a small gap of the transcript text column (instead of sitting on
   // top of the text), measured against the actual rendered pill width.
+  // The goal overlay must stop above the composer dock, so track its height.
+  const [composerDockElement, setComposerDockElement] = useState<HTMLDivElement | null>(null)
+  const [composerDockHeight, setComposerDockHeight] = useState(0)
+  useEffect(() => {
+    const el = composerDockElement
+    if (!el || typeof ResizeObserver === 'undefined') { setComposerDockHeight(0); return }
+    const update = () => setComposerDockHeight((prev) => (prev === el.offsetHeight ? prev : el.offsetHeight))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [composerDockElement])
   const [gitDiffIndicatorElement, setGitDiffIndicatorElement] = useState<HTMLDivElement | null>(null)
   const [gitDiffIndicatorWidth, setGitDiffIndicatorWidth] = useState(0)
   const attachGitDiffIndicator = useCallback((node: HTMLDivElement | null) => {
@@ -746,10 +758,12 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {!showDebugPanel && loop && activeSessionId && (
-            // The card may grow for readable text, but never beyond half the chat panel.
+            // The card may grow for readable text up to the centre of the chat panel,
+            // and stops above the composer dock instead of covering it.
             <div
               data-testid="chat-goal-overlay"
-              className={`pointer-events-none absolute z-40 flex w-1/2 max-w-[32rem] flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2 max-h-[calc(100%-64px)]' : 'top-12 left-2 max-h-[calc(100%-64px)]'}`}
+              className={`pointer-events-none absolute z-40 flex w-[calc(50%-0.5rem)] flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2' : 'top-12 left-2'}`}
+              style={{ maxHeight: `calc(100% - ${(isMobile ? 56 : 48) + composerDockHeight + 8}px)` }}
             >
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
@@ -811,7 +825,7 @@ export function DeveloperChatWorkspace({
           )}
 
           {showNormalComposer && (
-            <div data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
+            <div ref={setComposerDockElement} data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
             <div className={getChatColumnClassName('space-y-1.5')}>
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">

@@ -23,7 +23,7 @@ import { getProjectMoveTargets } from '@/components/project/project-move-targets
 import type { ProjectRecord, ProjectSearchResults, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
-import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME, setDragImageChip } from '@/lib/jait-dnd'
+import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME, setDragImageRow } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { primarySessionWaits, type SessionWaitMap } from '@/lib/session-waits'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
@@ -281,6 +281,13 @@ export function SessionSelector({
       return next
     })
   }
+  const sessionOrderIdsRef = useRef(new Map<string, string[]>())
+  const moveSessionUp = (sessionId: string, projectId: string | null) => {
+    const key = `sessions:${projectId ?? 'personal'}`
+    const ids = sessionOrderIdsRef.current.get(key) ?? []
+    const index = ids.indexOf(sessionId)
+    if (index > 0) saveOrder(key, ids, sessionId, ids[index - 1]!, false)
+  }
   const sessionOrderProps = (sessionId: string, projectId: string | null, ids: string[]) => ({
     onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
       const source = dragSessionRef.current
@@ -527,7 +534,11 @@ export function SessionSelector({
       else onMoveProject?.(action.projectId, action.to)
     },
   })
-  const touchHandle = (source: TouchSource) => isMobile ? (
+  const touchHandle = (source: TouchSource) => !isMobile ? (
+    <span aria-hidden className="flex h-5 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/50 group-hover:text-muted-foreground active:cursor-grabbing">
+      <GripVertical className="h-3.5 w-3.5" />
+    </span>
+  ) : (
     <button
       type="button"
       aria-label={`Drag ${source.label}`}
@@ -538,7 +549,7 @@ export function SessionSelector({
     >
       <GripVertical className="h-3.5 w-3.5" />
     </button>
-  ) : null
+  )
 
   const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel || onRenameSession)
 
@@ -565,6 +576,7 @@ export function SessionSelector({
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
       showRename: Boolean(onRenameSession),
+      showMoveUp: true,
       showOpenInPanel: Boolean(onOpenSessionInPanel),
       showMoveSection: Boolean(onMoveSession),
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
@@ -675,6 +687,7 @@ export function SessionSelector({
   const recentPersonalSessions = normalizedSearchQuery
     ? filteredPersonalSessions
     : orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).slice(0, visiblePersonalSessions)
+  sessionOrderIdsRef.current.set('sessions:personal', orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id))
   const hasOlderPersonalSessions = !normalizedSearchQuery
     && filteredPersonalSessions.length > recentPersonalSessions.length
 
@@ -829,6 +842,7 @@ export function SessionSelector({
                     .sort((a, b) =>
                       Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt
                     )), manualOrder[`sessions:${project.id}`])
+                  sessionOrderIdsRef.current.set(`sessions:${project.id}`, sortedSessions.map((item) => item.id))
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
                   const recentSessions = normalizedSearchQuery
                     ? sortedSessions
@@ -840,7 +854,7 @@ export function SessionSelector({
                     <div
                       data-dnd-key={`project:${project.id}`}
                       style={orderTarget?.kind === 'project' && orderTarget.id === project.id ? { boxShadow: `inset 0 ${orderTarget.after ? '-2px' : '2px'} 0 hsl(var(--primary))` } : undefined}
-                      className={`group grid w-full ${isMobile ? 'grid-cols-[auto,auto,minmax(0,1fr),auto]' : 'grid-cols-[auto,minmax(0,1fr),auto]'} items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      className={`group grid w-full grid-cols-[auto,auto,minmax(0,1fr),auto] items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
@@ -849,9 +863,9 @@ export function SessionSelector({
                         dragProjectRef.current = project.id
                         e.dataTransfer.effectAllowed = 'copyMove'
                         // Project/folder rows snapshot to nothing during a
-                        // native drag, so always supply an explicit ghost.
-                        setDragImageChip(
-                          e.dataTransfer,
+                        // native drag, so supply the row clone as the ghost.
+                        setDragImageRow(
+                          e,
                           isFolder ? 'folder' : 'project',
                           project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')
                         )
@@ -1245,7 +1259,7 @@ export function SessionSelector({
                                     JAIT_CHAT_REF_MIME,
                                     JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
                                   )
-                                  setDragImageChip(e.dataTransfer, 'chat', session.name || 'Untitled session')
+                                  setDragImageRow(e, 'chat', session.name || 'Untitled session')
                                   dragSessionRef.current = { sessionId: session.id, sourceProjectId: project.id }
                                 },
                                 onDragEnd: () => {
@@ -1438,7 +1452,7 @@ export function SessionSelector({
                             JAIT_CHAT_REF_MIME,
                             JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
                           )
-                          setDragImageChip(e.dataTransfer, 'chat', session.name || 'Untitled session')
+                          setDragImageRow(e, 'chat', session.name || 'Untitled session')
                           dragSessionRef.current = { sessionId: session.id, sourceProjectId: null }
                         },
                         onDragEnd: () => {
@@ -1490,6 +1504,8 @@ export function SessionSelector({
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
               onRename={onRenameSession ? startRename : undefined}
+              onMoveUp={normalizedSearchQuery ? undefined : (id) => moveSessionUp(id, sessionContextMenu.projectId)}
+              canMoveUp={(sessionOrderIdsRef.current.get(`sessions:${sessionContextMenu.projectId ?? 'personal'}`)?.indexOf(sessionContextMenu.sessionId) ?? 0) > 0}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}
             />

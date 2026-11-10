@@ -31,28 +31,13 @@ export function useMessenger() {
 const EMPTY_SNAPSHOT: MessengerSnapshot = { status: 'disconnected', error: null, session: null, rooms: [], messages: [], selectedRoomId: null, notifications: false, assistantAccess: false }
 const noSubscribe = () => () => {}
 const emptySnapshot = () => EMPTY_SNAPSHOT
-const preferenceEvent = 'jait-messenger-badge-preference'
 
-/** The exclusion is local to this browser and Matrix account. */
+/** Hidden chats are stored on the Matrix account, so they are identical on every client. */
 export function useMessengerBadge() {
   const store = useContext(MessengerContext)
   const snapshot = useSyncExternalStore(store?.subscribe ?? noSubscribe, store?.getSnapshot ?? emptySnapshot, store?.getSnapshot ?? emptySnapshot)
-  const session = snapshot.session
-  const key = session ? 'jait.messenger.badge-excluded.' + [getApiUrl(), session.homeserver, session.userId].map(encodeURIComponent).join('.') : null
-  const subscribe = (listener: () => void) => {
-    window.addEventListener('storage', listener)
-    window.addEventListener(preferenceEvent, listener)
-    return () => { window.removeEventListener('storage', listener); window.removeEventListener(preferenceEvent, listener) }
-  }
-  const read = () => { try { return key ? localStorage.getItem(key) ?? '[]' : '[]' } catch { return '[]' } }
-  const raw = useSyncExternalStore(subscribe, read, () => '[]')
-  let excluded: string[] = []
-  try { const parsed: unknown = JSON.parse(raw); if (Array.isArray(parsed)) excluded = parsed.filter((id): id is string => typeof id === 'string') } catch { /* Ignore malformed preferences. */ }
-  const setExcluded = (id: string, exclude: boolean) => {
-    if (!key) return
-    const next = exclude ? [...new Set([...excluded, id])] : excluded.filter(value => value !== id)
-    try { localStorage.setItem(key, JSON.stringify(next)); window.dispatchEvent(new Event(preferenceEvent)) } catch { /* Storage may be unavailable. */ }
-  }
+  const excluded = useMemo(() => snapshot.rooms.filter(room => room.hidden).map(room => room.id), [snapshot.rooms])
+  const setExcluded = (id: string, exclude: boolean) => { void store?.setHidden?.(id, exclude).catch(() => {}) }
   const count = snapshot.rooms.reduce((sum, room) => sum + (excluded.includes(room.id) || room.kind === 'team' ? 0 : Math.max(room.unread || 0, room.markedUnread ? 1 : 0)), 0)
   return { count, excluded, setExcluded }
 }

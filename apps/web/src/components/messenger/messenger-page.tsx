@@ -1,11 +1,10 @@
 import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Search, Settings2, X } from 'lucide-react'
+import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Conversation } from '@/components/chat/conversation'
 import { MessengerBubble } from './messenger-message'
 import { MessengerStatusView } from './messenger-status-view'
@@ -20,12 +19,18 @@ import { useVoiceRecording } from '@/hooks/useVoiceRecording'
 import type { SttProvider } from '@/hooks/useAuth'
 import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useMessenger, useMessengerBadge } from './messenger-provider'
+import { MessengerContext, useMessenger, useMessengerBadge } from './messenger-provider'
 import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
 import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
+import { MessengerHeaderBar } from './messenger-services-bar'
+import { hasServiceLogo, ServiceLogo } from './service-logo'
+
+const LIST_MIN = 240
+const LIST_MAX = 520
 
 function ConnectionForm() {
   const { store, snapshot } = useMessenger()
@@ -68,7 +73,12 @@ function ConnectionForm() {
   </div>
 }
 
-export default function MessengerPage({ token = null, sttProvider = 'whisper' }: { token?: string | null; sttProvider?: SttProvider }) {
+/** The auth user is briefly null during token refresh; render nothing instead of crashing the route. */
+export default function MessengerPage(props: { token?: string | null; sttProvider?: SttProvider }) {
+  return useContext(MessengerContext) ? <MessengerPageContent {...props} /> : null
+}
+
+function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token?: string | null; sttProvider?: SttProvider }) {
   const { store, snapshot } = useMessenger()
   const { excluded, setExcluded } = useMessengerBadge()
   const confirm = useConfirmDialog()
@@ -78,6 +88,18 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const [historyFailedRoom, setHistoryFailedRoom] = useState<string | null>(null)
   // Messenger options are their own pane, not a drawer sliding over the conversation list.
   const [pane, setPane] = useUrlSearchState('messenger', 'pane')
+  const [listWidth, setListWidth] = useState(() => { const stored = Number.parseInt(localStorage.getItem('jait.messenger.list-width') ?? '', 10); return Number.isFinite(stored) ? Math.min(LIST_MAX, Math.max(LIST_MIN, stored)) : 320 })
+  const [listHidden, updateListHidden] = useMessengerListHidden()
+  const listDrag = useRef<{ x: number; width: number } | null>(null)
+  const dragList = (clientX: number) => {
+    const start = listDrag.current
+    if (!start) return
+    const raw = start.width + clientX - start.x
+    if (raw < LIST_MIN - 40) { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize'); updateListHidden(true); return }
+    const next = Math.min(LIST_MAX, Math.max(LIST_MIN, Math.round(raw)))
+    setListWidth(next)
+    localStorage.setItem('jait.messenger.list-width', String(next))
+  }
   const optionsOpen = pane === 'options'
   const hiddenOpen = pane === 'hidden'
   // One search field drives conversations, loaded-message results, and the open conversation.
@@ -118,7 +140,6 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   }
   const ready = snapshot.status === 'ready'
   const connected = !!snapshot.session
-  const services = ['All', ...new Set([...snapshot.rooms.map(room => room.service), ...(service !== 'All' ? [service] : [])])]
   const messages = snapshot.messages.filter(message => !search || (!message.unableToDecrypt && message.body.toLowerCase().includes(search.toLowerCase())))
   // Consecutive messages from the same sender render as one run: one avatar, tighter spacing.
   const groupPositions = messageGroupPositions(messages)
@@ -151,8 +172,11 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
             <TooltipHint content={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
-              <span className="max-w-[55%] shrink-0 truncate text-2xs leading-4 text-muted-foreground">
-                {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
+              <span className="inline-flex max-w-[55%] shrink-0 items-center gap-1 text-2xs leading-4 text-muted-foreground">
+                {hasServiceLogo(item.service) && <ServiceLogo service={item.service} className="size-3 shrink-0" />}
+                <span className="truncate">
+                  {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
+                </span>
               </span>
             </TooltipHint>
           </span>
@@ -274,21 +298,25 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
       : optionsOpen ? <MessengerOptions onBack={() => setPane('')} onOpenConversation={id => { selectRoom(id); setPane('') }} />
       : <>
       <div className="flex min-h-0 flex-1">
-        <aside aria-label="Conversations" className={(roomId ? 'hidden md:flex ' : 'flex ') + 'w-full shrink-0 flex-col border-r md:w-72 lg:w-80'}>
-          <div className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input aria-label="Search conversations and messages" placeholder="Search" value={search} onChange={event => setSearch(event.target.value)} className="h-9 pl-8 pr-8 text-sm" />
-              {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
-            </div>
-            <Select value={service} onValueChange={value => setService(value === 'All' ? '' : value)}>
-              <SelectTrigger aria-label="Filter by service" className="h-9 w-auto max-w-[9rem] shrink-0 gap-1.5 px-2.5 text-xs font-medium"><SelectValue /></SelectTrigger>
-              <SelectContent align="end" className="min-w-[8rem]">{services.map(item => <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>)}</SelectContent>
-            </Select>
-            <TooltipHint content="Connections"><Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setPane('options')} aria-label="Connections"><Settings2 className="h-4 w-4" /></Button></TooltipHint>
-          </div>
+        <aside aria-label="Conversations" style={{ '--list-w': listWidth + 'px' } as CSSProperties} className={(listHidden ? (roomId ? 'hidden ' : 'flex md:hidden ') : roomId ? 'hidden md:flex ' : 'flex ') + 'relative w-full shrink-0 flex-col border-r md:w-[var(--list-w)]'}>
+          <div role="separator" aria-label="Resize conversations list" aria-orientation="vertical" aria-valuemin={LIST_MIN} aria-valuemax={LIST_MAX} aria-valuenow={listWidth} tabIndex={0}
+            className="sash-handle absolute inset-y-0 right-0 z-20 hidden w-3 translate-x-1/2 cursor-col-resize touch-none outline-none md:block"
+            onKeyDown={event => { if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return; event.preventDefault(); listDrag.current = { x: 0, width: listWidth }; dragList(event.key === 'ArrowRight' ? 12 : -12); listDrag.current = null }}
+            onPointerDown={event => { event.preventDefault(); listDrag.current = { x: event.clientX, width: listWidth }; event.currentTarget.setPointerCapture(event.pointerId); document.documentElement.classList.add('is-dragging-col-resize') }}
+            onPointerMove={event => dragList(event.clientX)}
+            onPointerUp={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }}
+            onPointerCancel={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }} />
+          <MessengerHeaderBar
+          service={service}
+          onService={item => setService(item === 'All' ? '' : item)}
+          hiddenOpen={hiddenOpen}
+          hiddenCount={excluded.length}
+          onToggleHidden={() => { setPane(hiddenOpen ? '' : 'hidden'); selectRoom(null) }}
+          onOptions={() => setPane('options')}
+          search={search}
+          onSearch={setSearch}
+          />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <button type="button" onClick={() => { setPane(hiddenOpen ? '' : 'hidden'); selectRoom(null) }} className="w-full border-b px-3 py-2 text-left text-sm font-medium hover:bg-muted/60">{hiddenOpen ? '← All chats' : `Hidden chats (${excluded.length})`}</button>
             {search && <div aria-label="Message search results" className="border-b">
               {searchResults.map(item => <button key={item.roomId + item.message.id} onClick={() => selectRoom(item.roomId)} className="block w-full space-y-1 border-b p-3 text-left text-sm hover:bg-muted/60"><span className="block truncate font-medium">{item.roomName}</span><span className="line-clamp-2 break-words text-xs text-muted-foreground">{item.message.body.slice(0, 300)}</span></button>)}
               {searchResults.length === 0 && <p className="p-3 text-sm text-muted-foreground">No matching loaded messages.</p>}
@@ -315,9 +343,9 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
             {rooms.length === 0 && <div className="space-y-2 p-5 text-sm text-muted-foreground"><p>{hiddenOpen ? 'No hidden chats.' : snapshot.rooms.length ? 'No matching conversations.' : 'Your conversations will appear here as Matrix syncs.'}</p>{!snapshot.rooms.length && <Button variant="outline" size="sm" onClick={() => setPane('options')}>Connect a bridge</Button>}</div>}
           </div>
         </aside>
-        <main onPointerDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'min-h-0 min-w-0 flex-1 flex-col'}>
+        <main onPointerDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'relative min-h-0 min-w-0 flex-1 flex-col'}>
           {!room ? <div className="m-auto max-w-sm space-y-2 p-6 text-center text-muted-foreground"><MessageCircle className="mx-auto h-10 w-10 text-primary/60" /><h2 className="font-medium text-foreground">Your personal inbox</h2><p className="text-sm">{roomId ? 'Waiting for this conversation to sync. Use Back to choose another.' : 'Choose a conversation to read and reply as yourself.'}</p>{roomId && <Button variant="outline" size="sm" onClick={() => selectRoom(null)}>Back to conversations</Button>}</div> : <>
-            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-3"><Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => selectRoom(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button><MessengerPeerAvatar name={room.peer?.name || room.name} mxcUrl={room.peer?.avatarUrl ?? room.avatarUrl} presence={room.peer?.presence} /><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{room.kind === 'channel' ? '#' + room.name : room.name}</h2><p className="truncate text-xs text-muted-foreground">{room.kind === 'channel' ? [room.team, room.service].filter(Boolean).join(' · ') : [presenceLabel(room.peer?.presence, room.peer?.lastActiveAgo), room.service, room.network].filter(Boolean).join(' · ')}</p></div>{roomMenu(room, 'Conversation options')}{room.encrypted && <TooltipHint content="Encrypted Matrix room"><span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Encrypted room" /></span></TooltipHint>}</div>
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-3"><Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => selectRoom(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button><MessengerPeerAvatar name={room.peer?.name || room.name} mxcUrl={room.peer?.avatarUrl ?? room.avatarUrl} presence={room.peer?.presence} /><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{room.kind === 'channel' ? '#' + room.name : room.name}</h2><p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">{hasServiceLogo(room.service) && <ServiceLogo service={room.service} className="size-3 shrink-0" />}<span className="truncate">{room.kind === 'channel' ? [room.team, room.service].filter(Boolean).join(' · ') : [presenceLabel(room.peer?.presence, room.peer?.lastActiveAgo), room.service, room.network].filter(Boolean).join(' · ')}</span></p></div>{roomMenu(room, 'Conversation options')}{room.encrypted && <TooltipHint content="Encrypted Matrix room"><span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Encrypted room" /></span></TooltipHint>}</div>
             {room.kind === 'channel' && room.topic && <p data-channel-topic className="truncate border-b bg-muted/30 px-3 py-1 text-xs text-muted-foreground">{room.topic}</p>}
             {search && <div role="status" className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1 text-xs text-muted-foreground"><span className="truncate">Showing {messages.length} matching {messages.length === 1 ? 'message' : 'messages'}</span><button type="button" className="ml-auto shrink-0 underline" onClick={() => setSearch('')}>Clear search</button></div>}
             {room.membership === 'invite' ? <div className="m-auto space-y-4 p-6 text-center"><p>You have been invited to this conversation.</p><div className="flex justify-center gap-2"><Button disabled={!ready || busy} onClick={() => void act(() => store.join(room.id))}>Accept invitation</Button><Button variant="outline" disabled={!ready || busy} onClick={() => void act(() => store.leave(room.id))}>Decline</Button></div></div> : statusRoom ? <MessengerStatusView key={room.id} messages={messages} hasEarlier={!!snapshot.hasEarlier && ready} loadingEarlier={loadingHistory} onLoadEarlier={() => void loadEarlier()} /> : <>

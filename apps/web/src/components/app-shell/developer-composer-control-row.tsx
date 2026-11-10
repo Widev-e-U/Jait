@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
+import { Bug, CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
 
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
@@ -19,6 +19,8 @@ interface DeveloperComposerControlRowProps {
   compact: boolean
   disableSendTargetSelector: boolean
   remainingPrompts: number | null
+  showDebugPanel?: boolean
+  onToggleDebug?: () => void
   repositories: AutomationRepository[]
   selectedThreadRepo: AutomationRepository | null
   sendTarget: SendTarget
@@ -45,6 +47,8 @@ export function DeveloperComposerControlRow({
   compact,
   disableSendTargetSelector,
   remainingPrompts,
+  showDebugPanel = false,
+  onToggleDebug,
   repositories,
   selectedThreadRepo,
   sendTarget,
@@ -121,6 +125,23 @@ export function DeveloperComposerControlRow({
             </div>
           )}
           <div className={`${compact ? 'contents' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
+            {onToggleDebug && (
+              <TooltipHint side="top" content="Trajectory">
+                <Button
+                  type="button"
+                  variant={showDebugPanel ? 'secondary' : 'ghost'}
+                  size="sm"
+                  aria-label="Trajectory"
+                  aria-pressed={showDebugPanel}
+                  disabled={!activeSessionId}
+                  onClick={onToggleDebug}
+                  className="h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Bug className="h-3.5 w-3.5" />
+                  {!compact && 'Trajectory'}
+                </Button>
+              </TooltipHint>
+            )}
             {sendTarget !== 'thread' && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

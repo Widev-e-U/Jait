@@ -62,6 +62,8 @@ function teamsRetryAfterMs(error: unknown): number | undefined {
 const MAX_MEDIA = 20 * 1024 * 1024;
 /** How long a presence answer is reused before asking the homeserver again. */
 const PRESENCE_TTL = 30_000;
+/** Matrix drops a user to idle/offline without activity, so a kept status is re-sent. */
+const OWN_PRESENCE_REFRESH_MS = 45_000;
 const enc = encodeURIComponent;
 type Event = {
   event_id?: string;
@@ -323,6 +325,11 @@ class Connection {
       // notifications for messages that arrived while Jait was offline.
       read = last?.origin_server_ts ?? 0;
       this.readMarkers.set(room.summary.id, read);
+    }
+    // Replying implies everything before the reply was seen.
+    for (const event of room.events) {
+      if (event.sender === self && (event.type === 'm.room.message' || event.type === 'm.sticker'))
+        read = Math.max(read, event.origin_server_ts ?? 0);
     }
     const signature = `${last?.event_id ?? ''}:${room.events.length}:${read}`;
     const memo = this.unreadMemo.get(room.summary.id);
@@ -755,11 +762,17 @@ class Connection {
         );
         // The counterpart of a direct chat: `m.direct` when the bridge reports it,
         // otherwise the single other participant of the room.
+        // Bridged rooms also hold the bridge bot, which is never the counterpart.
+        const bridgeBot = room.states.find((e) =>
+          ['m.bridge', 'uk.half-shot.bridge'].includes(e.type),
+        )?.content?.bridgebot;
         const others = room.states.filter(
           (e) =>
             e.type === 'm.room.member' &&
             !!e.state_key &&
             e.state_key !== this.session?.userId &&
+            e.state_key !== bridgeBot &&
+            !/^@[a-z0-9_-]*bot:/i.test(e.state_key) &&
             (e.content?.membership === 'join' ||
               e.content?.membership === 'invite'),
         );
@@ -826,6 +839,8 @@ class Connection {
         for (const e of data.account_data?.events ?? [])
           if (e.type === 'm.marked_unread')
             room.summary.markedUnread = !!e.content.unread;
+          else if (e.type === 'net.jait.hidden')
+            room.summary.hidden = !!e.content?.hidden;
         for (const e of data.ephemeral?.events ?? [])
           if (e.type === 'm.receipt')
             for (const [eventId, types] of Object.entries(
@@ -1098,6 +1113,20 @@ class Connection {
       room!.summary.markedUnread = body.action === 'unread';
       return {};
     }
+    if (body.action === 'hide' || body.action === 'unhide') {
+      const room = this.rooms.get(body.roomId);
+      if (!room) throw new Error('Unknown conversation.');
+      const hidden = body.action === 'hide';
+      // Account data syncs to every client of this Matrix account.
+      await client.doRequest(
+        'PUT',
+        `/_matrix/client/v3/user/${enc(this.session!.userId)}/rooms/${enc(body.roomId)}/account_data/net.jait.hidden`,
+        null,
+        { hidden },
+      );
+      room.summary.hidden = hidden;
+      return {};
+    }
     if (body.action === 'attachment') {
       const data = Buffer.from(body.data, 'base64');
       if (data.length > MAX_MEDIA)
@@ -1146,7 +1175,34 @@ class Connection {
         if (room.events[i]!.type === 'm.room.encrypted')
           room.events[i] = await this.decrypt(id, room.events[i]!);
   }
+  /** Own presence the user asked to keep, re-asserted while the sync runs. */
+  ownPresence: { state: MessengerPresence; keep: boolean } = { state: 'online', keep: false };
+  private presenceTimer?: NodeJS.Timeout;
+  async setOwnPresence(state: 'online' | 'unavailable' | 'offline', keep: boolean) {
+    const client = this.client;
+    if (!client || !this.session) throw new Error('Matrix is not connected.');
+    await client.setPresenceStatus(state);
+    this.ownPresence = { state, keep };
+    clearInterval(this.presenceTimer);
+    if (keep) {
+      this.presenceTimer = setInterval(() => {
+        void this.client?.setPresenceStatus(state).catch(() => {});
+      }, OWN_PRESENCE_REFRESH_MS);
+      this.presenceTimer.unref?.();
+    }
+  }
+  async readOwnPresence() {
+    const client = this.client;
+    if (!client || !this.session) return { ...this.ownPresence, state: 'unknown' as MessengerPresence };
+    const status = await client.getPresenceStatusFor(this.session.userId).catch(() => null);
+    const state = status?.state;
+    return {
+      state: (state === 'online' || state === 'unavailable' || state === 'offline' ? state : this.ownPresence.state) as MessengerPresence,
+      keep: this.ownPresence.keep,
+    };
+  }
   async stop() {
+    clearInterval(this.presenceTimer);
     clearTimeout(this.retryTimer);
     ++this.generation;
     const client = this.client;
@@ -1462,6 +1518,14 @@ export class MessengerService {
       return Buffer.from(clear);
     }
     return data;
+  }
+  async ownPresence(owner: string) {
+    await this.resume(owner);
+    return this.connection(owner).readOwnPresence();
+  }
+  async setOwnPresence(owner: string, state: 'online' | 'unavailable' | 'offline', keep: boolean) {
+    await this.resume(owner);
+    await this.connection(owner).setOwnPresence(state, keep);
   }
   async command(owner: string, body: unknown) {
     await this.resume(owner);

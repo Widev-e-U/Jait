@@ -205,21 +205,23 @@ describe('gateway Messenger notifications', () => {
     restored.dispose()
     remote = { ...remote, session: { ...remote.session!, userId: '@other:test' } }
     const other = await start()
+    // Notifications are on by default until the account is muted explicitly.
+    expect(other.getSnapshot().notifications).toBe(true)
+    await other.enableNotifications(false)
     expect(other.getSnapshot().notifications).toBe(false)
 
     remote = snapshot([])
     const otherOwner = await start('different-jait-user')
-    expect(otherOwner.getSnapshot().notifications).toBe(false)
+    expect(otherOwner.getSnapshot().notifications).toBe(true)
   })
 
-  it('leaves notifications disabled when browser permission is denied', async () => {
-    const notification = { requestPermission: vi.fn(async () => 'denied') }
+  it('does not persist an opt-in when browser permission is denied', async () => {
+    const notification = { permission: 'denied', requestPermission: vi.fn(async () => 'denied') }
     Object.assign(browser, { Notification: notification })
     vi.stubGlobal('Notification', notification)
     const store = await start()
 
     await expect(store.enableNotifications(true)).rejects.toThrow('Allow notifications')
-    expect(store.getSnapshot().notifications).toBe(false)
     expect(storage.length).toBe(0)
   })
 

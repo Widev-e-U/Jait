@@ -141,3 +141,43 @@ export function setDragImageChip(
     /* Ghost chip is cosmetic — never let it break the drag itself. */
   }
 }
+
+/**
+ * Use the dragged row itself as the drag image, at its real size, so the ghost
+ * looks like the item being dragged. Falls back to the chip when the row is
+ * unavailable or cannot be cloned.
+ */
+export function setDragImageRow(
+  event: { dataTransfer: DataTransfer; currentTarget: EventTarget; clientX: number; clientY: number },
+  kind: DragGhostKind,
+  label: string,
+): void {
+  const row = event.currentTarget
+  try {
+    if (!(row instanceof HTMLElement) || !('setDragImage' in event.dataTransfer)) throw new Error('no row')
+    const rect = row.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) throw new Error('empty row')
+    const rootStyle = getComputedStyle(document.documentElement)
+    const popover = rootStyle.getPropertyValue('--popover').trim()
+    const clone = row.cloneNode(true) as HTMLElement
+    clone.removeAttribute('draggable')
+    clone.style.cssText += [
+      ';position:fixed',
+      'left:-10000px',
+      'top:0',
+      'z-index:-1',
+      'pointer-events:none',
+      'box-sizing:border-box',
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+      `background:${popover ? `hsl(${popover})` : 'hsl(210 18% 16%)'}`,
+      'border-radius:6px',
+      'opacity:0.95',
+    ].join(';')
+    document.body.appendChild(clone)
+    event.dataTransfer.setDragImage(clone, event.clientX - rect.left, event.clientY - rect.top)
+    window.setTimeout(() => clone.remove(), 0)
+  } catch {
+    setDragImageChip(event.dataTransfer, kind, label)
+  }
+}

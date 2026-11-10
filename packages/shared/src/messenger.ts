@@ -107,6 +107,8 @@ export interface MessengerRoom {
   network: string
   unread: number
   markedUnread?: boolean
+  /** Hidden from the chat list; synced through Matrix room account data. */
+  hidden?: boolean
   membership: string
   encrypted: boolean
   timestamp: number

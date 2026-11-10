@@ -72,7 +72,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
   }
   private readNotificationPreference(key: string | null) {
     if (!key) return false;
-    try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+    // On unless the user muted it explicitly.
+    try { return window.localStorage.getItem(key) !== '0'; } catch { return true; }
   }
   subscribe = (listener: () => void) => {
     this.remoteListeners.add(listener);
@@ -211,7 +212,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         const old = this.notificationRooms.get(room.id);
         if (
           (old && room.timestamp <= old.timestamp) ||
-          !room.unread ||
+          (old ? room.unread <= old.unread : !room.unread) ||
           (this.visible === room.id &&
             document.visibilityState === 'visible' &&
             document.hasFocus())
@@ -257,6 +258,9 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     if (this.started) return;
     this.started = true;
     if (typeof window !== 'undefined') window.addEventListener('storage', this.onStorage);
+    // Chrome only shows the permission prompt from a user gesture.
+    if (typeof window !== 'undefined' && 'Notification' in window && !window.jaitDesktop?.notify && Notification.permission === 'default')
+      window.addEventListener('pointerdown', () => { void Notification.requestPermission().catch(() => {}); }, { once: true });
     const poll = async () => {
       try {
         await this.refreshRemote();
@@ -316,6 +320,16 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     this.forgetRoom(roomId);
     if (this.remoteSnapshot.selectedRoomId === roomId) this.selectRoom(null);
     await this.refreshRemote();
+  }
+  /** Hidden state lives in Matrix account data, so every client of the account sees it. */
+  async setHidden(roomId: string, hidden: boolean) {
+    const rooms = this.remoteSnapshot.rooms.map((room) => room.id === roomId ? { ...room, hidden } : room);
+    this.publish({ rooms });
+    try {
+      await this.request('/command', 'POST', { action: hidden ? 'hide' : 'unhide', roomId });
+    } finally {
+      await this.refreshRemote().catch(() => {});
+    }
   }
   async join(roomId: string) {
     await this.action({ action: 'join', roomId });

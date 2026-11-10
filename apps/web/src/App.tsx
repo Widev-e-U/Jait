@@ -20,6 +20,8 @@ import { AppHeader } from '@/components/app-shell/app-header'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
+import { MessagesSquare } from 'lucide-react'
+import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { AgentControlButton } from '@/components/app-shell/agent-control-button'
 import { useAgentControl } from '@/hooks/useAgentControl'
@@ -303,6 +305,7 @@ function App() {
     displayTarget: null,
   })
   const [showScreenShare, setShowScreenShare] = useState(false)
+  const [messengerListHidden, setMessengerListHidden] = useMessengerListHidden()
   const [showProjectTree, setShowProjectTree] = useState(true)
   const [showProjectEditor, setShowProjectEditor] = useState(true)
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>(() => localStorage.getItem('developerSidebarView') === 'git' ? 'git' : 'files')
@@ -5129,6 +5132,8 @@ function App() {
           compact={compactDeveloperComposer}
           disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
           remainingPrompts={remainingPrompts}
+          showDebugPanel={showDebugPanel}
+          onToggleDebug={() => setShowDebugPanel((d) => !d)}
           repositories={automation.repositories}
           selectedThreadRepo={threadTargetRepo}
           sendTarget={sendTarget}
@@ -5155,6 +5160,7 @@ function App() {
       activeProjectId,
       activeProjectSessions,
       activeProjectRecord?.title,
+      showDebugPanel,
       activeSessionId,
       approveAllInSession,
       compactDeveloperComposer,
@@ -5501,6 +5507,9 @@ function App() {
                     onOpenSettings={() => setCurrentView('settings')}
                     screenShareActive={showScreenShare}
                     onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                    items={currentView === 'messenger' ? [
+                      { id: 'conversations', label: 'Chats', description: 'Show or hide the conversations list', icon: MessagesSquare, active: !messengerListHidden, onSelect: () => setMessengerListHidden(!messengerListHidden) },
+                    ] : []}
                   />
                 )}
                 <AppPageOutlet
@@ -5586,7 +5595,6 @@ function App() {
                       searchResults={searchResults}
                       sessionInfo={sessionInfo}
                       showArchitecture={showArchitecture}
-                      showDebugPanel={showDebugPanel}
                       showSidebar={showSidebar}
                       sidebarView={sidebarView}
                       sidebarWidth={developerSidebarWidth}
@@ -5641,7 +5649,6 @@ function App() {
                       onToggleArchitecture={() => {
                         void handleSidebarArchitectureToggle()
                       }}
-                      onToggleDebug={() => setShowDebugPanel((d) => !d)}
                       onTogglePreview={() => {
                         void handleSidebarPreviewToggle()
                       }}

@@ -1,5 +1,7 @@
 import { GithubIntakeService } from "./services/github-intake.js";
 import { registerMessengerRoutes } from './routes/messenger.js';
+import { TeamsReauthService } from './services/bridge-reauth.js';
+import { bridgeStatuses } from './services/bridge-status.js';
 import { TeamChatService } from "./services/team-chat.js";
 import { registerTeamChatRoutes } from "./routes/team-chat.js";
 import { createTeamChatTool } from "./tools/team-chat-tools.js";
@@ -260,7 +262,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
 
-  registerMessengerRoutes(app, config, deps.ws?.messenger);
+  const teamsReauth = deps.surfaceRegistry
+    ? new TeamsReauthService(deps.surfaceRegistry, () => { void bridgeStatuses(true); })
+    : undefined;
+  registerMessengerRoutes(app, config, deps.ws?.messenger, teamsReauth);
   registerHealthRoutes(app, config, {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
     getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,

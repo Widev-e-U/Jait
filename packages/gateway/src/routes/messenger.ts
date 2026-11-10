@@ -8,6 +8,7 @@ import {
 } from '../services/messenger-service.js';
 import type { MessengerBridge } from '../services/messenger-bridge.js';
 import { bridgeStatuses } from '../services/bridge-status.js';
+import type { TeamsReauthService } from '../services/bridge-reauth.js';
 
 const roomId = z.string().min(3).max(512).startsWith('!');
 const login = z
@@ -54,7 +55,7 @@ const command = z.discriminatedUnion('action', [
         .regex(/^@[^:\s]+:[^\s]+$/),
     })
     .strict(),
-  ...(['join', 'leave', 'earlier', 'unread', 'remove'] as const).map((action) =>
+  ...(['join', 'leave', 'earlier', 'unread', 'remove', 'hide', 'unhide'] as const).map((action) =>
     z.object({ action: z.literal(action), roomId }).strict(),
   ),
   z
@@ -82,6 +83,7 @@ export function registerMessengerRoutes(
   app: FastifyInstance,
   config: AppConfig,
   bridge?: MessengerBridge,
+  teamsReauth?: TeamsReauthService,
 ) {
   const messenger = new MessengerService(config.jwtSecret);
   const auth = (request: FastifyRequest, reply: FastifyReply) =>
@@ -107,6 +109,53 @@ export function registerMessengerRoutes(
     if (!user) return;
     reply.header('Cache-Control', 'no-store');
     return { bridges: await bridgeStatuses(true) };
+  });
+  app.get('/api/messenger/presence', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    return messenger.ownPresence(user.id);
+  });
+  app.put('/api/messenger/presence', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    const parsed = z
+      .object({
+        state: z.enum(['online', 'unavailable', 'offline']),
+        keep: z.boolean().default(false),
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'Invalid presence.' });
+    try {
+      await messenger.setOwnPresence(user.id, parsed.data.state, parsed.data.keep);
+      return messenger.ownPresence(user.id);
+    } catch {
+      return reply.code(400).send({ error: 'Could not update presence. Connect Matrix first.' });
+    }
+  });
+  app.get('/api/messenger/bridge-reauth/teams', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
+    return teamsReauth.get(user.id);
+  });
+  app.post('/api/messenger/bridge-reauth/teams', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
+    return teamsReauth.start(user.id);
+  });
+  app.delete('/api/messenger/bridge-reauth/teams', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
+    return teamsReauth.cancel(user.id);
   });
   app.get('/api/messenger', async (request, reply) => {
     const user = await auth(request, reply);

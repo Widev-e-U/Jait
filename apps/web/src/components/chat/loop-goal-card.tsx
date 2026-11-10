@@ -92,6 +92,7 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
       className={`pointer-events-auto min-h-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain relative border bg-card/95 text-xs shadow-sm backdrop-blur-sm ${compact && closingWidth === null ? 'rounded-full' : 'rounded-xl'} ${GOAL_TRANSITION} transition-[height]`}
       style={box ? { ...box, width: closingWidth ?? box.width } : { width: compact ? 'max-content' : '100%' }}>
       <div ref={contentRef} className={compact ? 'px-3 py-1.5' : 'p-3'}>
+        <div className={compact ? undefined : 'sticky top-0 z-10 -mx-3 -mt-3 bg-card px-3 pb-1 pt-3'}>
         <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-controls={contentId} aria-label={collapsed ? 'Expand goal card' : 'Collapse goal card'} className={`flex w-full items-center rounded text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'gap-1.5' : 'gap-2'}`}>
           {!compact && <ChevronDown aria-hidden="true" className={`size-3.5 shrink-0 transition-transform motion-reduce:transition-none ${collapsed ? '-rotate-90' : ''}`} />}
           {failed ? <AlertCircle className="size-3.5 shrink-0 text-destructive" /> : completed ? <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" /> : <Target className="size-3.5 shrink-0" />}
@@ -101,6 +102,7 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
             {compact && failed ? 'Stopped · error' : loop.status}
           </span>}
         </button>
+        </div>
         {collapsed && !running && !completed && loop.summary && <p className="mt-1 max-w-64 truncate text-muted-foreground">{loop.summary}</p>}
         <div id={contentId} hidden={collapsed && closingWidth === null} inert={collapsed} aria-hidden={collapsed || undefined}
           className={closingWidth !== null && collapsed ? 'pointer-events-none absolute left-3 top-[1.625rem] mt-2 opacity-0 transition-opacity duration-[180ms] motion-reduce:transition-none' : 'mt-2 opacity-100 transition-opacity duration-[180ms] motion-reduce:transition-none'}

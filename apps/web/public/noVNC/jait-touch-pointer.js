@@ -14,8 +14,8 @@ export function setupTouchPointer(rfb, screen, button) {
     const cursor = document.createElement('div');
     cursor.setAttribute('aria-hidden', 'true');
     cursor.dataset.touchCursor = '';
-    cursor.style.cssText = 'position:fixed;left:0;top:0;width:14px;height:18px;z-index:19;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)';
-    cursor.innerHTML = '<svg viewBox="0 0 20 26" width="14" height="18"><path d="M2 2v20l5-5 4 8 4-2-4-8h7Z" fill="white" stroke="#18181b" stroke-width="2"/></svg>';
+    cursor.style.cssText = 'position:fixed;left:0;top:0;width:22px;height:28px;transform-origin:0 0;z-index:19;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)';
+    cursor.innerHTML = '<svg viewBox="0 0 20 26" width="22" height="28"><path d="M2 2v20l5-5 4 8 4-2-4-8h7Z" fill="white" stroke="#18181b" stroke-width="2"/></svg>';
     document.body.appendChild(cursor);
     const rect = () => canvas.getBoundingClientRect();
     const show = () => {
@@ -24,7 +24,9 @@ export function setupTouchPointer(rfb, screen, button) {
         if (!position) position = { x: box.width / 2, y: box.height / 2 };
         position.x = Math.max(0, Math.min(Math.max(0, box.width - 1), position.x));
         position.y = Math.max(0, Math.min(Math.max(0, box.height - 1), position.y));
-        cursor.style.transform = `translate(${box.left + position.x}px, ${box.top + position.y}px)`;
+        // Match the agent cursor (22x28 remote px), which shrinks with the viewport scale.
+        const scale = canvas.width > 0 ? box.width / canvas.width : 1;
+        cursor.style.transform = `translate(${box.left + position.x}px, ${box.top + position.y}px) scale(${scale})`;
         cursor.hidden = !mouseMode || rfb.viewOnly;
     };
     const send = mask => rfb._handleMouseButton(position.x, position.y, mask);

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Copy, RefreshCw, ShieldQuestion } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, LogIn, RefreshCw, ShieldQuestion } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 
 interface BridgeStatus {
   platform: string
@@ -13,7 +15,15 @@ interface BridgeStatus {
   reauth?: { command?: string; hint?: string }
 }
 
+interface ReauthState {
+  phase: 'idle' | 'starting' | 'waiting_login' | 'applying' | 'done' | 'error'
+  message: string
+  liveViewUrl: string | null
+}
+
 const POLL_MS = 60_000
+const REAUTH_POLL_MS = 2_000
+const REAUTH_URL = '/api/messenger/bridge-reauth/teams'
 
 function timeOf(value?: string): string {
   if (!value) return ''
@@ -68,7 +78,8 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
   const [status, setStatus] = useState<BridgeStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [reauth, setReauth] = useState<ReauthState | null>(null)
+  const [reauthOpen, setReauthOpen] = useState(false)
 
   const load = useCallback(async (force: boolean) => {
     setBusy(true)
@@ -96,15 +107,48 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     return () => window.clearInterval(timer)
   }, [load])
 
-  const copyCommand = async (command: string) => {
+  const callReauth = useCallback(async (method: 'GET' | 'POST' | 'DELETE') => {
     try {
-      await navigator.clipboard.writeText(command)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      setCopied(false)
+      const response = await fetch(REAUTH_URL, {
+        method,
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
+      if (!response.ok) throw new Error(`Re-authentication request failed (${response.status})`)
+      setReauth((await response.json()) as ReauthState)
+    } catch (failure) {
+      setReauth({
+        phase: 'error',
+        message: failure instanceof Error ? failure.message : 'Re-authentication request failed',
+        liveViewUrl: null,
+      })
     }
+  }, [])
+
+  const startReauth = () => {
+    setReauthOpen(true)
+    setReauth({ phase: 'starting', message: 'Starting browser…', liveViewUrl: null })
+    void callReauth('POST')
   }
+
+  const closeReauth = () => {
+    setReauthOpen(false)
+    if (reauth && ['starting', 'waiting_login', 'applying'].includes(reauth.phase)) void callReauth('DELETE')
+  }
+
+  const reauthPhase = reauth?.phase
+  useEffect(() => {
+    if (!reauthOpen || !reauthPhase || !['starting', 'waiting_login', 'applying'].includes(reauthPhase)) return
+    const timer = window.setInterval(() => void callReauth('GET'), REAUTH_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [reauthOpen, reauthPhase, callReauth])
+
+  useEffect(() => {
+    if (reauthPhase !== 'done') return
+    void load(true)
+    const timer = window.setTimeout(() => setReauthOpen(false), 1500)
+    return () => window.clearTimeout(timer)
+  }, [reauthPhase, load])
 
   if (!status && !error) {
     return (
@@ -159,21 +203,54 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
         </Button>
       </div>
 
-      {needsAttention && (status.reauth?.hint || status.reauth?.command) && (
+      {needsAttention && (
         <div className="mt-3 space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          {status.reauth?.hint && <p className="text-xs text-destructive">{status.reauth.hint}</p>}
-          {status.reauth?.command && (
-            <div className="flex items-start gap-2">
-              <code className="min-w-0 flex-1 overflow-x-auto rounded bg-background/80 px-2 py-1 text-xs">{status.reauth.command}</code>
-              <Button variant="outline" size="sm" onClick={() => void copyCommand(status.reauth?.command ?? '')}>
-                <Copy className="mr-2 h-4 w-4" />
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-          )}
+          <p className="text-xs text-destructive">
+            {status.state === 'expired'
+              ? 'The Teams session has expired. Sign in again to resume syncing.'
+              : 'The Teams connection could not be verified.'}
+          </p>
+          <Button size="sm" onClick={startReauth}>
+            <LogIn className="mr-2 h-4 w-4" />
+            Reconnect Teams
+          </Button>
           <p className="text-xs text-muted-foreground">Messages from Teams stay missing until the session is renewed.</p>
         </div>
       )}
+
+      {!needsAttention && status.state === 'connected' && (
+        <Button variant="ghost" size="sm" className="mt-2" onClick={startReauth}>
+          <LogIn className="mr-2 h-4 w-4" />
+          Sign in again
+        </Button>
+      )}
+
+      <Dialog open={reauthOpen} onOpenChange={open => { if (!open) closeReauth() }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Reconnect Microsoft Teams</DialogTitle>
+            <DialogDescription>
+              Sign in to Teams in the window below. Jait picks up the new session automatically; no passwords or tokens pass through this page.
+            </DialogDescription>
+          </DialogHeader>
+          {reauth?.liveViewUrl && reauth.phase === 'waiting_login' ? (
+            <div className="h-[60vh] overflow-hidden rounded-lg border">
+              <NoVncSessionView source={reauth.liveViewUrl} title="Teams sign-in" className="h-full w-full border-0 bg-white" />
+            </div>
+          ) : (
+            <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+              {(reauth?.phase === 'starting' || reauth?.phase === 'applying') && <Loader2 className="h-4 w-4 animate-spin" />}
+              {reauth?.phase === 'done' && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+              <span role={reauth?.phase === 'error' ? 'alert' : 'status'} className={reauth?.phase === 'error' ? 'text-destructive' : ''}>
+                {reauth?.message}
+              </span>
+            </div>
+          )}
+          {reauth?.phase === 'error' && (
+            <Button size="sm" onClick={startReauth}>Try again</Button>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
     </section>
