@@ -475,6 +475,19 @@ impl Application {
                 .router(),
             )
             .merge(
+                crate::routes::maintenance::MaintenanceRoutes {
+                    auth: auth.clone(),
+                    backend: Arc::new(
+                        super::maintenance_mount::ServiceBackend::new(auth.worker())
+                            .map_err(ApplicationError::from)?,
+                    ),
+                    broadcast: None,
+                    notifications: None,
+                    clock: crate::time::default_clock(),
+                }
+                .router(),
+            )
+            .merge(
                 CalendarRoutes {
                     auth: auth.clone(),
                     calendar: Arc::new(CalendarService::new(

@@ -1312,3 +1312,47 @@ async fn provider_accounts_and_usage_are_served_from_the_database() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn maintenance_runs_are_served_and_execution_needs_consent() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client
+        .get(format!("{base}/api/maintenance/runs"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let list = client
+        .get(format!("{base}/api/maintenance/runs"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(list.status(), 200);
+    let missing = client
+        .get(format!("{base}/api/maintenance/runs/none"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let run = client
+        .post(format!("{base}/api/maintenance/run"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"repoId": "none"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(run.status(), 500);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
