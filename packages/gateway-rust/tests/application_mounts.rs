@@ -1452,3 +1452,45 @@ async fn channels_are_authenticated_and_report_no_connectors() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+
+#[tokio::test]
+async fn plugins_are_authenticated_and_none_are_loaded() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client.get(format!("{base}/api/plugins")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/plugins"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list, serde_json::json!([]));
+    let missing = client
+        .get(format!("{base}/api/plugins/nope"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let enable = client
+        .post(format!("{base}/api/plugins/nope/enable"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(enable.status(), 400);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

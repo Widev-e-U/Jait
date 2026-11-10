@@ -475,6 +475,13 @@ impl Application {
                 .router(),
             )
             .merge(
+                crate::routes::plugins::PluginRoutes {
+                    auth: auth.clone(),
+                    manager: super::channels_mount::no_plugins(),
+                }
+                .router(),
+            )
+            .merge(
                 crate::routes::channels::ChannelRoutes {
                     auth: auth.clone(),
                     host: Arc::new(super::channels_mount::NoConnectors),

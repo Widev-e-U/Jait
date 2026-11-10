@@ -45,3 +45,20 @@ impl ChannelHost for NoConnectors {
         Box::pin(async { unavailable() })
     }
 }
+
+/// Plugin loading executes third-party code, so the Rust gateway lists none and
+/// refuses every other operation until a sandboxed loader exists.
+pub fn no_plugins() -> crate::routes::plugins::PluginManagerPort {
+    use crate::routes::plugins::{PluginError, PluginOperation};
+    std::sync::Arc::new(|op| {
+        Box::pin(async move {
+            match op {
+                PluginOperation::List => Ok(serde_json::json!([])),
+                PluginOperation::Get(_) => Ok(serde_json::Value::Null),
+                _ => Err(PluginError::Message(
+                    "Plugins are not available in the Rust gateway yet".to_string(),
+                )),
+            }
+        })
+    })
+}
