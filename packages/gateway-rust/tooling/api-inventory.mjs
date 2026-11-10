@@ -68,6 +68,32 @@ for (const f of walk(rustSrc, ['.rs'])) {
   }
 }
 
+// --- Path-dispatch routers: one axum `any()` handler that matches the path and method itself.
+// Each `path == "/lit"` or `mid(&path, "/prefix/", "/suffix")` marker opens a segment; the
+// `Method::X` tokens inside that segment (up to the next marker) are the methods it serves.
+for (const rel of ['routes/projects.rs']) {
+  const text = readFileSync(join(rustSrc, rel), 'utf8');
+  const markers = [
+    ...text.matchAll(/path\s*==\s*"(\/[^"]+)"|mid\(\s*&path\s*,\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)/g),
+  ];
+  markers.forEach((m, i) => {
+    const path = m[1] ?? `${m[2]}{}${m[3]}`;
+    const seg = text.slice(m.index, markers[i + 1]?.index ?? text.length);
+    for (const mm of seg.matchAll(/Method::(GET|POST|PUT|PATCH|DELETE)/g)) {
+      const key = `${mm[1]} ${norm(path)}`;
+      rustRoutes.add(key);
+      rustFile.set(key, rel);
+    }
+  });
+  // the collection root is dispatched on its exact path
+  for (const [method, path] of [['GET', '/api/projects'], ['POST', '/api/projects'], ['GET', '/api/projects/archived'], ['DELETE', '/api/projects/archived']]) {
+    if (new RegExp(String.raw`"${path}"`).test(text)) {
+      rustRoutes.add(`${method} ${norm(path)}`);
+      rustFile.set(`${method} ${norm(path)}`, rel);
+    }
+  }
+}
+
 // --- "tested" heuristic: path literal appears in a Rust test file or contract test ---
 let testText = '';
 for (const root of [rustTests, contractTests]) {

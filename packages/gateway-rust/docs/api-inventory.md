@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 422,
   "mounted-fail-closed": 71,
-  "native-tested": 199,
-  "missing": 103,
+  "native-tested": 216,
+  "missing": 85,
   "router-unmounted": 40,
-  "native-untested": 9,
-  "nativeTestedPct": 47.2,
+  "native-untested": 10,
+  "nativeTestedPct": 51.2,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -35,8 +35,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/plans/:id` | native-tested | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | mounted-fail-closed | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | router-unmounted | routes/browser-devtools.ts |
-| DELETE | `/api/projects/:id` | missing | routes/projects.ts |
-| DELETE | `/api/projects/archived` | missing | routes/projects.ts |
+| DELETE | `/api/projects/:id` | native-tested | routes/projects.ts |
+| DELETE | `/api/projects/archived` | native-tested | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | native-tested | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | native-tested | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | native-tested | routes/repo-proposals.ts |
@@ -131,14 +131,14 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/project/read` | missing | routes/project.ts |
 | GET | `/api/project/search` | missing | routes/project.ts |
 | GET | `/api/project/stat` | missing | routes/project.ts |
-| GET | `/api/projects` | missing | routes/projects.ts |
-| GET | `/api/projects/:id` | missing | routes/projects.ts |
-| GET | `/api/projects/:id/sessions` | missing | routes/projects.ts |
-| GET | `/api/projects/:id/state` | missing | routes/projects.ts |
-| GET | `/api/projects/:id/subtree` | missing | routes/projects.ts |
-| GET | `/api/projects/archived` | missing | routes/projects.ts |
-| GET | `/api/projects/last-active` | missing | routes/projects.ts |
-| GET | `/api/projects/search` | missing | routes/projects.ts |
+| GET | `/api/projects` | native-tested | routes/projects.ts |
+| GET | `/api/projects/:id` | native-tested | routes/projects.ts |
+| GET | `/api/projects/:id/sessions` | native-tested | routes/projects.ts |
+| GET | `/api/projects/:id/state` | native-tested | routes/projects.ts |
+| GET | `/api/projects/:id/subtree` | native-tested | routes/projects.ts |
+| GET | `/api/projects/archived` | native-tested | routes/projects.ts |
+| GET | `/api/projects/last-active` | native-tested | routes/projects.ts |
+| GET | `/api/projects/search` | native-untested | routes/projects.ts |
 | GET | `/api/provider-accounts` | native-tested | routes/providers.ts |
 | GET | `/api/provider-usage` | native-tested | routes/providers.ts |
 | GET | `/api/provider-usage/summary` | native-tested | routes/providers.ts |
@@ -221,8 +221,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | PATCH | `/api/jobs/:id` | native-tested | routes/jobs.ts |
 | PATCH | `/api/plans/:id` | native-tested | routes/plans.ts |
 | PATCH | `/api/plugins/:id/config` | mounted-fail-closed | routes/plugins.ts |
-| PATCH | `/api/projects/:id` | missing | routes/projects.ts |
-| PATCH | `/api/projects/:id/state` | missing | routes/projects.ts |
+| PATCH | `/api/projects/:id` | native-tested | routes/projects.ts |
+| PATCH | `/api/projects/:id/state` | native-tested | routes/projects.ts |
 | PATCH | `/api/provider-accounts/:id` | native-tested | routes/providers.ts |
 | PATCH | `/api/reminders/:id` | native-tested | routes/reminders.ts |
 | PATCH | `/api/repo-proposals/:id` | native-tested | routes/repo-proposals.ts |
@@ -340,12 +340,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/project/undo` | missing | routes/project.ts |
 | POST | `/api/project/undo-all` | missing | routes/project.ts |
 | POST | `/api/project/write` | missing | routes/project.ts |
-| POST | `/api/projects` | missing | routes/projects.ts |
-| POST | `/api/projects/:id/move` | missing | routes/projects.ts |
-| POST | `/api/projects/:id/repository` | missing | routes/projects.ts |
-| POST | `/api/projects/:id/restore` | missing | routes/projects.ts |
-| POST | `/api/projects/:id/sessions` | missing | routes/projects.ts |
-| POST | `/api/projects/select` | missing | routes/projects.ts |
+| POST | `/api/projects` | native-tested | routes/projects.ts |
+| POST | `/api/projects/:id/move` | native-tested | routes/projects.ts |
+| POST | `/api/projects/:id/repository` | native-tested | routes/projects.ts |
+| POST | `/api/projects/:id/restore` | native-tested | routes/projects.ts |
+| POST | `/api/projects/:id/sessions` | native-tested | routes/projects.ts |
+| POST | `/api/projects/select` | native-tested | routes/projects.ts |
 | POST | `/api/provider-accounts` | native-tested | routes/providers.ts |
 | POST | `/api/provider-accounts/:id/opencode-go` | native-tested | routes/providers.ts |
 | POST | `/api/provider-usage/ollama/api-key` | native-tested | routes/providers.ts |
