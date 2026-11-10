@@ -1746,7 +1746,7 @@
     },
     {
       "path": "packages/gateway/package.json",
-      "fingerprint": "239a6ad77f3d4188",
+      "fingerprint": "bcbcb0f1d30b6c1f",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -1791,7 +1791,7 @@
         "packages/gateway/package.json#dependency:yaml",
         "packages/gateway/package.json#dependency:zod"
       ],
-      "claims_fingerprint": "5cccebd79de7f27e",
+      "claims_fingerprint": "d9c47ee65b602fce",
       "claims": [
         {
           "id": "packages/gateway/package.json#dependency:@agentclientprotocol/claude-agent-acp",
@@ -1799,7 +1799,7 @@
           "name": "@agentclientprotocol/claude-agent-acp",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "0.87.0"
           },
@@ -1813,7 +1813,7 @@
           "name": "@agentclientprotocol/codex-acp",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "2.1.1"
           },
@@ -1827,7 +1827,7 @@
           "name": "@agentclientprotocol/sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.7.0"
           },
@@ -1841,7 +1841,7 @@
           "name": "@browserbasehq/stagehand",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "4.3.0"
           },
@@ -1855,7 +1855,7 @@
           "name": "@fastify/cookie",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^11.1.2"
           },
@@ -1869,7 +1869,7 @@
           "name": "@fastify/cors",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^11.3.0"
           },
@@ -1883,7 +1883,7 @@
           "name": "@fastify/static",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^9.3.0"
           },
@@ -1897,7 +1897,7 @@
           "name": "@fastify/websocket",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^11.3.3"
           },
@@ -1911,7 +1911,7 @@
           "name": "@jait/screen-share",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "workspace:*"
           },
@@ -1925,7 +1925,7 @@
           "name": "@jait/shared",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "workspace:*"
           },
@@ -1939,7 +1939,7 @@
           "name": "@modelcontextprotocol/sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.32.1"
           },
@@ -1953,7 +1953,7 @@
           "name": "@openai/codex",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "0.159.2"
           },
@@ -1967,7 +1967,7 @@
           "name": "@parcel/watcher",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^2.6.0"
           },
@@ -1981,7 +1981,7 @@
           "name": "baileys",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^7.0.0-rc14"
           },
@@ -1995,7 +1995,7 @@
           "name": "bun-pty",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^0.4.11"
           },
@@ -2009,7 +2009,7 @@
           "name": "dotenv",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^16.6.1"
           },
@@ -2023,7 +2023,7 @@
           "name": "drizzle-orm",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^0.45.3"
           },
@@ -2037,7 +2037,7 @@
           "name": "fast-xml-parser",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^5.11.2"
           },
@@ -2051,7 +2051,7 @@
           "name": "fastify",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^5.12.5"
           },
@@ -2065,7 +2065,7 @@
           "name": "htmlparser2",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^12.0.0"
           },
@@ -2079,7 +2079,7 @@
           "name": "imapflow",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^2.5.2"
           },
@@ -2093,7 +2093,7 @@
           "name": "jose",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^6.2.12"
           },
@@ -2107,7 +2107,7 @@
           "name": "mailparser",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^3.9.40"
           },
@@ -2121,7 +2121,7 @@
           "name": "matrix-bot-sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^0.8.0"
           },
@@ -2135,7 +2135,7 @@
           "name": "matrix-encrypt-attachment",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.0.3"
           },
@@ -2149,7 +2149,7 @@
           "name": "nanoid",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^5.1.16"
           },
@@ -2163,7 +2163,7 @@
           "name": "node-pty",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.1.0"
           },
@@ -2177,7 +2177,7 @@
           "name": "nodemailer",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^10.1.2"
           },
@@ -2191,7 +2191,7 @@
           "name": "pino",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^9.14.0"
           },
@@ -2205,7 +2205,7 @@
           "name": "playwright",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.64.0"
           },
@@ -2219,7 +2219,7 @@
           "name": "qrcode",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^1.5.4"
           },
@@ -2233,7 +2233,7 @@
           "name": "ws",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^8.22.0"
           },
@@ -2247,7 +2247,7 @@
           "name": "yaml",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^2.9.1"
           },
@@ -2261,7 +2261,7 @@
           "name": "zod",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^4.6.5"
           },
@@ -2275,7 +2275,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-nodejs",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "0.6.1"
           },
@@ -2289,7 +2289,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-wasm",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "version": "^18.9.0"
           },
@@ -2303,7 +2303,7 @@
           "name": "jait",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "entry": "./bin/jait.mjs"
           },
@@ -2317,7 +2317,7 @@
           "name": "jait-matrix",
           "start": 0,
           "end": 2860,
-          "fingerprint": "239a6ad77f3d4188",
+          "fingerprint": "bcbcb0f1d30b6c1f",
           "details": {
             "entry": "./bin/matrix-stack.mjs"
           },
@@ -18265,7 +18265,7 @@
     },
     {
       "path": "packages/gateway/src/routes/preview.ts",
-      "fingerprint": "c590bb5041535c35",
+      "fingerprint": "cf32053df62b658b",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
@@ -18278,13 +18278,14 @@
         "packages/gateway/src/routes/preview.ts#route:3021",
         "packages/gateway/src/routes/preview.ts#route:4033",
         "packages/gateway/src/routes/preview.ts#route:4726",
-        "packages/gateway/src/routes/preview.ts#route:5721",
+        "packages/gateway/src/routes/preview.ts#route:5646",
         "packages/gateway/src/routes/preview.ts#route:593",
-        "packages/gateway/src/routes/preview.ts#route:6717",
-        "packages/gateway/src/routes/preview.ts#route:7620",
-        "packages/gateway/src/routes/preview.ts#route:8409"
+        "packages/gateway/src/routes/preview.ts#route:6641",
+        "packages/gateway/src/routes/preview.ts#route:7637",
+        "packages/gateway/src/routes/preview.ts#route:8540",
+        "packages/gateway/src/routes/preview.ts#route:9329"
       ],
-      "claims_fingerprint": "4417096e7de7eff7",
+      "claims_fingerprint": "381a1987bcd92cb2",
       "claims": [
         {
           "id": "packages/gateway/src/routes/preview.ts#dependency:0",
@@ -18393,15 +18394,15 @@
         {
           "id": "packages/gateway/src/routes/preview.ts#route:4726",
           "kind": "route",
-          "name": "/api/preview/navigate",
+          "name": "/api/preview/reopen",
           "start": 4726,
-          "end": 5716,
-          "fingerprint": "b5c91c277e76a450",
+          "end": 5641,
+          "fingerprint": "f553e3f70dbf5086",
           "details": {
             "methods": "POST",
             "receiver": "app",
-            "url_expression": "\"/api/preview/navigate\"",
-            "schema": "{\n      body: {\n        type: \"object\", additionalProperties: false, required: [\"sessionId\", \"url\"],\n        properties: { sessionId: { type: \"string\", minLength: 1 }, url: { type: \"string\", minLength: 1, maxLength: 8192 } },\n      },\n    }",
+            "url_expression": "\"/api/preview/reopen\"",
+            "schema": "{ body: { type: \"object\", additionalProperties: false, required: [\"sessionId\", \"url\"],\n      properties: { sessionId: { type: \"string\", minLength: 1 }, url: { type: \"string\", minLength: 1, maxLength: 8192 } } } }",
             "resolution": "candidate; receiver identity and plugin prefixes require review"
           },
           "status": "pending",
@@ -18409,17 +18410,17 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/preview.ts#route:5721",
+          "id": "packages/gateway/src/routes/preview.ts#route:5646",
           "kind": "route",
-          "name": "/api/preview/history",
-          "start": 5721,
-          "end": 6712,
-          "fingerprint": "1539258d8bef2e51",
+          "name": "/api/preview/navigate",
+          "start": 5646,
+          "end": 6636,
+          "fingerprint": "b5c91c277e76a450",
           "details": {
             "methods": "POST",
             "receiver": "app",
-            "url_expression": "\"/api/preview/history\"",
-            "schema": "{ body: { type: \"object\", additionalProperties: false, required: [\"sessionId\", \"direction\"],\n      properties: { sessionId: { type: \"string\", minLength: 1 }, direction: { type: \"string\", enum: [\"back\", \"forward\"] } } } }",
+            "url_expression": "\"/api/preview/navigate\"",
+            "schema": "{\n      body: {\n        type: \"object\", additionalProperties: false, required: [\"sessionId\", \"url\"],\n        properties: { sessionId: { type: \"string\", minLength: 1 }, url: { type: \"string\", minLength: 1, maxLength: 8192 } },\n      },\n    }",
             "resolution": "candidate; receiver identity and plugin prefixes require review"
           },
           "status": "pending",
@@ -18445,11 +18446,29 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/preview.ts#route:6717",
+          "id": "packages/gateway/src/routes/preview.ts#route:6641",
+          "kind": "route",
+          "name": "/api/preview/history",
+          "start": 6641,
+          "end": 7632,
+          "fingerprint": "1539258d8bef2e51",
+          "details": {
+            "methods": "POST",
+            "receiver": "app",
+            "url_expression": "\"/api/preview/history\"",
+            "schema": "{ body: { type: \"object\", additionalProperties: false, required: [\"sessionId\", \"direction\"],\n      properties: { sessionId: { type: \"string\", minLength: 1 }, direction: { type: \"string\", enum: [\"back\", \"forward\"] } } } }",
+            "resolution": "candidate; receiver identity and plugin prefixes require review"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/routes/preview.ts#route:7637",
           "kind": "route",
           "name": "/api/preview/reload",
-          "start": 6717,
-          "end": 7615,
+          "start": 7637,
+          "end": 8535,
           "fingerprint": "854c360a929e4da7",
           "details": {
             "methods": "POST",
@@ -18463,11 +18482,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/preview.ts#route:7620",
+          "id": "packages/gateway/src/routes/preview.ts#route:8540",
           "kind": "route",
           "name": "/api/preview/share",
-          "start": 7620,
-          "end": 8404,
+          "start": 8540,
+          "end": 9324,
           "fingerprint": "dab132e94f95e356",
           "details": {
             "methods": "POST",
@@ -18481,11 +18500,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/preview.ts#route:8409",
+          "id": "packages/gateway/src/routes/preview.ts#route:9329",
           "kind": "route",
           "name": "/api/preview/stop",
-          "start": 8409,
-          "end": 8992,
+          "start": 9329,
+          "end": 9912,
           "fingerprint": "4d9e58b732c34937",
           "details": {
             "methods": "POST",
@@ -29721,7 +29740,7 @@
     },
     {
       "path": "packages/gateway/src/services/preview.ts",
-      "fingerprint": "b02cd4eac2d00597",
+      "fingerprint": "653e78a07f3f1aff",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
