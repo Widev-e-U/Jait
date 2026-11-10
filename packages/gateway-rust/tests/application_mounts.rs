@@ -3244,3 +3244,59 @@ async fn session_loop_is_null_for_owned_sessions_and_404_otherwise() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn session_fork_creates_a_new_owned_branch() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = session["id"].as_str().unwrap();
+    let anon = client
+        .post(format!("{base}/api/sessions/{id}/fork"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let forked = client
+        .post(format!("{base}/api/sessions/{id}/fork"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(forked.status(), 201);
+    let branch: serde_json::Value = forked.json().await.unwrap();
+    assert_ne!(branch["id"].as_str().unwrap(), id);
+    let fetched = client
+        .get(format!(
+            "{base}/api/sessions/{}",
+            branch["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), 200);
+    let missing = client
+        .post(format!("{base}/api/sessions/nosuchsession/fork"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

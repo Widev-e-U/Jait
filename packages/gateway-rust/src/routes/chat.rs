@@ -212,6 +212,7 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/messages", get(messages))
             .route("/api/sessions/{id}/runtime", get(runtime))
             .route("/api/sessions/{id}/loop", get(session_loop))
+            .route("/api/sessions/{id}/fork", post(session_fork))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -776,6 +777,40 @@ async fn session_loop(
     match found {
         Ok((false, _)) => response(404, json!({"error":"NOT_FOUND"})),
         Ok((true, current)) => response(200, json!({"loop": current})),
+        Err(_) => auth::internal_error(),
+    }
+}
+/// Branch a session. Live streaming snapshots and the `chat.created` user
+/// broadcast are not wired here; the branch is the durable persisted state.
+async fn session_fork(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    let owner = user.id.clone();
+    let forked = state
+        .auth
+        .with_database(move |db| {
+            let branch = SessionService::new(db).fork(&session, &owner, None)?;
+            if let Some(project) = branch.as_ref().and_then(|b| b.project_id.as_deref()) {
+                let _ = crate::services::projects::ProjectService::new(db).touch(project);
+            }
+            Ok(branch)
+        })
+        .await;
+    match forked {
+        Ok(Some(branch)) => response(201, serde_json::to_value(branch).unwrap_or(Value::Null)),
+        Ok(None) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        ),
         Err(_) => auth::internal_error(),
     }
 }
