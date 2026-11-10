@@ -598,6 +598,8 @@ impl Application {
                 super::consent_mount::composed_consent_routes(&auth, consent.clone()).router(),
             );
         }
+        router = router
+            .merge(super::mobile_mount::composed_mobile_routes(&auth, consent.clone()).router());
         if let Some(root) = config
             .web_root
             .as_deref()

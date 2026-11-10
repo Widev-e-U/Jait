@@ -1821,3 +1821,77 @@ async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let discovery = client
+        .get(format!("{base}/api/mobile/discovery"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(discovery.status(), 200);
+    let registered = client
+        .post(format!("{base}/api/mobile/devices/register"))
+        .json(&serde_json::json!({"id":"phone-1","name":"Phone","platform":"mobile"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(registered.status(), 200);
+    let beat = client
+        .post(format!("{base}/api/mobile/devices/phone-1/heartbeat"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(beat.status(), 200);
+    let missing = client
+        .post(format!("{base}/api/mobile/devices/ghost/heartbeat"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let listed: serde_json::Value = client
+        .get(format!("{base}/api/mobile/devices"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(listed["devices"][0]["id"], "phone-1", "{listed}");
+
+    let anon = client
+        .get(format!("{base}/api/mobile/consent/pending"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let pending: serde_json::Value = client
+        .get(format!("{base}/api/mobile/consent/pending"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(pending["requests"], serde_json::json!([]), "{pending}");
+    for verb in ["approve", "reject"] {
+        let unknown = client
+            .post(format!("{base}/api/mobile/consent/nope/{verb}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(unknown.status(), 404, "{verb}");
+    }
+
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}

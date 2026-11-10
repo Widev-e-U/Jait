@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 422,
   "mounted-fail-closed": 71,
-  "native-tested": 216,
+  "native-tested": 229,
   "missing": 85,
-  "router-unmounted": 40,
+  "router-unmounted": 27,
   "native-untested": 10,
-  "nativeTestedPct": 51.2,
+  "nativeTestedPct": 54.3,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -29,7 +29,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | DELETE | `/api/jobs/:id` | native-tested | routes/jobs.ts |
 | DELETE | `/api/messenger` | missing | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-reauth/teams` | missing | routes/messenger.ts |
-| DELETE | `/api/mobile/push-devices/:deviceId` | router-unmounted | routes/mobile.ts |
+| DELETE | `/api/mobile/push-devices/:deviceId` | native-tested | routes/mobile.ts |
 | DELETE | `/api/nodes/:id/credential` | missing | server.ts |
 | DELETE | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | DELETE | `/api/plans/:id` | native-tested | routes/plans.ts |
@@ -104,12 +104,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/messenger/bridge-status` | missing | routes/messenger.ts |
 | GET | `/api/messenger/search` | missing | routes/messenger.ts |
 | GET | `/api/mobile-update/check` | native-tested | routes/update.ts |
-| GET | `/api/mobile/consent/pending` | router-unmounted | routes/mobile.ts |
-| GET | `/api/mobile/devices` | router-unmounted | routes/mobile.ts |
-| GET | `/api/mobile/discovery` | router-unmounted | routes/mobile.ts |
-| GET | `/api/mobile/os-tool/sessions` | router-unmounted | routes/mobile.ts |
-| GET | `/api/mobile/push-devices` | router-unmounted | routes/mobile.ts |
-| GET | `/api/mobile/routines` | router-unmounted | routes/mobile.ts |
+| GET | `/api/mobile/consent/pending` | native-tested | routes/mobile.ts |
+| GET | `/api/mobile/devices` | native-tested | routes/mobile.ts |
+| GET | `/api/mobile/discovery` | native-tested | routes/mobile.ts |
+| GET | `/api/mobile/os-tool/sessions` | native-tested | routes/mobile.ts |
+| GET | `/api/mobile/push-devices` | native-tested | routes/mobile.ts |
+| GET | `/api/mobile/routines` | native-tested | routes/mobile.ts |
 | GET | `/api/network/devices` | native-tested | routes/network.ts |
 | GET | `/api/network/interfaces` | native-tested | routes/network.ts |
 | GET | `/api/network/nodes` | native-tested | routes/network.ts |
@@ -303,11 +303,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/messenger/command` | missing | routes/messenger.ts |
 | POST | `/api/messenger/keys` | missing | routes/messenger.ts |
 | POST | `/api/messenger/media` | missing | routes/messenger.ts |
-| POST | `/api/mobile/consent/:id/approve` | router-unmounted | routes/mobile.ts |
-| POST | `/api/mobile/consent/:id/reject` | router-unmounted | routes/mobile.ts |
-| POST | `/api/mobile/devices/:deviceId/heartbeat` | router-unmounted | routes/mobile.ts |
-| POST | `/api/mobile/devices/register` | router-unmounted | routes/mobile.ts |
-| POST | `/api/mobile/push-devices/test` | router-unmounted | routes/mobile.ts |
+| POST | `/api/mobile/consent/:id/approve` | native-tested | routes/mobile.ts |
+| POST | `/api/mobile/consent/:id/reject` | native-tested | routes/mobile.ts |
+| POST | `/api/mobile/devices/:deviceId/heartbeat` | native-tested | routes/mobile.ts |
+| POST | `/api/mobile/devices/register` | native-tested | routes/mobile.ts |
+| POST | `/api/mobile/push-devices/test` | native-tested | routes/mobile.ts |
 | POST | `/api/network/deploy` | missing | routes/network.ts |
 | POST | `/api/network/nodes/register` | native-tested | routes/network.ts |
 | POST | `/api/network/scan` | native-tested | routes/network.ts |
@@ -438,7 +438,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/mcp/sse` | router-unmounted | routes/mcp-server.ts |
 | PUT | `/api/agents/:agentId/github-app/intake` | mounted-fail-closed | routes/agent-github-apps.ts |
 | PUT | `/api/architecture` | native-tested | routes/architecture.ts |
-| PUT | `/api/mobile/routines/:kind` | router-unmounted | routes/mobile.ts |
+| PUT | `/api/mobile/routines/:kind` | native-tested | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-tested | routes/repositories.ts |
 

@@ -372,7 +372,7 @@ fn routine_matches_kind(job: &Value, kind: &str, user_id: &str) -> bool {
         && job.get("userId").and_then(Value::as_str) == Some(user_id)
 }
 
-fn iso_now() -> String {
+pub(crate) fn iso_now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 
@@ -637,17 +637,26 @@ async fn consent_pending(State(state): State<MobileRoutes>, request: Request) ->
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let pending = state
-        .consent
-        .list_pending()
-        .into_iter()
-        .filter(|entry| {
-            entry
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .is_some_and(|session| state.access.session(session, &user.id))
-        })
-        .collect::<Vec<_>>();
+    // The collaborators are synchronous and may wait on the database worker, so they run
+    // on the blocking pool and never stall the request runtime.
+    let user_id = user.id.clone();
+    let Ok(pending) = tokio::task::spawn_blocking(move || {
+        state
+            .consent
+            .list_pending()
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .is_some_and(|session| state.access.session(session, &user_id))
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    else {
+        return error(500, "Consent lookup failed");
+    };
     auth::response(200, json!({ "requests": pending }))
 }
 
@@ -660,10 +669,13 @@ async fn consent_approve(
         Ok(user) => user,
         Err(response) => return *response,
     };
-    if !state.access.consent_request(&id, &user.id) {
-        return error(404, CONSENT_NOT_FOUND);
-    }
-    if !state.consent.approve(&id, "click", "mobile.approve") {
+    let user_id = user.id.clone();
+    let decided = tokio::task::spawn_blocking(move || {
+        state.access.consent_request(&id, &user_id) && state.consent.approve(&id, "click", "mobile.approve")
+    })
+    .await
+    .unwrap_or(false);
+    if !decided {
         return error(404, CONSENT_NOT_FOUND);
     }
     auth::response(200, json!({ "ok": true }))
@@ -678,10 +690,13 @@ async fn consent_reject(
         Ok(user) => user,
         Err(response) => return *response,
     };
-    if !state.access.consent_request(&id, &user.id) {
-        return error(404, CONSENT_NOT_FOUND);
-    }
-    if !state.consent.reject(&id, "click", "mobile.reject") {
+    let user_id = user.id.clone();
+    let decided = tokio::task::spawn_blocking(move || {
+        state.access.consent_request(&id, &user_id) && state.consent.reject(&id, "click", "mobile.reject")
+    })
+    .await
+    .unwrap_or(false);
+    if !decided {
         return error(404, CONSENT_NOT_FOUND);
     }
     auth::response(200, json!({ "ok": true }))

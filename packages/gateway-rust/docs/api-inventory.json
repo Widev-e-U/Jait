@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 422,
     "mounted-fail-closed": 71,
-    "native-tested": 216,
+    "native-tested": 229,
     "missing": 85,
-    "router-unmounted": 40,
+    "router-unmounted": 27,
     "native-untested": 10,
-    "nativeTestedPct": 51.2,
+    "nativeTestedPct": 54.3,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -106,7 +106,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -772,7 +772,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -781,7 +781,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -790,7 +790,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -799,7 +799,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -808,7 +808,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -817,7 +817,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -2526,7 +2526,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -2535,7 +2535,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -2544,7 +2544,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -2553,7 +2553,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -2562,7 +2562,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
@@ -3704,7 +3704,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/mobile.rs"
     },
     {
