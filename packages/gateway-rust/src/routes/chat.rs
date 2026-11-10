@@ -211,6 +211,7 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/cancel", post(cancel_path))
             .route("/api/sessions/{id}/messages", get(messages))
             .route("/api/sessions/{id}/runtime", get(runtime))
+            .route("/api/sessions/{id}/loop", get(session_loop))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -741,6 +742,42 @@ async fn runtime(
         .get(&session)
         .is_some_and(|turn| turn.owner == user.id);
     response(200, json!({"running":running,"startedAt":Value::Null}))
+}
+async fn session_loop(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    let owner = user.id.clone();
+    let found = state
+        .auth
+        .with_database(move |db| {
+            let exists = SessionService::new(db)
+                .get(&session, Some(&owner))?
+                .is_some();
+            let current = if exists {
+                crate::services::chat_loops::ChatLoopService::new(db, Default::default())
+                    .get(&session, Some(&owner))
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
+            Ok((exists, current))
+        })
+        .await;
+    match found {
+        Ok((false, _)) => response(404, json!({"error":"NOT_FOUND"})),
+        Ok((true, current)) => response(200, json!({"loop": current})),
+        Err(_) => auth::internal_error(),
+    }
 }
 async fn messages(
     State(state): State<ChatRoutes>,

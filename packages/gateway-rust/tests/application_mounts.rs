@@ -3197,3 +3197,50 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn session_loop_is_null_for_owned_sessions_and_404_otherwise() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = session["id"].as_str().unwrap();
+    let anon = client
+        .get(format!("{base}/api/sessions/{id}/loop"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let body: serde_json::Value = client
+        .get(format!("{base}/api/sessions/{id}/loop"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(body["loop"].is_null());
+    let missing = client
+        .get(format!("{base}/api/sessions/nosuchsession/loop"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 424,
   "mounted-fail-closed": 96,
-  "native-tested": 266,
-  "missing": 59,
+  "native-tested": 267,
+  "missing": 58,
   "router-unmounted": 1,
   "native-untested": 2,
-  "nativeTestedPct": 62.7,
+  "nativeTestedPct": 63,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -171,7 +171,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/sessions` | native-tested | routes/sessions.ts |
 | GET | `/api/sessions/:id` | native-tested | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/events` | native-tested | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/loop` | missing | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/loop` | native-tested | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/messages` | native-tested | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | missing | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/plan` | missing | routes/chat.ts |

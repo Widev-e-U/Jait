@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 424,
     "mounted-fail-closed": 96,
-    "native-tested": 266,
-    "missing": 59,
+    "native-tested": 267,
+    "missing": 58,
     "router-unmounted": 1,
     "native-untested": 2,
-    "nativeTestedPct": 62.7,
+    "nativeTestedPct": 63,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1373,7 +1373,8 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
     },
     {
       "method": "GET",
