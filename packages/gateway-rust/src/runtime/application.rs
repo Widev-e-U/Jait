@@ -394,6 +394,7 @@ impl Application {
         if let Some(stt) = crate::voice::http::configured_from_env(&voice_config).await {
             voice = voice.with_transcription(Arc::new(stt));
         }
+        let assessments = super::channels_mount::assessment_registry().map_err(std::io::Error::other)?;
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -505,9 +506,17 @@ impl Application {
             // No preview port is wired yet, so owned sessions answer 503 instead of 404.
             .merge(crate::routes::preview::PreviewRoutes::new(auth.clone()).router())
             .merge(
-                super::channels_mount::network_routes(&auth)
+                super::channels_mount::network_routes(&auth, assessments.clone())
                     .map_err(std::io::Error::other)?
                     .router(),
+            )
+            .merge(
+                crate::routes::security_assessments::SecurityAssessmentRoutes {
+                    auth: auth.clone(),
+                    assessments,
+                    project_database: Some(auth.clone()),
+                }
+                .router(),
             )
             .merge(
                 crate::routes::plugins::PluginRoutes {

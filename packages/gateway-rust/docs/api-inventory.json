@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 422,
     "mounted-fail-closed": 71,
-    "native-tested": 229,
+    "native-tested": 234,
     "missing": 85,
-    "router-unmounted": 27,
+    "router-unmounted": 22,
     "native-untested": 10,
-    "nativeTestedPct": 54.3,
+    "nativeTestedPct": 55.5,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1269,7 +1269,7 @@
       "nodeFiles": [
         "routes/security-assessments.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/security_assessments.rs"
     },
     {
@@ -1278,7 +1278,7 @@
       "nodeFiles": [
         "routes/security-assessments.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/security_assessments.rs"
     },
     {
@@ -3221,7 +3221,7 @@
       "nodeFiles": [
         "routes/security-assessments.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/security_assessments.rs"
     },
     {
@@ -3230,7 +3230,7 @@
       "nodeFiles": [
         "routes/security-assessments.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/security_assessments.rs"
     },
     {
@@ -3293,7 +3293,7 @@
       "nodeFiles": [
         "routes/security-assessments.ts"
       ],
-      "status": "router-unmounted",
+      "status": "native-tested",
       "rustFile": "routes/security_assessments.rs"
     },
     {

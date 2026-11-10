@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 422,
   "mounted-fail-closed": 71,
-  "native-tested": 229,
+  "native-tested": 234,
   "missing": 85,
-  "router-unmounted": 27,
+  "router-unmounted": 22,
   "native-untested": 10,
-  "nativeTestedPct": 54.3,
+  "nativeTestedPct": 55.5,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -160,8 +160,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/screen-share/state` | mounted-fail-closed | routes/screen-share.ts |
 | GET | `/api/secrets` | native-tested | routes/secrets.ts |
 | GET | `/api/secrets/requests` | native-tested | routes/secrets.ts |
-| GET | `/api/security/assessments` | router-unmounted | routes/security-assessments.ts |
-| GET | `/api/security/assessments/:id` | router-unmounted | routes/security-assessments.ts |
+| GET | `/api/security/assessments` | native-tested | routes/security-assessments.ts |
+| GET | `/api/security/assessments/:id` | native-tested | routes/security-assessments.ts |
 | GET | `/api/security/checks/:id` | router-unmounted | routes/security-workbench.ts |
 | GET | `/api/security/checks/:id/report` | router-unmounted | routes/security-workbench.ts |
 | GET | `/api/security/engines` | router-unmounted | routes/security-workbench.ts |
@@ -382,15 +382,15 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/secrets` | native-tested | routes/secrets.ts |
 | POST | `/api/secrets/requests/:id/cancel` | native-tested | routes/secrets.ts |
 | POST | `/api/secrets/requests/:id/submit` | native-tested | routes/secrets.ts |
-| POST | `/api/security/assessments` | router-unmounted | routes/security-assessments.ts |
-| POST | `/api/security/assessments/:id/cancel` | router-unmounted | routes/security-assessments.ts |
+| POST | `/api/security/assessments` | native-tested | routes/security-assessments.ts |
+| POST | `/api/security/assessments/:id/cancel` | native-tested | routes/security-assessments.ts |
 | POST | `/api/security/checks` | router-unmounted | routes/security-workbench.ts |
 | POST | `/api/security/checks/:id/cancel` | router-unmounted | routes/security-workbench.ts |
 | POST | `/api/security/comparisons` | router-unmounted | routes/security-workbench.ts |
 | POST | `/api/security/findings/:id/decision` | router-unmounted | routes/security-workbench.ts |
 | POST | `/api/security/findings/:id/verify` | router-unmounted | routes/security-workbench.ts |
 | POST | `/api/security/monitors` | router-unmounted | routes/security-workbench.ts |
-| POST | `/api/security/scopes` | router-unmounted | routes/security-assessments.ts |
+| POST | `/api/security/scopes` | native-tested | routes/security-assessments.ts |
 | POST | `/api/sessions` | native-tested | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/approve` | missing | routes/chat.ts |
 | POST | `/api/sessions/:id/archive` | native-tested | routes/sessions.ts |

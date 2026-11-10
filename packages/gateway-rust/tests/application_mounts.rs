@@ -1895,3 +1895,43 @@ async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn security_assessments_require_auth_and_reject_unscoped_runs() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let list = format!("{base}/api/security/assessments");
+    assert_eq!(client.get(&list).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let ok = client.get(&list).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(ok.status(), 200, "{:?}", ok.text().await);
+    let no_scope = client
+        .post(&list)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(no_scope.status(), 400);
+    let filesystem = client
+        .post(format!("{base}/api/security/scopes"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"paths":["/etc"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(filesystem.status(), 400, "path scope needs an owned project session");
+    let unknown = client
+        .get(format!("{base}/api/security/assessments/nope"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unknown.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

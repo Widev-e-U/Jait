@@ -66,21 +66,25 @@ pub fn no_plugins() -> crate::routes::plugins::PluginManagerPort {
 /// Network routes on the canonical assessment registry and bounded Docker inventory.
 /// The local view is empty until a native platform view exists; scans still require
 /// an explicit owner-scoped assessment scope.
+pub fn assessment_registry() -> Result<crate::assessments::service::AssessmentRegistry, String> {
+    use crate::assessments::service::{AssessmentOptions, AssessmentRegistry};
+    let vantage = std::env::var("HOSTNAME")
+        .ok()
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "gateway".to_string());
+    Ok(AssessmentRegistry::new(AssessmentOptions::new(vantage)?))
+}
+
 pub fn network_routes(
     auth: &crate::routes::auth::AuthState,
+    registry: crate::assessments::service::AssessmentRegistry,
 ) -> Result<crate::routes::network::NetworkRoutes, String> {
     use crate::{
-        assessments::service::{AssessmentOptions, AssessmentRegistry},
         routes::network::{LocalNetworkSnapshot, LocalNetworkView, NetworkRoutes},
         services::network_resources::{
             DockerResourceInventory, LocalDockerRunner, SystemDockerHost,
         },
     };
-    let vantage = std::env::var("HOSTNAME")
-        .ok()
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "gateway".to_string());
-    let registry = AssessmentRegistry::new(AssessmentOptions::new(vantage)?);
     let local: LocalNetworkView = std::sync::Arc::new(|_| {
         Box::pin(async {
             Ok(LocalNetworkSnapshot {
