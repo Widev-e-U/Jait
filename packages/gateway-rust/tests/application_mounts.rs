@@ -3300,3 +3300,67 @@ async fn session_fork_creates_a_new_owned_branch() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn thread_stop_and_interrupt_respect_ownership_and_session_state() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/threads"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"providerId": "jait"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().unwrap();
+    for action in ["stop", "interrupt"] {
+        let anon = client
+            .post(format!("{base}/api/threads/{id}/{action}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401);
+        let missing = client
+            .post(format!("{base}/api/threads/nope/{action}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(missing.status(), 404);
+    }
+    // no provider session: interrupt is a conflict, stop records the interruption
+    let interrupt = client
+        .post(format!("{base}/api/threads/{id}/interrupt"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(interrupt.status(), 409);
+    let stopped = client
+        .post(format!("{base}/api/threads/{id}/stop"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stopped.status(), 200);
+    let fetched: serde_json::Value = client
+        .get(format!("{base}/api/threads/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(fetched["status"], "interrupted");
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

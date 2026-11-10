@@ -302,22 +302,34 @@ pub fn mark_error(connection: &Connection, id: &str, error: &str, now: &str) -> 
 /// can overwrite this state or an active worker can continue after it is saved.
 /// A turn-only interrupt has different semantics and must not call this helper:
 /// it retains the provider session and does not cancel queued deliveries.
-pub fn mark_interrupted(connection: &mut Connection, id: &str, now: &str) -> Result<bool> {
-    let transaction = connection.savepoint()?;
-    clear_recovery(&transaction, id)?;
-    let changed = transaction.execute(
-        "update agent_threads \
-            set status = 'interrupted', provider_session_id = null, updated_at = ?2 \
-          where id = ?1",
-        params![id, now],
-    )?;
-    transaction.execute(
-        "update team_room_deliveries set status = 'cancelled', error = ?2 \
-          where session_id = ?1 and status = 'queued'",
-        params![id, CANCELLED_DELIVERY_ERROR],
-    )?;
-    transaction.commit()?;
-    Ok(changed > 0)
+pub fn mark_interrupted(connection: &Connection, id: &str, now: &str) -> Result<bool> {
+    connection.execute_batch("SAVEPOINT mark_interrupted")?;
+    let result = (|| {
+        clear_recovery(connection, id)?;
+        let changed = connection.execute(
+            "update agent_threads \
+                set status = 'interrupted', provider_session_id = null, updated_at = ?2 \
+              where id = ?1",
+            params![id, now],
+        )?;
+        connection.execute(
+            "update team_room_deliveries set status = 'cancelled', error = ?2 \
+              where session_id = ?1 and status = 'queued'",
+            params![id, CANCELLED_DELIVERY_ERROR],
+        )?;
+        Ok(changed > 0)
+    })();
+    match result {
+        Ok(changed) => {
+            connection.execute_batch("RELEASE mark_interrupted")?;
+            Ok(changed)
+        }
+        Err(error) => {
+            let _ =
+                connection.execute_batch("ROLLBACK TO mark_interrupted; RELEASE mark_interrupted");
+            Err(error)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -406,7 +418,7 @@ mod tests {
     }
     #[test]
     fn interruption_cancels_only_queued_deliveries_for_the_thread() {
-        let mut connection = database();
+        let connection = database();
         insert_thread(&connection, "a", "running", Some("sess-a"));
         insert_thread(&connection, "b", "running", Some("sess-b"));
         connection
@@ -428,7 +440,7 @@ mod tests {
         ] {
             connection.execute("insert into team_room_deliveries (id, room_id, message_id, agent_id, session_id, status, error) values (?1, 'r', 'm', 'agent', ?2, ?3, 'old')", params![id, session, status]).unwrap();
         }
-        assert!(mark_interrupted(&mut connection, "a", "t1").unwrap());
+        assert!(mark_interrupted(&connection, "a", "t1").unwrap());
         assert!(get_recovery(&connection, "a").unwrap().is_none());
         let thread: (String, Option<String>, String) = connection
             .query_row(
@@ -462,7 +474,7 @@ mod tests {
 
     #[test]
     fn interruption_rolls_back_on_delivery_failure_and_nests() {
-        let mut connection = database();
+        let connection = database();
         insert_thread(&connection, "a", "running", Some("sess-a"));
         connection
             .execute(
@@ -471,7 +483,7 @@ mod tests {
             )
             .unwrap();
         connection.execute_batch("create trigger reject_cancel before update on team_room_deliveries begin select raise(abort, 'reject'); end; insert into team_room_deliveries values ('d', 'r', 'm', 'agent', 'a', 'queued', null);").unwrap();
-        assert!(mark_interrupted(&mut connection, "a", "t1").is_err());
+        assert!(mark_interrupted(&connection, "a", "t1").is_err());
         assert_eq!(
             get_thread(&connection, "a").unwrap().unwrap().status,
             "running"
@@ -480,7 +492,7 @@ mod tests {
         connection
             .execute_batch("drop trigger reject_cancel; begin")
             .unwrap();
-        assert!(mark_interrupted(&mut connection, "a", "t2").unwrap());
+        assert!(mark_interrupted(&connection, "a", "t2").unwrap());
         connection.execute_batch("rollback").unwrap();
         assert_eq!(
             get_thread(&connection, "a").unwrap().unwrap().status,

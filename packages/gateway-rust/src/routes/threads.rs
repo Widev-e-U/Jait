@@ -26,7 +26,7 @@ use axum::Router;
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde_json::{Map, Value, json};
@@ -88,6 +88,8 @@ impl ThreadRoutes {
                 "/api/threads/{id}",
                 get(get_thread).patch(patch_thread).delete(delete_thread),
             )
+            .route("/api/threads/{id}/stop", post(stop_thread))
+            .route("/api/threads/{id}/interrupt", post(interrupt_thread))
             .route("/api/threads/{id}/runtime", get(thread_runtime))
             .route("/api/threads/{id}/activities", get(thread_activities))
             .with_state(self)
@@ -886,6 +888,70 @@ async fn get_thread(
     match thread {
         Some(thread) => json_response(200, thread),
         None => error_response(404, "Thread not found"),
+    }
+}
+
+/// An owned thread with its provider session handle. Native provider sessions
+/// are not started by this gateway yet, so a recorded session cannot be
+/// stopped or interrupted here; those requests fail closed instead of
+/// pretending the provider was reached.
+async fn owned_session(
+    state: &ThreadRoutes,
+    id: String,
+    headers: &axum::http::HeaderMap,
+) -> Result<(String, Option<String>), Response> {
+    let user = auth::require_user(&state.auth, headers)
+        .await
+        .map_err(|response| *response)?;
+    let user_id = user.id.clone();
+    let lookup = id.clone();
+    let thread = run(state, move |conn| {
+        select_owned_thread(conn, &lookup, &user_id)
+    })
+    .await
+    .map_err(|response| *response)?
+    .ok_or_else(|| error_response(404, "Thread not found"))?;
+    let session = thread["providerSessionId"].as_str().map(str::to_owned);
+    Ok((id, session))
+}
+
+async fn stop_thread(
+    Path(id): Path<String>,
+    State(state): State<ThreadRoutes>,
+    request: Request,
+) -> Response {
+    let (id, session) = match owned_session(&state, id, &request.headers().clone()).await {
+        Ok(found) => found,
+        Err(response) => return response,
+    };
+    if session.is_some() {
+        return json_response(
+            409,
+            json!({"error":"STOP_FAILED","details":"Provider session control is unavailable in this gateway"}),
+        );
+    }
+    match run(&state, move |conn| {
+        crate::services::thread_recovery::mark_interrupted(conn, &id, &now_iso())
+    })
+    .await
+    {
+        Ok(_) => json_response(200, json!({"ok":true})),
+        Err(response) => *response,
+    }
+}
+
+async fn interrupt_thread(
+    Path(id): Path<String>,
+    State(state): State<ThreadRoutes>,
+    request: Request,
+) -> Response {
+    match owned_session(&state, id, &request.headers().clone()).await {
+        Err(response) => response,
+        Ok((_, None)) => error_response(409, "Thread has no active session"),
+        Ok((_, Some(_))) => error_response(
+            400,
+            "Provider session control is unavailable in this gateway",
+        ),
     }
 }
 

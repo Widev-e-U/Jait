@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 424,
     "mounted-fail-closed": 96,
-    "native-tested": 268,
-    "missing": 57,
+    "native-tested": 270,
+    "missing": 55,
     "router-unmounted": 1,
     "native-untested": 2,
-    "nativeTestedPct": 63.2,
+    "nativeTestedPct": 63.7,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -3551,7 +3551,8 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
     },
     {
       "method": "POST",
@@ -3591,7 +3592,8 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
     },
     {
       "method": "POST",
