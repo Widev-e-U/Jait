@@ -467,12 +467,22 @@ async fn register(State(state): State<MobileRoutes>, request: Request) -> Respon
     auth::response(200, json!({ "ok": true, "device": device }))
 }
 
-async fn heartbeat(State(state): State<MobileRoutes>, Path(device_id): Path<String>) -> Response {
+async fn heartbeat(
+    State(state): State<MobileRoutes>,
+    Path(device_id): Path<String>,
+    request: Request,
+) -> Response {
+    if let Err(response) = auth::require_user(&state.auth, request.headers()).await {
+        return *response;
+    }
     let (status, body) = heartbeat_body(state.devices.heartbeat(&device_id));
     auth::response(status, body)
 }
 
-async fn devices(State(state): State<MobileRoutes>) -> Response {
+async fn devices(State(state): State<MobileRoutes>, request: Request) -> Response {
+    if let Err(response) = auth::require_user(&state.auth, request.headers()).await {
+        return *response;
+    }
     auth::response(200, json!({ "devices": state.devices.list() }))
 }
 

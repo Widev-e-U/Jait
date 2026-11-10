@@ -1842,20 +1842,36 @@ async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
         .await
         .unwrap();
     assert_eq!(registered.status(), 200);
+    let anon_beat = client
+        .post(format!("{base}/api/mobile/devices/phone-1/heartbeat"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon_beat.status(), 401);
+    let anon_list = client
+        .get(format!("{base}/api/mobile/devices"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon_list.status(), 401);
+    let token = token(&client, &base).await;
     let beat = client
         .post(format!("{base}/api/mobile/devices/phone-1/heartbeat"))
+        .bearer_auth(&token)
         .send()
         .await
         .unwrap();
     assert_eq!(beat.status(), 200);
     let missing = client
         .post(format!("{base}/api/mobile/devices/ghost/heartbeat"))
+        .bearer_auth(&token)
         .send()
         .await
         .unwrap();
     assert_eq!(missing.status(), 404);
     let listed: serde_json::Value = client
         .get(format!("{base}/api/mobile/devices"))
+        .bearer_auth(&token)
         .send()
         .await
         .unwrap()
@@ -1870,7 +1886,6 @@ async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
         .await
         .unwrap();
     assert_eq!(anon.status(), 401);
-    let token = token(&client, &base).await;
     let pending: serde_json::Value = client
         .get(format!("{base}/api/mobile/consent/pending"))
         .bearer_auth(&token)
