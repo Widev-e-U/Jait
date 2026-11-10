@@ -528,7 +528,7 @@ it('highlights every open chat across projects and removes closed highlights', (
 
 it('offers a separate new chat control when the latest chat is open', () => {
   const project = createProject()
-  const projectRow = (markup: string) => markup.match(/class="group grid w-full grid-cols-\[auto,minmax\(0,1fr\),auto\][^"]*"/)?.[0] ?? ''
+  const projectRow = (markup: string) => markup.match(/class="group grid w-full grid-cols-\[auto,auto,minmax\(0,1fr\),auto\][^"]*"/)?.[0] ?? ''
   const render = (onNewChatInProject?: (projectId: string) => void) => renderToStaticMarkup(<SessionSelector
     projects={[project]} activeProjectId="project-1" activeSessionId="session-1"
     onSelectProject={() => {}} onNewChatInProject={onNewChatInProject} onCreateProject={() => {}}
