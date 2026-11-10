@@ -52,7 +52,7 @@ pub struct ThreadLifecycle {
 impl ThreadLifecycle {
     pub fn new() -> Result<Self, LifecycleError> {
         let owner = NEXT_OWNER
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| LifecycleError::SequenceExhausted)?;
         Ok(Self {
             owner,

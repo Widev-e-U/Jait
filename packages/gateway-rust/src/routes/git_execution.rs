@@ -784,7 +784,7 @@ const OUTPUT_BUDGET: usize = 2 * 1024 * 1024;
 fn charge_output(ctx: &Context, bytes: usize) -> io::Result<()> {
     let previous = ctx
         .output_bytes
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
             Some(used.saturating_add(bytes).min(OUTPUT_BUDGET))
         })
         .expect("budget update always succeeds");

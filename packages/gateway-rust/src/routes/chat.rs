@@ -601,7 +601,7 @@ fn event_sink(
                 let data = format!("data: {event}\n\n");
                 if data.len() > limits.event_bytes
                     || bytes
-                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |bytes| {
+                        .try_update(Ordering::AcqRel, Ordering::Acquire, |bytes| {
                             bytes
                                 .checked_add(data.len())
                                 .filter(|total| *total <= limits.stream_bytes - 1024)

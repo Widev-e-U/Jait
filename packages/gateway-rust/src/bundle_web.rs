@@ -111,7 +111,7 @@ pub fn publish_new_web(
         std::path::PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd())).join(&stage);
     let annotate =
         |error: io::Error| io::Error::new(error.kind(), format!("{error}; staging name: {stage}"));
-    match stage_web(source, &stage_path).map_err(&annotate)? {
+    match stage_web(source, &stage_path).map_err(annotate)? {
         BundleResult::MissingBuild => return Ok(BundleResult::MissingBuild),
         BundleResult::Staged => {}
     }

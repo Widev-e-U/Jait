@@ -237,7 +237,7 @@ impl RetentionBounds {
     fn progress(&self) -> bool {
         let _ = self
             .remaining
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
                 Some(n.saturating_sub(PROGRESS_INTERVAL as u64))
             });
         self.reason().is_some()

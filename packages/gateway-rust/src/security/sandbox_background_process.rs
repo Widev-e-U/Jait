@@ -63,7 +63,7 @@ impl Admission {
     }
     fn acquire(&self) -> Result<Permit, HostError> {
         self.0
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
                 (n < MAX_BACKGROUND_PROCESSES).then_some(n + 1)
             })
             .map(|_| Permit(self.0.clone()))
