@@ -125,7 +125,11 @@ pub struct ProjectRoutes {
     pub root: std::sync::Arc<PathBuf>,
     filesystem: crate::runtime::blocking::BlockingLane,
     scoped: crate::services::project_search::scoped::ScopedProjectSearch,
+    /// Original content (None = file did not exist) captured before the first write.
+    backups: Backups,
 }
+
+type Backups = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<PathBuf, Option<String>>>>;
 
 impl ProjectRoutes {
     pub fn new(auth: AuthState) -> Self {
@@ -141,6 +145,7 @@ impl ProjectRoutes {
             auth,
             root: std::sync::Arc::new(PathBuf::new()),
             filesystem,
+            backups: Backups::default(),
         }
     }
 
@@ -325,6 +330,7 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
             if let Some(parent) = target.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
+            record_backup(&state.backups, &target);
             match std::fs::write(&target, content.as_bytes()) {
                 Ok(()) => response(
                     200,
@@ -449,15 +455,125 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
         }
         ("search", "GET") => search_response(&state, &ctx, &uid, &query).await,
         ("reveal", "POST") => response(200, json!({ "ok": true, "revealed": false })),
-        // Surface-state dependent operations (backup/undo stack) require a
-        // live `FileSystemSurface`, which no router exposes yet.
-        ("backup", _) | ("undo", _) | ("undo-all", _) | ("apply-diff", _) => fail(
-            501,
-            "SURFACE_UNAVAILABLE",
-            "Filesystem surface is not registered in the native router",
-        ),
+        ("backup", "GET") => {
+            let Some(root) = ctx.root.clone() else {
+                return fail(404, "NO_PROJECT", "No project is open");
+            };
+            let relative = query.get("path").cloned().unwrap_or_default();
+            if relative.is_empty() {
+                return fail(400, "VALIDATION_ERROR", "path query parameter is required");
+            }
+            let Some(target) = confine(&root, &relative) else {
+                return fail(400, "INVALID_PATH", "Path is outside the project root");
+            };
+            let backup = state.backups.lock().unwrap().get(&target).cloned();
+            let Some(original) = backup else {
+                return fail(404, "NO_BACKUP", "No backup found for this file");
+            };
+            let current = std::fs::read_to_string(&target).unwrap_or_default();
+            response(
+                200,
+                json!({
+                    "path": relative,
+                    "originalContent": original,
+                    "currentContent": current,
+                    "hasBackup": true,
+                }),
+            )
+        }
+        ("undo", "POST") => {
+            let Some(root) = ctx.root.clone() else {
+                return fail(404, "NO_PROJECT", "No project is open");
+            };
+            let relative = js_text(body.get("path")).unwrap_or_default();
+            if relative.is_empty() {
+                return fail(400, "VALIDATION_ERROR", "path is required");
+            }
+            let Some(target) = confine(&root, &relative) else {
+                return fail(400, "INVALID_PATH", "Path is outside the project root");
+            };
+            match restore_backup(&state.backups, &target) {
+                Ok(true) => response(200, json!({ "ok": true, "path": relative })),
+                Ok(false) => fail(404, "NO_BACKUP", "No backup found for this file"),
+                Err(_) => fail(500, "UNDO_FAILED", "Failed to undo file change"),
+            }
+        }
+        ("undo-all", "POST") => {
+            let Some(root) = ctx.root.clone() else {
+                return fail(404, "NO_PROJECT", "No project is open");
+            };
+            let paths: Vec<String> = body
+                .get("paths")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if paths.is_empty() {
+                return fail(400, "VALIDATION_ERROR", "paths array is required");
+            }
+            let results: Vec<Value> = paths
+                .iter()
+                .map(|p| {
+                    let restored = confine(&root, p)
+                        .and_then(|t| restore_backup(&state.backups, &t).ok())
+                        .unwrap_or(false);
+                    json!({ "path": p, "restored": restored })
+                })
+                .collect();
+            response(200, json!({ "ok": true, "results": results }))
+        }
+        ("apply-diff", "POST") => {
+            let Some(root) = ctx.root.clone() else {
+                return fail(404, "NO_PROJECT", "No project is open");
+            };
+            let relative = js_text(body.get("path")).unwrap_or_default();
+            if relative.is_empty() {
+                return fail(400, "VALIDATION_ERROR", "path is required");
+            }
+            let Some(target) = confine(&root, &relative) else {
+                return fail(400, "VALIDATION_ERROR", "Path is outside the project root");
+            };
+            if let Some(content) = body.get("content").and_then(Value::as_str) {
+                record_backup(&state.backups, &target);
+                if let Some(parent) = target.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::fs::write(&target, content.as_bytes()).is_err() {
+                    return fail(500, "APPLY_FAILED", "Failed to apply diff");
+                }
+            }
+            state.backups.lock().unwrap().remove(&target);
+            response(200, json!({ "ok": true, "path": relative }))
+        }
         (_, _) => fail(405, "METHOD_NOT_ALLOWED", "Method not allowed"),
     }
+}
+
+/// Keeps the first pre-modification state of `target` (None when it did not exist).
+fn record_backup(backups: &Backups, target: &Path) {
+    let mut map = backups.lock().unwrap();
+    if !map.contains_key(target) {
+        map.insert(target.to_path_buf(), std::fs::read_to_string(target).ok());
+    }
+}
+
+/// Restores `target` from its backup; Ok(false) when none exists.
+fn restore_backup(backups: &Backups, target: &Path) -> std::io::Result<bool> {
+    let Some(original) = backups.lock().unwrap().get(target).cloned() else {
+        return Ok(false);
+    };
+    match original {
+        Some(content) => std::fs::write(target, content)?,
+        None => match std::fs::remove_file(target) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => {}
+        },
+    }
+    backups.lock().unwrap().remove(target);
+    Ok(true)
 }
 
 /// Resolves the project for this request and its effective root.

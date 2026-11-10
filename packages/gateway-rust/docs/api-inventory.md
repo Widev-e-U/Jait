@@ -6,10 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 424,
   "mounted-fail-closed": 96,
-  "native-tested": 264,
-  "missing": 63,
+  "native-tested": 266,
+  "missing": 59,
   "router-unmounted": 1,
-  "nativeTestedPct": 62.3,
+  "native-untested": 2,
+  "nativeTestedPct": 62.7,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -124,7 +125,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/preview/logs/:sessionId` | mounted-fail-closed | routes/preview.ts |
 | GET | `/api/preview/screenshot/:sessionId` | mounted-fail-closed | routes/preview.ts |
 | GET | `/api/preview/session/:sessionId` | mounted-fail-closed | routes/preview.ts |
-| GET | `/api/project/backup` | missing | routes/project.ts |
+| GET | `/api/project/backup` | native-tested | routes/project.ts |
 | GET | `/api/project/download` | missing | routes/project.ts |
 | GET | `/api/project/info` | native-tested | routes/project.ts |
 | GET | `/api/project/list` | native-tested | routes/project.ts |
@@ -329,7 +330,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/preview/share` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/preview/start` | mounted-fail-closed | routes/preview.ts |
 | POST | `/api/preview/stop` | mounted-fail-closed | routes/preview.ts |
-| POST | `/api/project/apply-diff` | missing | routes/project.ts |
+| POST | `/api/project/apply-diff` | native-tested | routes/project.ts |
 | POST | `/api/project/create-directory` | native-tested | routes/project.ts |
 | POST | `/api/project/create-file` | native-tested | routes/project.ts |
 | POST | `/api/project/delete` | native-tested | routes/project.ts |
@@ -337,8 +338,8 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/project/open` | native-tested | routes/project.ts |
 | POST | `/api/project/rename` | native-tested | routes/project.ts |
 | POST | `/api/project/reveal` | native-tested | routes/project.ts |
-| POST | `/api/project/undo` | missing | routes/project.ts |
-| POST | `/api/project/undo-all` | missing | routes/project.ts |
+| POST | `/api/project/undo` | native-untested | routes/project.ts |
+| POST | `/api/project/undo-all` | native-untested | routes/project.ts |
 | POST | `/api/project/write` | native-tested | routes/project.ts |
 | POST | `/api/projects` | native-tested | routes/projects.ts |
 | POST | `/api/projects/:id/move` | native-tested | routes/projects.ts |

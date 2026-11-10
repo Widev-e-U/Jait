@@ -3073,3 +3073,127 @@ async fn session_runtime_reports_idle_for_owned_sessions_only() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let root = dir.join("proj-undo");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("a.txt"), "orig").unwrap();
+    let token = token(&client, &base).await;
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "Undo", "rootPath": root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().expect("project id").to_owned();
+    let post = |route: &str, mut body: serde_json::Value| {
+        body["projectId"] = serde_json::json!(id);
+        client
+            .post(format!("{base}/api/project/{route}"))
+            .bearer_auth(&token)
+            .json(&body)
+    };
+
+    let none = post("undo", serde_json::json!({"path": "a.txt"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(none.status(), 404, "no backup before any write");
+
+    for content in ["first", "second"] {
+        post(
+            "write",
+            serde_json::json!({"path": "a.txt", "content": content}),
+        )
+        .send()
+        .await
+        .unwrap();
+    }
+    post(
+        "write",
+        serde_json::json!({"path": "new.txt", "content": "n"}),
+    )
+    .send()
+    .await
+    .unwrap();
+    let backup: serde_json::Value = client
+        .get(format!(
+            "{base}/api/project/backup?projectId={id}&path=a.txt"
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        backup["originalContent"], "orig",
+        "only the first version is kept"
+    );
+    assert_eq!(backup["currentContent"], "second");
+
+    let undone: serde_json::Value = post(
+        "undo-all",
+        serde_json::json!({"paths": ["a.txt", "new.txt", "../escape.txt"]}),
+    )
+    .send()
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(undone["results"][0]["restored"], true);
+    assert_eq!(undone["results"][1]["restored"], true);
+    assert_eq!(undone["results"][2]["restored"], false);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "orig");
+    assert!(
+        !root.join("new.txt").exists(),
+        "new file is removed on undo"
+    );
+
+    let escape = post(
+        "apply-diff",
+        serde_json::json!({"path": "../escape.txt", "content": "x"}),
+    )
+    .send()
+    .await
+    .unwrap();
+    assert_eq!(escape.status(), 400);
+    assert!(!dir.join("escape.txt").exists());
+
+    let applied = post(
+        "apply-diff",
+        serde_json::json!({"path": "a.txt", "content": "merged"}),
+    )
+    .send()
+    .await
+    .unwrap();
+    assert_eq!(applied.status(), 200);
+    assert_eq!(
+        std::fs::read_to_string(root.join("a.txt")).unwrap(),
+        "merged"
+    );
+    let after = post("undo", serde_json::json!({"path": "a.txt"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(after.status(), 404, "apply-diff clears the backup");
+
+    let _ = stop.send(());
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
