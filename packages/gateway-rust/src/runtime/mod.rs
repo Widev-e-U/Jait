@@ -10,6 +10,8 @@ pub mod application;
 
 pub mod skills_mount;
 
+pub mod tools_mount;
+
 pub mod channels_mount;
 pub mod chat_acp;
 pub mod chat_settings;

@@ -5,6 +5,7 @@
 //!   PUT    /api/persona-agents/{id}
 //!   DELETE /api/persona-agents/{id}
 //!   GET    /api/threads
+//!   POST   /api/threads
 //!   GET    /api/threads/{id}
 //!   PATCH  /api/threads/{id}
 //!   DELETE /api/threads/{id}
@@ -12,7 +13,6 @@
 //!   GET    /api/threads/{id}/activities
 //!
 //! DEFERRED (see module docs at the bottom of this file for reasons):
-//!   POST /api/threads                                   (threads.ts:1039-1101)
 //!   provider turn-execution / streaming / attachment / PR handlers
 //!                                                       (threads.ts:1248-2365)
 //!
@@ -83,7 +83,7 @@ impl ThreadRoutes {
                 "/api/persona-agents/{id}",
                 put(save_persona_agent).delete(delete_persona_agent),
             )
-            .route("/api/threads", get(list_threads))
+            .route("/api/threads", get(list_threads).post(create_thread))
             .route(
                 "/api/threads/{id}",
                 get(get_thread).patch(patch_thread).delete(delete_thread),
@@ -704,6 +704,170 @@ async fn list_threads(State(state): State<ThreadRoutes>, request: Request) -> Re
     json_response(200, json!({ "threads": threads, "hasMore": has_more }))
 }
 
+/// `POST /api/threads`. The provider is the requested one, else the one chosen on the origin chat;
+/// it is never guessed. A thread may only inherit from, or attach to, a session the caller owns.
+async fn create_thread(State(state): State<ThreadRoutes>, request: Request) -> Response {
+    let headers = request.headers().clone();
+    let user = match auth::require_user(&state.auth, &headers).await {
+        Ok(user) => user,
+        Err(response) => return *response,
+    };
+    let body = match json_body(request).await {
+        Ok(body) => body,
+        Err(response) => return *response,
+    };
+    let body = body.as_object().cloned().unwrap_or_default();
+    let user_id = user.id.clone();
+    let text = |key: &str| body.get(key).and_then(Value::as_str).map(str::to_owned);
+
+    let persona = match body.get("personaAgentId") {
+        None => None,
+        Some(Value::String(id)) => {
+            let (id, owner) = (id.clone(), user_id.clone());
+            let lookup = id.clone();
+            let found = run(&state, move |conn| {
+                conn.query_row(
+                    "SELECT 1 FROM persona_agents WHERE id = ?1 AND user_id = ?2",
+                    params![&lookup, &owner],
+                    |_| Ok(()),
+                )
+                .optional()
+            })
+            .await;
+            match found {
+                Ok(Some(())) => Some(id),
+                Ok(None) => return error_response(400, "Agent profile not found"),
+                Err(response) => return *response,
+            }
+        }
+        Some(_) => return error_response(400, "Agent profile not found"),
+    };
+
+    let session_id = text("sessionId").filter(|s| !s.trim().is_empty());
+    let defaults = match session_id.clone() {
+        None => crate::services::thread_defaults::ThreadSelectionDefaults::default(),
+        Some(session) => {
+            let owner = user_id.clone();
+            let loaded = run(&state, move |conn| {
+                let owned = crate::services::sessions::SessionService::new(conn)
+                    .get(&session, Some(&owner))
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?
+                    .is_some();
+                if !owned {
+                    return Ok(None);
+                }
+                let state = crate::services::json_state::SessionStateService::new(conn);
+                crate::services::thread_defaults::resolve_thread_selection_defaults(
+                    Some(&owner),
+                    Some(&session),
+                    None,
+                    Some(&state),
+                )
+                .map(Some)
+            })
+            .await;
+            match loaded {
+                Ok(Some(defaults)) => defaults,
+                Ok(None) => return error_response(404, "Session not found"),
+                Err(response) => return *response,
+            }
+        }
+    };
+
+    let requested = text("providerId")
+        .map(|p| p.trim().to_owned())
+        .filter(|p| !p.is_empty());
+    let Some(provider_id) = requested.or(defaults.provider_id.clone()) else {
+        return error_response(400, "No selected provider is configured for this user.");
+    };
+    if let Some(check) = state.provider_check.as_ref()
+        && !check(&user_id, &provider_id)
+    {
+        return error_response(
+            400,
+            &format!("Provider '{provider_id}' is not available for this user"),
+        );
+    }
+
+    let reasoning = match body.get("reasoningEffort") {
+        Some(Value::Null) => None,
+        Some(value) => crate::services::thread_defaults::normalize_reasoning_effort(value)
+            .or(defaults.reasoning_effort.clone()),
+        None => defaults.reasoning_effort.clone(),
+    };
+    let runtime_mode = match body.get("runtimeMode").and_then(Value::as_str) {
+        Some("supervised") => "supervised".to_owned(),
+        Some("full-access") => "full-access".to_owned(),
+        _ => defaults
+            .runtime_mode
+            .clone()
+            .unwrap_or_else(|| "full-access".into()),
+    };
+    let kind = if body.get("kind").and_then(Value::as_str) == Some("delegation") {
+        "delegation"
+    } else {
+        "delivery"
+    };
+    let skill_ids = match body.get("skillIds") {
+        Some(Value::Array(items)) => {
+            let mut seen = Vec::<String>::new();
+            for item in items.iter().filter_map(Value::as_str) {
+                let item = item.trim();
+                if !item.is_empty() && !seen.iter().any(|s| s == item) {
+                    seen.push(item.to_owned());
+                }
+            }
+            SqlValue::Text(serde_json::to_string(&seen).unwrap_or_else(|_| "[]".into()))
+        }
+        _ => SqlValue::Null,
+    };
+    let pr_base = match body.get("prBaseBranch") {
+        Some(Value::String(branch)) => SqlValue::Text(branch.clone()),
+        _ => SqlValue::Null,
+    };
+    let opt = |value: Option<String>| value.map_or(SqlValue::Null, SqlValue::Text);
+    let id = crate::db::identifiers::uuidv7().to_string();
+    let now = now_iso();
+    let row = vec![
+        SqlValue::Text(id.clone()),
+        SqlValue::Text(user_id.clone()),
+        opt(session_id),
+        opt(persona),
+        SqlValue::Text(text("title").unwrap_or_else(|| "New Thread".into())),
+        SqlValue::Text(provider_id),
+        opt(text("model").or(defaults.model.clone())),
+        opt(reasoning),
+        SqlValue::Text(runtime_mode),
+        SqlValue::Text(kind.into()),
+        skill_ids,
+        opt(text("workingDirectory")),
+        opt(text("branch")),
+        pr_base,
+        SqlValue::Text(now.clone()),
+        SqlValue::Text(now),
+    ];
+    let lookup = id.clone();
+    let created = run(&state, move |conn| {
+        conn.execute(
+            "INSERT INTO agent_threads (id, user_id, session_id, persona_agent_id, title, provider_id, \
+             model, reasoning_effort, runtime_mode, kind, skill_ids, working_directory, branch, \
+             pr_base_branch, status, created_at, updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'idle',?15,?16)",
+            params_from_iter(row.iter()),
+        )?;
+        conn.query_row(
+            &format!("SELECT {THREAD_COLUMNS} FROM agent_threads WHERE id = ?1"),
+            params![&lookup],
+            thread_json,
+        )
+    })
+    .await;
+    match created {
+        Ok(thread) => json_response(201, thread),
+        Err(response) => *response,
+    }
+}
+
 async fn get_thread(
     Path(id): Path<String>,
     State(state): State<ThreadRoutes>,
@@ -1090,11 +1254,9 @@ async fn thread_activities(
 // handlers are deferred because they depend on native services that do not
 // exist yet in `gateway-rust`:
 //
-// * `POST /api/threads` (threads.ts:1039-1101) — create thread. Requires the
-//   provider/model bootstrap resolution (`providerRegistry.getForUser()` /
-//   default-model selection) and `ThreadService.create`'s initial activity +
-//   session rows; no native provider bootstrap path exists, and
-//   `ThreadRoutes::with_provider_check` is the injection point prepared for it.
+// * `POST /api/threads` is ported (DB insert, provider visibility via
+//   `ThreadRoutes::with_provider_check`); it is stricter than Node by requiring the
+//   session to be owned by the caller.
 // * Provider turn execution / streaming / cancellation handlers
 //   (threads.ts:1248-2365) — these read the live websocket session registry and
 //   `providerRegistry` subscription objects, which have no native counterpart.

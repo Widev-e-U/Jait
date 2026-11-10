@@ -6,11 +6,11 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 {
   "httpTotal": 424,
   "mounted-fail-closed": 92,
-  "native-tested": 234,
-  "missing": 87,
+  "native-tested": 238,
+  "missing": 83,
   "native-untested": 10,
   "router-unmounted": 1,
-  "nativeTestedPct": 55.2,
+  "nativeTestedPct": 56.1,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -186,7 +186,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/store/packages` | native-tested | routes/store.ts |
 | GET | `/api/store/skills` | native-tested | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-tested | routes/store.ts |
-| GET | `/api/surfaces` | missing | routes/terminals.ts |
+| GET | `/api/surfaces` | native-tested | routes/terminals.ts |
 | GET | `/api/team-rooms` | missing | routes/team-chat.ts |
 | GET | `/api/team-rooms/:id` | missing | routes/team-chat.ts |
 | GET | `/api/terminals` | native-tested | routes/terminals.ts |
@@ -196,7 +196,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | GET | `/api/threads/:id` | native-tested | routes/threads.ts |
 | GET | `/api/threads/:id/activities` | native-tested | routes/threads.ts |
 | GET | `/api/threads/:id/runtime` | native-tested | routes/threads.ts |
-| GET | `/api/tools` | missing | routes/terminals.ts |
+| GET | `/api/tools` | native-tested | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-tested | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-tested | routes/sessions.ts |
 | GET | `/api/trust` | native-tested | routes/consent.ts |
@@ -414,7 +414,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/terminals/:id/execute` | native-tested | routes/terminals.ts |
 | POST | `/api/terminals/:id/resize` | native-tested | routes/terminals.ts |
 | POST | `/api/terminals/:id/write` | native-tested | routes/terminals.ts |
-| POST | `/api/threads` | missing | routes/threads.ts |
+| POST | `/api/threads` | native-tested | routes/threads.ts |
 | POST | `/api/threads/:id/approve` | missing | routes/threads.ts |
 | POST | `/api/threads/:id/create-pr` | missing | routes/threads.ts |
 | POST | `/api/threads/:id/interrupt` | missing | routes/threads.ts |
@@ -423,7 +423,7 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/threads/:id/start` | missing | routes/threads.ts |
 | POST | `/api/threads/:id/steer` | missing | routes/threads.ts |
 | POST | `/api/threads/:id/stop` | missing | routes/threads.ts |
-| POST | `/api/tools/execute` | missing | routes/terminals.ts |
+| POST | `/api/tools/execute` | native-tested | routes/terminals.ts |
 | POST | `/api/trust/levels/:actionType/reset` | native-tested | routes/trust.ts |
 | POST | `/api/update/apply` | native-tested | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-tested | routes/user-questions.ts |

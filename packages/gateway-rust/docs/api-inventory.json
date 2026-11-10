@@ -2,11 +2,11 @@
   "summary": {
     "httpTotal": 424,
     "mounted-fail-closed": 92,
-    "native-tested": 234,
-    "missing": 87,
+    "native-tested": 238,
+    "missing": 83,
     "native-untested": 10,
     "router-unmounted": 1,
-    "nativeTestedPct": 55.2,
+    "nativeTestedPct": 56.1,
     "wsTotal": 35,
     "wsMissing": 27,
     "rustOnlyRoutes": 12
@@ -1495,7 +1495,8 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
     },
     {
       "method": "GET",
@@ -1582,7 +1583,8 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "runtime/tools_mount.rs"
     },
     {
       "method": "GET",
@@ -3498,7 +3500,8 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
     },
     {
       "method": "POST",
@@ -3570,7 +3573,8 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "missing"
+      "status": "native-tested",
+      "rustFile": "runtime/tools_mount.rs"
     },
     {
       "method": "POST",

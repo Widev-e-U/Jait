@@ -170,6 +170,22 @@ fn execute_port(tool: Rc<FileTool<Ctx>>) -> ExecutePort<RegistryAuthority> {
     })
 }
 
+/// Full definitions of the tools the gateway can execute today (the same set `project_tools` mounts).
+pub fn project_tool_definitions() -> Result<Vec<Value>, String> {
+    let read = metadata("read")
+        .ok_or("file.read definition missing")?
+        .clone();
+    let write = metadata("write")
+        .ok_or("file.write definition missing")?
+        .clone();
+    let terminal = TerminalTools::<Ctx>::metadata()
+        .as_array()
+        .and_then(|a| a.iter().find(|e| e["name"] == "terminal.run"))
+        .ok_or("terminal.run definition missing")?
+        .clone();
+    Ok(vec![read, write, terminal])
+}
+
 /// Tool definitions offered to the model, and the consent executor that runs them.
 pub fn project_tools(
     user_id: &str,

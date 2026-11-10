@@ -222,6 +222,7 @@ impl TerminalRoutes {
         Router::new()
             .route("/api/terminals", get(list_terminals).post(create_terminal))
             .route("/api/terminals/shells", get(terminal_shells))
+            .route("/api/surfaces", get(list_surfaces))
             .route(
                 "/api/terminals/{id}",
                 get(get_terminal).delete(delete_terminal),
@@ -377,6 +378,30 @@ async fn list_terminals(
         }
     }
     auth::response(200, json!({ "terminals": terminals }))
+}
+
+/// Every surface the caller owns, of any kind, plus the kinds the registry can start.
+async fn list_surfaces(
+    State(state): State<TerminalRoutes>,
+    request: Request,
+) -> axum::response::Response {
+    let user = match authorize(&state, request.headers()).await {
+        Ok(user) => user,
+        Err(response) => return response,
+    };
+    let mut surfaces = Vec::new();
+    for (surface, owner) in state.registry.list_with_owners() {
+        if owner.as_deref() != Some(user.id.as_str()) {
+            continue;
+        }
+        if let Ok(snapshot) = surface.snapshot() {
+            surfaces.push(snapshot_body(snapshot));
+        }
+    }
+    auth::response(
+        200,
+        json!({ "surfaces": surfaces, "registeredTypes": state.registry.registered_types() }),
+    )
 }
 
 async fn terminal_shells(

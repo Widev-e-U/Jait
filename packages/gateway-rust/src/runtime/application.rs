@@ -401,9 +401,22 @@ impl Application {
             .merge(auth.clone().router())
             .merge(sessions.router())
             .merge(terminals.router())
+            .merge(super::tools_mount::tools_routes(
+                &auth,
+                consent.clone(),
+                config.project_root.clone(),
+            ))
             .merge(projects.router())
             .merge(crate::routes::projects::ProjectCollectionRoutes::new(auth.clone()).router())
-            .merge(ThreadRoutes::new(auth.clone()).router())
+            .merge(
+                ThreadRoutes::with_provider_check(auth.clone(), {
+                    let registry = provider_registry.clone();
+                    Arc::new(move |user: &str, provider: &str| {
+                        registry.is_visible_to(provider, user)
+                    })
+                })
+                .router(),
+            )
             .merge(ReminderRoutes::new(auth.clone()).router())
             .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
             .merge(AssistantProfileRoutes { auth: auth.clone() }.router())

@@ -122,6 +122,82 @@ async fn threads_and_reminders_are_served_and_authenticated() {
 }
 
 #[tokio::test]
+async fn thread_create_needs_a_visible_provider_and_an_owned_session() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/threads");
+    let anon = client
+        .post(&url)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let post = |body: serde_json::Value| {
+        let (client, url, token) = (client.clone(), url.clone(), token.clone());
+        async move {
+            client
+                .post(url)
+                .bearer_auth(token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap()
+        }
+    };
+    // no provider requested and none chosen on a chat: never guessed
+    assert_eq!(post(serde_json::json!({})).await.status(), 400);
+    assert_eq!(
+        post(serde_json::json!({"providerId": "no-such-provider"}))
+            .await
+            .status(),
+        400
+    );
+    assert_eq!(
+        post(serde_json::json!({"providerId": "jait", "sessionId": "not-mine"}))
+            .await
+            .status(),
+        404
+    );
+    assert_eq!(
+        post(serde_json::json!({"providerId": "jait", "personaAgentId": "missing"}))
+            .await
+            .status(),
+        400
+    );
+    let created = post(serde_json::json!({
+        "providerId": "jait", "title": "T", "skillIds": [" a ", "a", "b"], "runtimeMode": "supervised"
+    }))
+    .await;
+    assert_eq!(created.status(), 201);
+    let thread: serde_json::Value = created.json().await.unwrap();
+    assert_eq!(thread["status"], "idle");
+    assert_eq!(thread["providerId"], "jait");
+    assert_eq!(thread["runtimeMode"], "supervised");
+    assert_eq!(thread["skillIds"], serde_json::json!(["a", "b"]));
+    let fetched: serde_json::Value = client
+        .get(format!("{url}/{}", thread["id"].as_str().unwrap()))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(fetched["title"], "T");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn filesystem_and_secrets_are_served_and_authenticated() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
@@ -1591,6 +1667,154 @@ async fn trust_levels_are_authenticated_and_listed() {
     assert_eq!(ok.status(), 200);
     let body: serde_json::Value = ok.json().await.unwrap();
     assert!(body["levels"].is_array(), "{body}");
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn tools_list_and_execute_need_login_and_an_owned_session() {
+    let (base, stop, task, dir) = start_seeded(false, |d| {
+        std::fs::write(d.join("notes.txt"), "tool-marker-7").unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    assert_eq!(
+        client
+            .get(format!("{base}/api/tools"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(
+        client
+            .post(format!("{base}/api/tools/execute"))
+            .json(&serde_json::json!({"tool": "file.read"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let token = token(&client, &base).await;
+    let listed: serde_json::Value = client
+        .get(format!("{base}/api/tools"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let names: Vec<&str> = listed["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|t| t["name"].as_str())
+        .collect();
+    assert!(
+        names.contains(&"file.read") && names.contains(&"terminal.run"),
+        "{listed}"
+    );
+    let exec = |body: serde_json::Value| {
+        let (client, base, token) = (client.clone(), base.clone(), token.clone());
+        async move {
+            client
+                .post(format!("{base}/api/tools/execute"))
+                .bearer_auth(token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap()
+        }
+    };
+    assert_eq!(exec(serde_json::json!({})).await.status(), 400);
+    assert_eq!(
+        exec(serde_json::json!({"tool": "file.read"}))
+            .await
+            .status(),
+        400
+    );
+    assert_eq!(
+        exec(serde_json::json!({"tool": "file.read", "sessionId": "nope"}))
+            .await
+            .status(),
+        404
+    );
+    assert_eq!(
+        exec(serde_json::json!({"tool": "file.read", "sessionId": "x", "nodeId": "other"}))
+            .await
+            .status(),
+        503
+    );
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let ok = exec(serde_json::json!({
+        "tool": "file.read", "sessionId": session["id"], "input": {"path": "notes.txt"}
+    }))
+    .await;
+    assert_eq!(ok.status(), 200);
+    let body: serde_json::Value = ok.json().await.unwrap();
+    assert!(body.to_string().contains("tool-marker-7"), "{body}");
+    let escape = exec(serde_json::json!({
+        "tool": "file.read", "sessionId": session["id"], "input": {"path": "../../etc/passwd"}
+    }))
+    .await;
+    let escape: serde_json::Value = escape.json().await.unwrap();
+    assert_eq!(escape["ok"], false, "{escape}");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn surfaces_list_is_authenticated_and_owner_scoped() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client
+        .get(format!("{base}/api/surfaces"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let made = client
+        .post(format!("{base}/api/terminals"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    let made_status = made.status();
+    let ok = client
+        .get(format!("{base}/api/surfaces"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), 200);
+    let body: serde_json::Value = ok.json().await.unwrap();
+    assert!(body["surfaces"].is_array(), "{body}");
+    assert!(body["registeredTypes"].is_array(), "{body}");
+    if made_status.is_success() {
+        assert!(!body["surfaces"].as_array().unwrap().is_empty(), "{body}");
+    }
     drop(stop);
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
