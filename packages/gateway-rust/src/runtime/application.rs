@@ -612,6 +612,7 @@ impl Application {
             )
             .merge(
                 GitRoutes::new(auth.clone())
+                    .with_authority(super::git_mount::git_authority(&auth))
                     .with_user_secrets(Some(crate::services::user_secrets::UserSecretService::new(
                         &secrets_key,
                     )))

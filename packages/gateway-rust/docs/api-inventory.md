@@ -5,12 +5,12 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 ```json
 {
   "httpTotal": 424,
-  "mounted-fail-closed": 92,
-  "native-tested": 251,
+  "mounted-fail-closed": 96,
+  "native-tested": 254,
   "missing": 70,
-  "native-untested": 10,
+  "native-untested": 3,
   "router-unmounted": 1,
-  "nativeTestedPct": 59.2,
+  "nativeTestedPct": 59.9,
   "wsTotal": 35,
   "wsMissing": 27,
   "rustOnlyRoutes": 12
@@ -272,29 +272,29 @@ Heuristic: "tested" means the route prefix appears in a Rust test or contract te
 | POST | `/api/git/branches` | native-tested | routes/git.ts |
 | POST | `/api/git/checkout` | native-tested | routes/git.ts |
 | POST | `/api/git/create-branch` | native-tested | routes/git.ts |
-| POST | `/api/git/create-worktree` | native-tested | routes/git.ts |
+| POST | `/api/git/create-worktree` | mounted-fail-closed | routes/git.ts |
 | POST | `/api/git/diff` | native-tested | routes/git.ts |
-| POST | `/api/git/diff-stats` | native-untested | routes/git.ts |
-| POST | `/api/git/discard` | native-untested | routes/git.ts |
-| POST | `/api/git/fetch` | native-tested | routes/git.ts |
-| POST | `/api/git/file-diffs` | native-untested | routes/git.ts |
+| POST | `/api/git/diff-stats` | native-tested | routes/git.ts |
+| POST | `/api/git/discard` | native-tested | routes/git.ts |
+| POST | `/api/git/fetch` | mounted-fail-closed | routes/git.ts |
+| POST | `/api/git/file-diffs` | native-tested | routes/git.ts |
 | POST | `/api/git/forge-auth` | missing | routes/git.ts |
 | POST | `/api/git/forge-pr-checks` | missing | routes/git.ts |
 | POST | `/api/git/forge-status` | missing | routes/git.ts |
 | POST | `/api/git/generate-commit-message` | missing | routes/git.ts |
 | POST | `/api/git/gh-auth` | missing | routes/git.ts |
 | POST | `/api/git/gh-status` | missing | routes/git.ts |
-| POST | `/api/git/identity` | native-untested | routes/git.ts |
+| POST | `/api/git/identity` | native-tested | routes/git.ts |
 | POST | `/api/git/init` | native-tested | routes/git.ts |
 | POST | `/api/git/pr-checks` | missing | routes/git.ts |
-| POST | `/api/git/pull` | native-tested | routes/git.ts |
-| POST | `/api/git/remove-worktree` | native-untested | routes/git.ts |
+| POST | `/api/git/pull` | mounted-fail-closed | routes/git.ts |
+| POST | `/api/git/remove-worktree` | mounted-fail-closed | routes/git.ts |
 | POST | `/api/git/run-commit-flow` | missing | routes/git.ts |
 | POST | `/api/git/run-stacked-action` | missing | routes/git.ts |
 | POST | `/api/git/stage` | native-tested | routes/git.ts |
 | POST | `/api/git/status` | native-tested | routes/git.ts |
-| POST | `/api/git/sync` | native-untested | routes/git.ts |
-| POST | `/api/git/unstage` | native-untested | routes/git.ts |
+| POST | `/api/git/sync` | native-tested | routes/git.ts |
+| POST | `/api/git/unstage` | native-tested | routes/git.ts |
 | POST | `/api/jobs` | native-tested | routes/jobs.ts |
 | POST | `/api/jobs/:id/trigger` | native-tested | routes/jobs.ts |
 | POST | `/api/maintenance/run` | native-tested | routes/maintenance.ts |

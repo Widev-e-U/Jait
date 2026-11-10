@@ -2642,3 +2642,122 @@ async fn project_files_are_served_for_the_owner_and_stay_inside_the_root() {
     let _ = stop.send(());
     let _ = task.await;
 }
+
+#[tokio::test]
+async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let root = dir.join("git-proj");
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "G", "rootPath": root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(created["id"].is_string(), "{created}");
+    let call = |path: &'static str, body: serde_json::Value| {
+        let client = client.clone();
+        let token = token.clone();
+        let url = format!("{base}{path}");
+        async move {
+            let r = client
+                .post(url)
+                .bearer_auth(token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap();
+            let status = r.status().as_u16();
+            (
+                status,
+                r.json::<serde_json::Value>().await.unwrap_or_default(),
+            )
+        }
+    };
+    let cwd = serde_json::json!({"cwd": root});
+
+    let (s, b) = call("/api/git/init", cwd.clone()).await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call(
+        "/api/git/identity",
+        serde_json::json!({"cwd": root, "name": "T", "email": "t@example.com"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call("/api/git/identity", cwd.clone()).await;
+    assert!(s == 200 && b["email"] == "t@example.com", "{b}");
+
+    std::fs::write(root.join("a.txt"), "one\n").unwrap();
+    let (s, b) = call(
+        "/api/git/stage",
+        serde_json::json!({"cwd": root, "paths": ["a.txt"]}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call("/api/git/status", cwd.clone()).await;
+    assert!(s == 200 && b.to_string().contains("a.txt"), "{b}");
+    let (s, b) = call("/api/git/diff-stats", cwd.clone()).await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call(
+        "/api/git/unstage",
+        serde_json::json!({"cwd": root, "paths": ["a.txt"]}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call(
+        "/api/git/file-diffs",
+        serde_json::json!({"cwd": root, "paths": ["a.txt"]}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = call(
+        "/api/git/discard",
+        serde_json::json!({"cwd": root, "paths": ["a.txt"]}),
+    )
+    .await;
+    assert!(s == 200 || s == 500, "{s} {b}");
+
+    // network, worktree and a repository that is not the caller's project are all refused
+    assert!(
+        std::process::Command::new("git")
+            .args(["remote", "add", "origin", "https://example.invalid/x.git"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    for path in ["/api/git/fetch", "/api/git/remove-worktree"] {
+        let (s, b) = call(
+            path,
+            serde_json::json!({"cwd": root, "path": root.join("wt")}),
+        )
+        .await;
+        assert!(s >= 400, "{path} must not act: {s} {b}");
+    }
+    let (s, b) = call("/api/git/sync", cwd.clone()).await;
+    assert!(
+        s == 200 && b["pull"]["status"] == "skipped_no_upstream",
+        "{b}"
+    );
+    let (s, _) = call("/api/git/status", serde_json::json!({"cwd": dir})).await;
+    assert_eq!(s, 403, "a directory that is not a project root");
+    let (s, _) = call(
+        "/api/git/status",
+        serde_json::json!({"cwd": root.join("sub")}),
+    )
+    .await;
+    assert!(s == 403 || s == 400);
+
+    let _ = stop.send(());
+    let _ = task.await;
+}

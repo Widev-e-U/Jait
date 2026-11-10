@@ -144,6 +144,8 @@ const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/termina
 // Mounted, but the production host behind them refuses the effect (no connector, loader, device or backend
 // yet). They are served and tested black-box as fail-closed, and are NOT counted native.
 const FAIL_CLOSED = new Set(['routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs', 'routes/security_workbench.rs', 'routes/mcp_server.rs', 'routes/browser_devtools.rs']);
+// Individual routes inside an otherwise native file whose effect the production authority refuses.
+const FAIL_CLOSED_ROUTES = new Set(['POST /api/git/fetch', 'POST /api/git/pull', 'POST /api/git/create-worktree', 'POST /api/git/remove-worktree']);
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
   return {
@@ -154,7 +156,7 @@ const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b))
       ? 'missing'
       : !MOUNTED.has(rustFile.get(key))
         ? 'router-unmounted'
-        : FAIL_CLOSED.has(rustFile.get(key))
+        : FAIL_CLOSED.has(rustFile.get(key)) || FAIL_CLOSED_ROUTES.has(key)
         ? 'mounted-fail-closed'
         : isTested(r.path)
           ? 'native-tested'
