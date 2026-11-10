@@ -475,6 +475,13 @@ impl Application {
                 .router(),
             )
             .merge(
+                crate::routes::channels::ChannelRoutes {
+                    auth: auth.clone(),
+                    host: Arc::new(super::channels_mount::NoConnectors),
+                }
+                .router(),
+            )
+            .merge(
                 crate::routes::jobs::JobRoutes {
                     auth: auth.clone(),
                     // Scheduled tool execution fails closed until the consent engine

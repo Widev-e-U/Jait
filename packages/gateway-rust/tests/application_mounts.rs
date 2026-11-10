@@ -1408,3 +1408,47 @@ async fn jobs_are_created_listed_and_removed() {
         .unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn channels_are_authenticated_and_report_no_connectors() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let anon = client.get(format!("{base}/api/channels")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/channels"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list, serde_json::json!([]));
+    let status = client
+        .get(format!("{base}/api/channels/telegram/status"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(status.status(), 404);
+    let start_channel = client
+        .post(format!("{base}/api/channels/telegram/start"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(start_channel.status(), 400);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
