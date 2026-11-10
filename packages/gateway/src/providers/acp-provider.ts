@@ -147,6 +147,13 @@ const CLAUDE_FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
   .map((reasoningEffort) => ({ reasoningEffort }));
 const CODEX_FALLBACK_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"]
   .map((reasoningEffort) => ({ reasoningEffort }));
+/**
+ * Claude Code's built-in shell tools. Disabled so every command goes through
+ * the visible jait.terminal MCP tool, matching Codex (which has no native
+ * shell once the ACP `terminal` capability is off).
+ */
+const CLAUDE_CODE_NATIVE_SHELL_TOOLS = ["Bash", "BashOutput", "KillShell", "KillBash", "PowerShell"];
+
 const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
   { id: "fable", name: "Fable", description: "Claude Fable alias for the top-tier Mythos-class model" },
@@ -1056,6 +1063,9 @@ export class AcpProvider implements CliProviderAdapter {
       newSession = await connection.newSession({
         cwd: options.workingDirectory,
         mcpServers: (options.mcpServers ?? []).map(toAcpMcpServer),
+        ...(this.providerType === "claude-code" ? {
+          _meta: { claudeCode: { options: { disallowedTools: CLAUDE_CODE_NATIVE_SHELL_TOOLS } } },
+        } : {}),
       });
 
       // These calls can legitimately fail — not every ACP agent implements
