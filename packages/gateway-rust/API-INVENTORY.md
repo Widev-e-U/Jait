@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 208 | 48.8% |
+| native-tested | 211 | 49.5% |
 | native-untested | 175 | 41.1% |
-| missing | 43 | 10.1% |
+| missing | 40 | 9.4% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -78,10 +78,10 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/sessions/:sessionId/messages` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/plan` | routes/chat.ts | native-tested |
-| POST | `/api/sessions/:sessionId/plan/execute` | routes/chat.ts | missing |
+| POST | `/api/sessions/:sessionId/plan/execute` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/plan/reject` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/restart-from` | routes/chat.ts | native-tested |
-| POST | `/api/sessions/:sessionId/retry-tool` | routes/chat.ts | missing |
+| POST | `/api/sessions/:sessionId/retry-tool` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/runtime` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/steer` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/stream` | routes/chat.ts | native-tested |
@@ -241,7 +241,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/project/create-directory` | routes/project.ts | native-tested |
 | POST | `/api/project/create-file` | routes/project.ts | native-tested |
 | POST | `/api/project/delete` | routes/project.ts | native-tested |
-| GET | `/api/project/download` | routes/project.ts | missing |
+| GET | `/api/project/download` | routes/project.ts | native-tested |
 | GET | `/api/project/info` | routes/project.ts | native-untested |
 | GET | `/api/project/list` | routes/project.ts | native-tested |
 | POST | `/api/project/move` | routes/project.ts | native-tested |

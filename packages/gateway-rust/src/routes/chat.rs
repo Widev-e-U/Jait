@@ -223,6 +223,8 @@ impl ChatRoutes {
             )
             .route("/api/sessions/{id}/plan", get(session_plan))
             .route("/api/sessions/{id}/plan/reject", post(session_plan))
+            .route("/api/sessions/{id}/plan/execute", post(session_plan))
+            .route("/api/sessions/{id}/retry-tool", post(session_retry_tool))
             .route("/api/chat/prewarm", post(prewarm))
             .route("/api/threads/{id}/approve", post(thread_approve))
             .route("/api/threads/{id}/start", post(thread_start))
@@ -1151,6 +1153,44 @@ async fn session_steer(
     response(
         409,
         json!({"error":"CONFLICT","details":"The active turn does not accept steering"}),
+    )
+}
+/// Node retries from an in-memory log of the live loop's executed calls. Native turns keep no such
+/// log, so after the same checks Node applies, an idle owned session has no retryable call.
+async fn session_retry_tool(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let value = match body(&state, request).await {
+        Ok(value) => value,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        );
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    if value["callId"].as_str().is_none_or(str::is_empty) {
+        return validation("callId is required");
+    }
+    if state.active.turns.lock().unwrap().contains_key(&session) {
+        return response(
+            409,
+            json!({"error":"CONFLICT","details":"Cannot retry while session is streaming"}),
+        );
+    }
+    response(
+        404,
+        json!({"error":"NOT_FOUND","details":"No tool calls recorded for this session"}),
     )
 }
 enum Restart {

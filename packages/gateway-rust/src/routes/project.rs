@@ -202,6 +202,7 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
         "/api/project/open" => "open",
         "/api/project/list" => "list",
         "/api/project/read" => "read",
+        "/api/project/download" => "download",
         "/api/project/write" => "write",
         "/api/project/stat" => "stat",
         "/api/project/undo" => "undo",
@@ -317,6 +318,70 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
                 Ok(content) => response(200, json!({ "content": content, "path": relative })),
                 Err(_) => fail(404, "NOT_FOUND", "File not found"),
             }
+        }
+        ("download", "GET") => {
+            const LIMIT: u64 = 50 * 1024 * 1024;
+            let relative = query.get("path").cloned().unwrap_or_default();
+            if relative.trim().is_empty() {
+                return fail(400, "VALIDATION_ERROR", "path is required");
+            }
+            let Some(root) = ctx.root.clone() else {
+                return fail(
+                    404,
+                    "NO_PROJECT",
+                    "Open the file's project in this chat, then retry.",
+                );
+            };
+            let Some(target) = confine(&root, &relative) else {
+                return fail(403, "PATH_DENIED", "Path is outside the project root");
+            };
+            let unavailable = || {
+                fail(
+                    400,
+                    "DOWNLOAD_FAILED",
+                    "File unavailable or outside the project's allowed paths.",
+                )
+            };
+            let Ok(metadata) = std::fs::metadata(&target) else {
+                return unavailable();
+            };
+            if metadata.is_dir() {
+                return fail(400, "NOT_A_FILE", "Path is a directory");
+            }
+            if metadata.len() > LIMIT {
+                return fail(413, "FILE_TOO_LARGE", "Downloads are limited to 50 MiB.");
+            }
+            let Ok(bytes) = std::fs::read(&target) else {
+                return unavailable();
+            };
+            let name = relative.replace('\\', "/");
+            let name = name
+                .rsplit('/')
+                .next()
+                .filter(|n| !n.is_empty())
+                .unwrap_or("download");
+            let mut encoded = String::new();
+            for byte in name.bytes() {
+                if byte.is_ascii_alphanumeric() || b"-_.!~".contains(&byte) {
+                    encoded.push(byte as char);
+                } else {
+                    encoded.push_str(&format!("%{byte:02X}"));
+                }
+            }
+            (
+                StatusCode::OK,
+                [
+                    ("content-type", "application/octet-stream".to_string()),
+                    (
+                        "content-disposition",
+                        format!("attachment; filename=\"download\"; filename*=UTF-8''{encoded}"),
+                    ),
+                    ("cache-control", "no-store".to_string()),
+                    ("x-content-type-options", "nosniff".to_string()),
+                ],
+                bytes,
+            )
+                .into_response()
         }
         ("write", "POST") => {
             let Some(root) = ctx.root.clone() else {

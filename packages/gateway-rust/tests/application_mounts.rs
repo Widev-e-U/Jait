@@ -3304,6 +3304,55 @@ async fn project_files_are_served_for_the_owner_and_stay_inside_the_root() {
         .unwrap();
     assert!(found.to_string().contains("alpha-marker"), "{found}");
 
+    let download = |query: String, bearer: String| {
+        let client = client.clone();
+        let base = base.clone();
+        let id = id.clone();
+        async move {
+            client
+                .get(format!(
+                    "{base}/api/project/download?projectId={id}&{query}"
+                ))
+                .bearer_auth(bearer)
+                .send()
+                .await
+                .unwrap()
+        }
+    };
+    let ok = download("path=src/a.txt".into(), token.clone()).await;
+    assert_eq!(ok.status(), 200);
+    assert_eq!(ok.headers()["content-type"], "application/octet-stream");
+    assert_eq!(ok.headers()["x-content-type-options"], "nosniff");
+    assert!(
+        ok.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains("filename*=UTF-8''a.txt")
+    );
+    assert!(ok.text().await.unwrap().contains("alpha-marker"));
+    assert_eq!(download("".into(), token.clone()).await.status(), 400);
+    assert_eq!(
+        download("path=src".into(), token.clone()).await.status(),
+        400
+    );
+    for escape in ["../outside.txt", "link/secret.txt"] {
+        assert_eq!(
+            download(format!("path={escape}"), token.clone())
+                .await
+                .status(),
+            403,
+            "{escape}"
+        );
+    }
+    let no_auth = client
+        .get(format!(
+            "{base}/api/project/download?projectId={id}&path=src/a.txt"
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(no_auth.status(), 401);
+
     // another user cannot reach this project's files
     let invite: serde_json::Value = client
         .post(format!("{base}/api/auth/invitations"))
@@ -4300,6 +4349,15 @@ async fn session_plan_and_prewarm_respect_auth_and_ownership() {
         .await
         .unwrap();
     assert_eq!(reject.status(), 404);
+    let execute = client
+        .post(format!("{base}/api/sessions/{id}/plan/execute"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(execute.status(), 404);
+    let body: serde_json::Value = execute.json().await.unwrap();
+    assert_eq!(body["details"], "No pending plan for this session");
     let missing = client
         .get(format!("{base}/api/sessions/nope/plan"))
         .bearer_auth(&token)
@@ -5403,6 +5461,65 @@ async fn session_approve_steer_and_trajectory_routes_enforce_ownership() {
     assert!(text.contains("\"replay\":true"), "{text}");
     assert!(text.contains("\"log_id\":1"), "{text}");
     drop(live);
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn session_retry_tool_route_enforces_auth_ownership_and_records() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let (status, _) = call(
+        &client,
+        &base,
+        None,
+        "POST",
+        "/api/sessions/s/retry-tool",
+        json!({"callId":"c"}),
+    )
+    .await;
+    assert_eq!(status, 401);
+    let owner = token(&client, &base).await;
+    let intruder = second_token(&client, &base, &owner).await;
+    let (status, created) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        "/api/sessions",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let path = format!(
+        "/api/sessions/{}/retry-tool",
+        created["id"].as_str().unwrap()
+    );
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "POST",
+        &path,
+        json!({"callId":"c"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, Some(&owner), "POST", &path, json!({})).await;
+    assert_eq!(status, 400);
+    let (status, body) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &path,
+        json!({"callId":"c"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    assert_eq!(body["details"], "No tool calls recorded for this session");
     let _ = stop.send(());
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
