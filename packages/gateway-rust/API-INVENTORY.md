@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 161 | 37.8% |
-| native-untested | 216 | 50.7% |
+| native-tested | 163 | 38.3% |
+| native-untested | 214 | 50.2% |
 | missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -47,8 +47,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | PATCH | `/api/auth/settings` | routes/auth.ts | native-tested |
 | DELETE | `/api/auth/settings/archive` | routes/auth.ts | native-untested |
 | GET | `/api/auth/settings/env-status` | routes/auth.ts | native-tested |
-| GET | `/api/auth/settings/tools` | routes/auth.ts | native-untested |
-| PATCH | `/api/auth/settings/tools` | routes/auth.ts | native-untested |
+| GET | `/api/auth/settings/tools` | routes/auth.ts | native-tested |
+| PATCH | `/api/auth/settings/tools` | routes/auth.ts | native-tested |
 | POST | `/api/preview/devtools` | routes/browser-devtools.ts | native-tested |
 | DELETE | `/api/preview/devtools/:grantId` | routes/browser-devtools.ts | native-untested |
 | GET | `/preview/:previewToken/devtools/:grantId/*` | routes/browser-devtools.ts | native-untested |

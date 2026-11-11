@@ -1953,6 +1953,68 @@ async fn read_routes_require_login_and_answer_for_the_caller() {
 }
 
 #[tokio::test]
+async fn tool_settings_list_and_disable_persist_for_the_caller() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let url = format!("{base}/api/auth/settings/tools");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    assert_eq!(
+        client
+            .patch(&url)
+            .json(&serde_json::json!({"disabled_tools": []}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let token = token(&client, &base).await;
+    let get = || async {
+        client
+            .get(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap()
+    };
+    let listed = get().await;
+    let tools = listed["tools"].as_array().expect("tools array");
+    assert!(tools.iter().any(|t| t["name"] == "file.read"));
+    assert!(tools.iter().all(|t| t["enabled"] == true));
+    let bad = client
+        .patch(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"disabled_tools": "file.read"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+    let patched = client
+        .patch(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"disabled_tools": ["file.read"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), 200);
+    let after = get().await;
+    let read = after["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "file.read")
+        .unwrap();
+    // core tools are locked and cannot be disabled; anything else must now be off
+    assert_eq!(read["enabled"], read["locked"]);
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn tools_list_and_execute_need_login_and_an_owned_session() {
     let (base, stop, task, dir) = start_seeded(false, |d| {
         std::fs::write(d.join("notes.txt"), "tool-marker-7").unwrap();

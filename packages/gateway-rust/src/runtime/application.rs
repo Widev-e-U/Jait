@@ -339,6 +339,25 @@ impl Application {
         })
         .await??;
         auth.cors_origin = config.cors_origin;
+        // The settings page lists the tools this gateway can really run, the same set `/api/tools` offers.
+        auth.tools = Some(
+            super::chat_tools::project_tool_definitions()
+                .map_err(ApplicationError::from)?
+                .iter()
+                .map(|d| {
+                    let text =
+                        |key: &str, default: &str| d[key].as_str().unwrap_or(default).to_owned();
+                    crate::routes::auth::ToolSettingsInfo {
+                        name: text("name", ""),
+                        display_name: d["displayName"].as_str().map(str::to_owned),
+                        description: text("description", ""),
+                        tier: text("tier", "standard"),
+                        category: text("category", "general"),
+                        source: text("source", "builtin"),
+                    }
+                })
+                .collect(),
+        );
         let provider_directory = Arc::new(crate::providers::db_accounts::DbProviderDirectory::new(
             &auth,
             provider_registry.clone(),
