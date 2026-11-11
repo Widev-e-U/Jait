@@ -267,54 +267,169 @@ pub async fn security_workbench_routes(
 }
 
 /// MCP caller resolution on the gateway's own bearer auth and origin policy. Anonymous
-/// callers get the standard login error. No session id is trusted from headers or query:
-/// no tools are exposed yet, so there is nothing to scope.
-struct McpBearerAuth(crate::routes::auth::AuthState);
+/// callers get the standard login error. A session id (`x-jait-session-id` or `sessionId`)
+/// is only honored when it names an active session owned by the caller; its stored project
+/// path (else the gateway project root) becomes the tool root. Nothing else is trusted.
+struct McpBearerAuth {
+    auth: crate::routes::auth::AuthState,
+    project_root: std::path::PathBuf,
+}
 
 impl crate::routes::mcp_server::McpAuthenticator for McpBearerAuth {
     fn resolve<'a>(
         &'a self,
         headers: &'a axum::http::HeaderMap,
-        _: &'a std::collections::HashMap<String, String>,
+        query: &'a std::collections::HashMap<String, String>,
     ) -> BoxFuture<'a, Result<crate::routes::mcp_server::McpToolContext, axum::response::Response>>
     {
         Box::pin(async move {
-            let user = crate::routes::auth::require_user(&self.0, headers)
+            let user = crate::routes::auth::require_user(&self.auth, headers)
                 .await
                 .map_err(|response| *response)?;
-            Ok(crate::routes::mcp_server::McpToolContext {
-                user_id: Some(user.id),
+            let mut context = crate::routes::mcp_server::McpToolContext {
+                user_id: Some(user.id.clone()),
                 ..Default::default()
+            };
+            let requested = headers
+                .get("x-jait-session-id")
+                .and_then(|v| v.to_str().ok())
+                .or_else(|| query.get("sessionId").map(String::as_str))
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && s.len() <= 256 && !s.chars().any(char::is_control))
+                .map(str::to_owned);
+            if let Some(session_id) = requested {
+                let (owner, lookup) = (user.id, session_id.clone());
+                let session = self
+                    .auth
+                    .with_database(move |db| {
+                        Ok(crate::services::sessions::SessionService::new(db)
+                            .get(&lookup, Some(&owner))?
+                            .filter(|s| s.status.as_deref() == Some("active")))
+                    })
+                    .await
+                    .map_err(|_| crate::routes::auth::internal_error())?
+                    .ok_or_else(|| {
+                        crate::routes::auth::response(
+                            404,
+                            serde_json::json!({"error": "Resource not found"}),
+                        )
+                    })?;
+                context.session_id = Some(session_id);
+                context.project_root = Some(
+                    session
+                        .project_path
+                        .unwrap_or_else(|| self.project_root.display().to_string()),
+                );
+            }
+            Ok(context)
+        })
+    }
+}
+
+/// The tools the gateway can really run, executed through the same `ConsentAwareExecutor`
+/// as chat, so consent, path confinement and cancellation are unchanged. Execution needs a
+/// caller-owned session; there is no default session and no caller-chosen root.
+struct ProjectMcpTools {
+    consent: crate::security::consent_manager::ConsentManager,
+    descriptors: Vec<crate::routes::mcp_server::McpToolDescriptor>,
+}
+
+impl ProjectMcpTools {
+    fn new(consent: crate::security::consent_manager::ConsentManager) -> Result<Self, String> {
+        let descriptors = super::chat_tools::project_tool_definitions()?
+            .iter()
+            .map(|d| {
+                let name = d["name"].as_str().unwrap_or_default();
+                let risk = match name {
+                    "file.read" | "file.list" => "read",
+                    "terminal.run" => "execute",
+                    _ => "write",
+                };
+                crate::routes::mcp_server::McpToolDescriptor::from_registry_entry(
+                    name,
+                    d["displayName"].as_str().unwrap_or(name),
+                    d["description"].as_str().unwrap_or_default(),
+                    d["parameters"].clone(),
+                    risk,
+                    d["category"].as_str().unwrap_or("core"),
+                    true,
+                )
+            })
+            .collect();
+        Ok(Self {
+            consent,
+            descriptors,
+        })
+    }
+}
+
+impl crate::routes::mcp_server::McpToolSource for ProjectMcpTools {
+    fn list(&self) -> Vec<crate::routes::mcp_server::McpToolDescriptor> {
+        self.descriptors.clone()
+    }
+    fn get(&self, name: &str) -> Option<crate::routes::mcp_server::McpToolDescriptor> {
+        self.descriptors.iter().find(|d| d.name == name).cloned()
+    }
+    fn execute<'a>(
+        &'a self,
+        name: &'a str,
+        args: Value,
+        ctx: crate::routes::mcp_server::McpToolContext,
+    ) -> BoxFuture<'a, Result<crate::routes::mcp_server::McpToolOutcome, String>> {
+        Box::pin(async move {
+            if self.get(name).is_none() {
+                return Err(format!("Unknown tool: {name}"));
+            }
+            let (Some(user_id), Some(session_id), Some(root)) =
+                (ctx.user_id, ctx.session_id, ctx.project_root)
+            else {
+                return Err("An owned session is required (x-jait-session-id)".into());
+            };
+            let project_root = std::path::PathBuf::from(root);
+            if !project_root.is_absolute() {
+                return Err("Session project root is invalid".into());
+            }
+            let (_, executor) =
+                super::chat_tools::project_tools(&user_id, &session_id, self.consent.clone())?;
+            let context = crate::security::consent_executor::ToolExecutionContext {
+                user_id,
+                session_id,
+                action_id: ctx.action_id,
+                project_root,
+                origin: crate::security::consent_executor::ExecutionOrigin::Agent,
+                runtime_mode: crate::security::consent_executor::RuntimeMode::Guarded,
+                cancellation: Default::default(),
+                on_output: None,
+            };
+            let result = executor
+                .execute(
+                    name,
+                    &args,
+                    &context,
+                    crate::security::consent_executor::ExecuteOptions::default(),
+                )
+                .await?;
+            let text = serde_json::to_string(&result).map_err(|e| e.to_string())?;
+            Ok(crate::routes::mcp_server::McpToolOutcome {
+                ok: result.ok,
+                content: vec![serde_json::json!({"type": "text", "text": text})],
             })
         })
     }
 }
 
-struct NoMcpTools;
-
-impl crate::routes::mcp_server::McpToolSource for NoMcpTools {
-    fn list(&self) -> Vec<crate::routes::mcp_server::McpToolDescriptor> {
-        Vec::new()
-    }
-    fn get(&self, _: &str) -> Option<crate::routes::mcp_server::McpToolDescriptor> {
-        None
-    }
-    fn execute<'a>(
-        &'a self,
-        name: &'a str,
-        _: Value,
-        _: crate::routes::mcp_server::McpToolContext,
-    ) -> BoxFuture<'a, Result<crate::routes::mcp_server::McpToolOutcome, String>> {
-        Box::pin(async move { Err(format!("Unknown tool: {name}")) })
-    }
-}
-
-/// `/mcp*` with authenticated callers and an empty tool list until the native tool
-/// registry is exposed to MCP.
-pub fn mcp_routes(auth: &crate::routes::auth::AuthState) -> axum::Router {
-    crate::routes::mcp_server::router(
+/// `/mcp*` for authenticated callers, exposing the native project tools behind consent.
+pub fn mcp_routes(
+    auth: &crate::routes::auth::AuthState,
+    consent: crate::security::consent_manager::ConsentManager,
+    project_root: std::path::PathBuf,
+) -> Result<axum::Router, String> {
+    Ok(crate::routes::mcp_server::router(
         crate::routes::mcp_server::McpRoutes::new()
-            .with_tools(std::sync::Arc::new(NoMcpTools))
-            .with_auth(std::sync::Arc::new(McpBearerAuth(auth.clone()))),
-    )
+            .with_tools(std::sync::Arc::new(ProjectMcpTools::new(consent)?))
+            .with_auth(std::sync::Arc::new(McpBearerAuth {
+                auth: auth.clone(),
+                project_root,
+            })),
+    ))
 }

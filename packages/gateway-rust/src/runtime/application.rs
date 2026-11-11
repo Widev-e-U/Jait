@@ -535,7 +535,14 @@ impl Application {
                     .await
                     .router(),
             )
-            .merge(super::channels_mount::mcp_routes(&auth))
+            .merge(
+                super::channels_mount::mcp_routes(
+                    &auth,
+                    consent.clone(),
+                    config.project_root.clone(),
+                )
+                .map_err(std::io::Error::other)?,
+            )
             // No browser host or session lookup is wired, so every panel request is refused
             // (404) until the ferridriver-backed browser service supplies a CDP connection.
             .merge(

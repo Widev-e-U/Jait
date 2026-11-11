@@ -2491,7 +2491,7 @@ async fn security_workbench_is_authenticated_and_refuses_unavailable_engines() {
 }
 
 #[tokio::test]
-async fn mcp_requires_login_and_lists_no_tools_yet() {
+async fn mcp_requires_login_lists_project_tools_and_needs_an_owned_session() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -2516,8 +2516,16 @@ async fn mcp_requires_login_and_lists_no_tools_yet() {
         .unwrap();
     assert_eq!(ok.status(), 200);
     let text = ok.text().await.unwrap();
-    assert!(text.contains("\"tools\":[]"), "{text}");
-    let call = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"terminal_run","arguments":{}}});
+    for name in [
+        "file_read",
+        "file_write",
+        "file_list",
+        "file_patch",
+        "terminal_run",
+    ] {
+        assert!(text.contains(&format!("\"{name}\"")), "{name}: {text}");
+    }
+    let call = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"terminal_run","arguments":{"command":"echo hi"}}});
     let denied = client
         .post(format!("{base}/mcp"))
         .bearer_auth(&token)
@@ -2529,10 +2537,112 @@ async fn mcp_requires_login_and_lists_no_tools_yet() {
         .text()
         .await
         .unwrap();
-    assert!(
-        denied.contains("Unknown tool") || denied.contains("error"),
-        "{denied}"
-    );
+    assert!(denied.contains("requires a sessionId"), "{denied}");
+    assert!(!denied.contains("hi\\n"), "{denied}");
+    let foreign = client
+        .post(format!("{base}/mcp"))
+        .bearer_auth(&token)
+        .header("x-jait-session-id", "not-my-session")
+        .header("accept", "application/json, text/event-stream")
+        .json(&call)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(foreign.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn mcp_file_write_waits_for_consent_on_an_owned_session() {
+    let (base, stop, task, dir) = start_seeded(false, |d| {
+        std::fs::write(d.join("notes.txt"), "original").unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    for (action, expected) in [("reject", "original"), ("approve", "via-mcp")] {
+        let call = {
+            let (client, base, token) = (client.clone(), base.clone(), token.clone());
+            let session_id = session["id"].as_str().unwrap().to_string();
+            let body = serde_json::json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"file_write","arguments":{"path":"notes.txt","content":"via-mcp"}}});
+            tokio::spawn(async move {
+                client
+                    .post(format!("{base}/mcp"))
+                    .bearer_auth(&token)
+                    .header("x-jait-session-id", session_id)
+                    .header("accept", "application/json, text/event-stream")
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+            })
+        };
+        let mut pending = None;
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                pending = Some(first.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let pending = pending.expect("mcp write must wait for consent");
+        assert_eq!(pending["toolName"], "file.write");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+            "original",
+            "file must not change before a decision"
+        );
+        let decided = client
+            .post(format!(
+                "{base}/api/consent/{}/{action}",
+                pending["id"].as_str().unwrap()
+            ))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(decided.status(), 200);
+        tokio::time::timeout(Duration::from_secs(20), call)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+            expected,
+            "after {action}"
+        );
+    }
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await
