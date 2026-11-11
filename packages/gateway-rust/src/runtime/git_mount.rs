@@ -130,10 +130,128 @@ fn permitted(arguments: &[String]) -> Result<(), &'static str> {
 }
 
 pub(super) fn find_git() -> Option<PathBuf> {
+    find_program("git")
+}
+
+fn find_program(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
-            .map(|dir| dir.join("git"))
+            .map(|dir| dir.join(name))
             .find(|p| p.is_file())
+    })
+}
+
+fn gh_slug(part: &str) -> bool {
+    !part.is_empty()
+        && part.len() <= 255
+        && part != "."
+        && part != ".."
+        && !part.starts_with('-')
+        && part
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// `github.com/<owner>/<repo>`, the only repository spelling the forge session produces.
+fn gh_target(target: &str) -> bool {
+    let parts: Vec<&str> = target.split('/').collect();
+    matches!(parts.as_slice(), ["github.com", owner, repo] if gh_slug(owner) && gh_slug(repo))
+}
+
+/// Whether `gh` may run these arguments: `Some(true)` when it contacts GitHub, `Some(false)`
+/// for a local-only call, `None` when the shape is not one the forge session issues. Pull
+/// request creation is deliberately absent: it is an outward write that has no consent yet.
+fn gh_permitted(arguments: &[String]) -> Option<bool> {
+    let rest: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    match rest.as_slice() {
+        ["--version"] => Some(false),
+        ["api", "--hostname", "github.com", "user"] => Some(true),
+        ["repo", "view", target, "--json", "defaultBranchRef"] if gh_target(target) => Some(true),
+        [
+            "pr",
+            "list",
+            "--repo",
+            target,
+            "--head",
+            head,
+            "--state",
+            "all",
+            "--limit",
+            "100",
+            "--json",
+            "number,url,title,state,baseRefName,headRefName",
+        ] if gh_target(target) && !head.starts_with('-') => Some(true),
+        [
+            "pr",
+            "view",
+            number,
+            "--repo",
+            target,
+            "--json",
+            fields @ ("statusCheckRollup" | "changedFiles,additions,deletions"),
+        ] if gh_target(target)
+            && !fields.is_empty()
+            && !number.is_empty()
+            && number.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            Some(true)
+        }
+        _ => None,
+    }
+}
+
+/// Environment keys the forge session sets for `gh`; anything else is refused.
+const GH_ENVIRONMENT: [&str; 6] = [
+    "GH_HOST",
+    "GH_PROMPT_DISABLED",
+    "GH_PAGER",
+    "PAGER",
+    "GIT_TERMINAL_PROMPT",
+    "GH_TOKEN",
+];
+
+fn gh_request(
+    root: &Path,
+    request: GitCommandRequest,
+    network: Option<&Arc<network::NetworkGuard>>,
+) -> Result<ProcessRequest, String> {
+    let contacts_github =
+        gh_permitted(&request.arguments).ok_or("GitHub command is not authorized")?;
+    if request.input.is_some()
+        || request.environment.get("GH_HOST").map(String::as_str) != Some("github.com")
+        || request
+            .environment
+            .keys()
+            .any(|key| !GH_ENVIRONMENT.contains(&key.as_str()))
+    {
+        return Err("GitHub command is not authorized".into());
+    }
+    if contacts_github {
+        let guard = network.ok_or("Network operations are not authorized")?;
+        if !guard.permits(
+            &request.owner,
+            root,
+            network::FORGE_OPERATION,
+            &network::forge_destination(),
+        ) {
+            return Err("Network access to github.com:443 is not approved for this project".into());
+        }
+    }
+    let gh = find_program("gh").ok_or("gh is not installed")?;
+    let mut environment = request.environment;
+    for key in ["PATH", "HOME", "LANG", "LC_ALL", "USER"] {
+        if let Ok(value) = std::env::var(key) {
+            environment.insert(key.into(), value);
+        }
+    }
+    environment.insert("GH_NO_UPDATE_NOTIFIER".into(), "1".into());
+    Ok(ProcessRequest {
+        argv: [vec![gh.to_string_lossy().into_owned()], request.arguments].concat(),
+        cwd: request.cwd,
+        environment,
+        input: None,
+        timeout: Duration::from_secs(30),
+        output_limit: 512 * 1024,
     })
 }
 
@@ -195,6 +313,9 @@ fn command_authority(
         let root = root.clone();
         let network = network.clone();
         Box::pin(async move {
+            if request.program == "gh" && request.cwd == root {
+                return gh_request(&root, request, network.as_ref());
+            }
             if request.program != "git" || request.cwd != root {
                 return Err("Git command is not authorized for this directory".into());
             }
@@ -251,10 +372,106 @@ fn command_authority(
 
 #[cfg(test)]
 mod tests {
-    use super::permitted;
+    use super::{gh_permitted, permitted};
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| (*s).into()).collect()
     }
+
+    #[test]
+    fn gh_runs_only_the_forge_sessions_read_shapes_for_github_com() {
+        let target = "github.com/octo/repo";
+        assert_eq!(gh_permitted(&args(&["--version"])), Some(false));
+        for network in [
+            args(&["api", "--hostname", "github.com", "user"]),
+            args(&["repo", "view", target, "--json", "defaultBranchRef"]),
+            args(&[
+                "pr",
+                "view",
+                "12",
+                "--repo",
+                target,
+                "--json",
+                "statusCheckRollup",
+            ]),
+            args(&[
+                "pr",
+                "list",
+                "--repo",
+                target,
+                "--head",
+                "feature/x",
+                "--state",
+                "all",
+                "--limit",
+                "100",
+                "--json",
+                "number,url,title,state,baseRefName,headRefName",
+            ]),
+        ] {
+            assert_eq!(gh_permitted(&network), Some(true), "{network:?}");
+        }
+        for denied in [
+            // writes, other hosts, free-form API paths and option injection are all refused
+            args(&[
+                "pr",
+                "create",
+                "--repo",
+                target,
+                "--title=x",
+                "--body-file",
+                "-",
+            ]),
+            args(&["api", "--hostname", "evil.example", "user"]),
+            args(&["api", "repos/octo/repo", "--method", "DELETE"]),
+            args(&["auth", "login", "--with-token"]),
+            args(&[
+                "pr",
+                "view",
+                "12",
+                "--repo",
+                "evil.example/octo/repo",
+                "--json",
+                "statusCheckRollup",
+            ]),
+            args(&[
+                "pr",
+                "view",
+                "-1",
+                "--repo",
+                target,
+                "--json",
+                "statusCheckRollup",
+            ]),
+            args(&[
+                "pr",
+                "view",
+                "12",
+                "--repo",
+                "github.com/-x/repo",
+                "--json",
+                "statusCheckRollup",
+            ]),
+            args(&["pr", "view", "12", "--repo", target, "--json", "body"]),
+            args(&[
+                "pr",
+                "list",
+                "--repo",
+                target,
+                "--head",
+                "--web",
+                "--state",
+                "all",
+                "--limit",
+                "100",
+                "--json",
+                "number,url,title,state,baseRefName,headRefName",
+            ]),
+            args(&["--version", "--help"]),
+        ] {
+            assert_eq!(gh_permitted(&denied), None, "{denied:?}");
+        }
+    }
+
     #[test]
     fn network_worktree_global_writes_and_option_injection_are_refused() {
         for denied in [

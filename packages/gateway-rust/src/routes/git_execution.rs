@@ -559,37 +559,44 @@ impl Command {
         }
     }
 }
+/// Routes that may open a forge session; the session is built from the request scope only.
+const FORGE_OPERATIONS: [&str; 6] = [
+    "forge-auth",
+    "gh-auth",
+    "forge-status",
+    "gh-status",
+    "forge-pr-checks",
+    "pr-checks",
+];
+
 /// Return the authenticated owner only for a matching forge-auth grant.
 /// Credential persistence must use this identity rather than request-body data.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_owner() -> crate::services::git_forge::ForgeResult<String> {
     use crate::services::git_forge::ForgeError;
     let ctx = REQUEST_CONTEXT
         .try_with(Clone::clone)
         .map_err(|_| ForgeError::Denied)?;
-    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+    if !matches!(ctx.operation.as_str(), "forge-auth" | "gh-auth") || ctx.grant.owner != ctx.owner {
         return Err(ForgeError::Denied);
     }
     Ok(ctx.owner)
 }
 
 /// Capture the request cancellation handle for deferred credential persistence.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_cancellation()
 -> crate::services::git_forge::ForgeResult<ProcessCancellation> {
     use crate::services::git_forge::ForgeError;
     let ctx = REQUEST_CONTEXT
         .try_with(Clone::clone)
         .map_err(|_| ForgeError::Denied)?;
-    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+    if !matches!(ctx.operation.as_str(), "forge-auth" | "gh-auth") || ctx.grant.owner != ctx.owner {
         return Err(ForgeError::Denied);
     }
     Ok(ctx.cancel)
 }
 
-/// Construct a forge-auth session exclusively from the authorized request identity.
+/// Construct a forge session exclusively from the authorized request identity.
 /// Callers cannot substitute an owner, root, authority or process pool.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_session(
     repository: crate::services::git_forge::ForgeRepository,
     token: String,
@@ -598,7 +605,7 @@ pub(super) fn forge_auth_session(
     let ctx = REQUEST_CONTEXT
         .try_with(Clone::clone)
         .map_err(|_| ForgeError::Denied)?;
-    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+    if !FORGE_OPERATIONS.contains(&ctx.operation.as_str()) || ctx.grant.owner != ctx.owner {
         return Err(ForgeError::Denied);
     }
     ForgeSession::new_scoped(

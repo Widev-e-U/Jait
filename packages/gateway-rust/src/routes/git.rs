@@ -5,10 +5,11 @@
 //!        /checkout, /create-branch, /diff, /diff-stats, /file-diffs,
 //!        /discard, /stage, /unstage, /init, /create-worktree, /remove-worktree
 //!
-//! Deferred (9 handlers, all remote-control-plane / integration bound -- see
-//! `DEFERRED` below): run-stacked-action, run-commit-flow, gh-status,
-//! pr-checks, gh-auth, forge-status, forge-auth, forge-pr-checks,
-//! generate-commit-message.
+//! GitHub forge routes (`gh`, github.com only, owner consent per project):
+//!        /gh-status, /gh-auth, /forge-status, /forge-auth, /pr-checks, /forge-pr-checks
+//!
+//! Deferred (see `DEFERRED` below): run-commit-flow, generate-commit-message.
+//! run-stacked-action answers its denial until its network steps are gated.
 //!
 //! Exact commands require an owner-bound request grant and command authorization.
 //! Canonical ProcessPool supervises cancellation and bounded raw capture; bounded
@@ -37,16 +38,7 @@ use serde_json::{Map, Value, json};
 use super::auth::{self, AuthState};
 
 /// Handlers that exist in the TypeScript module but are not ported yet.
-pub const DEFERRED: [&str; 8] = [
-    "run-commit-flow",
-    "gh-status",
-    "pr-checks",
-    "gh-auth",
-    "forge-status",
-    "forge-auth",
-    "forge-pr-checks",
-    "generate-commit-message",
-];
+pub const DEFERRED: [&str; 2] = ["run-commit-flow", "generate-commit-message"];
 
 #[derive(Clone)]
 pub struct GitRoutes {
@@ -133,6 +125,12 @@ impl GitRoutes {
             .route("/api/git/init", post(init))
             .route("/api/git/create-worktree", post(create_worktree))
             .route("/api/git/remove-worktree", post(remove_worktree))
+            .route("/api/git/gh-status", post(gh_status))
+            .route("/api/git/gh-auth", post(gh_auth))
+            .route("/api/git/forge-status", post(forge_status))
+            .route("/api/git/forge-auth", post(forge_auth))
+            .route("/api/git/pr-checks", post(pr_checks))
+            .route("/api/git/forge-pr-checks", post(pr_checks))
             .layer(axum::middleware::from_fn_with_state(
                 self.clone(),
                 execution::authorize,
@@ -222,7 +220,6 @@ where
 /// Parse a github.com remote into a validated target. Enterprise hosts remain
 /// unsupported until credentials are stored and retrieved by host; destination
 /// authorization is still required from the request-scoped command authority.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 fn github_auth_repository(raw: &str) -> Option<crate::services::git_forge::ForgeRepository> {
     use crate::services::git_forge::ForgeRepository;
     let raw = raw.trim();
@@ -266,7 +263,6 @@ fn github_auth_repository(raw: &str) -> Option<crate::services::git_forge::Forge
 
 // Once dispatched, the database worker cannot abort a running write. The
 // cancellation check prevents a queued write from starting after cancellation.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 async fn save_github_token(
     auth: &AuthState,
     secrets: UserSecretService,
@@ -305,7 +301,6 @@ async fn save_github_token(
 
 /// Authenticate with GitHub under the current forge-auth grant and persist only
 /// a successfully validated token under the owner captured from that same grant.
-#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 async fn github_forge_auth(
     state: &GitRoutes,
     repository: crate::services::git_forge::ForgeRepository,
@@ -351,6 +346,301 @@ async fn github_forge_auth(
         response.insert("error".into(), error.clone());
     }
     Ok(Value::Object(response))
+}
+
+// ---------------------------------------------------------------------------
+// forge routes (GitHub only; every GitHub call is gated by owner consent for github.com)
+// ---------------------------------------------------------------------------
+
+const GITHUB_CONNECT_HINT: &str = "GitHub is not connected for this account.";
+
+fn forge_error(error: crate::services::git_forge::ForgeError) -> Box<Response> {
+    use crate::services::git_forge::ForgeError;
+    Box::new(match error {
+        ForgeError::Denied => error_response(403, "Git execution denied"),
+        ForgeError::InvalidInput => error_response(400, "Invalid forge request"),
+        ForgeError::TimedOut => error_response(504, "Forge request timed out"),
+        _ => error_response(500, "Forge request failed"),
+    })
+}
+
+/// Repository used by calls that do not name one (`gh --version`, `gh api user`).
+fn github_account_repository() -> crate::services::git_forge::ForgeRepository {
+    crate::services::git_forge::ForgeRepository::new("github.com", "_", "_")
+        .expect("static github.com repository is valid")
+}
+
+struct ForgeCall {
+    owner: String,
+    cwd: String,
+    body: Map<String, Value>,
+}
+
+async fn forge_call(state: &GitRoutes, request: Request) -> Result<ForgeCall, Response> {
+    let headers = request.headers().clone();
+    let user = auth::require_user(&state.auth, &headers)
+        .await
+        .map_err(|response| *response)?;
+    let body = json_body(request).await.map_err(|response| *response)?;
+    let cwd = require_cwd(&body).map_err(|response| *response)?;
+    Ok(ForgeCall {
+        owner: user.id,
+        cwd,
+        body,
+    })
+}
+
+/// The remote the request names, else `origin` of the project.
+async fn forge_remote_url(call: &ForgeCall) -> Option<String> {
+    if let Some(url) = string_field(&call.body, "remoteUrl") {
+        return Some(url);
+    }
+    let cwd = call.cwd.clone();
+    git_task(move || Ok(remote_url(&cwd, "origin")))
+        .await
+        .ok()
+        .flatten()
+}
+
+async fn stored_github_token(state: &GitRoutes, owner: &str) -> HandlerResult<Option<String>> {
+    use crate::services::github_pull_requests::{
+        GITHUB_TOKEN_SECRET_KEY, GITHUB_TOKEN_SECRET_TYPE,
+    };
+    let secrets = state
+        .user_secrets
+        .clone()
+        .ok_or_else(|| Box::new(error_response(503, "User secret store is unavailable")))?;
+    let owner = owner.to_owned();
+    state
+        .auth
+        .with_database(move |db| {
+            secrets.get_value(
+                db,
+                Some(&owner),
+                GITHUB_TOKEN_SECRET_TYPE,
+                GITHUB_TOKEN_SECRET_KEY,
+            )
+        })
+        .await
+        .map_err(|_| Box::new(error_response(500, "Secret storage failed")))
+}
+
+struct GithubStatus {
+    installed: bool,
+    authenticated: bool,
+    username: Option<String>,
+    error: Option<String>,
+}
+
+/// `gh` availability and, when a token is stored and the owner approves github.com, who it is.
+async fn github_status(state: &GitRoutes, owner: &str) -> HandlerResult<GithubStatus> {
+    use crate::execution::process_runner::ProcessCancellation;
+    use crate::services::git_forge::{ForgeError, GitHubForge};
+    let token = stored_github_token(state, owner).await?;
+    // The placeholder token only accompanies `gh --version`, which never reaches the network.
+    let session = execution::forge_auth_session(
+        github_account_repository(),
+        token.clone().unwrap_or_else(|| "unused".into()),
+    )
+    .map_err(forge_error)?;
+    let forge = GitHubForge::new(session);
+    let installed = match forge
+        .check_cli_available(ProcessCancellation::default())
+        .await
+    {
+        Ok(installed) => installed,
+        // `--version` needs no consent, so a refusal means `gh` cannot be run at all.
+        Err(ForgeError::Denied) => false,
+        Err(error) => return Err(forge_error(error)),
+    };
+    let Some(_) = token.filter(|_| installed) else {
+        return Ok(GithubStatus {
+            installed,
+            authenticated: false,
+            username: None,
+            error: installed.then(|| GITHUB_CONNECT_HINT.into()),
+        });
+    };
+    state
+        .authorize_network(crate::runtime::git_network::FORGE_OPERATION, vec![])
+        .await
+        .map_err(Box::new)?;
+    let result = forge
+        .login_with_token(ProcessCancellation::default())
+        .await
+        .map_err(forge_error)?;
+    Ok(GithubStatus {
+        installed,
+        authenticated: result.get("authenticated").and_then(Value::as_bool) == Some(true),
+        username: result
+            .get("username")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        error: result
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    })
+}
+
+/// `POST /api/git/gh-status` (git.ts:916)
+async fn gh_status(State(state): State<GitRoutes>, request: Request) -> Response {
+    let call = match forge_call(&state, request).await {
+        Ok(call) => call,
+        Err(response) => return response,
+    };
+    match github_status(&state, &call.owner).await {
+        Ok(status) => ok_json(json!({
+            "installed": status.installed,
+            "authenticated": status.authenticated,
+            "username": status.username,
+        })),
+        Err(response) => *response,
+    }
+}
+
+/// `POST /api/git/forge-status` (git.ts:1012)
+async fn forge_status(State(state): State<GitRoutes>, request: Request) -> Response {
+    let call = match forge_call(&state, request).await {
+        Ok(call) => call,
+        Err(response) => return response,
+    };
+    let remote = forge_remote_url(&call).await;
+    let provider = remote
+        .as_deref()
+        .map_or("unknown", detect_git_remote_provider);
+    if provider != "github" {
+        return ok_json(json!({
+            "provider": provider,
+            "forgeName": if provider == "unknown" { "Unknown" } else { provider },
+            "installed": false,
+            "authenticated": false,
+            "username": Value::Null,
+            "error": if provider == "unknown" {
+                Value::Null
+            } else {
+                json!("This gateway supports GitHub forges only.")
+            },
+        }));
+    }
+    match github_status(&state, &call.owner).await {
+        Ok(status) => {
+            let mut response = json!({
+                "provider": "github",
+                "forgeName": "GitHub",
+                "installed": status.installed,
+                "authenticated": status.authenticated,
+                "username": status.username,
+            });
+            if let Some(error) = status.error {
+                response["error"] = json!(error);
+            }
+            ok_json(response)
+        }
+        Err(response) => *response,
+    }
+}
+
+async fn authenticate_github(
+    state: &GitRoutes,
+    repository: crate::services::git_forge::ForgeRepository,
+    token: String,
+) -> HandlerResult<Value> {
+    state
+        .authorize_network(crate::runtime::git_network::FORGE_OPERATION, vec![])
+        .await
+        .map_err(Box::new)?;
+    github_forge_auth(state, repository, token).await
+}
+
+/// `POST /api/git/gh-auth` (git.ts:974)
+async fn gh_auth(State(state): State<GitRoutes>, request: Request) -> Response {
+    let call = match forge_call(&state, request).await {
+        Ok(call) => call,
+        Err(response) => return response,
+    };
+    let Some(token) = string_field(&call.body, "token") else {
+        return error_response(400, "Missing token");
+    };
+    match authenticate_github(&state, github_account_repository(), token).await {
+        Ok(result) if result.get("ok").and_then(Value::as_bool) == Some(true) => {
+            ok_json(json!({ "ok": true, "username": result.get("username") }))
+        }
+        Ok(result) => error_response(
+            401,
+            result
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("GitHub authentication failed"),
+        ),
+        Err(response) => *response,
+    }
+}
+
+/// `POST /api/git/forge-auth` (git.ts:1062)
+async fn forge_auth(State(state): State<GitRoutes>, request: Request) -> Response {
+    let call = match forge_call(&state, request).await {
+        Ok(call) => call,
+        Err(response) => return response,
+    };
+    let Some(token) = string_field(&call.body, "token") else {
+        return error_response(400, "Missing token");
+    };
+    let remote = forge_remote_url(&call).await;
+    let provider = remote
+        .as_deref()
+        .map_or("unknown", detect_git_remote_provider);
+    if provider == "unknown" {
+        return error_response(400, "Cannot determine forge provider from remote URL");
+    }
+    let Some(repository) = remote.as_deref().and_then(github_auth_repository) else {
+        return error_response(400, "This gateway supports github.com forges only.");
+    };
+    match authenticate_github(&state, repository, token).await {
+        Ok(result) => ok_json(result),
+        Err(response) => *response,
+    }
+}
+
+/// `POST /api/git/pr-checks` and `/api/git/forge-pr-checks` (git.ts:948, 1101)
+async fn pr_checks(State(state): State<GitRoutes>, request: Request) -> Response {
+    use crate::execution::process_runner::ProcessCancellation;
+    use crate::services::git_forge::{ForgeError, GitHubForge};
+    let call = match forge_call(&state, request).await {
+        Ok(call) => call,
+        Err(response) => return response,
+    };
+    let Some(branch) = string_field(&call.body, "branch") else {
+        return error_response(400, "Missing branch parameter");
+    };
+    let remote = forge_remote_url(&call).await;
+    let Some(repository) = remote.as_deref().and_then(github_auth_repository) else {
+        return ok_json(json!([]));
+    };
+    let token = match stored_github_token(&state, &call.owner).await {
+        Ok(Some(token)) => token,
+        Ok(None) => return error_response(401, GITHUB_CONNECT_HINT),
+        Err(response) => return *response,
+    };
+    if let Err(response) = state
+        .authorize_network(crate::runtime::git_network::FORGE_OPERATION, vec![])
+        .await
+    {
+        return response;
+    }
+    let session = match execution::forge_auth_session(repository, token) {
+        Ok(session) => session,
+        Err(error) => return *forge_error(error),
+    };
+    match GitHubForge::new(session)
+        .get_pr_checks(&branch, ProcessCancellation::default())
+        .await
+    {
+        Ok(checks) => ok_json(checks),
+        // No pull request for the branch (or none readable) has no checks to show.
+        Err(ForgeError::CommandFailed) => ok_json(json!([])),
+        Err(error) => *forge_error(error),
+    }
 }
 
 // ---------------------------------------------------------------------------

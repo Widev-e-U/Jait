@@ -3758,6 +3758,207 @@ async fn git_fetch_needs_the_owners_consent_for_each_destination() {
 }
 
 #[tokio::test]
+async fn git_forge_routes_are_authenticated_and_github_calls_need_consent() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+    for path in [
+        "gh-status",
+        "gh-auth",
+        "forge-status",
+        "forge-auth",
+        "pr-checks",
+        "forge-pr-checks",
+    ] {
+        let anon = client
+            .post(format!("{base}/api/git/{path}"))
+            .json(&serde_json::json!({"cwd": "/"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth");
+    }
+    let token = token(&client, &base).await;
+    let root = dir.join("forge-proj");
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "F", "rootPath": root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(created["id"].is_string(), "{created}");
+    let git = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .status()
+                .unwrap()
+                .success(),
+            "git {args:?}"
+        );
+    };
+    git(&["init", "-q"]);
+    git(&[
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/octo/repo.git",
+    ]);
+    let post = |path: &'static str, body: serde_json::Value| {
+        let (client, token, url) = (
+            client.clone(),
+            token.clone(),
+            format!("{base}/api/git/{path}"),
+        );
+        tokio::spawn(async move {
+            let r = client
+                .post(url)
+                .bearer_auth(token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap();
+            let status = r.status().as_u16();
+            let text = r.text().await.unwrap_or_default();
+            (
+                status,
+                serde_json::from_str::<serde_json::Value>(&text).unwrap_or_default(),
+                text,
+            )
+        })
+    };
+
+    // Only a project the caller owns is reachable.
+    let (s, _, text) = post("forge-status", serde_json::json!({"cwd": dir}))
+        .await
+        .unwrap();
+    assert_eq!(s, 403, "{text}");
+    assert_eq!(
+        post("pr-checks", serde_json::json!({"cwd": root}))
+            .await
+            .unwrap()
+            .0,
+        400,
+        "a branch is required"
+    );
+    assert_eq!(
+        post("gh-auth", serde_json::json!({"cwd": root}))
+            .await
+            .unwrap()
+            .0,
+        400,
+        "a token is required"
+    );
+
+    // Providers other than github.com are reported, never contacted.
+    git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://gitlab.com/octo/repo.git",
+    ]);
+    let (s, body, text) = post("forge-status", serde_json::json!({"cwd": root}))
+        .await
+        .unwrap();
+    assert_eq!(s, 200, "{text}");
+    assert_eq!(body["provider"], "gitlab", "{text}");
+    assert_eq!(body["authenticated"], false, "{text}");
+    let (s, _, text) = post("forge-auth", serde_json::json!({"cwd": root, "token": "t"}))
+        .await
+        .unwrap();
+    assert_eq!(s, 400, "{text}");
+    git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://github.com/octo/repo.git",
+    ]);
+
+    // Without a stored token nothing leaves the machine and no prompt is raised.
+    let (s, body, text) = post("forge-status", serde_json::json!({"cwd": root}))
+        .await
+        .unwrap();
+    assert_eq!(s, 200, "{text}");
+    assert_eq!(body["provider"], "github", "{text}");
+    assert_eq!(body["authenticated"], false, "{text}");
+    let (s, _, text) = post(
+        "pr-checks",
+        serde_json::json!({"cwd": root, "branch": "main"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(s, 401, "{text}");
+
+    // Authenticating contacts github.com, so the owner is asked first; a rejection stops it.
+    let attempt = post(
+        "gh-auth",
+        serde_json::json!({"cwd": root, "token": "ghp_example"}),
+    );
+    let request = {
+        let mut found = None;
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                found = Some(first.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        found
+    };
+    let Some(request) = request else {
+        let early = tokio::time::timeout(Duration::from_secs(2), attempt).await;
+        panic!("no consent prompt for github.com; gh-auth answered {early:?}");
+    };
+    assert_eq!(request["toolName"], "git.forge", "{request}");
+    assert!(
+        request["summary"]
+            .as_str()
+            .unwrap()
+            .contains("github.com:443"),
+        "{request}"
+    );
+    let decided = client
+        .post(format!(
+            "{base}/api/consent/{}/reject",
+            request["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(decided.status().as_u16(), 200);
+    let (s, _, text) = attempt.await.unwrap();
+    assert_eq!(s, 403, "{text}");
+    assert!(text.contains("not approved"), "{text}");
+    assert!(
+        !text.contains("ghp_example"),
+        "the token must never be echoed: {text}"
+    );
+
+    let _ = stop.send(());
+    let _ = task.await;
+}
+
+#[tokio::test]
 async fn team_rooms_are_stored_per_user_and_authenticated() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

@@ -45,6 +45,17 @@ pub(crate) const PINNED_CONFIG: &[(&str, &str)] = &[
     ("push.recurseSubmodules", "no"),
 ];
 
+/// Operation name for GitHub API calls made through `gh` (status, auth check, PR checks).
+pub(crate) const FORGE_OPERATION: &str = "forge";
+
+/// The only forge destination: github.com over https.
+pub(crate) fn forge_destination() -> Destination {
+    Destination {
+        host: "github.com".into(),
+        port: 443,
+    }
+}
+
 /// The consent queue session that carries a user's network Git prompts.
 pub fn consent_session(owner: &str) -> String {
     format!("git-network:{owner}")
@@ -341,6 +352,19 @@ pub fn gate(guard: Arc<NetworkGuard>) -> NetworkGate {
         move |request: NetworkRequest, cancel: ProcessCancellation| {
             let guard = guard.clone();
             Box::pin(async move {
+                // Forge calls go to the forge's API host, not to a remote's git endpoint, and
+                // only github.com is supported; the repository itself travels in the command.
+                if request.operation == FORGE_OPERATION {
+                    return guard
+                        .authorize(
+                            &request.owner,
+                            &request.root,
+                            FORGE_OPERATION,
+                            &forge_destination(),
+                            &cancel,
+                        )
+                        .await;
+                }
                 let push = request.operation == "push";
                 for remote in &request.remotes {
                     let destination = resolve_destination(&request.root, remote, push).await?;
