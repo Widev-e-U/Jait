@@ -4869,6 +4869,350 @@ async fn terminal_routes_are_owner_scoped_and_validate_input() {
     drop(dir);
 }
 
+async fn call(
+    client: &reqwest::Client,
+    base: &str,
+    token: Option<&str>,
+    method: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> (u16, serde_json::Value) {
+    let mut request = client.request(method.parse().unwrap(), format!("{base}{path}"));
+    if let Some(token) = token {
+        request = request.bearer_auth(token);
+    }
+    if !body.is_null() {
+        request = request.json(&body);
+    }
+    let response = request.send().await.unwrap();
+    let status = response.status().as_u16();
+    (status, response.json().await.unwrap_or_default())
+}
+
+#[tokio::test]
+async fn repo_todo_proposal_and_plan_routes_validate_and_isolate_owners() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for (method, path) in [
+        ("GET", "/api/repos/x/todos"),
+        ("POST", "/api/repos/x/todos"),
+        ("PATCH", "/api/jait-todos/x"),
+        ("DELETE", "/api/jait-todos/x"),
+        ("PATCH", "/api/repo-proposals/x"),
+        ("GET", "/api/plans/x"),
+        ("PATCH", "/api/plans/x"),
+        ("DELETE", "/api/plans/x"),
+        ("POST", "/api/plans/x/generate"),
+        ("POST", "/api/plans/x/start"),
+        ("POST", "/api/plans/x/tasks/t/start"),
+        ("PATCH", "/api/repos/x"),
+        ("DELETE", "/api/repos/x"),
+    ] {
+        let (status, _) = call(&client, &base, None, method, path, json!(null)).await;
+        assert_eq!(status, 401, "{method} {path}");
+    }
+    let owner = token(&client, &base).await;
+    let intruder = second_token(&client, &base, &owner).await;
+    let owner = Some(owner.as_str());
+    let intruder = Some(intruder.as_str());
+    let local = dir.join("repo-under-test");
+    std::fs::create_dir_all(&local).unwrap();
+    let (status, repo) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        "/api/repos",
+        json!({"name":"under-test","localPath":local.to_string_lossy()}),
+    )
+    .await;
+    assert_eq!(status, 200, "{repo}");
+    let repo_id = repo["repo"]["id"].as_str().unwrap().to_owned();
+
+    // Todos.
+    let todos = format!("/api/repos/{repo_id}/todos");
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &todos,
+        json!({"message":"  "}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        intruder,
+        "POST",
+        &todos,
+        json!({"message":"x"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, intruder, "GET", &todos, json!(null)).await;
+    assert_eq!(status, 404);
+    let (status, created) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &todos,
+        json!({"message":"ship it","priority":"high","tags":[" A ","a","B"],"dueDate":"2030-01-02"}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let todo = &created["todo"];
+    assert_eq!(todo["priority"], "high");
+    let todo_id = todo["id"].as_str().unwrap().to_owned();
+    let (_, listed) = call(&client, &base, owner, "GET", &todos, json!(null)).await;
+    assert_eq!(listed["todos"].as_array().unwrap().len(), 1);
+    let item = format!("/api/jait-todos/{todo_id}");
+    for body in [
+        json!({"message":""}),
+        json!({"status":"bogus"}),
+        json!({"priority":"urgent"}),
+    ] {
+        let (status, _) = call(&client, &base, owner, "PATCH", &item, body).await;
+        assert_eq!(status, 400);
+    }
+    let (status, _) = call(
+        &client,
+        &base,
+        intruder,
+        "PATCH",
+        &item,
+        json!({"status":"done"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, intruder, "DELETE", &item, json!(null)).await;
+    assert_eq!(status, 404);
+    let (status, patched) = call(
+        &client,
+        &base,
+        owner,
+        "PATCH",
+        &item,
+        json!({"status":"done"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(patched["todo"]["status"], "done");
+    let (status, _) = call(&client, &base, owner, "DELETE", &item, json!(null)).await;
+    assert_eq!(status, 200);
+    let (status, _) = call(&client, &base, owner, "DELETE", &item, json!(null)).await;
+    assert_eq!(status, 404);
+
+    // Legacy proposal aliases.
+    let proposals = format!("/api/repos/{repo_id}/proposals");
+    let (status, created) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &proposals,
+        json!({"message":"idea"}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let proposal_id = created["proposal"]["id"].as_str().unwrap().to_owned();
+    let alias = format!("/api/repo-proposals/{proposal_id}");
+    let (status, _) = call(
+        &client,
+        &base,
+        intruder,
+        "PATCH",
+        &alias,
+        json!({"status":"done"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, patched) = call(
+        &client,
+        &base,
+        owner,
+        "PATCH",
+        &alias,
+        json!({"status":"in_progress"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(patched["proposal"]["status"], "in_progress");
+    let (status, _) = call(&client, &base, owner, "DELETE", &alias, json!(null)).await;
+    assert_eq!(status, 200);
+
+    // Plans.
+    let plans = format!("/api/repos/{repo_id}/plans");
+    let (status, _) = call(
+        &client,
+        &base,
+        intruder,
+        "POST",
+        &plans,
+        json!({"title":"x"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, created) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &plans,
+        json!({"title":"Launch"}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let plan_id = created["plan"]["id"].as_str().unwrap().to_owned();
+    let plan = format!("/api/plans/{plan_id}");
+    let (status, got) = call(&client, &base, owner, "GET", &plan, json!(null)).await;
+    assert_eq!(status, 200);
+    assert_eq!(got["plan"]["title"], "Launch");
+    for (method, path) in [
+        ("GET", plan.clone()),
+        ("PATCH", plan.clone()),
+        ("DELETE", plan.clone()),
+        ("POST", format!("{plan}/generate")),
+        ("POST", format!("{plan}/start")),
+        ("POST", format!("{plan}/tasks/t/start")),
+    ] {
+        let (status, _) = call(&client, &base, intruder, method, &path, json!({})).await;
+        assert_eq!(status, 404, "{method} {path}");
+    }
+    let (status, patched) = call(
+        &client,
+        &base,
+        owner,
+        "PATCH",
+        &plan,
+        json!({"title":"Launch 2","status":"bogus"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(patched["plan"]["title"], "Launch 2");
+    assert_ne!(patched["plan"]["status"], "bogus");
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &format!("{plan}/start"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        &format!("{plan}/tasks/nope/start"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, owner, "DELETE", &plan, json!(null)).await;
+    assert_eq!(status, 200);
+    let (status, _) = call(&client, &base, owner, "GET", &plan, json!(null)).await;
+    assert_eq!(status, 404);
+
+    // Repo item routes.
+    let repo_path = format!("/api/repos/{repo_id}");
+    let (status, _) = call(
+        &client,
+        &base,
+        intruder,
+        "PATCH",
+        &repo_path,
+        json!({"name":"mine"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, intruder, "DELETE", &repo_path, json!(null)).await;
+    assert_eq!(status, 404);
+    let (status, renamed) = call(
+        &client,
+        &base,
+        owner,
+        "PATCH",
+        &repo_path,
+        json!({"name":"renamed"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(renamed["repo"]["name"], "renamed");
+    let (status, _) = call(&client, &base, owner, "DELETE", &repo_path, json!(null)).await;
+    assert_eq!(status, 200);
+    let (status, _) = call(&client, &base, owner, "DELETE", &repo_path, json!(null)).await;
+    assert_eq!(status, 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn user_question_routes_validate_and_report_missing_requests() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for path in [
+        "/api/user-questions/requests/q/submit",
+        "/api/user-questions/requests/q/cancel",
+    ] {
+        let (status, _) = call(&client, &base, None, "POST", path, json!({})).await;
+        assert_eq!(status, 401, "{path}");
+    }
+    let owner = token(&client, &base).await;
+    let owner = Some(owner.as_str());
+    let (status, listed) = call(
+        &client,
+        &base,
+        owner,
+        "GET",
+        "/api/user-questions/requests",
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(listed["requests"], json!([]));
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        "/api/user-questions/requests/q/submit",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        "/api/user-questions/requests/q/submit",
+        json!({"answers":{"0":{"selected":["a"]}}}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(
+        &client,
+        &base,
+        owner,
+        "POST",
+        "/api/user-questions/requests/q/cancel",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
 async fn second_token(client: &reqwest::Client, base: &str, owner: &str) -> String {
     let invite: serde_json::Value = client
         .post(format!("{base}/api/auth/invitations"))

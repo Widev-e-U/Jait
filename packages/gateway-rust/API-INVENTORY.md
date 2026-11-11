@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 187 | 43.9% |
-| native-untested | 190 | 44.6% |
+| native-tested | 202 | 47.4% |
+| native-untested | 175 | 41.1% |
 | missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -209,14 +209,14 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/network/ssh/enable` | routes/network.ts | native-untested |
 | POST | `/api/network/ssh/test` | routes/network.ts | missing |
 | GET | `/api/network/topology` | routes/network.ts | native-untested |
-| DELETE | `/api/plans/:id` | routes/plans.ts | native-untested |
-| GET | `/api/plans/:id` | routes/plans.ts | native-untested |
-| PATCH | `/api/plans/:id` | routes/plans.ts | native-untested |
+| DELETE | `/api/plans/:id` | routes/plans.ts | native-tested |
+| GET | `/api/plans/:id` | routes/plans.ts | native-tested |
+| PATCH | `/api/plans/:id` | routes/plans.ts | native-tested |
 | POST | `/api/plans/:id/generate` | routes/plans.ts | native-untested |
 | POST | `/api/plans/:id/start` | routes/plans.ts | native-untested |
 | POST | `/api/plans/:id/tasks/:taskId/start` | routes/plans.ts | native-untested |
-| GET | `/api/repos/:repoId/plans` | routes/plans.ts | native-untested |
-| POST | `/api/repos/:repoId/plans` | routes/plans.ts | native-untested |
+| GET | `/api/repos/:repoId/plans` | routes/plans.ts | native-tested |
+| POST | `/api/repos/:repoId/plans` | routes/plans.ts | native-tested |
 | GET | `/api/plugins` | routes/plugins.ts | native-tested |
 | DELETE | `/api/plugins/:id` | routes/plugins.ts | native-untested |
 | GET | `/api/plugins/:id` | routes/plugins.ts | native-untested |
@@ -303,19 +303,19 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | DELETE | `/api/reminders/:id` | routes/reminders.ts | native-tested |
 | PATCH | `/api/reminders/:id` | routes/reminders.ts | native-tested |
 | GET | `/api/reminders/export.md` | routes/reminders.ts | native-tested |
-| DELETE | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-untested |
-| PATCH | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-untested |
-| DELETE | `/api/repo-proposals/:id` | routes/repo-proposals.ts | native-untested |
-| PATCH | `/api/repo-proposals/:id` | routes/repo-proposals.ts | native-untested |
-| GET | `/api/repos/:repoId/proposals` | routes/repo-proposals.ts | native-untested |
-| POST | `/api/repos/:repoId/proposals` | routes/repo-proposals.ts | native-untested |
-| GET | `/api/repos/:repoId/todos` | routes/repo-proposals.ts | native-untested |
-| POST | `/api/repos/:repoId/todos` | routes/repo-proposals.ts | native-untested |
+| DELETE | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-tested |
+| PATCH | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-tested |
+| DELETE | `/api/repo-proposals/:id` | routes/repo-proposals.ts | native-tested |
+| PATCH | `/api/repo-proposals/:id` | routes/repo-proposals.ts | native-tested |
+| GET | `/api/repos/:repoId/proposals` | routes/repo-proposals.ts | native-tested |
+| POST | `/api/repos/:repoId/proposals` | routes/repo-proposals.ts | native-tested |
+| GET | `/api/repos/:repoId/todos` | routes/repo-proposals.ts | native-tested |
+| POST | `/api/repos/:repoId/todos` | routes/repo-proposals.ts | native-tested |
 | POST | `/api/repos/:repoId/todos/generate` | routes/repo-proposals.ts | native-untested |
 | GET | `/api/repos` | routes/repositories.ts | native-tested |
 | POST | `/api/repos` | routes/repositories.ts | native-tested |
-| DELETE | `/api/repos/:id` | routes/repositories.ts | native-untested |
-| PATCH | `/api/repos/:id` | routes/repositories.ts | native-untested |
+| DELETE | `/api/repos/:id` | routes/repositories.ts | native-tested |
+| PATCH | `/api/repos/:id` | routes/repositories.ts | native-tested |
 | GET | `/api/repos/:id/strategy` | routes/repositories.ts | native-untested |
 | PUT | `/api/repos/:id/strategy` | routes/repositories.ts | native-untested |
 | POST | `/api/repos/:id/strategy/generate` | routes/repositories.ts | native-untested |
