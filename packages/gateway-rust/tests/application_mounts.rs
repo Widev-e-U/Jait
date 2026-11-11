@@ -5154,6 +5154,70 @@ async fn repo_todo_proposal_and_plan_routes_validate_and_isolate_owners() {
 }
 
 #[tokio::test]
+async fn session_context_flow_and_sub_agent_routes_read_persisted_rows() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for path in [
+        "/api/sessions/s/messages/0/context-flow",
+        "/api/sessions/s/sub-agents/a",
+    ] {
+        let (status, _) = call(&client, &base, None, "GET", path, json!(null)).await;
+        assert_eq!(status, 401, "{path}");
+    }
+    let owner = token(&client, &base).await;
+    let intruder = second_token(&client, &base, &owner).await;
+    let (status, created) = call(&client, &base, Some(&owner), "POST", "/api/sessions", json!({})).await;
+    assert_eq!(status, 201, "{created}");
+    let session = created["id"].as_str().unwrap().to_owned();
+    let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    let flow = json!({"rounds":[{"n":1}]}).to_string();
+    for (id, role, content, calls, flow, at) in [
+        ("m1", "user", "hi", None::<&str>, None::<&str>, "2030-01-01T00:00:01Z"),
+        ("m2", "assistant", "", None, None, "2030-01-01T00:00:02Z"),
+        ("m3", "assistant", "hello", None, Some(flow.as_str()), "2030-01-01T00:00:03Z"),
+    ] {
+        db.execute(
+            "INSERT INTO messages(id, session_id, role, content, tool_calls, context_flow, created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            rusqlite::params![id, session, role, content, calls, flow, at],
+        )
+        .unwrap();
+    }
+    db.execute(
+        "INSERT INTO sub_agent_history(sub_agent_id, session_id, message_id, rounds, duration_ms, content, created_at) VALUES('sa1', ?1, 'm3', 2, 40, '\"done\"', '2030-01-01T00:00:04Z')",
+        [&session],
+    )
+    .unwrap();
+    drop(db);
+    let flow_path = |i: &str| format!("/api/sessions/{session}/messages/{i}/context-flow");
+    let (status, body) = call(&client, &base, Some(&owner), "GET", &flow_path("0"), json!(null)).await;
+    assert_eq!((status, &body["contextFlow"]), (200, &json!(null)));
+    // The empty assistant placeholder is not visible, so index 1 is "hello".
+    let (status, body) = call(&client, &base, Some(&owner), "GET", &flow_path("1"), json!(null)).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["contextFlow"]["rounds"][0]["n"], 1);
+    for (path, expected) in [(flow_path("2"), 404), (flow_path("-1"), 400), (flow_path("abc"), 400)] {
+        let (status, _) = call(&client, &base, Some(&owner), "GET", &path, json!(null)).await;
+        assert_eq!(status, expected, "{path}");
+    }
+    let (status, _) = call(&client, &base, Some(&intruder), "GET", &flow_path("1"), json!(null)).await;
+    assert_eq!(status, 404);
+    let sub = |id: &str| format!("/api/sessions/{session}/sub-agents/{id}");
+    let (status, body) = call(&client, &base, Some(&owner), "GET", &sub("sa1"), json!(null)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["subAgent"]["content"], "done");
+    assert_eq!(body["subAgent"]["rounds"], 2);
+    assert_eq!(body["subAgent"]["messageId"], "m3");
+    let (status, _) = call(&client, &base, Some(&owner), "GET", &sub("nope"), json!(null)).await;
+    assert_eq!(status, 404);
+    let (status, _) = call(&client, &base, Some(&intruder), "GET", &sub("sa1"), json!(null)).await;
+    assert_eq!(status, 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn user_question_routes_validate_and_report_missing_requests() {
     use serde_json::json;
     let (base, stop, task, dir) = start().await;

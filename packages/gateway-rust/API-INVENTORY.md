@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 202 | 47.4% |
+| native-tested | 204 | 47.9% |
 | native-untested | 175 | 41.1% |
-| missing | 49 | 11.5% |
+| missing | 47 | 11.0% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -76,7 +76,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/sessions/:sessionId/loop` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/loop` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/messages` | routes/chat.ts | native-tested |
-| GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | routes/chat.ts | missing |
+| GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/plan` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/plan/execute` | routes/chat.ts | missing |
 | POST | `/api/sessions/:sessionId/plan/reject` | routes/chat.ts | native-tested |
@@ -85,7 +85,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/sessions/:sessionId/runtime` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/steer` | routes/chat.ts | missing |
 | GET | `/api/sessions/:sessionId/stream` | routes/chat.ts | native-tested |
-| GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | routes/chat.ts | missing |
+| GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/trajectory` | routes/chat.ts | missing |
 | GET | `/api/sessions/streaming` | routes/chat.ts | native-tested |
 | GET | `/api/code-graph` | routes/code-graph.ts | native-tested |

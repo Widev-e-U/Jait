@@ -213,6 +213,14 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/runtime", get(runtime))
             .route("/api/sessions/{id}/loop", get(session_loop))
             .route("/api/sessions/{id}/fork", post(session_fork))
+            .route(
+                "/api/sessions/{id}/messages/{index}/context-flow",
+                get(message_context_flow),
+            )
+            .route(
+                "/api/sessions/{id}/sub-agents/{sub_agent}",
+                get(session_sub_agent),
+            )
             .route("/api/sessions/{id}/plan", get(session_plan))
             .route("/api/sessions/{id}/plan/reject", post(session_plan))
             .route("/api/chat/prewarm", post(prewarm))
@@ -1222,6 +1230,150 @@ async fn session_plan(
             json!({"error":"NOT_FOUND","details":"Session not found"}),
         ),
         Err(_) => auth::internal_error(),
+    }
+}
+/// Lazily loaded identity/context snapshot of one visible message. Rows follow the messages
+/// endpoint order; empty assistant placeholders are not visible. The Node gateway also
+/// recomputes size metrics for old snapshots; the stored JSON is returned as persisted here.
+async fn message_context_flow(
+    State(state): State<ChatRoutes>,
+    Path((session, index)): Path<(String, String)>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    let digits = index.trim_start().trim_start_matches('+');
+    let (negative, digits) = match digits.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, digits),
+    };
+    let digits: String = digits.chars().take_while(char::is_ascii_digit).collect();
+    let parsed = digits.parse::<usize>().ok();
+    let Some(index) = parsed.filter(|n| !negative || *n == 0) else {
+        return response(
+            400,
+            json!({"error":"VALIDATION_ERROR","details":"messageIndex must be a non-negative integer"}),
+        );
+    };
+    let flow = state
+        .auth
+        .with_database(move |db| {
+            let mut statement = db.prepare(
+                "SELECT context_flow, role, content, tool_calls FROM messages WHERE session_id = ?1 ORDER BY created_at, id",
+            )?;
+            let rows = statement.query_map([&session], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })?;
+            let mut visible = 0usize;
+            for row in rows {
+                let (flow, role, content, calls) = row?;
+                let empty = |v: &Option<String>| v.as_deref().is_none_or(str::is_empty);
+                if role == "assistant" && empty(&content) && empty(&calls) {
+                    continue;
+                }
+                if visible == index {
+                    return Ok(Some(flow));
+                }
+                visible += 1;
+            }
+            Ok(None)
+        })
+        .await;
+    match flow {
+        Ok(Some(flow)) => {
+            let parsed = flow
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+                .filter(|v| v["rounds"].is_array());
+            response(200, json!({"contextFlow":parsed}))
+        }
+        Ok(None) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Message not found"}),
+        ),
+        Err(_) => auth::internal_error(),
+    }
+}
+/// Full persisted body of one sub-agent, loaded when its card is expanded.
+async fn session_sub_agent(
+    State(state): State<ChatRoutes>,
+    Path((session, sub_agent)): Path<(String, String)>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    let found = state
+        .auth
+        .with_database(move |db| {
+            use rusqlite::OptionalExtension;
+            db.query_row(
+                "SELECT sub_agent_id, session_id, message_id, performative, rounds, duration_ms, created_at, content, segments, tool_calls FROM sub_agent_history WHERE sub_agent_id = ?1 AND session_id = ?2",
+                [&sub_agent, &session],
+                |row| {
+                    let json_column = |i: usize| -> rusqlite::Result<Value> {
+                        Ok(row
+                            .get::<_, Option<String>>(i)?
+                            .and_then(|text| serde_json::from_str(&text).ok())
+                            .unwrap_or(Value::Null))
+                    };
+                    Ok(json!({
+                        "subAgentId": row.get::<_, String>(0)?,
+                        "sessionId": row.get::<_, Option<String>>(1)?,
+                        "messageId": row.get::<_, Option<String>>(2)?,
+                        "performative": row.get::<_, Option<String>>(3)?,
+                        "rounds": row.get::<_, Option<i64>>(4)?,
+                        "durationMs": row.get::<_, Option<i64>>(5)?,
+                        "createdAt": row.get::<_, rusqlite::types::Value>(6)?.into_json(),
+                        "content": json_column(7)?,
+                        "segments": json_column(8)?,
+                        "toolCalls": json_column(9)?,
+                    }))
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+        })
+        .await;
+    match found {
+        Ok(Some(sub_agent)) => response(200, json!({"subAgent":sub_agent})),
+        Ok(None) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Sub-agent not found"}),
+        ),
+        Err(_) => auth::internal_error(),
+    }
+}
+trait IntoJson {
+    fn into_json(self) -> Value;
+}
+impl IntoJson for rusqlite::types::Value {
+    fn into_json(self) -> Value {
+        match self {
+            Self::Integer(n) => json!(n),
+            Self::Real(n) => json!(n),
+            Self::Text(s) => json!(s),
+            _ => Value::Null,
+        }
     }
 }
 /// Pre-warming is an optimisation only. This gateway starts provider sessions
