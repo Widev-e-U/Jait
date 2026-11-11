@@ -4868,3 +4868,313 @@ async fn terminal_routes_are_owner_scoped_and_validate_input() {
     let _ = task.await;
     drop(dir);
 }
+
+async fn second_token(client: &reqwest::Client, base: &str, owner: &str) -> String {
+    let invite: serde_json::Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: serde_json::Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&serde_json::json!({"username":"intruder","password":"correct-horse-2","invitation":invite["invitation"]}))
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    other["access_token"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no second token: {other}"))
+        .to_owned()
+}
+
+#[tokio::test]
+async fn reminder_item_routes_validate_and_isolate_owners() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for (method, path) in [
+        ("PATCH", "/api/reminders/x"),
+        ("DELETE", "/api/reminders/x"),
+        ("GET", "/api/reminders/export.md"),
+    ] {
+        let anon = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{method} {path}");
+    }
+    let token = token(&client, &base).await;
+    let blank = client
+        .post(format!("{base}/api/reminders"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "   "}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blank.status(), 400);
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/reminders"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "remember-the-milk-marker"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["reminder"]["id"].as_str().unwrap().to_owned();
+
+    let export = client
+        .get(format!("{base}/api/reminders/export.md"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(export.status(), 200);
+    assert!(
+        export
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("text/markdown")
+    );
+    assert!(
+        export
+            .text()
+            .await
+            .unwrap()
+            .contains("remember-the-milk-marker")
+    );
+
+    let other = second_token(&client, &base, &token).await;
+    let foreign_export = client
+        .get(format!("{base}/api/reminders/export.md"))
+        .bearer_auth(&other)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!foreign_export.contains("remember-the-milk-marker"));
+    for method in ["PATCH", "DELETE"] {
+        let denied = client
+            .request(
+                method.parse().unwrap(),
+                format!("{base}/api/reminders/{id}"),
+            )
+            .bearer_auth(&other)
+            .json(&serde_json::json!({"content": "hijack"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), 404, "{method}");
+    }
+
+    let empty = client
+        .patch(format!("{base}/api/reminders/{id}"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": " "}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(empty.status(), 400);
+    let bad_status = client
+        .patch(format!("{base}/api/reminders/{id}"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"status": "bogus"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_status.status(), 400);
+    let patched: serde_json::Value = client
+        .patch(format!("{base}/api/reminders/{id}"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "edited-marker", "status": "archived"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(patched["reminder"]["content"], "edited-marker", "{patched}");
+    assert_eq!(patched["reminder"]["status"], "archived", "{patched}");
+    let missing = client
+        .patch(format!("{base}/api/reminders/nope"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"content": "x"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+
+    let deleted = client
+        .delete(format!("{base}/api/reminders/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 200);
+    let again = client
+        .delete(format!("{base}/api/reminders/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(again.status(), 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn trust_level_item_routes_need_login_and_reset_state() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon_get = client
+        .get(format!("{base}/api/trust/levels/file.write"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon_get.status(), 401);
+    let anon_reset = client
+        .post(format!("{base}/api/trust/levels/file.write/reset"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon_reset.status(), 401);
+    let token = token(&client, &base).await;
+    let level = client
+        .get(format!("{base}/api/trust/levels/file.write"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(level.status(), 200);
+    let level: serde_json::Value = level.json().await.unwrap();
+    assert!(level.is_object(), "{level}");
+    let reset = client
+        .post(format!("{base}/api/trust/levels/file.write/reset"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reset.status(), 200);
+    let reset: serde_json::Value = reset.json().await.unwrap();
+    assert!(reset.is_object(), "{reset}");
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn assistant_profile_item_routes_validate_and_isolate_owners() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let anon = client
+        .get(format!("{base}/api/assistants/profiles/x"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let token = token(&client, &base).await;
+    let nameless = client
+        .post(format!("{base}/api/assistants/profiles"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"name": "  "}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(nameless.status(), 400);
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/assistants/profiles"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"name": "Reviewer", "runtimeMode": "bogus"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["profile"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["profile"]["name"], "Reviewer", "{created}");
+    assert!(created["profile"]["runtimeMode"].is_null(), "{created}");
+
+    let got: serde_json::Value = client
+        .get(format!("{base}/api/assistants/profiles/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(got["profile"]["id"], id.as_str());
+
+    let other = second_token(&client, &base, &token).await;
+    for method in ["GET", "PATCH", "DELETE"] {
+        let denied = client
+            .request(
+                method.parse().unwrap(),
+                format!("{base}/api/assistants/profiles/{id}"),
+            )
+            .bearer_auth(&other)
+            .json(&serde_json::json!({"name": "hijack"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), 404, "{method}");
+    }
+
+    let patched: serde_json::Value = client
+        .patch(format!("{base}/api/assistants/profiles/{id}"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"description": "d", "runtimeMode": "supervised"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(patched["profile"]["runtimeMode"], "supervised", "{patched}");
+    assert_eq!(patched["profile"]["name"], "Reviewer", "{patched}");
+    let missing = client
+        .patch(format!("{base}/api/assistants/profiles/nope"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"description": "x"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+
+    let deleted = client
+        .delete(format!("{base}/api/assistants/profiles/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 204);
+    let again = client
+        .delete(format!("{base}/api/assistants/profiles/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(again.status(), 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

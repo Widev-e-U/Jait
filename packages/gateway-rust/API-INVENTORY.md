@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 181 | 42.5% |
-| native-untested | 196 | 46.0% |
+| native-tested | 187 | 43.9% |
+| native-untested | 190 | 44.6% |
 | missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -33,9 +33,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | PUT | `/api/architecture` | routes/architecture.ts | native-tested |
 | GET | `/api/assistants/profiles` | routes/assistant-profiles.ts | native-tested |
 | POST | `/api/assistants/profiles` | routes/assistant-profiles.ts | native-tested |
-| DELETE | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-untested |
-| GET | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-untested |
-| PATCH | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-untested |
+| DELETE | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-tested |
+| GET | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-tested |
+| PATCH | `/api/assistants/profiles/:id` | routes/assistant-profiles.ts | native-tested |
 | POST | `/api/auth/invitations` | routes/auth.ts | native-tested |
 | POST | `/api/auth/login` | routes/auth.ts | native-untested |
 | POST | `/api/auth/logout` | routes/auth.ts | native-untested |
@@ -300,9 +300,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/repos/:id/pull-requests/:number/reviews` | routes/pull-requests.ts | native-untested |
 | GET | `/api/reminders` | routes/reminders.ts | native-tested |
 | POST | `/api/reminders` | routes/reminders.ts | native-tested |
-| DELETE | `/api/reminders/:id` | routes/reminders.ts | native-untested |
-| PATCH | `/api/reminders/:id` | routes/reminders.ts | native-untested |
-| GET | `/api/reminders/export.md` | routes/reminders.ts | native-untested |
+| DELETE | `/api/reminders/:id` | routes/reminders.ts | native-tested |
+| PATCH | `/api/reminders/:id` | routes/reminders.ts | native-tested |
+| GET | `/api/reminders/export.md` | routes/reminders.ts | native-tested |
 | DELETE | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-untested |
 | PATCH | `/api/jait-todos/:id` | routes/repo-proposals.ts | native-untested |
 | DELETE | `/api/repo-proposals/:id` | routes/repo-proposals.ts | native-untested |
