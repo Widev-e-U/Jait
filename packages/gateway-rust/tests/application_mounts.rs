@@ -4343,3 +4343,528 @@ async fn session_plan_and_prewarm_respect_auth_and_ownership() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn consent_routes_are_owner_scoped_and_toggle_session_approve_all() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for path in [
+        "/api/consent/policy",
+        "/api/consent/pending",
+        "/api/consent/count",
+        "/api/consent/nope",
+        "/api/consent/pending/nope",
+    ] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path}");
+    }
+    let token = token(&client, &base).await;
+    let get = |path: String| {
+        let request = client.get(format!("{base}{path}")).bearer_auth(&token);
+        async move { request.send().await.unwrap() }
+    };
+    let policy: serde_json::Value = get("/api/consent/policy".into())
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(policy["unknownToolsRequireConsent"], true, "{policy}");
+    let pending: serde_json::Value = get("/api/consent/pending".into())
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(pending["requests"], serde_json::json!([]), "{pending}");
+    let count: serde_json::Value = get("/api/consent/count".into()).await.json().await.unwrap();
+    assert_eq!(count["count"], 0, "{count}");
+    assert_eq!(get("/api/consent/nope".into()).await.status(), 404);
+    // a session the caller does not own is invisible, not an empty list
+    assert_eq!(get("/api/consent/pending/nope".into()).await.status(), 404);
+    assert_eq!(
+        get("/api/consent/pending/nope/approve-all".into())
+            .await
+            .status(),
+        404
+    );
+    for action in ["approve", "reject", "approve-all"] {
+        let unknown = client
+            .post(format!("{base}/api/consent/nope/{action}"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(unknown.status(), 404, "{action}");
+    }
+    let foreign = client
+        .post(format!("{base}/api/consent/pending/nope/approve-all"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(foreign.status(), 404);
+    let trust: serde_json::Value = get("/api/trust".into()).await.json().await.unwrap();
+    assert!(trust["message"].is_string(), "{trust}");
+
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = session["id"].as_str().unwrap().to_owned();
+    let own: serde_json::Value = get(format!("/api/consent/pending/{id}"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(own["requests"], serde_json::json!([]), "{own}");
+    let url = format!("{base}/api/consent/pending/{id}/approve-all");
+    let state = |value: serde_json::Value| async move { value["approveAllEnabled"].clone() };
+    let off: serde_json::Value = get(format!("/api/consent/pending/{id}/approve-all"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state(off).await, false);
+    let on: serde_json::Value = client
+        .post(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(on["approveAllEnabled"], true, "{on}");
+    assert_eq!(on["approvedCount"], 0, "{on}");
+    let enabled: serde_json::Value = get(format!("/api/consent/pending/{id}/approve-all"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state(enabled).await, true);
+    let cleared: serde_json::Value = client
+        .delete(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cleared["approveAllEnabled"], false, "{cleared}");
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn session_lifecycle_routes_archive_move_view_and_keep_state() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for (method, path) in [
+        ("GET", "/api/sessions/last-active"),
+        ("GET", "/api/tools/sessions.list"),
+        ("GET", "/api/tools/sessions.status"),
+        ("GET", "/api/sessions/x/state"),
+        ("POST", "/api/sessions/x/archive"),
+        ("POST", "/api/sessions/x/viewed"),
+        ("POST", "/api/sessions/x/move"),
+        ("POST", "/api/sessions/x/generate-title"),
+    ] {
+        let anon = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{method} {path}");
+    }
+    let token = token(&client, &base).await;
+    let send = |method: &str, path: String, body: serde_json::Value| {
+        let request = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .bearer_auth(&token)
+            .json(&body);
+        async move { request.send().await.unwrap() }
+    };
+    let none: serde_json::Value = send(
+        "GET",
+        "/api/sessions/last-active".into(),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(none["session"].is_null(), "{none}");
+    let made = send(
+        "POST",
+        "/api/sessions".into(),
+        serde_json::json!({"name": "lifecycle", "projectPath": dir.to_string_lossy()}),
+    )
+    .await;
+    assert_eq!(made.status(), 201);
+    let session: serde_json::Value = made.json().await.unwrap();
+    let id = session["id"].as_str().unwrap().to_owned();
+    let project = session["projectId"]
+        .as_str()
+        .expect("project created")
+        .to_owned();
+
+    let last: serde_json::Value = send(
+        "GET",
+        "/api/sessions/last-active".into(),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(last["session"]["id"], id, "{last}");
+    let listed: serde_json::Value = send(
+        "GET",
+        "/api/tools/sessions.list".into(),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(listed["sessions"].to_string().contains(&id), "{listed}");
+    let status_url = |sid: &str| format!("/api/tools/sessions.status?sessionId={sid}");
+    let status = send("GET", status_url(&id), serde_json::json!(null)).await;
+    assert_eq!(status.status(), 200);
+    assert_eq!(
+        send("GET", status_url("nope"), serde_json::json!(null))
+            .await
+            .status(),
+        404
+    );
+    assert_eq!(
+        send(
+            "GET",
+            "/api/tools/sessions.status".into(),
+            serde_json::json!(null)
+        )
+        .await
+        .status(),
+        400
+    );
+
+    let viewed: serde_json::Value = send(
+        "POST",
+        format!("/api/sessions/{id}/viewed"),
+        serde_json::json!({}),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(viewed["ok"], true, "{viewed}");
+    let bad_stamp = send(
+        "POST",
+        format!("/api/sessions/{id}/viewed"),
+        serde_json::json!({"lastActiveAt": "not a date"}),
+    )
+    .await;
+    assert_eq!(bad_stamp.status(), 400);
+
+    let patched = send(
+        "PATCH",
+        format!("/api/sessions/{id}/state"),
+        serde_json::json!({"draft": "hello", "tab": 2}),
+    )
+    .await;
+    assert_eq!(patched.status(), 200);
+    let state: serde_json::Value = send(
+        "GET",
+        format!("/api/sessions/{id}/state"),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(state.to_string().contains("hello"), "{state}");
+    let only_tab: serde_json::Value = send(
+        "GET",
+        format!("/api/sessions/{id}/state?keys=tab"),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(!only_tab.to_string().contains("hello"), "{only_tab}");
+    assert_eq!(
+        send(
+            "PATCH",
+            format!("/api/sessions/{id}/state"),
+            serde_json::json!([1])
+        )
+        .await
+        .status(),
+        400
+    );
+    assert_eq!(
+        send(
+            "GET",
+            "/api/sessions/nope/state".into(),
+            serde_json::json!(null)
+        )
+        .await
+        .status(),
+        404
+    );
+
+    // moving to the project it is already in is a no-op; a malformed or foreign target is refused
+    let same: serde_json::Value = send(
+        "POST",
+        format!("/api/sessions/{id}/move"),
+        serde_json::json!({"projectId": project}),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(same["moved"], false, "{same}");
+    let to_chat: serde_json::Value = send(
+        "POST",
+        format!("/api/sessions/{id}/move"),
+        serde_json::json!({"projectId": null}),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(to_chat["moved"], true, "{to_chat}");
+    assert!(to_chat["toProjectId"].is_null(), "{to_chat}");
+    assert_eq!(
+        send(
+            "POST",
+            format!("/api/sessions/{id}/move"),
+            serde_json::json!({"projectId": 7})
+        )
+        .await
+        .status(),
+        400
+    );
+    assert_eq!(
+        send(
+            "POST",
+            format!("/api/sessions/{id}/move"),
+            serde_json::json!({"projectId": "nope"})
+        )
+        .await
+        .status(),
+        404
+    );
+    assert_eq!(
+        send(
+            "POST",
+            "/api/sessions/nope/move".into(),
+            serde_json::json!({"projectId": null})
+        )
+        .await
+        .status(),
+        404
+    );
+
+    // no title transport is configured, so a missing session is the only deterministic answer here
+    assert_eq!(
+        send(
+            "POST",
+            "/api/sessions/nope/generate-title".into(),
+            serde_json::json!({"prompt": "hi"})
+        )
+        .await
+        .status(),
+        404
+    );
+
+    let archived: serde_json::Value = send(
+        "POST",
+        format!("/api/sessions/{id}/archive"),
+        serde_json::json!({}),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(archived["status"], "archived", "{archived}");
+    assert_eq!(
+        send(
+            "POST",
+            "/api/sessions/nope/archive".into(),
+            serde_json::json!({})
+        )
+        .await
+        .status(),
+        404
+    );
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test]
+async fn terminal_routes_are_owner_scoped_and_validate_input() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for (method, path) in [
+        ("GET", "/api/terminals/shells"),
+        ("GET", "/api/terminals/term-x"),
+        ("DELETE", "/api/terminals/term-x"),
+        ("POST", "/api/terminals/term-x/write"),
+        ("POST", "/api/terminals/term-x/resize"),
+        ("POST", "/api/terminals/term-x/execute"),
+    ] {
+        let anon = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{method} {path}");
+    }
+    let token = token(&client, &base).await;
+    let send = |method: &str, path: String, body: serde_json::Value| {
+        let request = client
+            .request(method.parse().unwrap(), format!("{base}{path}"))
+            .bearer_auth(&token)
+            .json(&body);
+        async move { request.send().await.unwrap() }
+    };
+    let shells: serde_json::Value = send(
+        "GET",
+        "/api/terminals/shells".into(),
+        serde_json::json!(null),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(shells["shells"].is_array(), "{shells}");
+    for (method, path) in [
+        ("GET", "/api/terminals/term-x"),
+        ("DELETE", "/api/terminals/term-x"),
+        ("POST", "/api/terminals/term-x/write"),
+        ("POST", "/api/terminals/term-x/resize"),
+    ] {
+        let missing = send(method, path.into(), serde_json::json!({"data": "x"})).await;
+        assert_eq!(missing.status(), 404, "{method} {path}");
+    }
+    let blank = send(
+        "POST",
+        "/api/terminals/term-x/execute".into(),
+        serde_json::json!({"command": "   "}),
+    )
+    .await;
+    assert_eq!(blank.status(), 400);
+    let unknown = send(
+        "POST",
+        "/api/terminals/term-x/execute".into(),
+        serde_json::json!({"command": "echo hi"}),
+    )
+    .await;
+    assert_eq!(unknown.status(), 404);
+
+    let made = send("POST", "/api/terminals".into(), serde_json::json!({})).await;
+    if made.status() == 201 {
+        let term: serde_json::Value = made.json().await.unwrap();
+        let id = term["id"].as_str().unwrap().to_owned();
+        assert_eq!(
+            send(
+                "GET",
+                format!("/api/terminals/{id}"),
+                serde_json::json!(null)
+            )
+            .await
+            .status(),
+            200
+        );
+        let write = send(
+            "POST",
+            format!("/api/terminals/{id}/write"),
+            serde_json::json!({"data": "\n"}),
+        )
+        .await;
+        assert_eq!(write.status(), 200);
+        let resized: serde_json::Value = send(
+            "POST",
+            format!("/api/terminals/{id}/resize"),
+            serde_json::json!({"cols": 100, "rows": 30}),
+        )
+        .await
+        .json()
+        .await
+        .unwrap();
+        assert_eq!(resized["ok"], true, "{resized}");
+        // a second account must not see, drive or stop the first account's terminal
+        let invite: serde_json::Value = client
+            .post(format!("{base}/api/auth/invitations"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let other: serde_json::Value = client
+            .post(format!("{base}/api/auth/register"))
+            .json(&serde_json::json!({"username": "intruder", "password": "correct-horse-2", "invitation": invite["invitation"]}))
+            .timeout(Duration::from_secs(60))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let other = other["access_token"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no second token: {other}"))
+            .to_owned();
+        for (method, path) in [
+            ("GET", format!("/api/terminals/{id}")),
+            ("POST", format!("/api/terminals/{id}/write")),
+            ("DELETE", format!("/api/terminals/{id}")),
+        ] {
+            let denied = client
+                .request(method.parse().unwrap(), format!("{base}{path}"))
+                .bearer_auth(&other)
+                .json(&serde_json::json!({"data": "x"}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(denied.status(), 404, "{method} {path}");
+        }
+        let stopped = send(
+            "DELETE",
+            format!("/api/terminals/{id}"),
+            serde_json::json!(null),
+        )
+        .await;
+        assert_eq!(stopped.status(), 200);
+        assert_eq!(
+            send(
+                "GET",
+                format!("/api/terminals/{id}"),
+                serde_json::json!(null)
+            )
+            .await
+            .status(),
+            404
+        );
+    }
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}

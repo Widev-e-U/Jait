@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 163 | 38.3% |
-| native-untested | 214 | 50.2% |
+| native-tested | 181 | 42.5% |
+| native-untested | 196 | 46.0% |
 | missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -100,12 +100,12 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/consent/:id/reject` | routes/consent.ts | native-tested |
 | GET | `/api/consent/count` | routes/consent.ts | native-tested |
 | GET | `/api/consent/pending` | routes/consent.ts | native-tested |
-| GET | `/api/consent/pending/:sessionId` | routes/consent.ts | native-untested |
-| DELETE | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
-| GET | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
-| POST | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
+| GET | `/api/consent/pending/:sessionId` | routes/consent.ts | native-tested |
+| DELETE | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-tested |
+| GET | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-tested |
+| POST | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-tested |
 | GET | `/api/consent/policy` | routes/consent.ts | native-tested |
-| GET | `/api/trust` | routes/consent.ts | native-untested |
+| GET | `/api/trust` | routes/consent.ts | native-tested |
 | GET | `/api/email/accounts` | routes/email.ts | native-tested |
 | POST | `/api/email/accounts` | routes/email.ts | native-tested |
 | DELETE | `/api/email/accounts/:id` | routes/email.ts | native-untested |
@@ -361,15 +361,15 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | DELETE | `/api/sessions/:id` | routes/sessions.ts | native-tested |
 | GET | `/api/sessions/:id` | routes/sessions.ts | native-tested |
 | PATCH | `/api/sessions/:id` | routes/sessions.ts | native-tested |
-| POST | `/api/sessions/:id/archive` | routes/sessions.ts | native-untested |
+| POST | `/api/sessions/:id/archive` | routes/sessions.ts | native-tested |
 | POST | `/api/sessions/:id/generate-title` | routes/sessions.ts | native-untested |
-| POST | `/api/sessions/:id/move` | routes/sessions.ts | native-untested |
-| GET | `/api/sessions/:id/state` | routes/sessions.ts | native-untested |
-| PATCH | `/api/sessions/:id/state` | routes/sessions.ts | native-untested |
-| POST | `/api/sessions/:id/viewed` | routes/sessions.ts | native-untested |
-| GET | `/api/sessions/last-active` | routes/sessions.ts | native-untested |
-| GET | `/api/tools/sessions.list` | routes/sessions.ts | native-untested |
-| GET | `/api/tools/sessions.status` | routes/sessions.ts | native-untested |
+| POST | `/api/sessions/:id/move` | routes/sessions.ts | native-tested |
+| GET | `/api/sessions/:id/state` | routes/sessions.ts | native-tested |
+| PATCH | `/api/sessions/:id/state` | routes/sessions.ts | native-tested |
+| POST | `/api/sessions/:id/viewed` | routes/sessions.ts | native-tested |
+| GET | `/api/sessions/last-active` | routes/sessions.ts | native-tested |
+| GET | `/api/tools/sessions.list` | routes/sessions.ts | native-tested |
+| GET | `/api/tools/sessions.status` | routes/sessions.ts | native-tested |
 | GET | `/api/skills` | routes/skills.ts | native-tested |
 | PATCH | `/api/skills/:id` | routes/skills.ts | native-untested |
 | POST | `/api/skills/:id/install-tool` | routes/skills.ts | native-untested |
@@ -385,12 +385,12 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/surfaces` | routes/terminals.ts | native-tested |
 | GET | `/api/terminals` | routes/terminals.ts | native-tested |
 | POST | `/api/terminals` | routes/terminals.ts | native-tested |
-| DELETE | `/api/terminals/:id` | routes/terminals.ts | native-untested |
-| GET | `/api/terminals/:id` | routes/terminals.ts | native-untested |
+| DELETE | `/api/terminals/:id` | routes/terminals.ts | native-tested |
+| GET | `/api/terminals/:id` | routes/terminals.ts | native-tested |
 | POST | `/api/terminals/:id/execute` | routes/terminals.ts | native-untested |
-| POST | `/api/terminals/:id/resize` | routes/terminals.ts | native-untested |
-| POST | `/api/terminals/:id/write` | routes/terminals.ts | native-untested |
-| GET | `/api/terminals/shells` | routes/terminals.ts | native-untested |
+| POST | `/api/terminals/:id/resize` | routes/terminals.ts | native-tested |
+| POST | `/api/terminals/:id/write` | routes/terminals.ts | native-tested |
+| GET | `/api/terminals/shells` | routes/terminals.ts | native-tested |
 | GET | `/api/tools` | routes/terminals.ts | native-tested |
 | POST | `/api/tools/execute` | routes/terminals.ts | native-tested |
 | GET | `/api/persona-agents` | routes/threads.ts | native-tested |
