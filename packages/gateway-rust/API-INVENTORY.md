@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 204 | 47.9% |
+| native-tested | 207 | 48.6% |
 | native-untested | 175 | 41.1% |
-| missing | 47 | 11.0% |
+| missing | 44 | 10.3% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -69,7 +69,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/channels/:id/stop` | routes/channels.ts | native-untested |
 | POST | `/api/chat` | routes/chat.ts | native-tested |
 | POST | `/api/chat/prewarm` | routes/chat.ts | native-tested |
-| POST | `/api/sessions/:sessionId/approve` | routes/chat.ts | missing |
+| POST | `/api/sessions/:sessionId/approve` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/cancel` | routes/chat.ts | native-untested |
 | GET | `/api/sessions/:sessionId/events` | routes/chat.ts | native-untested |
 | POST | `/api/sessions/:sessionId/fork` | routes/chat.ts | native-tested |
@@ -83,10 +83,10 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/sessions/:sessionId/restart-from` | routes/chat.ts | missing |
 | POST | `/api/sessions/:sessionId/retry-tool` | routes/chat.ts | missing |
 | GET | `/api/sessions/:sessionId/runtime` | routes/chat.ts | native-tested |
-| POST | `/api/sessions/:sessionId/steer` | routes/chat.ts | missing |
+| POST | `/api/sessions/:sessionId/steer` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/stream` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | routes/chat.ts | native-tested |
-| GET | `/api/sessions/:sessionId/trajectory` | routes/chat.ts | missing |
+| GET | `/api/sessions/:sessionId/trajectory` | routes/chat.ts | native-tested |
 | GET | `/api/sessions/streaming` | routes/chat.ts | native-tested |
 | GET | `/api/code-graph` | routes/code-graph.ts | native-tested |
 | POST | `/api/code-graph/graphrag/prepare` | routes/code-graph.ts | native-tested |

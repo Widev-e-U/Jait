@@ -181,6 +181,23 @@ fn frames_stream(
     })
 }
 
+/// Render one durable frame. The trajectory view wraps the stored event in an envelope that
+/// carries the log id and replay flag; the plain event stream sends the event itself.
+fn durable_text(trajectory: bool, log_id: i64, data: &str, replay: bool) -> String {
+    if !trajectory {
+        return format!("id: {log_id}\ndata: {data}\n\n");
+    }
+    let mut payload: Value = serde_json::from_str(data).unwrap_or_else(|_| json!({}));
+    if let Some(object) = payload.as_object_mut() {
+        object.remove("replay");
+    }
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis() as u64);
+    let envelope = json!({"type":"trajectory_event","log_id":log_id,"ts":ts,"replay":replay,"payload":payload});
+    format!("id: {log_id}\ndata: {envelope}\n\n")
+}
+
 struct SessionEventStream {
     receiver: Pin<Box<dyn Stream<Item = Result<Message, broadcast::error::RecvError>> + Send>>,
     heartbeat: Interval,
@@ -190,6 +207,7 @@ struct SessionEventStream {
     bytes: usize,
     max_bytes: usize,
     done: bool,
+    trajectory: bool,
 }
 
 impl SessionEventStream {
@@ -231,7 +249,7 @@ impl Stream for SessionEventStream {
                         continue;
                     }
                     self.last = log_id;
-                    let frame = format!("id: {log_id}\ndata: {data}\n\n");
+                    let frame = durable_text(self.trajectory, log_id, &data, false);
                     if let Some(frame) = self.charge(frame) {
                         return Poll::Ready(Some(Ok(frame)));
                     }
@@ -279,6 +297,24 @@ pub async fn stream(
     Path(session_id): Path<String>,
     headers: HeaderMap,
 ) -> Response {
+    serve(state, session_id, headers, false).await
+}
+
+/// Full persisted event log followed by live events, wrapped in trajectory envelopes.
+pub async fn trajectory(
+    State(state): State<ChatRoutes>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    serve(state, session_id, headers, true).await
+}
+
+async fn serve(
+    state: ChatRoutes,
+    session_id: String,
+    headers: HeaderMap,
+    trajectory: bool,
+) -> Response {
     let user = match auth::require_user(&state.auth, &headers).await {
         Ok(user) => user,
         Err(error) => return *error,
@@ -292,7 +328,12 @@ pub async fn stream(
         Ok(result) => result,
         Err(_) => return auth::response(503, json!({"error":"STREAM_CAPACITY_UNAVAILABLE"})),
     };
-    let resume = parse_last_event_id(&headers);
+    // The trajectory view always replays the whole log; the event stream resumes from the cursor.
+    let resume = if trajectory {
+        Some(0)
+    } else {
+        parse_last_event_id(&headers)
+    };
     let limits = state.limits.clone();
     let session_key = session_id.clone();
     let auth_state = state.auth.clone();
@@ -335,7 +376,7 @@ pub async fn stream(
     let mut last = start;
     for Frame { log_id, data } in frames.frames {
         last = log_id;
-        queued.push_back(format!("id: {log_id}\ndata: {data}\n\n"));
+        queued.push_back(durable_text(trajectory, log_id, &data, true));
     }
     if !frames.complete {
         queued.push_back("data: {\"type\":\"replay_required\"}\n\n".to_owned());
@@ -357,6 +398,7 @@ pub async fn stream(
         bytes: 0,
         max_bytes: limits.stream_bytes,
         done: !frames.complete,
+        trajectory,
     };
     (
         [
@@ -419,6 +461,7 @@ mod tests {
             bytes: 0,
             max_bytes: 4096,
             done: false,
+            trajectory: false,
         };
         let stream = authorized_stream(inner, auth.clone(), "session".into(), "owner".into());
         futures_util::pin_mut!(stream);
@@ -456,6 +499,7 @@ mod tests {
             bytes: 0,
             max_bytes: 4096,
             done: false,
+            trajectory: false,
         };
         let stream = authorized_stream(inner, auth.clone(), "session".into(), "owner".into());
         futures_util::pin_mut!(stream);

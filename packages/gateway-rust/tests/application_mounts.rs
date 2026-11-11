@@ -5167,15 +5167,37 @@ async fn session_context_flow_and_sub_agent_routes_read_persisted_rows() {
     }
     let owner = token(&client, &base).await;
     let intruder = second_token(&client, &base, &owner).await;
-    let (status, created) = call(&client, &base, Some(&owner), "POST", "/api/sessions", json!({})).await;
+    let (status, created) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        "/api/sessions",
+        json!({}),
+    )
+    .await;
     assert_eq!(status, 201, "{created}");
     let session = created["id"].as_str().unwrap().to_owned();
     let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
     let flow = json!({"rounds":[{"n":1}]}).to_string();
     for (id, role, content, calls, flow, at) in [
-        ("m1", "user", "hi", None::<&str>, None::<&str>, "2030-01-01T00:00:01Z"),
+        (
+            "m1",
+            "user",
+            "hi",
+            None::<&str>,
+            None::<&str>,
+            "2030-01-01T00:00:01Z",
+        ),
         ("m2", "assistant", "", None, None, "2030-01-01T00:00:02Z"),
-        ("m3", "assistant", "hello", None, Some(flow.as_str()), "2030-01-01T00:00:03Z"),
+        (
+            "m3",
+            "assistant",
+            "hello",
+            None,
+            Some(flow.as_str()),
+            "2030-01-01T00:00:03Z",
+        ),
     ] {
         db.execute(
             "INSERT INTO messages(id, session_id, role, content, tool_calls, context_flow, created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
@@ -5190,28 +5212,197 @@ async fn session_context_flow_and_sub_agent_routes_read_persisted_rows() {
     .unwrap();
     drop(db);
     let flow_path = |i: &str| format!("/api/sessions/{session}/messages/{i}/context-flow");
-    let (status, body) = call(&client, &base, Some(&owner), "GET", &flow_path("0"), json!(null)).await;
+    let (status, body) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "GET",
+        &flow_path("0"),
+        json!(null),
+    )
+    .await;
     assert_eq!((status, &body["contextFlow"]), (200, &json!(null)));
     // The empty assistant placeholder is not visible, so index 1 is "hello".
-    let (status, body) = call(&client, &base, Some(&owner), "GET", &flow_path("1"), json!(null)).await;
+    let (status, body) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "GET",
+        &flow_path("1"),
+        json!(null),
+    )
+    .await;
     assert_eq!(status, 200);
     assert_eq!(body["contextFlow"]["rounds"][0]["n"], 1);
-    for (path, expected) in [(flow_path("2"), 404), (flow_path("-1"), 400), (flow_path("abc"), 400)] {
+    for (path, expected) in [
+        (flow_path("2"), 404),
+        (flow_path("-1"), 400),
+        (flow_path("abc"), 400),
+    ] {
         let (status, _) = call(&client, &base, Some(&owner), "GET", &path, json!(null)).await;
         assert_eq!(status, expected, "{path}");
     }
-    let (status, _) = call(&client, &base, Some(&intruder), "GET", &flow_path("1"), json!(null)).await;
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "GET",
+        &flow_path("1"),
+        json!(null),
+    )
+    .await;
     assert_eq!(status, 404);
     let sub = |id: &str| format!("/api/sessions/{session}/sub-agents/{id}");
-    let (status, body) = call(&client, &base, Some(&owner), "GET", &sub("sa1"), json!(null)).await;
+    let (status, body) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "GET",
+        &sub("sa1"),
+        json!(null),
+    )
+    .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["subAgent"]["content"], "done");
     assert_eq!(body["subAgent"]["rounds"], 2);
     assert_eq!(body["subAgent"]["messageId"], "m3");
-    let (status, _) = call(&client, &base, Some(&owner), "GET", &sub("nope"), json!(null)).await;
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "GET",
+        &sub("nope"),
+        json!(null),
+    )
+    .await;
     assert_eq!(status, 404);
-    let (status, _) = call(&client, &base, Some(&intruder), "GET", &sub("sa1"), json!(null)).await;
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "GET",
+        &sub("sa1"),
+        json!(null),
+    )
+    .await;
     assert_eq!(status, 404);
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn session_approve_steer_and_trajectory_routes_enforce_ownership() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    for (method, path) in [
+        ("POST", "/api/sessions/s/approve"),
+        ("POST", "/api/sessions/s/steer"),
+        ("GET", "/api/sessions/s/trajectory"),
+    ] {
+        let (status, _) = call(&client, &base, None, method, path, json!({})).await;
+        assert_eq!(status, 401, "{path}");
+    }
+    let owner = token(&client, &base).await;
+    let intruder = second_token(&client, &base, &owner).await;
+    let (status, created) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        "/api/sessions",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let session = created["id"].as_str().unwrap().to_owned();
+    let approve = format!("/api/sessions/{session}/approve");
+    let steer = format!("/api/sessions/{session}/steer");
+    let (status, _) = call(&client, &base, Some(&owner), "POST", &approve, json!({})).await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &approve,
+        json!({"requestId":"r"}),
+    )
+    .await;
+    assert_eq!(status, 409);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "POST",
+        &approve,
+        json!({"requestId":"r"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &steer,
+        json!({"message":" "}),
+    )
+    .await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &steer,
+        json!({"message":"go"}),
+    )
+    .await;
+    assert_eq!(status, 409, "no active turn");
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "POST",
+        &steer,
+        json!({"message":"go"}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    db.execute(
+        "INSERT INTO session_events(session_id, log_id, type, payload, created_at) VALUES(?1, 1, 'rust.chat.stream', '{\"type\":\"token\",\"text\":\"hi\"}', 1700000000000)",
+        [&session],
+    )
+    .unwrap();
+    drop(db);
+    let trajectory = format!("{base}/api/sessions/{session}/trajectory");
+    let denied = client
+        .get(&trajectory)
+        .bearer_auth(&intruder)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 404);
+    let mut live = client
+        .get(&trajectory)
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(live.status(), 200);
+    let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), live.chunk())
+        .await
+        .expect("replayed chunk")
+        .unwrap()
+        .expect("chunk");
+    let text = String::from_utf8_lossy(&chunk);
+    assert!(text.contains("\"trajectory_event\""), "{text}");
+    assert!(text.contains("\"replay\":true"), "{text}");
+    assert!(text.contains("\"log_id\":1"), "{text}");
+    drop(live);
     let _ = stop.send(());
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);

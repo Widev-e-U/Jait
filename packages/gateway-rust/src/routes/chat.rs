@@ -231,6 +231,12 @@ impl ChatRoutes {
             .route("/api/threads/{id}/steer", post(thread_steer))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
+            .route(
+                "/api/sessions/{id}/trajectory",
+                get(super::chat_events::trajectory),
+            )
+            .route("/api/sessions/{id}/approve", post(session_approve))
+            .route("/api/sessions/{id}/steer", post(session_steer))
             .with_state(self.clone())
     }
     /// Stop admission and signal active turns even when no async cleanup is polled.
@@ -1059,6 +1065,89 @@ async fn cancel_path(
     request: Request,
 ) -> Response {
     cancel_request(state, Some(session), request).await
+}
+fn validation(details: &str) -> Response {
+    response(400, json!({"error":"VALIDATION_ERROR","details":details}))
+}
+/// Native turns ask for tool approval through `/api/consent`; there is no provider approval
+/// channel, so a well-formed request for an owned session has no provider session to answer.
+async fn session_approve(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let value = match body(&state, request).await {
+        Ok(value) => value,
+        Err(error) => return *error,
+    };
+    if value["requestId"].as_str().is_none_or(str::is_empty) {
+        return validation("requestId is required");
+    }
+    if !valid_session(&session) {
+        return response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        );
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    response(
+        409,
+        json!({"error":"CONFLICT","details":"No active provider session for approval"}),
+    )
+}
+/// Node injects steering text into a running loop. The native loop has no injection point, so
+/// an active turn is refused instead of silently dropping the message.
+async fn session_steer(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let value = match body(&state, request).await {
+        Ok(value) => value,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        );
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    if value["message"]
+        .as_str()
+        .is_none_or(|m| m.trim().is_empty())
+    {
+        return validation("message is required");
+    }
+    let active = state
+        .active
+        .turns
+        .lock()
+        .unwrap()
+        .get(&session)
+        .is_some_and(|turn| turn.owner == user.id);
+    if !active {
+        return response(
+            409,
+            json!({"error":"CONFLICT","details":"No active stream for this session — steering only works during streaming"}),
+        );
+    }
+    response(
+        409,
+        json!({"error":"CONFLICT","details":"The active turn does not accept steering"}),
+    )
 }
 async fn cancel_request(
     state: ChatRoutes,
