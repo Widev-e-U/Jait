@@ -3795,6 +3795,37 @@ async fn thread_start_send_and_resume_run_real_turns_on_the_thread_session() {
             .status(),
         409
     );
+
+    // approval: auth, ownership, validation, then the built-in provider has no approval channel
+    let approve_url = format!("{base}/api/threads/{thread}/approve");
+    let decision = serde_json::json!({"requestId": "r1", "approved": true});
+    assert_eq!(
+        post(approve_url.clone(), decision.clone(), false)
+            .await
+            .status(),
+        401
+    );
+    assert_eq!(
+        post(
+            format!("{base}/api/threads/nope/approve"),
+            decision.clone(),
+            true
+        )
+        .await
+        .status(),
+        404
+    );
+    assert_eq!(
+        post(
+            approve_url.clone(),
+            serde_json::json!({"requestId": "r1"}),
+            true
+        )
+        .await
+        .status(),
+        400
+    );
+    assert_eq!(post(approve_url, decision, true).await.status(), 409);
     assert_eq!(seen.lock().unwrap().len(), 3);
     let _ = stop.send(());
     let _ = task.await;

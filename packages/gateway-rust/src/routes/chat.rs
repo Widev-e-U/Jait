@@ -216,6 +216,7 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/plan", get(session_plan))
             .route("/api/sessions/{id}/plan/reject", post(session_plan))
             .route("/api/chat/prewarm", post(prewarm))
+            .route("/api/threads/{id}/approve", post(thread_approve))
             .route("/api/threads/{id}/start", post(thread_start))
             .route("/api/threads/{id}/send", post(thread_send))
             .route("/api/threads/{id}/resume", post(thread_resume))
@@ -580,6 +581,57 @@ async fn thread_steer(
     request: Request,
 ) -> Response {
     thread_turn(state, id, request, ThreadAction::Steer).await
+}
+/// Thread turns here run on the gateway's own agent loop, where tool approvals are consent
+/// requests answered through `/api/consent`. Like Node's built-in provider, there is no provider
+/// approval channel, so a well-formed request for a thread that has a session answers 409.
+async fn thread_approve(
+    State(state): State<ChatRoutes>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let value = match body(&state, request).await {
+        Ok(value) => value,
+        Err(error) => return *error,
+    };
+    let (owner, lookup) = (user.id.clone(), id);
+    let row = state
+        .auth
+        .with_database(move |db| {
+            use rusqlite::OptionalExtension;
+            Ok::<_, DbError>(
+                db.query_row(
+                    "SELECT session_id FROM agent_threads WHERE id = ?1 AND user_id = ?2",
+                    rusqlite::params![lookup, owner],
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .optional()?,
+            )
+        })
+        .await;
+    let session_id = match row {
+        Ok(Some(session_id)) => session_id,
+        Ok(None) => return response(404, json!({"error":"Thread not found"})),
+        Err(_) => return auth::internal_error(),
+    };
+    let request_id = value["requestId"].as_str().unwrap_or_default();
+    if request_id.trim().is_empty() || !value["approved"].is_boolean() {
+        return response(
+            400,
+            json!({"error":"A requestId and explicit approval decision are required"}),
+        );
+    }
+    if session_id.as_deref().is_none_or(str::is_empty) {
+        return response(409, json!({"error":"Thread has no active session"}));
+    }
+    response(
+        409,
+        json!({"error":"Thread approval is not supported by this provider"}),
+    )
 }
 async fn thread_resume(
     State(state): State<ChatRoutes>,

@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 142 | 33.3% |
+| native-tested | 143 | 33.6% |
 | native-untested | 224 | 52.6% |
-| missing | 60 | 14.1% |
+| missing | 59 | 13.8% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -402,7 +402,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/threads/:id` | routes/threads.ts | native-tested |
 | PATCH | `/api/threads/:id` | routes/threads.ts | native-tested |
 | GET | `/api/threads/:id/activities` | routes/threads.ts | native-tested |
-| POST | `/api/threads/:id/approve` | routes/threads.ts | missing |
+| POST | `/api/threads/:id/approve` | routes/threads.ts | native-tested |
 | POST | `/api/threads/:id/create-pr` | routes/threads.ts | missing |
 | POST | `/api/threads/:id/interrupt` | routes/threads.ts | native-tested |
 | POST | `/api/threads/:id/resume` | routes/threads.ts | native-tested |
