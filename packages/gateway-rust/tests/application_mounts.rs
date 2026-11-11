@@ -3596,6 +3596,182 @@ async fn thread_stop_and_interrupt_respect_ownership_and_session_state() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn thread_start_send_and_resume_run_real_turns_on_the_thread_session() {
+    let (model_base, seen) = fake_openai().await;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "user-key"},
+            "selected_model": "test-model"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let session_id = session["id"].as_str().unwrap().to_owned();
+    let create = |body: serde_json::Value| {
+        let (client, base, token) = (client.clone(), base.clone(), token.clone());
+        async move {
+            let created: serde_json::Value = client
+                .post(format!("{base}/api/threads"))
+                .bearer_auth(&token)
+                .json(&body)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            created["id"].as_str().unwrap().to_owned()
+        }
+    };
+    let thread = create(serde_json::json!({"providerId": "jait", "sessionId": session_id})).await;
+    let orphan = create(serde_json::json!({"providerId": "jait"})).await;
+    let post = |path: String, body: serde_json::Value, auth: bool| {
+        let (client, token) = (client.clone(), token.clone());
+        async move {
+            let request = client.post(path).json(&body);
+            let request = if auth {
+                request.bearer_auth(token)
+            } else {
+                request
+            };
+            request.send().await.unwrap()
+        }
+    };
+    let status_of = |id: String| {
+        let (client, base, token) = (client.clone(), base.clone(), token.clone());
+        async move {
+            let thread: serde_json::Value = client
+                .get(format!("{base}/api/threads/{id}"))
+                .bearer_auth(token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            thread["status"].as_str().unwrap_or_default().to_owned()
+        }
+    };
+    let wait_for = |id: String, want: &'static str| async move {
+        for _ in 0..100 {
+            if status_of(id.clone()).await == want {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("thread never reached {want}");
+    };
+
+    for action in ["start", "send", "resume"] {
+        let url = format!("{base}/api/threads/{thread}/{action}");
+        assert_eq!(
+            post(url, serde_json::json!({"message": "hi"}), false)
+                .await
+                .status(),
+            401
+        );
+        let url = format!("{base}/api/threads/nope/{action}");
+        assert_eq!(
+            post(url, serde_json::json!({"message": "hi"}), true)
+                .await
+                .status(),
+            404
+        );
+    }
+    let url = format!("{base}/api/threads/{thread}/start");
+    assert_eq!(
+        post(url, serde_json::json!({"message": "  "}), true)
+            .await
+            .status(),
+        400
+    );
+    let url = format!("{base}/api/threads/{orphan}/start");
+    assert_eq!(
+        post(url, serde_json::json!({"message": "hi"}), true)
+            .await
+            .status(),
+        409
+    );
+    // nothing stopped or failed yet, so there is nothing to resume
+    let url = format!("{base}/api/threads/{thread}/resume");
+    assert_eq!(post(url, serde_json::json!({}), true).await.status(), 409);
+
+    let url = format!("{base}/api/threads/{thread}/start");
+    let started = post(url, serde_json::json!({"message": "hi"}), true).await;
+    assert_eq!(started.status(), 200);
+    wait_for(thread.clone(), "completed").await;
+    let url = format!("{base}/api/threads/{thread}/send");
+    assert_eq!(
+        post(url, serde_json::json!({"message": "again"}), true)
+            .await
+            .status(),
+        200
+    );
+    wait_for(thread.clone(), "completed").await;
+    let activities: serde_json::Value = client
+        .get(format!("{base}/api/threads/{thread}/activities"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let texts = activities["activities"].as_array().unwrap();
+    assert!(
+        texts.iter().any(|a| a["payload"]["content"] == "hi"),
+        "{activities}"
+    );
+    assert!(
+        texts.iter().any(|a| a["payload"]["content"] == "again"),
+        "{activities}"
+    );
+
+    // a stopped thread resumes with the saved history
+    let stopped = post(
+        format!("{base}/api/threads/{thread}/stop"),
+        serde_json::json!({}),
+        true,
+    )
+    .await;
+    assert_eq!(stopped.status(), 200);
+    assert_eq!(status_of(thread.clone()).await, "interrupted");
+    let url = format!("{base}/api/threads/{thread}/resume");
+    assert_eq!(post(url, serde_json::json!({}), true).await.status(), 200);
+    wait_for(thread.clone(), "completed").await;
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 3);
+    assert!(
+        calls[2]
+            .1
+            .to_string()
+            .contains("Continue the interrupted task")
+    );
+    let _ = stop.send(());
+    let _ = task.await;
+    drop(dir);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn session_plan_and_prewarm_respect_auth_and_ownership() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

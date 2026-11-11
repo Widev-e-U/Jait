@@ -216,6 +216,9 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/plan", get(session_plan))
             .route("/api/sessions/{id}/plan/reject", post(session_plan))
             .route("/api/chat/prewarm", post(prewarm))
+            .route("/api/threads/{id}/start", post(thread_start))
+            .route("/api/threads/{id}/send", post(thread_send))
+            .route("/api/threads/{id}/resume", post(thread_resume))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -545,6 +548,270 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         Body::from_stream(stream),
     )
         .into_response()
+}
+#[derive(Clone, Copy, PartialEq)]
+enum ThreadAction {
+    Start,
+    Send,
+    Resume,
+}
+const RESUME_PROMPT: &str = "Continue the interrupted task from the saved history and current workspace. Preserve completed work, verify side effects before repeating actions, and finish the remaining steps.";
+type DbError = Box<dyn std::error::Error + Send + Sync>;
+
+async fn thread_start(
+    State(state): State<ChatRoutes>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    thread_turn(state, id, request, ThreadAction::Start).await
+}
+async fn thread_send(
+    State(state): State<ChatRoutes>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    thread_turn(state, id, request, ThreadAction::Send).await
+}
+async fn thread_resume(
+    State(state): State<ChatRoutes>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    thread_turn(state, id, request, ThreadAction::Resume).await
+}
+
+/// Records a thread status change; completion-like states stamp `completed_at`.
+async fn set_thread_status(
+    auth: &AuthState,
+    id: &str,
+    status: &'static str,
+    error: Option<&str>,
+    activity: Option<(&'static str, String, Value)>,
+) -> Result<(), ()> {
+    let (id, error) = (id.to_owned(), error.map(str::to_owned));
+    auth.with_database(move |db| {
+        let now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+        db.execute(
+            &format!(
+                "UPDATE agent_threads SET status = ?2, error = ?3, \
+                 completed_at = CASE WHEN ?2 IN ('completed','error','interrupted') THEN {now} ELSE NULL END, \
+                 updated_at = {now} WHERE id = ?1"
+            ),
+            rusqlite::params![id, status, error],
+        )?;
+        if let Some((kind, summary, payload)) = activity {
+            db.execute(
+                &format!(
+                    "INSERT INTO agent_thread_activities (id, thread_id, kind, summary, payload, created_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, {now})"
+                ),
+                rusqlite::params![
+                    crate::db::identifiers::uuidv7().to_string(),
+                    id,
+                    kind,
+                    summary.chars().take(500).collect::<String>(),
+                    payload.to_string()
+                ],
+            )?;
+        }
+        Ok::<_, DbError>(())
+    })
+    .await
+    .map_err(|_| ())
+}
+
+/// Runs one agent turn for a thread on its session, through the same provider, tool and consent
+/// path as `/api/chat`. The response returns once the turn is admitted; progress and the outcome
+/// reach clients through the thread status, its activities and the session event stream.
+async fn thread_turn(
+    state: ChatRoutes,
+    id: String,
+    request: Request,
+    action: ThreadAction,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let message = if action == ThreadAction::Resume {
+        RESUME_PROMPT.to_owned()
+    } else {
+        let value = match body(&state, request).await {
+            Ok(value) => value,
+            Err(error) => return *error,
+        };
+        value["message"].as_str().unwrap_or_default().to_owned()
+    };
+    if message.trim().is_empty() || message.len() > 32 * 1024 {
+        return response(
+            400,
+            json!({"error":"VALIDATION_ERROR","details":"message is required"}),
+        );
+    }
+    let (owner, lookup) = (user.id.clone(), id.clone());
+    let row = state
+        .auth
+        .with_database(move |db| {
+            use rusqlite::OptionalExtension;
+            Ok::<_, DbError>(
+                db.query_row(
+                    "SELECT session_id, status, pr_state FROM agent_threads WHERE id = ?1 AND user_id = ?2",
+                    rusqlite::params![lookup, owner],
+                    |row| {
+                        Ok((
+                            row.get::<_, Option<String>>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                        ))
+                    },
+                )
+                .optional()?,
+            )
+        })
+        .await;
+    let (session_id, status, pr_state) = match row {
+        Ok(Some(row)) => row,
+        Ok(None) => return response(404, json!({"error":"Thread not found"})),
+        Err(_) => return auth::internal_error(),
+    };
+    let status = status.unwrap_or_default();
+    if action == ThreadAction::Resume {
+        if !matches!(status.as_str(), "error" | "interrupted")
+            || matches!(pr_state.as_deref(), Some("merged" | "closed"))
+        {
+            return response(
+                409,
+                json!({"error":"Only stopped or failed work can be resumed"}),
+            );
+        }
+    } else if status == "running" {
+        return response(409, json!({"error":"A turn is already in progress"}));
+    }
+    let Some(session_id) = session_id.filter(|s| valid_session(s)) else {
+        return response(409, json!({"error":"Thread has no chat session"}));
+    };
+    let session = match owned_session(&state, &user.id, &session_id).await {
+        Ok(session) => session,
+        Err(error) => return *error,
+    };
+    let project_root = session
+        .project_path
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| state.project_root.clone());
+    if !project_root.is_absolute() {
+        return response(409, json!({"error":"SESSION_PROJECT_ROOT_INVALID"}));
+    }
+    let lease = match state.admit(&user.id, &session_id) {
+        Ok(lease) => lease,
+        Err(error) => return *error,
+    };
+    let cancellation = lease.cancellation.clone();
+    let prepared = tokio::select! {biased;
+        _=cancellation.wait_cancelled()=>return response(409,json!({"error":"CHAT_CANCELLED"})),
+        result=tokio::time::timeout(Duration::from_secs(10),state.factory.prepare(user.clone(),session))=>match result{Ok(Ok(prepared))=>prepared,_=>return response(503,json!({"error":"CHAT_CONFIGURATION_UNAVAILABLE"}))},
+    };
+    let store = match SqliteTurnStore::new(state.auth.clone(), user.id.clone(), session_id.clone())
+        .map(|store| {
+            store
+                .with_events(state.events.clone())
+                .with_database_owner(state.active.database_owner.clone())
+                .with_turn()
+        }) {
+        Ok(store) => store,
+        Err(_) => return auth::internal_error(),
+    };
+    if store.check_stream_capacity().await.is_err() {
+        return response(503, json!({"error":"CHAT_STREAM_CAPACITY_UNAVAILABLE"}));
+    }
+    state.events.clear_failure(&session_id);
+    let shown = if action == ThreadAction::Resume {
+        "Continue from where you left off."
+    } else {
+        message.as_str()
+    };
+    let activity = (
+        "message",
+        shown.to_owned(),
+        json!({"role":"user","content":shown,"fullContent":message}),
+    );
+    if set_thread_status(&state.auth, &id, "running", None, Some(activity))
+        .await
+        .is_err()
+    {
+        return auth::internal_error();
+    }
+    let context = ToolExecutionContext {
+        user_id: user.id.clone(),
+        session_id: session_id.clone(),
+        action_id: uuid::Uuid::new_v4().to_string(),
+        project_root,
+        origin: ExecutionOrigin::Agent,
+        runtime_mode: RuntimeMode::Guarded,
+        cancellation: cancellation.clone(),
+        on_output: None,
+    };
+    let (sender, mut receiver) = mpsc::channel(state.limits.channel_capacity);
+    tokio::spawn(async move { while receiver.recv().await.is_some() {} });
+    let serial = Arc::new(tokio::sync::Mutex::new(()));
+    let flags = StreamFlags {
+        closed: Arc::new(AtomicBool::new(false)),
+        delivery_failed: Arc::new(AtomicBool::new(false)),
+        stream_failed: Arc::new(AtomicBool::new(false)),
+    };
+    let sink = event_sink(
+        sender.clone(),
+        cancellation.clone(),
+        state.limits.clone(),
+        store.clone(),
+        serial.clone(),
+        flags.clone(),
+    );
+    let manager = state.manager.clone();
+    let auth_state = state.auth.clone();
+    let thread_id = id.clone();
+    tokio::spawn(async move {
+        let _lease = lease;
+        let result = manager
+            .run(SessionTurn {
+                config: prepared.config,
+                provider: &*prepared.provider,
+                tools: &*prepared.tools,
+                store: &store,
+                context: &context,
+                user_content: message,
+                sink,
+            })
+            .await;
+        let _serial = serial.lock().await;
+        flags.closed.store(true, Ordering::Release);
+        let (event, status, error) = match &result {
+            _ if flags.stream_failed.load(Ordering::Acquire) => (
+                json!({"type":"error","message":"Chat stream could not be persisted"}),
+                "error",
+                Some("Chat stream could not be persisted"),
+            ),
+            Ok(outcome) => (
+                json!({"type":"done","session_id":session_id,"prompt_count":null,"remaining_prompts":null,"rounds":outcome.rounds}),
+                "completed",
+                None,
+            ),
+            Err(SessionTurnError::Turn(TurnError::Cancelled)) => (
+                json!({"type":"done","session_id":session_id,"cancelled":true,"prompt_count":null,"remaining_prompts":null}),
+                "interrupted",
+                None,
+            ),
+            Err(error) => (
+                json!({"type":"error","message":public_error(error)}),
+                "error",
+                Some(public_error(error)),
+            ),
+        };
+        let _ = store.append_stream_terminal(event).await;
+        let _ = set_thread_status(&auth_state, &thread_id, status, error, None).await;
+        drop(sender);
+    });
+    response(200, json!({"ok":true,"threadId":id,"status":"running"}))
 }
 fn public_error(error: &SessionTurnError) -> &'static str {
     match error {

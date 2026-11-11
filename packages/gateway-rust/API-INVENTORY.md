@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 137 | 32.2% |
-| native-untested | 225 | 52.8% |
-| missing | 64 | 15.0% |
+| native-tested | 141 | 33.1% |
+| native-untested | 224 | 52.6% |
+| missing | 61 | 14.3% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -401,14 +401,14 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | DELETE | `/api/threads/:id` | routes/threads.ts | native-tested |
 | GET | `/api/threads/:id` | routes/threads.ts | native-tested |
 | PATCH | `/api/threads/:id` | routes/threads.ts | native-tested |
-| GET | `/api/threads/:id/activities` | routes/threads.ts | native-untested |
+| GET | `/api/threads/:id/activities` | routes/threads.ts | native-tested |
 | POST | `/api/threads/:id/approve` | routes/threads.ts | missing |
 | POST | `/api/threads/:id/create-pr` | routes/threads.ts | missing |
 | POST | `/api/threads/:id/interrupt` | routes/threads.ts | native-tested |
-| POST | `/api/threads/:id/resume` | routes/threads.ts | missing |
+| POST | `/api/threads/:id/resume` | routes/threads.ts | native-tested |
 | GET | `/api/threads/:id/runtime` | routes/threads.ts | native-untested |
-| POST | `/api/threads/:id/send` | routes/threads.ts | missing |
-| POST | `/api/threads/:id/start` | routes/threads.ts | missing |
+| POST | `/api/threads/:id/send` | routes/threads.ts | native-tested |
+| POST | `/api/threads/:id/start` | routes/threads.ts | native-tested |
 | POST | `/api/threads/:id/steer` | routes/threads.ts | missing |
 | POST | `/api/threads/:id/stop` | routes/threads.ts | native-tested |
 | GET | `/api/trust/levels` | routes/trust.ts | native-tested |
