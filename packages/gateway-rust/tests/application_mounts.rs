@@ -2309,7 +2309,8 @@ async fn node_credentials_are_issued_and_revoked_for_owned_nodes_only() {
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let url = format!("{base}/api/nodes/node-a/credential");
+    let id = "node-a";
+    let url = format!("{base}/api/nodes/{id}/credential");
     assert_eq!(client.post(&url).send().await.unwrap().status(), 401);
     assert_eq!(client.delete(&url).send().await.unwrap().status(), 401);
     let token = token(&client, &base).await;

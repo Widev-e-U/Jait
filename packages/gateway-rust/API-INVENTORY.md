@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 150 | 35.2% |
-| native-untested | 226 | 53.1% |
+| native-tested | 152 | 35.7% |
+| native-untested | 224 | 52.6% |
 | missing | 50 | 11.7% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -433,8 +433,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/dev-file/:encodedPath/*` | server.ts | missing |
 | ALL | `/api/dev-proxy/:port` | server.ts | missing |
 | ALL | `/api/dev-proxy/:port/*` | server.ts | missing |
-| DELETE | `/api/nodes/:id/credential` | server.ts | native-untested |
-| POST | `/api/nodes/:id/credential` | server.ts | native-untested |
+| DELETE | `/api/nodes/:id/credential` | server.ts | native-tested |
+| POST | `/api/nodes/:id/credential` | server.ts | native-tested |
 | POST | `/api/preview/access` | server.ts | missing |
 | GET | `/api/voice-assistant/status` | server.ts | native-tested |
 | GET | `/preview/:previewToken/file/:encodedPath` | server.ts | missing |
