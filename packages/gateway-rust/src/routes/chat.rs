@@ -219,6 +219,7 @@ impl ChatRoutes {
             .route("/api/threads/{id}/start", post(thread_start))
             .route("/api/threads/{id}/send", post(thread_send))
             .route("/api/threads/{id}/resume", post(thread_resume))
+            .route("/api/threads/{id}/steer", post(thread_steer))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
@@ -554,6 +555,7 @@ enum ThreadAction {
     Start,
     Send,
     Resume,
+    Steer,
 }
 const RESUME_PROMPT: &str = "Continue the interrupted task from the saved history and current workspace. Preserve completed work, verify side effects before repeating actions, and finish the remaining steps.";
 type DbError = Box<dyn std::error::Error + Send + Sync>;
@@ -571,6 +573,13 @@ async fn thread_send(
     request: Request,
 ) -> Response {
     thread_turn(state, id, request, ThreadAction::Send).await
+}
+async fn thread_steer(
+    State(state): State<ChatRoutes>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    thread_turn(state, id, request, ThreadAction::Steer).await
 }
 async fn thread_resume(
     State(state): State<ChatRoutes>,
@@ -684,6 +693,13 @@ async fn thread_turn(
                 json!({"error":"Only stopped or failed work can be resumed"}),
             );
         }
+    } else if action == ThreadAction::Steer {
+        if status != "running" {
+            return response(
+                409,
+                json!({"error":"CONFLICT","details":"No running thread session to steer"}),
+            );
+        }
     } else if status == "running" {
         return response(409, json!({"error":"A turn is already in progress"}));
     }
@@ -694,6 +710,40 @@ async fn thread_turn(
         Ok(session) => session,
         Err(error) => return *error,
     };
+    if action == ThreadAction::Steer {
+        // The chat turn has no mid-round injection point, so steering stops the active turn at
+        // its next cancellation check and starts a new one on the same history with the message.
+        let waiting = {
+            let turns = state.active.turns.lock().unwrap();
+            turns
+                .get(&session_id)
+                .filter(|turn| turn.owner == user.id)
+                .map(|turn| {
+                    turn.cancellation.cancel();
+                    turn.done.subscribe()
+                })
+        };
+        let Some(mut done) = waiting else {
+            return response(
+                409,
+                json!({"error":"CONFLICT","details":"No running thread session to steer"}),
+            );
+        };
+        let drained = tokio::time::timeout(Duration::from_secs(8), async {
+            while !*done.borrow_and_update() {
+                if done.changed().await.is_err() {
+                    break;
+                }
+            }
+        })
+        .await;
+        if drained.is_err() {
+            return response(
+                500,
+                json!({"error":"STEER_FAILED","details":"Running turn did not stop"}),
+            );
+        }
+    }
     let project_root = session
         .project_path
         .as_ref()
@@ -811,6 +861,9 @@ async fn thread_turn(
         let _ = set_thread_status(&auth_state, &thread_id, status, error, None).await;
         drop(sender);
     });
+    if action == ThreadAction::Steer {
+        return response(200, json!({"ok":true,"steered":true,"status":"running"}));
+    }
     response(200, json!({"ok":true,"threadId":id,"status":"running"}))
 }
 fn public_error(error: &SessionTurnError) -> &'static str {

@@ -3766,6 +3766,36 @@ async fn thread_start_send_and_resume_run_real_turns_on_the_thread_session() {
             .to_string()
             .contains("Continue the interrupted task")
     );
+
+    // steering needs a running turn: auth, ownership, validation and the idle conflict
+    let url = format!("{base}/api/threads/{thread}/steer");
+    let steer = |url: String, body: serde_json::Value, auth: bool| post(url, body, auth);
+    assert_eq!(
+        steer(url.clone(), serde_json::json!({"message": "x"}), false)
+            .await
+            .status(),
+        401
+    );
+    let missing = format!("{base}/api/threads/nope/steer");
+    assert_eq!(
+        steer(missing, serde_json::json!({"message": "x"}), true)
+            .await
+            .status(),
+        404
+    );
+    assert_eq!(
+        steer(url.clone(), serde_json::json!({"message": " "}), true)
+            .await
+            .status(),
+        400
+    );
+    assert_eq!(
+        steer(url, serde_json::json!({"message": "change course"}), true)
+            .await
+            .status(),
+        409
+    );
+    assert_eq!(seen.lock().unwrap().len(), 3);
     let _ = stop.send(());
     let _ = task.await;
     drop(dir);
