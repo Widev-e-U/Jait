@@ -2303,6 +2303,153 @@ async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
 }
 
 #[tokio::test]
+async fn project_hierarchy_sessions_and_state_are_owner_scoped() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let make = |title: &'static str| {
+        let client = client.clone();
+        let base = base.clone();
+        let token = token.clone();
+        async move {
+            let created: serde_json::Value = client
+                .post(format!("{base}/api/projects"))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "title": title }))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            created["id"].as_str().expect("project id").to_owned()
+        }
+    };
+    let parent = make("Parent").await;
+    let child = make("Child").await;
+
+    for suffix in ["move", "restore", "sessions", "state", "subtree"] {
+        let anon = client
+            .post(format!("{base}/api/projects/{parent}/{suffix}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(anon.status(), 401, "{suffix} without a token");
+    }
+    let missing = client
+        .post(format!("{base}/api/projects/nope/move"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({ "parentId": parent }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+
+    let moved = client
+        .post(format!("{base}/api/projects/{child}/move"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({ "parentId": parent }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(moved.status(), 200);
+    let moved: serde_json::Value = moved.json().await.unwrap();
+    assert_eq!(moved["parentId"], serde_json::json!(parent), "{moved}");
+
+    let cycle = client
+        .post(format!("{base}/api/projects/{parent}/move"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({ "parentId": child }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cycle.status(), 400);
+    let cycle: serde_json::Value = cycle.json().await.unwrap();
+    assert_eq!(cycle["error"], "CYCLE", "{cycle}");
+
+    let subtree: serde_json::Value = client
+        .get(format!("{base}/api/projects/{parent}/subtree"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        subtree["descendantIds"],
+        serde_json::json!([child]),
+        "{subtree}"
+    );
+    assert_eq!(subtree["descendantCount"], 1);
+
+    let not_archived = client
+        .post(format!("{base}/api/projects/{parent}/restore"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(not_archived.status(), 400);
+
+    let created = client
+        .post(format!("{base}/api/projects/{parent}/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({ "name": "Planning" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+    let session: serde_json::Value = created.json().await.unwrap();
+    let listed: serde_json::Value = client
+        .get(format!("{base}/api/projects/{parent}/sessions"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        listed.to_string().contains(session["id"].as_str().unwrap()),
+        "{listed}"
+    );
+
+    let patched = client
+        .patch(format!("{base}/api/projects/{parent}/state"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({ "layout": "split" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), 200);
+    let state: serde_json::Value = client
+        .get(format!("{base}/api/projects/{parent}/state"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["layout"], "split", "{state}");
+    let bad = client
+        .patch(format!("{base}/api/projects/{parent}/state"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!([1, 2]))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

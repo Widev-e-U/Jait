@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 143 | 33.6% |
+| native-tested | 150 | 35.2% |
 | native-untested | 224 | 52.6% |
-| missing | 59 | 13.8% |
+| missing | 52 | 12.2% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -259,14 +259,14 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | DELETE | `/api/projects/:id` | routes/projects.ts | native-tested |
 | GET | `/api/projects/:id` | routes/projects.ts | native-tested |
 | PATCH | `/api/projects/:id` | routes/projects.ts | native-tested |
-| POST | `/api/projects/:id/move` | routes/projects.ts | missing |
+| POST | `/api/projects/:id/move` | routes/projects.ts | native-tested |
 | POST | `/api/projects/:id/repository` | routes/projects.ts | missing |
-| POST | `/api/projects/:id/restore` | routes/projects.ts | missing |
-| GET | `/api/projects/:id/sessions` | routes/projects.ts | missing |
-| POST | `/api/projects/:id/sessions` | routes/projects.ts | missing |
-| GET | `/api/projects/:id/state` | routes/projects.ts | missing |
-| PATCH | `/api/projects/:id/state` | routes/projects.ts | missing |
-| GET | `/api/projects/:id/subtree` | routes/projects.ts | missing |
+| POST | `/api/projects/:id/restore` | routes/projects.ts | native-tested |
+| GET | `/api/projects/:id/sessions` | routes/projects.ts | native-tested |
+| POST | `/api/projects/:id/sessions` | routes/projects.ts | native-tested |
+| GET | `/api/projects/:id/state` | routes/projects.ts | native-tested |
+| PATCH | `/api/projects/:id/state` | routes/projects.ts | native-tested |
+| GET | `/api/projects/:id/subtree` | routes/projects.ts | native-tested |
 | DELETE | `/api/projects/archived` | routes/projects.ts | native-tested |
 | GET | `/api/projects/archived` | routes/projects.ts | native-tested |
 | GET | `/api/projects/last-active` | routes/projects.ts | native-untested |

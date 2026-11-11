@@ -64,6 +64,17 @@ for (const file of rustFiles.filter((p) => !/tests?\.rs$/.test(p))) {
   for (const m of text.matchAll(/"(\/(?:api|preview)\/[A-Za-z0-9_\-./{}:*]+)"/g)) dispatched.add(norm(m[1]));
 }
 
+// Catch-all dispatchers also match with `mid(&path, "/api/x/", "/suffix")`, which names `/api/x/{}/suffix`.
+// Handlers that only answer a fixed "unavailable" body are not counted as native.
+const STUBS = new Set(["/api/projects/{}/repository"]);
+for (const file of rustFiles.filter((p) => !/tests?\.rs$/.test(p))) {
+  const text = readFileSync(file, "utf8");
+  for (const m of text.matchAll(/\bmid\(\s*&?path\s*,\s*"(\/api\/[A-Za-z0-9_\-./]*)"\s*,\s*"([A-Za-z0-9_\-./]*)"\s*\)/g)) {
+    const key = norm(`${m[1]}{}${m[2]}`);
+    if (!STUBS.has(key)) dispatched.add(key);
+  }
+}
+
 // ---- Test references
 const testFiles = [
   ...walk(join(crate, "tests"), (p) => p.endsWith(".rs")),

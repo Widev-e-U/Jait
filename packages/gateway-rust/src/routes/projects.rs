@@ -369,6 +369,9 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             let projects = ProjectService::new(db);
             let sessions = crate::services::sessions::SessionService::new(db);
             match projects.get(&id, Some(&user_id)) {
+                Ok(Some(project)) if project.status.as_deref() != Some("archived") => {
+                    return Res::Ok(fail(400, "BAD_REQUEST", "Project is not archived"));
+                }
                 Ok(Some(_)) => {}
                 Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                 Err(error) => return Err(db_err(error)),
