@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 207 | 48.6% |
+| native-tested | 208 | 48.8% |
 | native-untested | 175 | 41.1% |
-| missing | 44 | 10.3% |
+| missing | 43 | 10.1% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -80,7 +80,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/sessions/:sessionId/plan` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/plan/execute` | routes/chat.ts | missing |
 | POST | `/api/sessions/:sessionId/plan/reject` | routes/chat.ts | native-tested |
-| POST | `/api/sessions/:sessionId/restart-from` | routes/chat.ts | missing |
+| POST | `/api/sessions/:sessionId/restart-from` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/retry-tool` | routes/chat.ts | missing |
 | GET | `/api/sessions/:sessionId/runtime` | routes/chat.ts | native-tested |
 | POST | `/api/sessions/:sessionId/steer` | routes/chat.ts | native-tested |

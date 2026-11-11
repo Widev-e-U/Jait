@@ -237,6 +237,10 @@ impl ChatRoutes {
             )
             .route("/api/sessions/{id}/approve", post(session_approve))
             .route("/api/sessions/{id}/steer", post(session_steer))
+            .route(
+                "/api/sessions/{id}/restart-from",
+                post(session_restart_from),
+            )
             .with_state(self.clone())
     }
     /// Stop admission and signal active turns even when no async cleanup is polled.
@@ -1148,6 +1152,165 @@ async fn session_steer(
         409,
         json!({"error":"CONFLICT","details":"The active turn does not accept steering"}),
     )
+}
+enum Restart {
+    NotFound,
+    NotUser,
+    Changed,
+    Done,
+}
+/// Resolves the edited user message against the persisted visible rows, then deletes it and every
+/// row after it. Mirrors Node's id/fromEnd/index resolution, user-row fallback and
+/// `expectedContent` re-anchoring.
+async fn session_restart_from(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let value = match body(&state, request).await {
+        Ok(value) => value,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Session not found"}),
+        );
+    }
+    if let Err(error) = owned_session(&state, &user.id, &session).await {
+        return *error;
+    }
+    let message_id = value["messageId"].as_str().unwrap_or("").to_string();
+    let number = |key: &str| {
+        value[key]
+            .as_f64()
+            .filter(|n| n.is_finite())
+            .map(|n| n.floor() as i64)
+    };
+    let index = number("messageIndex").unwrap_or(-1);
+    let from_end = number("messageFromEnd").unwrap_or(-1);
+    let expected = value["expectedContent"].as_str().map(str::to_string);
+    if message_id.is_empty() && index < 0 && from_end < 0 {
+        return validation("messageId, messageFromEnd, or messageIndex is required");
+    }
+    let turn_cancel = state
+        .active
+        .turns
+        .lock()
+        .unwrap()
+        .get(&session)
+        .filter(|turn| turn.owner == user.id)
+        .map(|turn| turn.cancellation.clone());
+    if let Some(cancel) = turn_cancel {
+        cancel.cancel();
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.active.turns.lock().unwrap().contains_key(&session) {
+            if tokio::time::Instant::now() >= deadline {
+                return response(
+                    409,
+                    json!({"error":"CONFLICT","details":"Cannot restart while session is streaming"}),
+                );
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+    let target_session = session.clone();
+    let outcome = state
+        .auth
+        .with_database(move |db| {
+            let mut statement = db.prepare(
+                "SELECT id, role, content FROM messages WHERE session_id = ?1 AND role != 'tool' ORDER BY created_at, id",
+            )?;
+            let visible: Vec<(String, String, String)> = statement
+                .query_map([&target_session], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                    ))
+                })?
+                .collect::<Result<_, _>>()?;
+            let len = visible.len() as i64;
+            let mut target = (0..visible.len())
+                .find(|i| !message_id.is_empty() && format!("{target_session}-{i}") == message_id)
+                .map(|i| i as i64)
+                .unwrap_or(-1);
+            if target == -1 && (0..len).contains(&from_end) {
+                target = len - 1 - from_end;
+            }
+            if target == -1 && (0..len).contains(&index) {
+                target = index;
+            }
+            if target == -1 {
+                return Ok(Restart::NotFound);
+            }
+            if visible[target as usize].1 != "user" {
+                match (0..target as usize).rev().find(|i| visible[*i].1 == "user") {
+                    Some(i) => target = i as i64,
+                    None => return Ok(Restart::NotUser),
+                }
+            }
+            if let Some(expected) = &expected
+                && &visible[target as usize].2 != expected
+            {
+                let best = (0..visible.len())
+                    .filter(|i| visible[*i].1 == "user" && &visible[*i].2 == expected)
+                    .min_by_key(|i| (*i as i64 - target).abs());
+                match best {
+                    Some(i) => target = i as i64,
+                    None => return Ok(Restart::Changed),
+                }
+            }
+            let target_id = &visible[target as usize].0;
+            let mut all = db.prepare(
+                "SELECT id FROM messages WHERE session_id = ?1 ORDER BY created_at, id",
+            )?;
+            let ids: Vec<String> = all
+                .query_map([&target_session], |row| row.get(0))?
+                .collect::<Result<_, _>>()?;
+            if let Some(cut) = ids.iter().position(|id| id == target_id) {
+                for id in &ids[cut..] {
+                    db.execute("DELETE FROM messages WHERE id = ?1", [id])?;
+                }
+            }
+            Ok(Restart::Done)
+        })
+        .await;
+    match outcome {
+        Ok(Restart::NotFound) => response(
+            404,
+            json!({"error":"NOT_FOUND","details":"Message not found"}),
+        ),
+        Ok(Restart::NotUser) => validation("Only user messages can be edited/restarted"),
+        Ok(Restart::Changed) => response(
+            409,
+            json!({"error":"CONFLICT","details":"The message changed or is no longer present; refresh the chat before editing it"}),
+        ),
+        Ok(Restart::Done) => {
+            match crate::runtime::chat_projection::project_messages(
+                state.auth.clone(),
+                user.id.clone(),
+                session.clone(),
+                None,
+                None,
+            )
+            .await
+            {
+                Ok(mut projected) => {
+                    projected["ok"] = json!(true);
+                    projected["sessionId"] = json!(session);
+                    projected["streaming"] = json!(false);
+                    response(200, projected)
+                }
+                Err(_) => auth::internal_error(),
+            }
+        }
+        Err(_) => auth::internal_error(),
+    }
 }
 async fn cancel_request(
     state: ChatRoutes,

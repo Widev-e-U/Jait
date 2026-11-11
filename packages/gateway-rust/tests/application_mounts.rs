@@ -5409,6 +5409,120 @@ async fn session_approve_steer_and_trajectory_routes_enforce_ownership() {
 }
 
 #[tokio::test]
+async fn session_restart_from_truncates_persisted_messages() {
+    use serde_json::json;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let (status, _) = call(
+        &client,
+        &base,
+        None,
+        "POST",
+        "/api/sessions/s/restart-from",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 401);
+    let owner = token(&client, &base).await;
+    let intruder = second_token(&client, &base, &owner).await;
+    let (status, created) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        "/api/sessions",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let session = created["id"].as_str().unwrap().to_owned();
+    let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    for (id, role, content, at) in [
+        ("r1", "user", "first", "2030-01-01T00:00:01Z"),
+        ("r2", "assistant", "answer one", "2030-01-01T00:00:02Z"),
+        ("r3", "user", "second", "2030-01-01T00:00:03Z"),
+        ("r4", "assistant", "answer two", "2030-01-01T00:00:04Z"),
+    ] {
+        db.execute(
+            "INSERT INTO messages(id, session_id, role, content, created_at) VALUES(?1,?2,?3,?4,?5)",
+            rusqlite::params![id, session, role, content, at],
+        )
+        .unwrap();
+    }
+    let count = || -> i64 {
+        db.query_row(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?1",
+            [&session],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    let path = format!("/api/sessions/{session}/restart-from");
+    let (status, _) = call(&client, &base, Some(&owner), "POST", &path, json!({})).await;
+    assert_eq!(status, 400);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&intruder),
+        "POST",
+        &path,
+        json!({"messageIndex":2}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    assert_eq!(count(), 4, "intruder must not delete");
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &path,
+        json!({"messageIndex":9}),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &path,
+        json!({"messageIndex":2,"expectedContent":"stale"}),
+    )
+    .await;
+    assert_eq!(status, 409);
+    assert_eq!(count(), 4);
+    // Index 3 is an assistant row, so it falls back to the preceding user row (index 2).
+    let (status, body) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &path,
+        json!({"messageIndex":3,"expectedContent":"second"}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["streaming"], false);
+    assert_eq!(body["messages"].as_array().unwrap().len(), 2, "{body}");
+    assert_eq!(count(), 2);
+    let (status, _) = call(
+        &client,
+        &base,
+        Some(&owner),
+        "POST",
+        &path,
+        json!({"messageFromEnd":0}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(count(), 0);
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn user_question_routes_validate_and_report_missing_requests() {
     use serde_json::json;
     let (base, stop, task, dir) = start().await;
