@@ -88,7 +88,14 @@ for (const file of testFiles) {
   }
 }
 
+// The Node `GET /` JSON stub only answers when no web UI is built; Rust serves the web UI there through
+// `fallback_service` (invisible to the `.route(..)` scan). Tested by the web_ui_is_served_* black-box test.
+const appText = readFileSync(join(crate, "src", "runtime", "application.rs"), "utf8");
+const webUiFallback = /fallback_service\(\s*crate::runtime::web_ui::service/.test(appText);
+const webUiTested = testFiles.some((f) => /web_ui_is_served/.test(readFileSync(f, "utf8")));
+
 const status = (route) => {
+  if (route.key === "/" && route.method === "GET" && webUiFallback) return webUiTested ? "native-tested" : "native-untested";
   const methods = rustRoutes.get(route.key);
   if (!methods && !dispatched.has(route.key)) return "missing";
   if (methods && route.method !== "ALL" && !methods.has(route.method) && !methods.has("ANY") && !dispatched.has(route.key)) return "missing";

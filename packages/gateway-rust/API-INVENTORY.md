@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 211 | 49.5% |
+| native-tested | 218 | 51.2% |
 | native-untested | 175 | 41.1% |
-| missing | 40 | 9.4% |
+| missing | 33 | 7.7% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -135,15 +135,15 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/git/discard` | routes/git.ts | native-tested |
 | POST | `/api/git/fetch` | routes/git.ts | native-tested |
 | POST | `/api/git/file-diffs` | routes/git.ts | native-tested |
-| POST | `/api/git/forge-auth` | routes/git.ts | missing |
-| POST | `/api/git/forge-pr-checks` | routes/git.ts | missing |
-| POST | `/api/git/forge-status` | routes/git.ts | missing |
+| POST | `/api/git/forge-auth` | routes/git.ts | native-tested |
+| POST | `/api/git/forge-pr-checks` | routes/git.ts | native-tested |
+| POST | `/api/git/forge-status` | routes/git.ts | native-tested |
 | POST | `/api/git/generate-commit-message` | routes/git.ts | missing |
-| POST | `/api/git/gh-auth` | routes/git.ts | missing |
-| POST | `/api/git/gh-status` | routes/git.ts | missing |
+| POST | `/api/git/gh-auth` | routes/git.ts | native-tested |
+| POST | `/api/git/gh-status` | routes/git.ts | native-tested |
 | POST | `/api/git/identity` | routes/git.ts | native-tested |
 | POST | `/api/git/init` | routes/git.ts | native-tested |
-| POST | `/api/git/pr-checks` | routes/git.ts | missing |
+| POST | `/api/git/pr-checks` | routes/git.ts | native-tested |
 | POST | `/api/git/pull` | routes/git.ts | native-untested |
 | POST | `/api/git/remove-worktree` | routes/git.ts | native-tested |
 | POST | `/api/git/run-commit-flow` | routes/git.ts | missing |
@@ -427,7 +427,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/voice/transcribe` | routes/voice.ts | native-untested |
 | POST | `/api/voice/transcribe-audio` | routes/voice.ts | native-tested |
 | POST | `/api/voice/wake-candidate` | routes/voice.ts | missing |
-| GET | `/` | server.ts | missing |
+| GET | `/` | server.ts | native-tested |
 | GET | `/api/browser/screenshot` | server.ts | missing |
 | GET | `/api/dev-file/:encodedPath` | server.ts | missing |
 | GET | `/api/dev-file/:encodedPath/*` | server.ts | missing |

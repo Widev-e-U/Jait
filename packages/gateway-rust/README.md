@@ -1,5 +1,28 @@
 # Native Rust gateway
 
+## Network git and GitHub forge consent — 2026-11-11
+
+Network git (`fetch`, `pull`, sync `push`) and the GitHub forge routes (`gh-status`, `gh-auth`,
+`forge-status`, `forge-auth`, `pr-checks`, `forge-pr-checks`) need explicit per-destination consent.
+This is a deliberate difference from the Node gateway, which scopes network git by owner only.
+
+- A host-issued in-memory `GitDestinationGrant` names an exact host and port, operation, owner and
+  project root. It is built only after the owner approves a consent prompt (session
+  `git-network:<owner>`, tool `git.<operation>`), never from request data. TTL 10 minutes, at most 256.
+- At execution the authority re-resolves the remote, requires a live grant for that destination and
+  pins `GIT_ALLOW_PROTOCOL=https` plus a fixed config. Denial returns 403.
+- Forge calls use destination `github.com:443` and operation `forge`. `gh` runs only a fixed read-only
+  argv allowlist (`--version`, `api user`, `repo view`, `pr list`, `pr view`); `pr create`, other
+  hosts and free-form API paths are refused.
+- Tested through the composed binary: `git_network_*` and
+  `git_forge_routes_are_authenticated_and_github_calls_need_consent` in `tests/application_mounts.rs`.
+
+Known limits (not hidden): no DNS pinning, so a TOCTOU window remains between consent and connect;
+`create-pr`, worktree push and stacked-action push stay denied; only GitHub forges are served (no
+GitLab, Gitea, Bitbucket, Azure or GitHub Enterprise); `pr-checks` needs a stored GitHub token where
+Node used ambient `gh` auth; `run-commit-flow` and `generate-commit-message` are not ported.
+Nothing here is marked verified in `native-coverage.json`.
+
 ## Component repairs and portability wave — 2026-11-05
 
 `maintenance.ts` now formats timestamps with the reference `toLocaleDateString()` behavior: unpadded `M/D/YYYY` taken from the local-timezone calendar day of an RFC 3339 value, replacing the previous ISO `%Y-%m-%d` output. The crate tests passed 8/8 under `TZ=UTC`, `TZ=America/New_York` and `TZ=Asia/Tokyo` (`.jait/artifacts/gateway-rust/preview-history/maintenance-locale-tz.log`) and the contract harness passed 9/9 (`maintenance-harness.log`); measured Bun reference values are `11/5/2026` in UTC and Tokyo, `11/4/2026` in New York for `2026-11-05T02:30:00Z`, and `12/31/2025` in New York for `2026-01-01T00:00:00Z`, with `LANG=de_DE` still yielding en-US. The ledger row is `implemented` with this partial evidence; the reference's remaining call sites and full component validation are still open.

@@ -3765,15 +3765,15 @@ async fn git_forge_routes_are_authenticated_and_github_calls_need_consent() {
         .build()
         .unwrap();
     for path in [
-        "gh-status",
-        "gh-auth",
-        "forge-status",
-        "forge-auth",
-        "pr-checks",
-        "forge-pr-checks",
+        "/api/git/gh-status",
+        "/api/git/gh-auth",
+        "/api/git/forge-status",
+        "/api/git/forge-auth",
+        "/api/git/pr-checks",
+        "/api/git/forge-pr-checks",
     ] {
         let anon = client
-            .post(format!("{base}/api/git/{path}"))
+            .post(format!("{base}{path}"))
             .json(&serde_json::json!({"cwd": "/"}))
             .send()
             .await
