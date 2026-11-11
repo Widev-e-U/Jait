@@ -95,6 +95,24 @@ mod linux {
             }
             Ok(data)
         }
+        /// Lists a directory beneath the root (`""` or `"."` is the root). Entries are not followed.
+        pub fn list_dir(&self, path: &Path) -> io::Result<Vec<(String, bool)>> {
+            let directory = if path.as_os_str().is_empty() || path == Path::new(".") {
+                self.root.try_clone()?
+            } else {
+                self.open_file(path, libc::O_RDONLY | libc::O_DIRECTORY, 0)?
+            };
+            let mut entries = Vec::new();
+            for entry in std::fs::read_dir(format!("/proc/self/fd/{}", directory.as_raw_fd()))? {
+                let entry = entry?;
+                entries.push((
+                    entry.file_name().to_string_lossy().into_owned(),
+                    entry.file_type()?.is_dir(),
+                ));
+            }
+            entries.sort();
+            Ok(entries)
+        }
         pub fn write_existing(&self, path: &Path, data: &[u8]) -> io::Result<()> {
             use std::os::unix::fs::{MetadataExt, PermissionsExt};
             if path.as_os_str().is_empty()

@@ -5,7 +5,8 @@
 //! project root, no symlinks), so the model cannot leave the project. `file.read` needs no consent;
 //! `file.write` replaces an existing file only and `terminal.run` runs a one-shot command in the
 //! project root; both wait for approval on the shared `ConsentManager` (served at /api/consent).
-//! Patch, list and persistent-terminal tools are not mounted.
+//! `file.list` needs no consent; `file.patch` replaces the first match in an existing file and
+//! waits for approval like `file.write`. Persistent-terminal tools are not mounted.
 use super::chat_turn::TurnTool;
 use crate::{
     contracts::bounded_json::Utf16Text,
@@ -18,7 +19,10 @@ use crate::{
     tools::{
         core_io::{HostError, HostPort},
         core_jait::JaitPort,
-        file_tools::{FileTool, create_file_read_tool, create_file_write_tool, metadata},
+        file_tools::{
+            FileTool, create_file_list_tool, create_file_patch_tool, create_file_read_tool,
+            create_file_write_tool, metadata,
+        },
         registry::{ExecutePort, RegistryContext, RegistryResult, ToolRegistry},
         registry_authority::RegistryAuthority,
         registry_owner::{RegistryOwner, consent_delegate},
@@ -90,6 +94,48 @@ fn host_port() -> HostPort<Ctx> {
                     })
                     .await
                     .map_err(|_| HostError::Error("File write failed".into()))?
+                }
+                "list" => {
+                    let root = ctx.capabilities.execution().project_root.clone();
+                    let path = relative(&root, args["path"].as_str().unwrap_or_default())?;
+                    tokio::task::spawn_blocking(move || {
+                        let entries = crate::security::scoped_file::ScopedFileRoot::open(&root)
+                            .and_then(|r| r.list_dir(&path))
+                            .map_err(|e| HostError::Error(format!("Cannot list directory: {e}")))?;
+                        Ok(Value::Array(
+                            entries
+                                .into_iter()
+                                .map(|(name, dir)| json!({"name": name, "isDirectory": dir}))
+                                .collect(),
+                        ))
+                    })
+                    .await
+                    .map_err(|_| HostError::Error("Directory listing failed".into()))?
+                }
+                "patch" => {
+                    let root = ctx.capabilities.execution().project_root.clone();
+                    let path = relative(&root, args["path"].as_str().unwrap_or_default())?;
+                    let search = args["search"].as_str().unwrap_or_default().to_owned();
+                    let replace = args["replace"].as_str().unwrap_or_default().to_owned();
+                    tokio::task::spawn_blocking(move || {
+                        let scoped = crate::security::scoped_file::ScopedFileRoot::open(&root)
+                            .map_err(|e| HostError::Error(format!("Cannot patch file: {e}")))?;
+                        let text = String::from_utf8(
+                            scoped
+                                .read(&path)
+                                .map_err(|e| HostError::Error(format!("Cannot read file: {e}")))?,
+                        )
+                        .map_err(|_| HostError::Error("File is not valid UTF-8".into()))?;
+                        if search.is_empty() || !text.contains(&search) {
+                            return Ok(json!({"matched": false}));
+                        }
+                        scoped
+                            .write_existing(&path, text.replacen(&search, &replace, 1).as_bytes())
+                            .map_err(|e| HostError::Error(format!("Cannot write file: {e}")))?;
+                        Ok(json!({"matched": true}))
+                    })
+                    .await
+                    .map_err(|_| HostError::Error("File patch failed".into()))?
                 }
                 _ => Err(HostError::Error("Operation is not available".into())),
             }
@@ -183,7 +229,13 @@ pub fn project_tool_definitions() -> Result<Vec<Value>, String> {
         .and_then(|a| a.iter().find(|e| e["name"] == "terminal.run"))
         .ok_or("terminal.run definition missing")?
         .clone();
-    Ok(vec![read, write, terminal])
+    let list = metadata("list")
+        .ok_or("file.list definition missing")?
+        .clone();
+    let patch = metadata("patch")
+        .ok_or("file.patch definition missing")?
+        .clone();
+    Ok(vec![read, write, terminal, list, patch])
 }
 
 /// Tool definitions offered to the model, and the consent executor that runs them.
@@ -203,10 +255,18 @@ pub fn project_tools(
         .and_then(|a| a.iter().find(|e| e["name"] == "terminal.run"))
         .ok_or("terminal.run definition missing")?
         .clone();
+    let list_definition = metadata("list")
+        .ok_or("file.list definition missing")?
+        .clone();
+    let patch_definition = metadata("patch")
+        .ok_or("file.patch definition missing")?
+        .clone();
     let turn_tools = vec![
         turn_tool(&read_definition, "file.read"),
         turn_tool(&write_definition, "file.write"),
         turn_tool(&terminal_definition, "terminal.run"),
+        turn_tool(&list_definition, "file.list"),
+        turn_tool(&patch_definition, "file.patch"),
     ];
     let terminal_definition_for_registry = terminal_definition.clone();
     let (handle_tx, handle_rx) = std::sync::mpsc::channel();
@@ -231,6 +291,14 @@ pub fn project_tools(
                 registry.register(
                     write_definition,
                     execute_port(Rc::new(create_file_write_tool(host_port()))),
+                );
+                registry.register(
+                    list_definition,
+                    execute_port(Rc::new(create_file_list_tool(host_port()))),
+                );
+                registry.register(
+                    patch_definition,
+                    execute_port(Rc::new(create_file_patch_tool(host_port()))),
                 );
                 let terminal = Rc::new(TerminalTools::new(terminal_port()));
                 registry.register(
@@ -293,6 +361,18 @@ pub fn project_tools(
                     ConsentLevel::Once,
                     Risk::High,
                     "Run a shell command in the project root",
+                ),
+                permission(
+                    "file.list",
+                    ConsentLevel::None,
+                    Risk::Low,
+                    "List a directory inside the project",
+                ),
+                permission(
+                    "file.patch",
+                    ConsentLevel::Once,
+                    Risk::Medium,
+                    "Replace the first match of a string in an existing project file",
                 ),
                 permission(
                     "file.write",

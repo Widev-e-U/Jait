@@ -999,6 +999,126 @@ async fn chat_write_waits_for_consent_then_applies_or_leaves_the_file() {
 }
 
 #[tokio::test]
+async fn chat_lists_without_consent_and_patch_waits_for_approval() {
+    for (tool, arguments, consent) in [
+        ("file_list", serde_json::json!({"path": "."}), false),
+        (
+            "file_patch",
+            serde_json::json!({"path": "notes.txt", "search": "original", "replace": "patched"}),
+            true,
+        ),
+    ] {
+        let (model_base, seen) = fake_model_calling(tool, arguments).await;
+        let (base, stop, task, dir) = start_seeded(false, |d| {
+            std::fs::write(d.join("notes.txt"), "original text").unwrap();
+            std::fs::create_dir(d.join("subdir")).unwrap();
+        })
+        .await;
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(20))
+            .build()
+            .unwrap();
+        let token = token(&client, &base).await;
+        let saved = client
+            .patch(format!("{base}/api/auth/settings"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({
+                "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "k"},
+                "selected_model": "m"
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(saved.status(), 200);
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let turn = {
+            let (client, base, token) = (client.clone(), base.clone(), token.clone());
+            let body = serde_json::json!({"sessionId": session["id"], "content": "go"});
+            tokio::spawn(async move {
+                client
+                    .post(format!("{base}/api/chat"))
+                    .bearer_auth(&token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+            })
+        };
+        if consent {
+            let mut pending = None;
+            for _ in 0..100 {
+                let listed: serde_json::Value = client
+                    .get(format!("{base}/api/consent/pending"))
+                    .bearer_auth(&token)
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                    pending = Some(first.clone());
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let pending = pending.expect("patch must wait for consent");
+            assert_eq!(pending["toolName"], "file.patch");
+            assert_eq!(
+                std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+                "original text",
+                "file must not change before approval"
+            );
+            let decided = client
+                .post(format!(
+                    "{base}/api/consent/{}/approve",
+                    pending["id"].as_str().unwrap()
+                ))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(decided.status(), 200);
+        }
+        let text = tokio::time::timeout(Duration::from_secs(20), turn)
+            .await
+            .unwrap()
+            .unwrap();
+        if consent {
+            assert_eq!(
+                std::fs::read_to_string(dir.join("notes.txt")).unwrap(),
+                "patched text"
+            );
+        } else {
+            assert!(
+                text.contains("notes.txt") && text.contains("subdir"),
+                "{text}"
+            );
+        }
+        assert!(seen.lock().unwrap().len() >= 2);
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[tokio::test]
 async fn chat_terminal_command_waits_for_consent_then_runs_or_never_starts() {
     let (model_base, seen) = fake_model_calling(
         "terminal_run",
