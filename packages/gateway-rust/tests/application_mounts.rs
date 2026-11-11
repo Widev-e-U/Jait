@@ -3313,6 +3313,48 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     .await;
     assert!(s == 200 || s == 500, "{s} {b}");
 
+    // stacked action: local commit works, no-op reports no changes, push is refused
+    std::fs::write(root.join("b.txt"), "two\n").unwrap();
+    let (s, b) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "commit", "commitMessage": "feat: add b"}),
+    )
+    .await;
+    assert!(
+        s == 200
+            && b["commit"]["status"] == "created"
+            && b["commit"]["subject"] == "feat: add b"
+            && b["push"]["status"] == "skipped_not_requested",
+        "{s} {b}"
+    );
+    let log = std::process::Command::new("git")
+        .args(["log", "-1", "--format=%s"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&log.stdout).trim(), "feat: add b");
+    let (s, b) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "commit"}),
+    )
+    .await;
+    assert!(
+        s == 200 && b["commit"]["status"] == "skipped_no_changes",
+        "{s} {b}"
+    );
+    let (s, _) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "nope"}),
+    )
+    .await;
+    assert_eq!(s, 400);
+    let (s, _) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "commit_push_pr"}),
+    )
+    .await;
+    assert_eq!(s, 501);
+
     // network, worktree and a repository that is not the caller's project are all refused
     assert!(
         std::process::Command::new("git")
@@ -3334,6 +3376,16 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     assert!(
         s == 200 && b["pull"]["status"] == "skipped_no_upstream",
         "{b}"
+    );
+    std::fs::write(root.join("c.txt"), "three\n").unwrap();
+    let (s, b) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "commit_push", "commitMessage": "feat: add c"}),
+    )
+    .await;
+    assert!(
+        s >= 400,
+        "push must be refused by the git authority: {s} {b}"
     );
     let (s, _) = call("/api/git/status", serde_json::json!({"cwd": dir})).await;
     assert_eq!(s, 403, "a directory that is not a project root");

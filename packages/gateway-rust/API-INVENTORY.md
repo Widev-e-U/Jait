@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 152 | 35.7% |
+| native-tested | 153 | 35.9% |
 | native-untested | 224 | 52.6% |
-| missing | 50 | 11.7% |
+| missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -147,7 +147,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/git/pull` | routes/git.ts | native-untested |
 | POST | `/api/git/remove-worktree` | routes/git.ts | native-tested |
 | POST | `/api/git/run-commit-flow` | routes/git.ts | missing |
-| POST | `/api/git/run-stacked-action` | routes/git.ts | missing |
+| POST | `/api/git/run-stacked-action` | routes/git.ts | native-tested |
 | POST | `/api/git/stage` | routes/git.ts | native-tested |
 | POST | `/api/git/status` | routes/git.ts | native-tested |
 | POST | `/api/git/sync` | routes/git.ts | native-tested |

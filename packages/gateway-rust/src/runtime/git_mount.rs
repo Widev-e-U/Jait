@@ -99,6 +99,11 @@ fn permitted(arguments: &[String]) -> Result<(), &'static str> {
     match subcommand {
         "rev-parse" | "rev-list" | "merge-base" | "for-each-ref" | "status" | "show" | "diff"
         | "symbolic-ref" | "branch" | "add" | "reset" | "checkout" | "init" => Ok(()),
+        // Local commit with a message only; hooks are disabled by the command environment.
+        "commit" => match rest.as_slice() {
+            ["-m", _] => Ok(()),
+            _ => Err("Git commit option is not authorized"),
+        },
         "remote" => match rest.as_slice() {
             [] | ["get-url", _] => Ok(()),
             _ => Err("Remote changes are not authorized"),

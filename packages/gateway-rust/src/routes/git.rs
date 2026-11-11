@@ -34,8 +34,7 @@ use serde_json::{Map, Value, json};
 use super::auth::{self, AuthState};
 
 /// Handlers that exist in the TypeScript module but are not ported yet.
-pub const DEFERRED: [&str; 9] = [
-    "run-stacked-action",
+pub const DEFERRED: [&str; 8] = [
     "run-commit-flow",
     "gh-status",
     "pr-checks",
@@ -90,6 +89,10 @@ impl GitRoutes {
             .route("/api/git/fetch", post(fetch))
             .route("/api/git/pull", post(pull))
             .route("/api/git/sync", post(sync))
+            .route(
+                "/api/git/run-stacked-action",
+                post(run_stacked_action_route),
+            )
             .route("/api/git/identity", post(identity))
             .route("/api/git/checkout", post(checkout))
             .route("/api/git/create-branch", post(create_branch))
@@ -1079,6 +1082,272 @@ async fn sync(State(state): State<GitRoutes>, request: Request) -> Response {
     })
     .await;
 
+    match result {
+        Ok(payload) => ok_json(payload),
+        Err(response) => *response,
+    }
+}
+
+/// `COMMITTABLE_PATHSPEC` from services/git.ts: never commit local release checkouts.
+const COMMITTABLE_PATHSPEC: [&str; 3] = ["--", ".", ":(exclude).jait/release-checkout-*"];
+
+fn with_pathspec<'a>(head: &[&'a str]) -> Vec<&'a str> {
+    head.iter()
+        .chain(COMMITTABLE_PATHSPEC.iter())
+        .copied()
+        .collect()
+}
+
+fn base36(mut value: u128) -> String {
+    if value == 0 {
+        return "0".into();
+    }
+    let mut digits = Vec::new();
+    while value > 0 {
+        digits.push(char::from_digit((value % 36) as u32, 36).unwrap_or('0'));
+        value /= 36;
+    }
+    digits.iter().rev().collect()
+}
+
+/// `buildCreatePrUrl` for hosts whose compare URL only needs the remote text.
+fn create_pr_url(raw: &str, branch: &str, base: &str) -> Option<String> {
+    let raw = raw.trim().trim_end_matches(".git");
+    let web = match raw.strip_prefix("git@") {
+        Some(rest) => {
+            let (host, path) = rest.split_once(':')?;
+            format!("https://{host}/{path}")
+        }
+        None => raw.to_owned(),
+    };
+    let enc =
+        |value: &str| url::form_urlencoded::byte_serialize(value.as_bytes()).collect::<String>();
+    match detect_git_remote_provider(raw) {
+        "github" => Some(format!(
+            "{web}/compare/{}...{}?expand=1",
+            enc(base),
+            enc(branch)
+        )),
+        "gitlab" => Some(format!(
+            "{web}/-/merge_requests/new?merge_request[source_branch]={}",
+            enc(branch)
+        )),
+        "bitbucket" => Some(format!("{web}/pull-requests/new?source={}", enc(branch))),
+        "gitea" => Some(format!("{web}/compare/{}...{}", enc(base), enc(branch))),
+        _ => None,
+    }
+}
+
+/// Commit and optionally push, mirroring `GitService.runStackedAction` for the
+/// `commit` and `commit_push` actions. Network commands go through the same
+/// request authority as every other command, so a root without network
+/// authority gets the denial instead of a push.
+fn run_stacked_action(
+    cwd: &str,
+    action: &str,
+    commit_message: Option<&str>,
+    feature_branch: bool,
+    base_branch: Option<&str>,
+) -> Result<Value, String> {
+    let pushing = action == "commit_push";
+    let mut branch_result = json!({ "status": "skipped_not_requested" });
+    let mut commit_result = json!({ "status": "skipped_no_changes" });
+    let mut push_result = json!({ "status": "skipped_not_requested" });
+
+    let resolve_base = |branch: Option<&str>| -> String {
+        if let Some(base) = base_branch.map(str::trim).filter(|b| !b.is_empty()) {
+            return base.to_string();
+        }
+        let _ = branch;
+        ["main", "master"]
+            .into_iter()
+            .find(|name| {
+                git_exec(
+                    cwd,
+                    &["rev-parse", "--verify", &format!("refs/heads/{name}")],
+                )
+                .is_ok()
+            })
+            .unwrap_or("main")
+            .to_string()
+    };
+
+    // Publish the base branch before branching so the PR diff stays clean (best effort).
+    if pushing && feature_branch {
+        let pre_branch = current_branch(cwd);
+        let target = resolve_base(pre_branch.as_deref());
+        if pre_branch.as_deref() == Some(target.as_str()) {
+            let _ = (|| -> Result<(), String> {
+                let remote = preferred_remote(cwd, pre_branch.as_deref()).ok_or("no remote")?;
+                git_exec(cwd, &["fetch", &remote, &target])?;
+                let range = format!("{remote}/{target}..HEAD");
+                let ahead = git_exec(cwd, &["rev-list", "--count", &range])?;
+                if ahead.trim().parse::<u64>().unwrap_or(0) > 0 {
+                    git_exec(cwd, &["push", "--no-verify", &remote, &target])?;
+                }
+                Ok(())
+            })();
+        }
+    }
+
+    if feature_branch {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let name = format!("feature/auto-{}", base36(millis));
+        git_exec(cwd, &["checkout", "-b", &name])?;
+        branch_result = json!({ "status": "created", "name": name });
+    }
+
+    let branch = current_branch(cwd);
+
+    // Honor the user's staging: commit exactly what is staged, otherwise stage everything.
+    let has_staged = !git_exec(cwd, &with_pathspec(&["diff", "--cached", "--name-only"]))
+        .unwrap_or_default()
+        .trim()
+        .is_empty();
+    let has_changes = has_staged
+        || !git_exec(cwd, &with_pathspec(&["status", "--porcelain"]))
+            .unwrap_or_default()
+            .trim()
+            .is_empty();
+    if has_changes {
+        if !has_staged {
+            git_exec(cwd, &with_pathspec(&["add", "-A"]))?;
+        }
+        let subject = match commit_message.map(str::trim).filter(|m| !m.is_empty()) {
+            Some(message) => message.to_string(),
+            None => match git_exec(cwd, &with_pathspec(&["diff", "--cached", "--stat"])) {
+                Ok(summary) => format!(
+                    "chore: auto-commit {} file(s) changed",
+                    summary.trim().lines().count()
+                ),
+                Err(_) => "chore: auto-commit changes".to_string(),
+            },
+        };
+        let committed = git_exec(cwd, &["commit", "-m", &subject])
+            .and_then(|_| git_exec(cwd, &["rev-parse", "HEAD"]));
+        match committed {
+            Ok(sha) => {
+                commit_result =
+                    json!({ "status": "created", "commitSha": sha.trim(), "subject": subject });
+            }
+            Err(error) => {
+                let _ = git_exec(cwd, &with_pathspec(&["reset", "HEAD"]));
+                return Err(error);
+            }
+        }
+    }
+
+    if pushing && let Some(branch) = branch.as_deref() {
+        let upstream = branch_upstream(cwd, branch);
+
+        // Rebase onto the latest remote base so the pushed branch is not rooted on a stale commit.
+        let rebase_target = resolve_base(Some(branch));
+        if let Some(remote) = preferred_remote(cwd, Some(branch)) {
+            let rebased = git_exec(cwd, &["fetch", &remote, &rebase_target])
+                .and_then(|_| git_exec(cwd, &["rebase", &format!("{remote}/{rebase_target}")]));
+            if rebased.is_err() {
+                let _ = git_exec(cwd, &["rebase", "--abort"]);
+            }
+        }
+
+        if let Some(upstream) = upstream {
+            push_result = match git_exec(cwd, &["push", "--no-verify", "--force-with-lease"]) {
+                Ok(_) => {
+                    json!({ "status": "pushed", "branch": branch, "upstreamBranch": upstream })
+                }
+                Err(error) => {
+                    json!({ "status": "failed", "branch": branch, "upstreamBranch": upstream, "error": error })
+                }
+            };
+        } else {
+            match preferred_remote(cwd, Some(branch)) {
+                None => push_result = json!({ "status": "skipped_no_remote", "branch": branch }),
+                Some(remote) => {
+                    git_exec(
+                        cwd,
+                        &["push", "--no-verify", "--set-upstream", &remote, branch],
+                    )?;
+                    push_result = json!({
+                        "status": "pushed",
+                        "branch": branch,
+                        "upstreamBranch": format!("{remote}/{branch}"),
+                        "setUpstream": true,
+                    });
+                }
+            }
+        }
+
+        if push_result["status"] == "pushed" {
+            let remote = push_result["upstreamBranch"]
+                .as_str()
+                .and_then(|upstream| upstream.split('/').next())
+                .map(str::to_string)
+                .or_else(|| preferred_remote(cwd, Some(branch)));
+            let url = remote
+                .and_then(|remote| remote_url(cwd, &remote))
+                .and_then(|raw| create_pr_url(&raw, branch, &resolve_base(Some(branch))));
+            if let (Some(url), Some(object)) = (url, push_result.as_object_mut()) {
+                object.insert("createPrUrl".into(), Value::String(url));
+            }
+        }
+    }
+
+    Ok(json!({
+        "commit": commit_result,
+        "push": push_result,
+        "branch": branch_result,
+        "pr": { "status": "skipped_not_requested" },
+    }))
+}
+
+/// `POST /api/git/run-stacked-action` (git.ts:429)
+///
+/// `commit_push_pr` needs the forge/`gh` integration and answers 501 until it
+/// is ported; `run-commit-flow` stays deferred for the same network reasons.
+async fn run_stacked_action_route(State(state): State<GitRoutes>, request: Request) -> Response {
+    let headers = request.headers().clone();
+    if let Err(response) = auth::require_user(&state.auth, &headers).await {
+        return *response;
+    }
+    let body = match json_body(request).await {
+        Ok(body) => body,
+        Err(response) => return *response,
+    };
+    let cwd = match require_cwd(&body) {
+        Ok(cwd) => cwd,
+        Err(response) => return *response,
+    };
+    let action = body
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    if !["commit", "commit_push", "commit_push_pr"].contains(&action.as_str()) {
+        return error_response(400, &format!("Invalid action: {action}"));
+    }
+    if action == "commit_push_pr" {
+        return error_response(
+            501,
+            "commit_push_pr is not available in the Rust gateway yet",
+        );
+    }
+    let message = string_field(&body, "commitMessage");
+    let feature_branch = body.get("featureBranch").and_then(Value::as_bool) == Some(true);
+    let base_branch = string_field(&body, "baseBranch");
+
+    let result = git_task(move || {
+        run_stacked_action(
+            &cwd,
+            &action,
+            message.as_deref(),
+            feature_branch,
+            base_branch.as_deref(),
+        )
+    })
+    .await;
     match result {
         Ok(payload) => ok_json(payload),
         Err(response) => *response,
