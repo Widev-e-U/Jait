@@ -1,10 +1,12 @@
 //! Authority for the `/api/git/*` routes in the composed gateway.
 //!
 //! A request is granted only for the exact root of a project the caller owns. Commands are limited
-//! to local, non-network Git operations; hooks, fsmonitor and ssh commands are switched off through
-//! `GIT_CONFIG_*` and repository discovery cannot leave the root. Network operations (fetch, pull,
-//! push), worktrees and global config writes are refused until they have a consent and destination
-//! model, so those routes answer with the denial instead of acting.
+//! to local Git operations plus fetch, pull and push of an explicitly named https remote; hooks,
+//! fsmonitor and ssh commands are switched off through `GIT_CONFIG_*` and repository discovery
+//! cannot leave the root. A network command runs only while the owner holds an unexpired
+//! per-destination grant (see `git_network`); worktrees and global config writes are refused, so
+//! those routes answer with the denial instead of acting.
+use super::git_network as network;
 use crate::{
     execution::process_runner::ProcessRequest,
     routes::{
@@ -24,10 +26,14 @@ use std::{
 
 const IDENTITY_KEYS: [&str; 2] = ["user.name", "user.email"];
 
-pub fn git_authority(auth: &AuthState) -> GitAuthority {
+pub fn git_authority(
+    auth: &AuthState,
+    network: Option<Arc<network::NetworkGuard>>,
+) -> GitAuthority {
     let auth = auth.clone();
     Arc::new(move |request: GitAuthorizationRequest, _| {
         let auth = auth.clone();
+        let network = network.clone();
         Box::pin(async move {
             let cwd = request
                 .body
@@ -62,7 +68,7 @@ pub fn git_authority(auth: &AuthState) -> GitAuthority {
                 .ok_or("Git root is not one of your projects")?;
             Ok(GitGrant {
                 owner: request.owner,
-                command_authority: command_authority(root.clone()),
+                command_authority: command_authority(root.clone(), network),
                 root,
                 allow_worktree_reads: true,
             })
@@ -123,7 +129,7 @@ fn permitted(arguments: &[String]) -> Result<(), &'static str> {
     }
 }
 
-fn find_git() -> Option<PathBuf> {
+pub(super) fn find_git() -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
             .map(|dir| dir.join("git"))
@@ -131,11 +137,64 @@ fn find_git() -> Option<PathBuf> {
     })
 }
 
-fn command_authority(root: PathBuf) -> GitCommandAuthority {
+/// The environment every Git child gets: no inherited config beyond the user's own, no
+/// hooks, fsmonitor, ssh command or prompts, and discovery capped at the project root.
+/// `extra_config` pins further `-c` style values (highest precedence).
+pub(crate) fn git_environment(
+    root: &Path,
+    mut environment: HashMap<String, String>,
+    extra_config: &[(&str, &str)],
+) -> HashMap<String, String> {
+    for key in ["PATH", "HOME", "LANG", "LC_ALL", "USER"] {
+        if let Ok(value) = std::env::var(key) {
+            environment.insert(key.into(), value);
+        }
+    }
+    environment.insert("GIT_TERMINAL_PROMPT".into(), "0".into());
+    if let Some(parent) = root.parent() {
+        environment.insert(
+            "GIT_CEILING_DIRECTORIES".into(),
+            parent.to_string_lossy().into_owned(),
+        );
+    }
+    let config = [
+        ("core.hooksPath", "/dev/null"),
+        ("core.fsmonitor", "false"),
+        ("core.sshCommand", "false"),
+        ("core.pager", "cat"),
+        ("diff.external", ""),
+    ];
+    let config = config.iter().chain(extra_config);
+    let mut count = 0;
+    for (i, (key, value)) in config.enumerate() {
+        environment.insert(format!("GIT_CONFIG_KEY_{i}"), (*key).into());
+        environment.insert(format!("GIT_CONFIG_VALUE_{i}"), (*value).into());
+        count = i + 1;
+    }
+    environment.insert("GIT_CONFIG_COUNT".into(), count.to_string());
+    environment
+}
+
+/// Network commands the routes may run, always with an explicit remote name so the
+/// destination that was consented to is the one contacted. Returns `(operation, remote)`.
+fn network_command(arguments: &[String]) -> Option<(&'static str, &str)> {
+    let rest: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    match rest.as_slice() {
+        ["fetch", "--prune", remote] if network::valid_remote(remote) => Some(("fetch", remote)),
+        ["pull", "--ff-only", remote] if network::valid_remote(remote) => Some(("fetch", remote)),
+        ["push", remote] if network::valid_remote(remote) => Some(("push", remote)),
+        _ => None,
+    }
+}
+
+fn command_authority(
+    root: PathBuf,
+    network: Option<Arc<network::NetworkGuard>>,
+) -> GitCommandAuthority {
     Arc::new(move |request: GitCommandRequest, _| {
         let root = root.clone();
+        let network = network.clone();
         Box::pin(async move {
-            permitted(&request.arguments)?;
             if request.program != "git" || request.cwd != root {
                 return Err("Git command is not authorized for this directory".into());
             }
@@ -145,34 +204,39 @@ fn command_authority(root: PathBuf) -> GitCommandAuthority {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 _ => return Err("Git directory is not inside the project".into()),
             }
-            let git = find_git().ok_or("git is not installed")?;
-            let mut environment: HashMap<String, String> = request.environment.clone();
-            for key in ["PATH", "HOME", "LANG", "LC_ALL", "USER"] {
-                if let Ok(value) = std::env::var(key) {
-                    environment.insert(key.into(), value);
-                }
-            }
-            environment.insert("GIT_TERMINAL_PROMPT".into(), "0".into());
-            if let Some(parent) = root.parent() {
-                environment.insert(
-                    "GIT_CEILING_DIRECTORIES".into(),
-                    parent.to_string_lossy().into_owned(),
-                );
-            }
-            for (i, (key, value)) in [
-                ("core.hooksPath", "/dev/null"),
-                ("core.fsmonitor", "false"),
-                ("core.sshCommand", "false"),
-                ("core.pager", "cat"),
-                ("diff.external", ""),
-            ]
-            .iter()
-            .enumerate()
+            let mut extra: &[(&str, &str)] = &[];
+            let mut protocols = None;
+            if request
+                .arguments
+                .first()
+                .is_some_and(|a| matches!(a.as_str(), "fetch" | "pull" | "push"))
             {
-                environment.insert(format!("GIT_CONFIG_KEY_{i}"), (*key).into());
-                environment.insert(format!("GIT_CONFIG_VALUE_{i}"), (*value).into());
+                if request.arguments.iter().any(|a| dangerous(a)) {
+                    return Err("Git option is not authorized".into());
+                }
+                let (operation, remote) = network_command(&request.arguments)
+                    .ok_or("Git network command is not authorized")?;
+                let guard = network
+                    .as_ref()
+                    .ok_or("Network Git operations are not authorized")?;
+                let destination =
+                    network::resolve_destination(&root, remote, operation == "push").await?;
+                if !guard.permits(&request.owner, &root, operation, &destination) {
+                    return Err(format!(
+                        "Network access to {}:{} is not approved for this project",
+                        destination.host, destination.port
+                    ));
+                }
+                extra = network::PINNED_CONFIG;
+                protocols = Some("https");
+            } else {
+                permitted(&request.arguments)?;
             }
-            environment.insert("GIT_CONFIG_COUNT".into(), "5".into());
+            let git = find_git().ok_or("git is not installed")?;
+            let mut environment = git_environment(&root, request.environment.clone(), extra);
+            if let Some(protocols) = protocols {
+                environment.insert("GIT_ALLOW_PROTOCOL".into(), protocols.into());
+            }
             Ok(ProcessRequest {
                 argv: [vec![git.to_string_lossy().into_owned()], request.arguments].concat(),
                 cwd: request.cwd,

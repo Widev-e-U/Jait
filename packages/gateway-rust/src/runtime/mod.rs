@@ -11,6 +11,7 @@ pub mod application;
 pub mod skills_mount;
 
 pub mod git_mount;
+pub mod git_network;
 pub mod team_chat_mount;
 pub mod tools_mount;
 

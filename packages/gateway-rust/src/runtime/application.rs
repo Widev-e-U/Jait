@@ -374,6 +374,8 @@ impl Application {
         // One queue backs both the chat executor and the consent routes, so an approval
         // reaches the tool call that is waiting on it.
         let consent = crate::security::consent_manager::ConsentManager::default();
+        // Network Git prompts go through the same queue and need the owner's approval.
+        let git_network = super::git_network::NetworkGuard::new(consent.clone());
         // The settings factory needs the opened auth state, so it is built here on request.
         let factory = match (factory, settings_chat) {
             (Some(factory), _) => Some(factory),
@@ -663,7 +665,11 @@ impl Application {
             )
             .merge(
                 GitRoutes::new(auth.clone())
-                    .with_authority(super::git_mount::git_authority(&auth))
+                    .with_authority(super::git_mount::git_authority(
+                        &auth,
+                        Some(git_network.clone()),
+                    ))
+                    .with_network(super::git_network::gate(git_network))
                     .with_user_secrets(Some(crate::services::user_secrets::UserSecretService::new(
                         &secrets_key,
                     )))

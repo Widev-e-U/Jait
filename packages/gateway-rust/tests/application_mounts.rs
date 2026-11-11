@@ -3531,7 +3531,7 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
             .unwrap()
             .success()
     );
-    for path in ["/api/git/fetch", "/api/git/remove-worktree"] {
+    for path in ["/api/git/remove-worktree"] {
         let (s, b) = call(
             path,
             serde_json::json!({"cwd": root, "path": root.join("wt")}),
@@ -3562,6 +3562,196 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     )
     .await;
     assert!(s == 403 || s == 400);
+
+    let _ = stop.send(());
+    let _ = task.await;
+}
+
+#[tokio::test]
+async fn git_fetch_needs_the_owners_consent_for_each_destination() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let root = dir.join("net-proj");
+    std::fs::create_dir_all(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    let created: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title": "N", "rootPath": root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(created["id"].is_string(), "{created}");
+    let git = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .status()
+                .unwrap()
+                .success(),
+            "git {args:?}"
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["remote", "add", "origin", "https://example.invalid/x.git"]);
+
+    let fetch = || {
+        let (client, token, url, root) = (
+            client.clone(),
+            token.clone(),
+            format!("{base}/api/git/fetch"),
+            root.clone(),
+        );
+        tokio::spawn(async move {
+            let r = client
+                .post(url)
+                .bearer_auth(token)
+                .json(&serde_json::json!({"cwd": root}))
+                .send()
+                .await
+                .unwrap();
+            let status = r.status().as_u16();
+            (status, r.text().await.unwrap_or_default())
+        })
+    };
+    let pending = || async {
+        for _ in 0..100 {
+            let listed: serde_json::Value = client
+                .get(format!("{base}/api/consent/pending"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if let Some(first) = listed["requests"].as_array().and_then(|r| r.first()) {
+                return Some(first.clone());
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        None
+    };
+    let decide = |id: String, action: &'static str| {
+        let (client, token, base) = (client.clone(), token.clone(), base.clone());
+        async move {
+            client
+                .post(format!("{base}/api/consent/{id}/{action}"))
+                .bearer_auth(token)
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        }
+    };
+
+    // Nothing runs until the owner decides, and a rejection leaves no grant behind.
+    let rejected = fetch();
+    let Some(request) = pending().await else {
+        let early = tokio::time::timeout(Duration::from_secs(2), rejected).await;
+        panic!("no consent prompt for the destination; fetch answered {early:?}");
+    };
+    assert_eq!(request["toolName"], "git.fetch", "{request}");
+    assert!(
+        request["summary"]
+            .as_str()
+            .unwrap()
+            .contains("example.invalid:443"),
+        "{request}"
+    );
+    assert_eq!(
+        decide(request["id"].as_str().unwrap().into(), "reject").await,
+        200
+    );
+    let (s, body) = rejected.await.unwrap();
+    assert_eq!(s, 403, "{body}");
+    assert!(body.contains("not approved"), "{body}");
+
+    // An approval lets git run (the host does not resolve, so git itself fails), and the
+    // same destination is not asked again while the grant is active.
+    let approved = fetch();
+    let request = pending().await.expect("a second prompt after a rejection");
+    assert_eq!(
+        decide(request["id"].as_str().unwrap().into(), "approve").await,
+        200
+    );
+    let (s, body) = approved.await.unwrap();
+    assert_eq!(
+        s, 500,
+        "git must have run and failed on the network: {body}"
+    );
+    assert!(
+        !body.contains("not authorized") && !body.contains("not approved"),
+        "{body}"
+    );
+    let again = fetch();
+    let (s, body) = again.await.unwrap();
+    assert_eq!(s, 500, "{body}");
+    let listed: serde_json::Value = client
+        .get(format!("{base}/api/consent/pending"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        listed["requests"].as_array().unwrap().is_empty(),
+        "{listed}"
+    );
+
+    // A different destination needs its own approval; non-https and proxied remotes never get one.
+    git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "ssh://git@example.invalid/x.git",
+    ]);
+    let (s, body) = fetch().await.unwrap();
+    assert_eq!(s, 403, "{body}");
+    assert!(body.contains("https"), "{body}");
+    git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://example.invalid/x.git",
+    ]);
+    git(&["config", "http.proxy", "http://127.0.0.1:9"]);
+    let (s, body) = fetch().await.unwrap();
+    assert_eq!(s, 403, "{body}");
+    assert!(body.contains("not allowed"), "{body}");
+    git(&["config", "--unset", "http.proxy"]);
+    git(&[
+        "remote",
+        "set-url",
+        "origin",
+        "https://other.example.invalid/x.git",
+    ]);
+    let other = fetch();
+    let request = pending().await.expect("a prompt for the new destination");
+    assert!(
+        request["summary"]
+            .as_str()
+            .unwrap()
+            .contains("other.example.invalid:443"),
+        "{request}"
+    );
+    assert_eq!(
+        decide(request["id"].as_str().unwrap().into(), "reject").await,
+        200
+    );
+    assert_eq!(other.await.unwrap().0, 403);
 
     let _ = stop.send(());
     let _ = task.await;

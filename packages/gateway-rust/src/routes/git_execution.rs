@@ -100,6 +100,43 @@ pub type GitCommandAuthority = Arc<
         + Sync,
 >;
 
+/// Remote destinations one request is about to contact. The host resolves each remote
+/// to its destination, obtains consent for it and records a grant that the command
+/// authority checks again at execution; the route never constructs that grant.
+#[derive(Clone, Debug)]
+pub struct NetworkRequest {
+    pub owner: String,
+    pub root: PathBuf,
+    /// `fetch` (also for pull) or `push`.
+    pub operation: String,
+    pub remotes: Vec<String>,
+}
+pub type NetworkGate = Arc<
+    dyn Fn(NetworkRequest, ProcessCancellation) -> BoxFuture<'static, Result<(), String>>
+        + Send
+        + Sync,
+>;
+/// Ask the host to authorize `remotes` for the current request's owner and root.
+pub(super) async fn network_gate(
+    gate: &NetworkGate,
+    operation: &str,
+    remotes: Vec<String>,
+) -> Result<(), String> {
+    let context = REQUEST_CONTEXT
+        .try_with(Clone::clone)
+        .map_err(|_| "Git execution has no authorized request".to_owned())?;
+    gate(
+        NetworkRequest {
+            owner: context.owner,
+            root: context.grant.root,
+            operation: operation.to_owned(),
+            remotes,
+        },
+        context.cancel,
+    )
+    .await
+}
+
 #[derive(Clone)]
 struct Context {
     owner: String,

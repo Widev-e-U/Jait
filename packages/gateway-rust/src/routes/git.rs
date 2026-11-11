@@ -17,11 +17,14 @@
 use crate::services::user_secrets::UserSecretService;
 #[path = "git_batch.rs"]
 mod batch;
+#[path = "git_destination_grant.rs"]
+pub(crate) mod destination_grant;
 #[path = "git_execution.rs"]
 pub mod execution;
 use execution::Command;
 pub use execution::{
     GitAuthority, GitAuthorizationRequest, GitCommandAuthority, GitCommandRequest, GitGrant,
+    NetworkGate, NetworkRequest,
 };
 
 use axum::extract::{Request, State};
@@ -51,6 +54,8 @@ pub struct GitRoutes {
     /// Optional user secret store, used by the forge/GitHub credential routes.
     user_secrets: Option<UserSecretService>,
     authority: Option<GitAuthority>,
+    /// Host consent for network destinations; without it fetch, pull and push are refused.
+    network: Option<NetworkGate>,
     processes: crate::execution::process_runner::ProcessPool,
     blocking: crate::runtime::blocking::BlockingLane,
     admission: std::sync::Arc<tokio::sync::Semaphore>,
@@ -63,6 +68,7 @@ impl GitRoutes {
             auth,
             user_secrets: None,
             authority: None,
+            network: None,
             processes,
             blocking,
             admission: std::sync::Arc::new(tokio::sync::Semaphore::new(4)),
@@ -80,6 +86,28 @@ impl GitRoutes {
     pub fn with_authority(mut self, authority: GitAuthority) -> Self {
         self.authority = Some(authority);
         self
+    }
+
+    pub fn with_network(mut self, network: NetworkGate) -> Self {
+        self.network = Some(network);
+        self
+    }
+
+    /// Obtain host consent for the destinations of `remotes`, or answer the denial.
+    async fn authorize_network(
+        &self,
+        operation: &str,
+        remotes: Vec<String>,
+    ) -> Result<(), Response> {
+        let Some(gate) = self.network.as_ref() else {
+            return Err(error_response(
+                403,
+                "Network Git operations are not authorized",
+            ));
+        };
+        execution::network_gate(gate, operation, remotes)
+            .await
+            .map_err(|message| error_response(403, &message))
     }
 
     pub fn router(self) -> Router {
@@ -968,15 +996,39 @@ async fn fetch(State(state): State<GitRoutes>, request: Request) -> Response {
     };
     let all_remotes = bool_field(&body, "allRemotes");
 
+    // Remotes are named explicitly so the destination that was consented to is the one
+    // contacted; `--all` becomes one fetch per remote.
+    let targets = {
+        let cwd = cwd.clone();
+        git_task(move || {
+            Ok(if all_remotes {
+                remotes(&cwd)
+            } else {
+                preferred_remote(&cwd, current_branch(&cwd).as_deref())
+                    .into_iter()
+                    .collect()
+            })
+        })
+        .await
+    };
+    let targets = match targets {
+        Ok(targets) => targets,
+        Err(response) => return *response,
+    };
+    if targets.is_empty() {
+        return ok_json(
+            json!({ "status": "skipped_no_remote", "remote": Value::Null, "allRemotes": all_remotes }),
+        );
+    }
+    if let Err(response) = state.authorize_network("fetch", targets.clone()).await {
+        return response;
+    }
+
     let result = git_task(move || {
-        if remotes(&cwd).is_empty() {
-            return Ok(json!({ "status": "skipped_no_remote", "remote": Value::Null, "allRemotes": all_remotes }));
+        let mut output = String::new();
+        for remote in &targets {
+            output.push_str(&git_exec(&cwd, &["fetch", "--prune", remote])?);
         }
-        let output = if all_remotes {
-            git_exec(&cwd, &["fetch", "--all", "--prune"])?
-        } else {
-            git_exec(&cwd, &["fetch", "--prune"])?
-        };
         Ok(json!({ "ok": true, "output": output.trim() }))
     })
     .await;
@@ -1002,20 +1054,36 @@ async fn pull(State(state): State<GitRoutes>, request: Request) -> Response {
         Err(response) => return *response,
     };
 
+    let plan = {
+        let cwd = cwd.clone();
+        git_task(move || {
+            let Some(branch) = current_branch(&cwd) else {
+                return Ok(Err(json!({ "status": "skipped_no_upstream" })));
+            };
+            let Some(upstream) = branch_upstream(&cwd, &branch) else {
+                return Ok(Err(json!({ "status": "skipped_no_upstream" })));
+            };
+            let (_, behind) = ahead_behind(&cwd, &upstream);
+            if behind == 0 {
+                return Ok(Err(json!({ "status": "skipped_up_to_date" })));
+            }
+            Ok(preferred_remote(&cwd, Some(&branch))
+                .map(|remote| (remote, behind))
+                .ok_or_else(|| json!({ "status": "skipped_no_upstream" })))
+        })
+        .await
+    };
+    let (remote, behind) = match plan {
+        Ok(Ok(plan)) => plan,
+        Ok(Err(skipped)) => return ok_json(skipped),
+        Err(response) => return *response,
+    };
+    if let Err(response) = state.authorize_network("fetch", vec![remote.clone()]).await {
+        return response;
+    }
+
     let result = git_task(move || {
-        let branch = match current_branch(&cwd) {
-            Some(branch) => branch,
-            None => return Ok(json!({ "status": "skipped_no_upstream" })),
-        };
-        let upstream = match branch_upstream(&cwd, &branch) {
-            Some(upstream) => upstream,
-            None => return Ok(json!({ "status": "skipped_no_upstream" })),
-        };
-        let (_, behind) = ahead_behind(&cwd, &upstream);
-        if behind == 0 {
-            return Ok(json!({ "status": "skipped_up_to_date" }));
-        }
-        git_exec(&cwd, &["pull", "--ff-only"])?;
+        git_exec(&cwd, &["pull", "--ff-only", &remote])?;
         Ok(json!({ "status": "pulled", "commits": behind }))
     })
     .await;
@@ -1041,46 +1109,85 @@ async fn sync(State(state): State<GitRoutes>, request: Request) -> Response {
         Err(response) => return *response,
     };
 
-    let result = git_task(move || {
-        let branch = current_branch(&cwd);
-        let upstream = branch
-            .as_deref()
-            .and_then(|branch| branch_upstream(&cwd, branch));
+    // Each network step asks for consent to its own destination and operation first.
+    let plan = {
+        let cwd = cwd.clone();
+        git_task(move || {
+            let branch = current_branch(&cwd);
+            let upstream = branch
+                .as_deref()
+                .and_then(|branch| branch_upstream(&cwd, branch));
+            let remote = branch
+                .as_deref()
+                .and_then(|branch| preferred_remote(&cwd, Some(branch)));
+            let behind = upstream
+                .as_deref()
+                .map_or(0, |upstream| ahead_behind(&cwd, upstream).1);
+            Ok((branch, upstream, remote, behind))
+        })
+        .await
+    };
+    let (branch, upstream, remote, behind) = match plan {
+        Ok(plan) => plan,
+        Err(response) => return *response,
+    };
 
-        let pull_result = match upstream.as_deref() {
-            None => json!({ "status": "skipped_no_upstream" }),
-            Some(upstream) => {
-                let (_, behind) = ahead_behind(&cwd, upstream);
-                if behind == 0 {
-                    json!({ "status": "skipped_up_to_date" })
-                } else {
-                    git_exec(&cwd, &["pull", "--ff-only"])?;
-                    json!({ "status": "pulled", "commits": behind })
-                }
+    let pull_result = match (upstream.as_deref(), remote.as_ref()) {
+        (None, _) | (_, None) => json!({ "status": "skipped_no_upstream" }),
+        (Some(_), Some(_)) if behind == 0 => json!({ "status": "skipped_up_to_date" }),
+        (Some(_), Some(remote)) => {
+            if let Err(response) = state.authorize_network("fetch", vec![remote.clone()]).await {
+                return response;
             }
-        };
-
-        let push_result = match upstream.as_deref() {
-            None => json!({ "status": "skipped_no_upstream" }),
-            Some(upstream) => {
-                let (ahead, _) = ahead_behind(&cwd, upstream);
-                if ahead == 0 {
-                    json!({ "status": "skipped_up_to_date" })
-                } else {
-                    git_exec(&cwd, &["push"])?;
-                    json!({ "status": "pushed", "commits": ahead })
-                }
+            let (cwd, remote) = (cwd.clone(), remote.clone());
+            match git_task(move || {
+                git_exec(&cwd, &["pull", "--ff-only", &remote])?;
+                Ok(json!({ "status": "pulled", "commits": behind }))
+            })
+            .await
+            {
+                Ok(value) => value,
+                Err(response) => return *response,
             }
-        };
+        }
+    };
 
-        Ok(json!({
-            "branch": branch.map(Value::String).unwrap_or(Value::Null),
-            "upstreamBranch": upstream.map(Value::String).unwrap_or(Value::Null),
-            "pull": pull_result,
-            "push": push_result,
-        }))
-    })
-    .await;
+    let ahead = match upstream.as_deref() {
+        Some(upstream) => {
+            let (cwd, upstream) = (cwd.clone(), upstream.to_owned());
+            match git_task(move || Ok(ahead_behind(&cwd, &upstream).0)).await {
+                Ok(ahead) => ahead,
+                Err(response) => return *response,
+            }
+        }
+        None => 0,
+    };
+    let push_result = match (upstream.as_deref(), remote.as_ref()) {
+        (None, _) | (_, None) => json!({ "status": "skipped_no_upstream" }),
+        (Some(_), Some(_)) if ahead == 0 => json!({ "status": "skipped_up_to_date" }),
+        (Some(_), Some(remote)) => {
+            if let Err(response) = state.authorize_network("push", vec![remote.clone()]).await {
+                return response;
+            }
+            let (cwd, remote) = (cwd.clone(), remote.clone());
+            match git_task(move || {
+                git_exec(&cwd, &["push", &remote])?;
+                Ok(json!({ "status": "pushed", "commits": ahead }))
+            })
+            .await
+            {
+                Ok(value) => value,
+                Err(response) => return *response,
+            }
+        }
+    };
+
+    let result: HandlerResult<Value> = Ok(json!({
+        "branch": branch.map(Value::String).unwrap_or(Value::Null),
+        "upstreamBranch": upstream.map(Value::String).unwrap_or(Value::Null),
+        "pull": pull_result,
+        "push": push_result,
+    }));
 
     match result {
         Ok(payload) => ok_json(payload),

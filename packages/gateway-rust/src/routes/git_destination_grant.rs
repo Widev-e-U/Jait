@@ -1,8 +1,9 @@
-//! Host-issued destination scope for a future Git execution authority.
+//! Host-issued destination scope for the Git execution authority.
 //!
 //! This is a policy primitive only. It does not resolve DNS, constrain redirects,
 //! protect Git configuration or hold a repository lease. Callers must enforce
-//! those boundaries and retain authority through execution before enabling effects.
+//! those boundaries and retain authority through execution before enabling effects
+//! (`runtime::git_network` does so for https remotes).
 use std::{
     path::{Component, Path, PathBuf},
     sync::{
@@ -119,6 +120,12 @@ impl GitDestinationGrant {
             && self.port == port
     }
 
+    /// False once revoked or expired, so a holder can drop the grant.
+    pub(crate) fn is_active(&self) -> bool {
+        !self.revoked.load(Ordering::Acquire) && Instant::now() < self.expires_at
+    }
+
+    #[cfg(test)]
     pub(crate) fn revoke(&self) {
         self.revoked.store(true, Ordering::Release);
     }

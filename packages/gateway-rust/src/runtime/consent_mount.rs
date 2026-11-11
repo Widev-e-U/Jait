@@ -18,6 +18,10 @@ pub fn composed_consent_routes(auth: &AuthState, manager: ConsentManager) -> Con
     let runtime = tokio::runtime::Handle::current();
     // Runs on the blocking lane, so waiting on the database worker cannot stall the runtime.
     let owns_session: ConsentOwnership = Arc::new(move |session, user| {
+        // Network Git prompts live in a per-user session that has no stored session row.
+        if super::git_network::owns_consent_session(session, user) {
+            return Ok(true);
+        }
         let (session, user) = (session.to_owned(), user.to_owned());
         let worker = worker.clone();
         runtime
