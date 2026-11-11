@@ -2303,6 +2303,112 @@ async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
 }
 
 #[tokio::test]
+async fn node_credentials_are_issued_and_revoked_for_owned_nodes_only() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/nodes/node-a/credential");
+    assert_eq!(client.post(&url).send().await.unwrap().status(), 401);
+    assert_eq!(client.delete(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    // Unknown node: 404 for both verbs.
+    assert_eq!(
+        client
+            .post(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .delete(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    {
+        let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+        let now = "2026-01-01T00:00:00.000Z";
+        db.execute(
+            "INSERT INTO nodes(node_id,user_id,name,first_seen_at,last_seen_at,created_at,updated_at) \
+             VALUES('node-a',(SELECT id FROM users LIMIT 1),'a',?1,?1,?1,?1), \
+             ('node-b','someone-else','b',?1,?1,?1,?1)",
+            [now],
+        )
+        .unwrap();
+    }
+    let issued: serde_json::Value = client
+        .post(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        issued["credential"]
+            .as_str()
+            .is_some_and(|c| c.starts_with("jait-node-")),
+        "{issued}"
+    );
+    // Another user's node is indistinguishable from a missing one.
+    let other = format!("{base}/api/nodes/node-b/credential");
+    assert_eq!(
+        client
+            .post(&other)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .delete(&other)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let revoked: serde_json::Value = client
+        .delete(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(revoked["ok"], true);
+    {
+        let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+        let left: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM node_credentials WHERE node_id='node-a'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn project_hierarchy_sessions_and_state_are_owner_scoped() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

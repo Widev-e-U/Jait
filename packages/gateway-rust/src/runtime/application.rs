@@ -408,6 +408,7 @@ impl Application {
             ))
             .merge(projects.router())
             .merge(crate::routes::projects::ProjectCollectionRoutes::new(auth.clone()).router())
+            .merge(crate::routes::node_credentials::NodeCredentialRoutes { auth: auth.clone() }.router())
             .merge(
                 ThreadRoutes::with_provider_check(auth.clone(), {
                     let registry = provider_registry.clone();
