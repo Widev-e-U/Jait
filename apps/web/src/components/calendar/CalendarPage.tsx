@@ -54,6 +54,7 @@ export function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [view, setView] = useState<ViewMode>('list')
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()))
   const isAndroid = isDeviceCalendarAvailable()
 
@@ -173,9 +174,9 @@ export function CalendarPage() {
       ) : view === 'month' ? (
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b p-3">
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 flex-1 items-center gap-0 sm:gap-1">
               <Button variant="ghost" size="icon" onClick={() => shiftMonth(-1)} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
-              <span className="min-w-[9rem] text-center text-sm font-semibold">{month.label}</span>
+              <span className="min-w-0 flex-1 text-center text-sm font-semibold sm:min-w-[9rem]">{month.label}</span>
               <Button variant="ghost" size="icon" onClick={() => shiftMonth(1)} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
             </div>
             <Button variant="outline" size="sm" onClick={goToToday}>Today</Button>
@@ -187,16 +188,20 @@ export function CalendarPage() {
           </div>
           <div className="grid grid-cols-7">
             {month.cells.map((day, index) => {
-              if (!day) return <div key={`empty-${index}`} className="min-h-24 border-b border-r bg-muted/30 last:border-r-0" />
+              if (!day) return <div key={`empty-${index}`} className="min-h-14 border-b border-r bg-muted/30 last:border-r-0 sm:min-h-24" />
               const key = day.toDateString()
               const dayEvents = eventsByDay.get(key) ?? []
               const isToday = key === todayKey
               return (
-                <div key={key} className="flex min-h-24 flex-col gap-1 border-b border-r p-1.5 last:border-r-0">
-                  <span className={cn('text-xs font-medium', isToday ? 'flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground' : 'text-muted-foreground')}>
+                <div key={key} className="flex min-h-14 min-w-0 flex-col gap-1 border-b border-r p-1 last:border-r-0 sm:min-h-24 sm:p-1.5">
+                  <button className={cn("flex flex-1 flex-col items-center justify-center rounded sm:hidden", selectedDay === key && "bg-accent")} onClick={() => setSelectedDay(key)} aria-label={`${day.toLocaleDateString(undefined, { dateStyle: 'full' })}, ${dayEvents.length} events`} aria-pressed={selectedDay === key}>
+                    <span className={cn("flex h-6 w-6 items-center justify-center text-xs", isToday && "rounded-full bg-primary text-primary-foreground")}>{day.getDate()}</span>
+                    {dayEvents.length > 0 && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />}
+                  </button>
+                  <span className={cn('text-xs font-medium', isToday ? 'flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground' : 'text-muted-foreground', 'hidden sm:block')}>
                     {day.getDate()}
                   </span>
-                  <div className="flex flex-col gap-0.5 overflow-hidden">
+                  <div className="hidden flex-col gap-0.5 overflow-hidden sm:flex">
                     {dayEvents.slice(0, 2).map((event) => (
                       <TooltipHint key={event.id} content={event.title}>
                       <button
@@ -213,6 +218,10 @@ export function CalendarPage() {
                 </div>
               )
             })}
+          </div>
+          <div className="space-y-2 p-3 sm:hidden" aria-live="polite">
+            <p className="text-sm font-medium">{selectedDay && month.cells.some(day => day?.toDateString() === selectedDay) ? new Date(selectedDay).toLocaleDateString(undefined, { dateStyle: 'full' }) : 'Select a day to see its events'}</p>
+            {selectedDay && month.cells.some(day => day?.toDateString() === selectedDay) && ((eventsByDay.get(selectedDay) ?? []).length ? (eventsByDay.get(selectedDay) ?? []).map(event => <div key={`${event.calendarId}:${event.id}`} className="min-w-0 rounded-md border p-2"><p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{event.title}</p><p className="text-xs text-muted-foreground">{formatEventTime(event)}</p></div>) : <p className="text-sm text-muted-foreground">No events on this day.</p>)}
           </div>
         </Card>
       ) : (

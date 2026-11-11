@@ -1,5 +1,6 @@
 import { MessageText } from '@/components/ui/message-text'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { TeamRoomMessage } from '@jait/shared'
 import { ArrowDown, ArrowLeft, ExternalLink, MoreHorizontal } from 'lucide-react'
 import { teamChatApi, type TeamRoomSnapshot } from '@/lib/team-chat-api'
@@ -78,6 +79,26 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
   const [sending, setSending] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const { scrollRef, contentRef, isAtBottom, onScroll, scrollToBottom } = useStickToBottom()
+  const messages = snapshot?.messages
+  const messageById = useMemo(() => new Map(messages?.map(message => [message.id, message])), [messages])
+  const deliveriesByMessage = useMemo(() => {
+    const grouped = new Map<string, NonNullable<TeamRoomSnapshot['deliveries']>>()
+    for (const delivery of snapshot?.deliveries ?? []) {
+      const group = grouped.get(delivery.messageId) ?? []
+      group.push(delivery)
+      grouped.set(delivery.messageId, group)
+    }
+    return grouped
+  }, [snapshot?.deliveries])
+  const virtualizer = useVirtualizer({
+    count: messages?.length ?? 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 140,
+    getItemKey: index => messages?.[index]?.id ?? index,
+    overscan: 5,
+    gap: 20,
+    scrollMargin: 16,
+  })
   const retryKey = useRef<{ content: string; signature: string; key: string } | null>(null)
 
   useEffect(() => {
@@ -150,10 +171,12 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
       <div ref={contentRef} className="min-h-full">
       {listError && <p role="alert" className="text-sm text-destructive">{listError}</p>}
       {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The team will route your message to the right agent.</p>}
-      <div className="mx-auto max-w-3xl space-y-5">{snapshot?.messages.map(message => {
-        const decision = message.routingDecision ?? snapshot.messages.find(parent => parent.id === message.parentMessageId)?.routingDecision
-        const deliveries = snapshot.deliveries.filter(delivery => delivery.messageId === message.id)
-        return <article key={message.id} className="flex items-start gap-3" data-testid="team-message">
+      <div className="relative mx-auto max-w-3xl" style={{ height: virtualizer.getTotalSize() }}>{snapshot && virtualizer.getVirtualItems().map(row => {
+        const message = snapshot.messages[row.index]
+        if (!message) return null
+        const decision = message.routingDecision ?? messageById.get(message.parentMessageId ?? '')?.routingDecision
+        const deliveries = deliveriesByMessage.get(message.id) ?? []
+        return <article key={row.key} ref={virtualizer.measureElement} data-index={row.index} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${row.start - 16}px)` }} className="flex items-start gap-3" data-testid="team-message">
           <TeamMessageAvatar message={message} />
           <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
             <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.sender.name}</strong>

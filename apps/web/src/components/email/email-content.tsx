@@ -32,7 +32,7 @@ export function prepareEmailHtml(html: string, images: Record<string, string> = 
   body.append(fragment)
   return {
     urls: urls.slice(0, 12),
-    srcDoc: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><style>body{font-family:system-ui,Arial,sans-serif;margin:12px;color:#111;background:white;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}</style></head><body>${body.innerHTML}</body></html>`,
+    srcDoc: `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><style>body{font-family:system-ui,Arial,sans-serif;margin:12px;color:#111;background:white;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}@media(max-width:600px){*,*::before,*::after{box-sizing:border-box}table{width:100% !important;min-width:0 !important;max-width:100% !important;table-layout:fixed}td,th{min-width:0 !important;overflow-wrap:anywhere;word-break:break-word}img{max-width:100% !important;height:auto !important}body *{overflow-wrap:anywhere}}</style></head><body>${body.innerHTML}</body></html>`,
   }
 }
 

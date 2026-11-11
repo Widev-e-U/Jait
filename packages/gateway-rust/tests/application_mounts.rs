@@ -6008,3 +6008,284 @@ async fn assistant_profile_item_routes_validate_and_isolate_owners() {
     let _ = task.await;
     drop(dir);
 }
+
+#[tokio::test]
+async fn project_repository_reconciles_gateway_device() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let root = dir.join("reconcile-repo");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    let project: serde_json::Value = client.post(format!("{base}/api/projects"))
+        .bearer_auth(&owner).json(&serde_json::json!({"title":"Reconcile", "rootPath":root.to_string_lossy(), "nodeId":"gateway"}))
+        .send().await.unwrap().json().await.unwrap();
+    let repo: serde_json::Value = client.post(format!("{base}/api/repos"))
+        .bearer_auth(&owner).json(&serde_json::json!({"name":"Reconcile", "localPath":root.to_string_lossy(), "deviceId":"remote"}))
+        .send().await.unwrap().json().await.unwrap();
+    let mut socket = WsClient::connect(&base, &owner).await;
+    socket
+        .send(serde_json::json!({"type":"subscribe", "sessionId":"missing"}))
+        .await;
+    assert!(socket.next(Duration::from_secs(5)).await.is_some());
+    let id = project["id"].as_str().unwrap();
+    let assigned: serde_json::Value = client
+        .post(format!("{base}/api/projects/{id}/repository"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":repo["repo"]["id"]}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(assigned["assigned"], true);
+    assert!(assigned["repo"]["deviceId"].is_null());
+    let event = socket
+        .until("repo.updated", Duration::from_secs(5))
+        .await
+        .expect("reconciliation event");
+    assert_eq!(event["payload"]["repo"]["id"], repo["repo"]["id"]);
+    assert!(event["payload"]["repo"]["deviceId"].is_null());
+
+    let discovery_root = dir.join("existing-path");
+    std::fs::create_dir_all(discovery_root.join(".git")).unwrap();
+    let existing_repo: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"name":"Existing", "localPath":discovery_root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let discovered_project: serde_json::Value = client.post(format!("{base}/api/projects"))
+        .bearer_auth(&owner).json(&serde_json::json!({"title":"Existing path", "rootPath":discovery_root.to_string_lossy(), "nodeId":"gateway"}))
+        .send().await.unwrap().json().await.unwrap();
+    let discovered_id = discovered_project["id"].as_str().unwrap();
+    let discovered: serde_json::Value = client
+        .post(format!("{base}/api/projects/{discovered_id}/repository"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(discovered["repo"]["id"], existing_repo["repo"]["id"]);
+    assert_eq!(discovered["assigned"], true);
+    assert_eq!(discovered["created"], false);
+
+    let other_root = dir.join("different-root");
+    std::fs::create_dir_all(other_root.join(".git")).unwrap();
+    let other_project: serde_json::Value = client.post(format!("{base}/api/projects"))
+        .bearer_auth(&owner).json(&serde_json::json!({"title":"Different root", "rootPath":other_root.to_string_lossy(), "nodeId":"gateway"}))
+        .send().await.unwrap().json().await.unwrap();
+    let remote_repo: serde_json::Value = client.post(format!("{base}/api/repos"))
+        .bearer_auth(&owner).json(&serde_json::json!({"name":"Remote", "localPath":root.to_string_lossy(), "deviceId":"remote"}))
+        .send().await.unwrap().json().await.unwrap();
+    let other_id = other_project["id"].as_str().unwrap();
+    let different: serde_json::Value = client
+        .post(format!("{base}/api/projects/{other_id}/repository"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":remote_repo["repo"]["id"]}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(different["repo"]["deviceId"], "remote");
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn project_repository_rejects_non_file_git_metadata() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let root = dir.join("socket-metadata");
+    std::fs::create_dir_all(&root).unwrap();
+    let _socket = std::os::unix::net::UnixListener::bind(root.join(".git")).unwrap();
+    let project: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"title":"Socket metadata", "rootPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = project["id"].as_str().unwrap();
+    let response = client
+        .post(format!("{base}/api/projects/{id}/repository"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["error"], "PROJECT_NOT_GIT");
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn project_repository_assignment_enforces_ownership_and_is_idempotent() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let other = second_token(&client, &base, &owner).await;
+    let project: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"title":"Assignment"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = project["id"].as_str().unwrap();
+    let root = dir.join("assignment-repo");
+    std::fs::create_dir_all(&root).unwrap();
+    let repo: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"name":"Assignment", "localPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let repo_id = repo["repo"]["id"].as_str().unwrap();
+    let other_root = dir.join("other-repo");
+    std::fs::create_dir_all(&other_root).unwrap();
+    let foreign: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&other)
+        .json(&serde_json::json!({"name":"Foreign", "localPath":other_root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let url = format!("{base}/api/projects/{id}/repository");
+    let cross_owner = client
+        .post(&url)
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":foreign["repo"]["id"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cross_owner.status(), 404);
+    let discovery_root = dir.join("discovery-pending");
+    std::fs::create_dir_all(discovery_root.join(".git")).unwrap();
+    let discovery_project: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&owner)
+        .json(
+            &serde_json::json!({"title":"Discovery", "rootPath":discovery_root.to_string_lossy()}),
+        )
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let discovery = client
+        .post(format!(
+            "{base}/api/projects/{}/repository",
+            discovery_project["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        discovery.status(),
+        503,
+        "unfinished discovery must fail closed"
+    );
+    let mut owner_ws = WsClient::connect(&base, &owner).await;
+    let mut other_ws = WsClient::connect(&base, &other).await;
+    for socket in [&mut owner_ws, &mut other_ws] {
+        socket
+            .send(serde_json::json!({"type":"subscribe", "sessionId":"missing"}))
+            .await;
+        assert!(socket.next(Duration::from_secs(5)).await.is_some());
+    }
+
+    let denied = client
+        .post(&url)
+        .bearer_auth(&other)
+        .json(&serde_json::json!({"repoId":repo_id}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 404);
+    let assigned = client
+        .post(&url)
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":repo_id}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(assigned.status(), 200);
+    let assigned: serde_json::Value = assigned.json().await.unwrap();
+    assert_eq!(assigned["assigned"], true);
+    let event = owner_ws
+        .until("repo.updated", Duration::from_secs(5))
+        .await
+        .expect("owner receives repository update");
+    assert_eq!(event["payload"]["repo"]["id"], repo_id);
+    assert!(
+        other_ws
+            .until("repo.updated", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "other user must not receive repository details"
+    );
+    let repeated: serde_json::Value = client
+        .post(&url)
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":repo_id}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(repeated["skipped"], true);
+    let deleted = client
+        .delete(format!("{base}/api/repos/{repo_id}"))
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 200);
+    let event = owner_ws
+        .until("repo.deleted", Duration::from_secs(5))
+        .await
+        .expect("owner receives repository deletion");
+    assert_eq!(event["payload"]["repoId"], repo_id);
+    assert!(
+        other_ws
+            .until("repo.deleted", Duration::from_millis(250))
+            .await
+            .is_none()
+    );
+    let _ = stop.send(());
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}

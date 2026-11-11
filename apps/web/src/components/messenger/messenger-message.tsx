@@ -273,8 +273,13 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
               ? 'border-primary/40 bg-primary/15 hover:bg-primary/25'
               : 'border-border/70 bg-background/95 hover:bg-muted')}
         >
-          {/* Canvas ink metrics are unreliable for colour emoji; centre the line box instead. */}
-          <span aria-hidden data-reaction-emoji className="inline-flex h-full items-center justify-center text-[13px] leading-none">{reaction.key}</span>
+          {/* Canvas ink metrics are unreliable for colour emoji; centre a fixed square box instead of the glyph's own advance width. */}
+          <span
+            aria-hidden
+            data-reaction-emoji
+            className="grid size-4 shrink-0 place-items-center overflow-visible text-center text-[13px] leading-none"
+            style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }}
+          >{reaction.key}</span>
           {reaction.count > 1 && <CenteredBadgeText
             text={reaction.count}
             className={'font-medium tabular-nums ' + (reaction.own ? 'text-foreground/80' : 'text-muted-foreground')}

@@ -272,6 +272,7 @@ pub struct Application {
     _database_owner: Arc<File>,
     store_supervisor: Option<StoreOwner>,
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
+    repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
 }
 
@@ -414,6 +415,22 @@ impl Application {
         }
         let assessments =
             super::channels_mount::assessment_registry().map_err(std::io::Error::other)?;
+        let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
+        let repository_events: crate::routes::repositories::RepositoryEventSink = {
+            let hub = repository_hub.clone();
+            Arc::new(move |owner, kind, payload| {
+                if let Ok(slot) = hub.lock()
+                    && let Some(hub) = slot.as_ref()
+                {
+                    hub.broadcast_to_user(owner, kind, payload);
+                }
+            })
+        };
+        let mut project_collection =
+            crate::routes::projects::ProjectCollectionRoutes::new(auth.clone());
+        project_collection.events = Some(repository_events.clone());
+        let mut repository_routes = RepositoryRoutes::new(auth.clone());
+        repository_routes.events = Some(repository_events);
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -426,7 +443,7 @@ impl Application {
                 config.project_root.clone(),
             ))
             .merge(projects.router())
-            .merge(crate::routes::projects::ProjectCollectionRoutes::new(auth.clone()).router())
+            .merge(project_collection.router())
             .merge(crate::routes::node_credentials::NodeCredentialRoutes { auth: auth.clone() }.router())
             .merge(
                 ThreadRoutes::with_provider_check(auth.clone(), {
@@ -484,7 +501,7 @@ impl Application {
                 },
             ))
             .merge(RepoProposalRoutes::new(auth.clone()).router())
-            .merge(RepositoryRoutes::new(auth.clone()).router())
+            .merge(repository_routes.router())
             .merge(voice.router())
             .merge(
                 Router::new()
@@ -687,6 +704,7 @@ impl Application {
                 _database_owner: database_owner,
                 store_supervisor: None,
                 ws_transport: None,
+                repository_hub,
                 consent: settings_chat.then_some(consent),
             }),
             Err(error) => {
@@ -765,6 +783,10 @@ impl Application {
         if let Some(consent) = &self.consent {
             crate::runtime::consent_ws::spawn(consent.clone(), transport.hub());
         }
+        *self
+            .repository_hub
+            .lock()
+            .map_err(|_| "repository hub lock poisoned")? = Some(transport.hub());
         self.gateway.mount_websocket(transport.clone());
         self.ws_transport = Some(transport.clone());
         Ok(transport)

@@ -86,6 +86,163 @@ fn query_limit(map: &HashMap<String, String>) -> Option<f64> {
         .filter(|v| v.is_finite() && *v >= 1.0)
 }
 
+/// Port of `assignRepositoryToProject` (services/project-repositories.ts) and
+/// the `sendAssignmentError` status mapping.
+fn assign_repository(
+    db: &rusqlite::Connection,
+    project_id: &str,
+    user_id: &str,
+    requested: Option<&str>,
+    events: &Option<crate::routes::repositories::RepositoryEventSink>,
+) -> Response {
+    use crate::services::repositories::RepositoryService;
+    let projects = ProjectService::new(db);
+    let repos = RepositoryService::new(db);
+    let project = match projects.get(project_id, Some(user_id)) {
+        Ok(Some(project)) => project,
+        Ok(None) => return fail(404, "PROJECT_NOT_FOUND", "Project not found."),
+        Err(error) => return *db_err(error),
+    };
+    let existing_id = project
+        .metadata
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|metadata| {
+            metadata
+                .get("repositoryId")
+                .and_then(Value::as_str)
+                .map(String::from)
+        });
+    let outcome = |project: &crate::services::projects::ProjectRecord,
+                   repo: &crate::services::repositories::RepositoryRecord,
+                   assigned: bool,
+                   created: bool| {
+        response(
+            200,
+            json!({
+                "project": project, "repo": repo,
+                "assigned": assigned, "skipped": !assigned, "created": created,
+            }),
+        )
+    };
+    let owned = |repo: &crate::services::repositories::RepositoryRecord| {
+        repo.user_id.as_deref() == Some(user_id)
+    };
+    let reconcile = |repo: crate::services::repositories::RepositoryRecord| -> rusqlite::Result<_> {
+        let root = project
+            .root_path
+            .as_deref()
+            .map(crate::text::js_trim)
+            .unwrap_or_default();
+        let git = std::path::Path::new(root).join(".git");
+        if project.node_id.as_deref() == Some("gateway")
+            && repo.device_id.is_some()
+            && repo.local_path == root
+            && !root.is_empty()
+            && (git.is_file() || git.is_dir())
+        {
+            let updated = repos
+                .update(
+                    &repo.id,
+                    crate::services::repositories::RepositoryPatch {
+                        device_id: crate::services::users::Patch::Set(None),
+                        ..Default::default()
+                    },
+                )?
+                .unwrap_or(repo);
+            crate::routes::repositories::publish_repository(
+                events,
+                user_id,
+                "repo.updated",
+                json!({"repo": updated}),
+            );
+            Ok(updated)
+        } else {
+            Ok(repo)
+        }
+    };
+    if let Some(repo_id) = requested {
+        let repo = match repos.get(repo_id) {
+            Ok(Some(repo)) if owned(&repo) => repo,
+            Ok(_) => return fail(404, "REPOSITORY_NOT_FOUND", "Repository not found."),
+            Err(error) => return *db_err(error),
+        };
+        let repo = match reconcile(repo) {
+            Ok(repo) => repo,
+            Err(error) => return *db_err(error),
+        };
+        if existing_id.as_deref() == Some(repo.id.as_str()) {
+            return outcome(&project, &repo, false, false);
+        }
+        return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
+            Ok(updated) => {
+                crate::routes::repositories::publish_repository(
+                    events,
+                    user_id,
+                    "repo.updated",
+                    json!({"repo": repo}),
+                );
+                outcome(&updated.unwrap_or(project), &repo, true, false)
+            }
+            Err(error) => *db_err(error),
+        };
+    }
+    let root = project
+        .root_path
+        .as_deref()
+        .map(crate::text::js_trim)
+        .unwrap_or_default()
+        .to_string();
+    if root.is_empty() {
+        return fail(400, "PROJECT_HAS_NO_ROOT", "Project has no folder path.");
+    }
+    if let Some(id) = &existing_id
+        && let Ok(Some(repo)) = repos.get(id)
+        && owned(&repo)
+    {
+        let repo = match reconcile(repo) {
+            Ok(repo) => repo,
+            Err(error) => return *db_err(error),
+        };
+        return outcome(&project, &repo, false, false);
+    }
+    let git_metadata = std::path::Path::new(&root).join(".git");
+    if !(git_metadata.is_file() || git_metadata.is_dir()) {
+        return fail(
+            400,
+            "PROJECT_NOT_GIT",
+            "Project folder does not contain .git.",
+        );
+    }
+    match repos.find_by_path(&root, Some(user_id)) {
+        Ok(Some(repo)) if owned(&repo) => {
+            let repo = match reconcile(repo) {
+                Ok(repo) => repo,
+                Err(error) => return *db_err(error),
+            };
+            return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
+                Ok(updated) => {
+                    crate::routes::repositories::publish_repository(
+                        events,
+                        user_id,
+                        "repo.updated",
+                        json!({"repo": repo}),
+                    );
+                    outcome(&updated.unwrap_or(project), &repo, true, false)
+                }
+                Err(error) => *db_err(error),
+            };
+        }
+        Ok(_) => {}
+        Err(error) => return *db_err(error),
+    }
+    fail(
+        503,
+        "SURFACE_UNAVAILABLE",
+        "Repository discovery is not available in the native gateway",
+    )
+}
+
 /// Extracts `{id}` from `/api/projects/{id}<suffix>`.
 fn mid(path: &str, prefix: &str, suffix: &str) -> Option<String> {
     let rest = path.strip_prefix(prefix)?;
@@ -97,11 +254,12 @@ fn mid(path: &str, prefix: &str, suffix: &str) -> Option<String> {
 #[derive(Clone)]
 pub struct ProjectCollectionRoutes {
     pub auth: AuthState,
+    pub events: Option<crate::routes::repositories::RepositoryEventSink>,
 }
 
 impl ProjectCollectionRoutes {
     pub fn new(auth: AuthState) -> Self {
-        Self { auth }
+        Self { auth, events: None }
     }
 
     pub fn router(self) -> axum::Router {
@@ -553,14 +711,28 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         if method != axum::http::Method::POST {
             return fail(405, "METHOD_NOT_ALLOWED", "Method not allowed");
         }
-        // TS drives real git cloning/validation through repoService and
-        // gitService, neither of which has a native implementation yet.
-        let _ = id;
-        return fail(
-            503,
-            "SURFACE_UNAVAILABLE",
-            "Repository management is not available in the native gateway",
-        );
+        let body = match auth::parse_body(request.into_body(), &headers).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let requested = body
+            .get("repoId")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let user_id = uid.clone();
+        let events = state.events.clone();
+        return run(&state.auth, move |db| {
+            Res::Ok(assign_repository(
+                db,
+                &id,
+                &user_id,
+                requested.as_deref(),
+                &events,
+            ))
+        })
+        .await
+        .unwrap_or_else(|response| *response);
     }
 
     if let Some(id) = mid(&path, "/api/projects/", "") {

@@ -124,7 +124,8 @@ function useServiceStates() {
   const synced = snapshot.status === 'ready' || snapshot.status === 'syncing'
   return names.map(name => {
     const rooms = snapshot.rooms.filter(room => room.service === name && room.membership === 'join')
-    const unread = rooms.reduce((sum, room) => sum + (room.unread || 0) + (room.markedUnread ? 1 : 0), 0)
+    // Hidden chats are not in the list, so they must not feed the badge either.
+    const unread = rooms.reduce((sum, room) => sum + (room.hidden || room.kind === 'team' ? 0 : Math.max(room.unread || 0, room.markedUnread ? 1 : 0)), 0)
     const state: ServiceState = name === 'Teams' && teamsState ? teamsState : synced && rooms.length ? 'connected' : 'offline'
     return { name, rooms: rooms.length, unread, state }
   })
@@ -196,7 +197,7 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
         const trigger = <button type="button" role="tab" aria-selected={selected} aria-label={`${name}: ${STATE_LABEL[state]}`}
           onClick={() => { if (selected) setConfigure(name); else onService(name) }}
           className={'relative grid h-8 w-8 shrink-0 place-items-center rounded-full ' + (selected ? 'bg-secondary ring-1 ring-border' : '')}>
-          <ServiceIcon service={name} className="size-6 rounded-full" />
+          <ServiceIcon service={name} className="size-6" />
           {badge(unread)}
         </button>
         return <Popover key={name} open={configure === name} onOpenChange={open => setConfigure(open && selected ? name : null)}>

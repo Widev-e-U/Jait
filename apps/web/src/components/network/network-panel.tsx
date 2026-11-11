@@ -768,15 +768,15 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
     if (updatedNode !== selectedNode) setSelectedNode(updatedNode)
   }, [graphData, selectedNode, topology])
 
-  // Set a tighter initial zoom once the graph first has data
+  // Set the initial zoom once the graph and its container are ready
   const didInitialZoom = useRef(false)
   useEffect(() => {
-    if (didInitialZoom.current || graphData.nodes.length === 0) return
-    didInitialZoom.current = true
+    if (didInitialZoom.current || graphData.nodes.length === 0 || !dimensions.width || !dimensions.height) return
     // Defer so ForceGraph2D has mounted and graphRef is populated
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       const fg = graphRef.current
       if (!fg) return
+      didInitialZoom.current = true
       // Moderate repulsion — more distance between nodes than default
       const charge = fg.d3Force('charge')
       if (charge && typeof (charge as any).strength === 'function') {
@@ -787,9 +787,10 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
       if (link && typeof (link as any).distance === 'function') {
         ;(link as any).distance(80)
       }
-      fg.zoom(3.5, 0)
+      fg.zoom(dimensions.width < 640 ? 1.2 : 3.5, 0)
     })
-  }, [graphData])
+    return () => cancelAnimationFrame(frame)
+  }, [graphData, dimensions.width, dimensions.height])
 
   // Draw node
   const drawNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {

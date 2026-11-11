@@ -307,7 +307,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   const showDetailPane = !isMobile || selectedId !== null
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 min-w-0 w-full">
       {/* Sidebar: account + folders */}
       {(!isMobile && (
         <aside className="flex w-52 shrink-0 flex-col border-r">
@@ -347,7 +347,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
 
       {/* Message list */}
       {(!isMobile || selectedId === null) && (
-        <section className={cn('flex min-h-0 flex-col border-r', isMobile ? 'flex-1' : 'w-80 shrink-0')}>
+        <section className={cn('flex min-h-0 min-w-0 flex-col border-r', isMobile ? 'flex-1' : 'w-80 shrink-0')}>
           {isMobile && <div className="flex min-w-0 items-center gap-2 border-b p-2">
             <Select value={activeAccount?.id} onValueChange={changeAccount}>
               <SelectTrigger aria-label="Email account" className="min-w-0 flex-1 text-xs"><SelectValue /></SelectTrigger>
@@ -356,7 +356,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
             <Button size="icon" variant="ghost" aria-label="Accounts & signatures" onClick={() => setManageAccounts(true)}><Settings2 className="h-4 w-4" /></Button>
           </div>}
           <div className="flex items-center gap-2 border-b p-2">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
@@ -408,7 +408,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
 
       {/* Reading pane */}
       {showDetailPane && (
-        <section className="flex min-h-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loadingMsg ? (
             <div className="flex flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : openMessage ? (
@@ -429,7 +429,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto break-words [overflow-wrap:anywhere] p-4">
                 <h1 className="text-lg font-semibold">{openMessage.subject || '(no subject)'}</h1>
                 <div className="mt-2 text-sm">
                   <div className="font-medium">{senderName(openMessage.from)}</div>

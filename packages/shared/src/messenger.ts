@@ -107,6 +107,10 @@ export interface MessengerRoom {
   network: string
   unread: number
   markedUnread?: boolean
+  /** Reactions from other people on the user's own messages; a rise means someone just reacted. */
+  reactionsToMe?: number
+  /** Newest reaction to one of the user's messages: the emoji, that message's text and the room's newest message id. */
+  latestReaction?: { emoji: string; messageBody: string; latestEventId?: string }
   /** Hidden from the chat list; synced through Matrix room account data. */
   hidden?: boolean
   membership: string

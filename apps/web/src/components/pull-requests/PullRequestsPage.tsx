@@ -11,6 +11,7 @@ import type {
 } from '@jait/shared'
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   CheckCircle2,
   CircleDot,
@@ -229,6 +230,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
   const [listState, setListState] = useState<PullRequestListState>(deepLink ? 'all' : 'open')
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([])
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
   const [detail, setDetail] = useState<PullRequestDetail | null>(null)
   const [diff, setDiff] = useState<PullRequestDiff | null>(null)
   const [activeTab, setActiveTab] = useState('conversation')
@@ -262,6 +264,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
         deepLinkHandledRef.current = true
         setRepositoryId(deepLinkedRepository.id)
         setSelectedNumber(deepLink.number)
+        setMobileDetailOpen(true)
         return
       }
     }
@@ -526,11 +529,12 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
                 deepLinkHandledRef.current = true
                 rememberPullRequestRepository(value)
                 setRepositoryId(value)
+                setMobileDetailOpen(false)
                 setSelectedNumber(null)
                 setDetail(null)
               }}
             >
-              <SelectTrigger className="h-9 min-w-52 max-w-80">
+              <SelectTrigger className="h-9 min-w-0 flex-1 sm:min-w-52 sm:max-w-80">
                 <SelectValue placeholder="Choose repository" />
               </SelectTrigger>
               <SelectContent>
@@ -586,7 +590,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
       )}
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden border-x bg-background lg:flex-row">
-        <aside className="max-h-64 shrink-0 overflow-y-auto border-b lg:max-h-none lg:w-[360px] lg:border-b-0 lg:border-r">
+        <aside className={cn("min-h-0 flex-1 overflow-y-auto lg:w-[360px] lg:flex-none lg:border-r", mobileDetailOpen && "hidden lg:block")}>
           {listLoading && !pullRequests.length ? (
             <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -598,7 +602,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
                 key={pullRequest.number}
                 pullRequest={pullRequest}
                 selected={selectedNumber === pullRequest.number}
-                onSelect={() => setSelectedNumber(pullRequest.number)}
+                onSelect={() => { setSelectedNumber(pullRequest.number); setMobileDetailOpen(true) }}
               />
             ))
           ) : (
@@ -608,7 +612,8 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
           )}
         </aside>
 
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <main className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto", !mobileDetailOpen && "hidden lg:block")}>
+          <Button variant="ghost" size="sm" className="m-2 lg:hidden" onClick={() => setMobileDetailOpen(false)}><ArrowLeft className="mr-2 h-4 w-4" />Pull requests</Button>
           {detailLoading && !detail ? (
             <div className="flex h-full min-h-72 items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />

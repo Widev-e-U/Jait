@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test.use({ screenshot: 'off' })
 
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPt0AAAAASUVORK5CYII='
-const html = `<meta http-equiv="refresh" content="0;url=https://tracker.example.test/redirect"><base href="https://tracker.example.test"><script>parent.emailCompromised=true</script><form action="https://tracker.example.test/form"><input name="password"></form><iframe src="https://tracker.example.test/frame"></iframe><style>@import url('https://tracker.example.test/style');</style><table style="border-collapse:collapse;width:100%;font-family:Arial"><tr><td style="background:#2563eb;color:white;padding:22px"><h1>Welcome aboard</h1></td></tr><tr><td style="padding:20px"><p>This email keeps its <b>formatting</b> inside chat.</p><img alt="Embedded logo" width="40" height="40" src="${pixel}"><img alt="External banner" src="https://tracker.example.test/banner.png"><img alt="Private host" src="http://127.0.0.1:9999/private"><a href="javascript:parent.emailCompromised=true">Unsafe link</a><a href="https://example.com">Read more</a></td></tr></table>`
+const html = `<meta http-equiv="refresh" content="0;url=https://tracker.example.test/redirect"><base href="https://tracker.example.test"><script>parent.emailCompromised=true</script><form action="https://tracker.example.test/form"><input name="password"></form><iframe src="https://tracker.example.test/frame"></iframe><style>@import url('https://tracker.example.test/style');</style><table style="border-collapse:collapse;width:900px;min-width:900px;font-family:Arial"><tr><td>averylongunbrokentextaverylongunbrokentextaverylongunbrokentextaverylongunbrokentext</td></tr><tr><td style="background:#2563eb;color:white;padding:22px"><h1>Welcome aboard</h1></td></tr><tr><td style="padding:20px"><p>This email keeps its <b>formatting</b> inside chat.</p><img alt="Embedded logo" width="40" height="40" src="${pixel}"><img alt="External banner" src="https://tracker.example.test/banner.png"><img alt="Private host" src="http://127.0.0.1:9999/private"><a href="javascript:parent.emailCompromised=true">Unsafe link</a><a href="https://example.com">Read more</a></td></tr></table>`
 const message = { id: 'm1', from: 'Team <team@example.test>', to: 'me@example.test', cc: '', subject: 'Welcome aboard', snippet: 'Welcome to the team', date: '2026-10-16T12:00:00Z', unread: false, labels: ['INBOX'], hasAttachments: false, bodyText: 'Welcome aboard', bodyHtml: html }
 
 for (const width of [390, 1280]) {
@@ -46,6 +46,14 @@ for (const width of [390, 1280]) {
     })
     await page.goto('/src/e2e-fixtures/email-workspace.html')
     await expect(page.getByRole('button', { name: /Welcome aboard/ })).toBeVisible()
+    if (width === 390) {
+      await page.getByRole('button', { name: /Welcome aboard/ }).click()
+      const frame = page.frameLocator('iframe[title="Email content"]')
+      await expect(frame.getByRole('heading', { name: 'Welcome aboard' })).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+      expect(await frame.locator('html').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await page.getByRole('button').filter({ has: page.locator('svg.lucide-arrow-left') }).click()
+    }
     await page.getByRole('combobox', { name: 'Email account' }).click()
     await page.getByRole('option', { name: 'work@example.test' }).click()
     await expect(page.getByRole('button', { name: /Work inbox/ })).toBeVisible()

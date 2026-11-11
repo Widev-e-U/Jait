@@ -60,8 +60,8 @@ for (const width of [390, 1280]) {
       expect(controlsBox.y).toBeGreaterThanOrEqual(bubbleBox.y)
       expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y + bubbleBox.height)
     } else {
-      // Desktop actions sit above the message so they do not intercept text clicks.
-      expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y)
+      // Desktop actions hang off the bubble's bottom edge so they do not intercept text clicks.
+      expect(controlsBox.y + controlsBox.height).toBeGreaterThanOrEqual(bubbleBox.y + bubbleBox.height)
       expect(controlsBox.x).toBeGreaterThanOrEqual(0)
       expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(width)
     }

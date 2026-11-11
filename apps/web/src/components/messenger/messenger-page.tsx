@@ -176,11 +176,10 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
             <TooltipHint content={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
-              <span className="inline-flex max-w-[55%] shrink-0 items-center gap-1 text-2xs leading-4 text-muted-foreground">
-                {hasServiceLogo(item.service) && <ServiceLogo service={item.service} className="size-3 shrink-0" />}
-                <span className="truncate">
-                  {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
-                </span>
+              <span className="inline-flex shrink-0 items-center text-2xs leading-4 text-muted-foreground">
+                {hasServiceLogo(item.service)
+                  ? <ServiceLogo service={item.service} className="size-4 shrink-0" />
+                  : <span className="truncate">{item.service}</span>}
               </span>
             </TooltipHint>
           </span>

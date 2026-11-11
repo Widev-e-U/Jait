@@ -29,6 +29,7 @@ pub(crate) fn effect_permit() -> ApiResult<tokio::sync::OwnedSemaphorePermit> {
 pub type RepositoryAutoAssignPort =
     Arc<dyn Fn(String, EffectCancellation) -> BoxFuture<'static, Result<(), String>> + Send + Sync>;
 pub type EventSink = Arc<dyn Fn(&str, Value) + Send + Sync>;
+pub type RepositoryEventSink = Arc<dyn Fn(&str, &str, Value) + Send + Sync>;
 #[derive(Clone, Debug)]
 pub struct GenerationRequest {
     pub owner: String,
@@ -109,9 +110,19 @@ pub(crate) fn bounded(status: u16, v: Value) -> Response {
     }
     response(status, v)
 }
-pub(crate) fn publish(events: &Option<EventSink>, kind: &str, v: Value) {
+pub(crate) fn publish_repository(
+    events: &Option<RepositoryEventSink>,
+    owner: &str,
+    kind: &str,
+    v: Value,
+) {
     if let Some(events) = events {
-        events(kind, v)
+        events(owner, kind, v)
+    }
+}
+pub(crate) fn publish(events: &Option<EventSink>, kind: &str, value: Value) {
+    if let Some(events) = events {
+        events(kind, value);
     }
 }
 pub(crate) async fn generate(
@@ -176,7 +187,7 @@ pub(crate) fn generated_array(raw: &str) -> ApiResult<Vec<Value>> {
 #[derive(Clone)]
 pub struct RepositoryRoutes {
     pub auth: AuthState,
-    pub events: Option<EventSink>,
+    pub events: Option<RepositoryEventSink>,
     pub generator: Option<Generator>,
     pub auto_assign: Option<RepositoryAutoAssignPort>,
 }
@@ -263,7 +274,12 @@ async fn dispatch(s: RepositoryRoutes, req: Request) -> ApiResult<Response> {
         })
         .await?;
         if let Some(kind) = kind {
-            publish(&s.events, kind, json!({"repo":row}))
+            publish_repository(
+                &s.events,
+                row.user_id.as_deref().unwrap_or_default(),
+                kind,
+                json!({"repo":row}),
+            )
         }
         return Ok(bounded(200, json!({"repo":row})));
     }
@@ -303,7 +319,7 @@ async fn dispatch(s: RepositoryRoutes, req: Request) -> ApiResult<Response> {
             RepositoryService::new(db).delete(&repo.id)
         })
         .await?;
-        publish(&s.events, "repo.deleted", json!({"repoId":id}));
+        publish_repository(&s.events, &owner, "repo.deleted", json!({"repoId":id}));
         return Ok(response(200, json!({"ok":true})));
     }
     let patch: RepositoryPatch = serde_json::from_value(if parts.len() > 3 {
@@ -317,7 +333,12 @@ async fn dispatch(s: RepositoryRoutes, req: Request) -> ApiResult<Response> {
     })
     .await?
     .ok_or_else(|| error(404, "Repository not found"))?;
-    publish(&s.events, "repo.updated", json!({"repo":row}));
+    publish_repository(
+        &s.events,
+        row.user_id.as_deref().unwrap_or_default(),
+        "repo.updated",
+        json!({"repo":row}),
+    );
     Ok(bounded(200, json!({"repo":row})))
 }
 

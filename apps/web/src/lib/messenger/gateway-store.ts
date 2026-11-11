@@ -211,6 +211,31 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     if (snapshot.status === 'ready' && key && this.notificationRooms && notifications) {
       for (const room of snapshot.rooms) {
         const old = this.notificationRooms.get(room.id);
+        const focused = this.visible === room.id &&
+          document.visibilityState === 'visible' &&
+          document.hasFocus();
+        // Reactions never raise unread counts, so they get their own signal.
+        if (old && !focused && (room.reactionsToMe ?? 0) > (old.reactionsToMe ?? 0)) {
+          void triggerSystemNotification({
+            id: 'matrix-reaction:' + room.id + ':' + room.reactionsToMe,
+            title: room.name,
+            body: room.latestReaction
+              ? room.latestReaction.emoji + ' Reacted to your message: ' + room.latestReaction.messageBody
+              : 'Reacted to your message',
+            independentOfAttention: true,
+            link: '/messenger?roomId=' + encodeURIComponent(room.id),
+            ...(room.latestReaction?.latestEventId && snapshot.session
+              ? {
+                  markReadLink: messengerReadLink(
+                    room.id,
+                    room.latestReaction.latestEventId,
+                    snapshot.session.userId,
+                    snapshot.session.homeserver,
+                  ),
+                }
+              : {}),
+          }).catch(() => {});
+        }
         if (
           (old && room.timestamp <= old.timestamp) ||
           (old ? room.unread <= old.unread : !room.unread) ||
@@ -223,7 +248,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         void triggerSystemNotification({
           id: 'matrix-room:' + room.id,
           title: room.name,
-          body: 'New message',
+          body: room.preview || 'New message',
           independentOfAttention: true,
           link: '/messenger?roomId=' + encodeURIComponent(room.id),
           ...(message && snapshot.selectedRoomId === room.id && snapshot.session

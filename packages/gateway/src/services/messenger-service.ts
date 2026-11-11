@@ -346,12 +346,65 @@ class Connection {
     return unread;
   }
 
+  /** Live reactions by other people on messages the user sent. */
+  private reactionsToMe(room: Room): number {
+    const self = this.session?.userId;
+    if (!self) return 0;
+    const removed = new Set<unknown>();
+    const own = new Set<string | undefined>();
+    for (const e of room.events) {
+      if (e.type === 'm.room.redaction') removed.add(e.redacts ?? e.content?.redacts);
+      else if (e.sender === self && e.type === 'm.room.message') own.add(e.event_id);
+    }
+    let count = 0;
+    for (const e of room.events) {
+      if (e.type !== 'm.reaction' || !e.sender || e.sender === self) continue;
+      if (e.unsigned?.redacted_because || removed.has(e.event_id)) continue;
+      const relation = e.content?.['m.relates_to'];
+      if (relation?.rel_type === 'm.annotation' && own.has(relation.event_id)) count += 1;
+    }
+    return count;
+  }
+
+  /** The newest reaction to one of the user's messages, with the message text it points at. */
+  private latestReaction(room: Room): MessengerRoom['latestReaction'] {
+    const self = this.session?.userId;
+    if (!self) return undefined;
+    const own = new Map<string, string>();
+    let latestEventId: string | undefined;
+    for (const e of room.events) {
+      if (e.type !== 'm.room.message' || !e.event_id) continue;
+      latestEventId = e.event_id;
+      if (e.sender === self) own.set(e.event_id, String(e.content?.body ?? ''));
+    }
+    const removed = new Set<unknown>();
+    for (const e of room.events)
+      if (e.type === 'm.room.redaction') removed.add(e.redacts ?? e.content?.redacts);
+    let found: NonNullable<MessengerRoom['latestReaction']> | undefined;
+    for (const e of room.events) {
+      if (e.type !== 'm.reaction' || !e.sender || e.sender === self) continue;
+      if (e.unsigned?.redacted_because || removed.has(e.event_id)) continue;
+      const relation = e.content?.['m.relates_to'];
+      if (relation?.rel_type !== 'm.annotation' || !own.has(relation.event_id)) continue;
+      found = {
+        emoji: String(relation.key ?? ''),
+        messageBody: own.get(relation.event_id)!.slice(0, 300),
+        ...(latestEventId ? { latestEventId } : {}),
+      };
+    }
+    return found;
+  }
+
   /** Merge cached presence and derived unread state into a room summary. */
   private roomSummary(room: Room): MessengerRoom {
     const unread = this.unreadCount(room);
+    const reactionsToMe = this.reactionsToMe(room);
+    const latestReaction = reactionsToMe ? this.latestReaction(room) : undefined;
     const base: MessengerRoom = {
       ...room.summary,
       unread: room.summary.markedUnread ? Math.max(unread, 1) : unread,
+      reactionsToMe,
+      ...(latestReaction ? { latestReaction } : {}),
     };
     const peer = room.peer;
     if (!peer) return base;
@@ -798,16 +851,20 @@ class Connection {
         const roomAvatar = room.states.find(
           (e) => e.type === 'm.room.avatar',
         )?.content?.url;
-        const avatar =
-          room.peer?.avatarUrl ??
-          (typeof roomAvatar === 'string' && roomAvatar.startsWith('mxc://')
-            ? roomAvatar
-            : undefined);
-        if (avatar) room.summary.avatarUrl = avatar;
-        else delete room.summary.avatarUrl;
         const bridge = room.states.find((e) =>
           ['m.bridge', 'uk.half-shot.bridge'].includes(e.type),
         )?.content;
+        // Bridged group/team channels often carry their picture only in the
+        // bridge record (MSC2346 `channel.avatar_url`), not in `m.room.avatar`.
+        const bridgeAvatar = bridge?.channel?.avatar_url;
+        const avatar =
+          room.peer?.avatarUrl ??
+          [roomAvatar, bridgeAvatar].find(
+            (url): url is string =>
+              typeof url === 'string' && url.startsWith('mxc://'),
+          );
+        if (avatar) room.summary.avatarUrl = avatar;
+        else delete room.summary.avatarUrl;
         const protocol = bridge?.protocol;
         const labels: Record<string, string> = {
           whatsapp: 'WhatsApp',

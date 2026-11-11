@@ -82,26 +82,26 @@ function JobRow({
   const nextRun = job.enabled ? getNextRunTime(job.cron_expression) : null
 
   const actionButtonClass =
-    'h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent'
+    'h-10 w-full text-muted-foreground hover:text-foreground hover:bg-accent sm:h-8 sm:w-8'
 
   return (
     <tr
       data-testid={`job-row-${job.id}`}
       className={cn(
-        'group border-b border-border/60 transition-colors last:border-0 hover:bg-muted/30',
+        'group grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 border-b border-border/60 p-4 transition-colors last:border-0 hover:bg-muted/30 sm:table-row sm:p-0',
         isLoading && 'opacity-50',
         !job.enabled && 'opacity-60',
       )}
     >
       {/* Name */}
-      <td className="px-3 py-2 align-middle sm:px-4">
+      <td className="min-w-0 self-center p-0 align-middle sm:px-4 sm:py-2">
         <div className="flex min-w-0 items-center gap-2">
           {job.job_type === 'agent_task' && job.model && job.provider && (
             <ModelIcon provider={job.provider} model={job.model} size={18} className="shrink-0" />
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="truncate font-medium">{job.name}</span>
+              <span className="min-w-0 break-words font-medium [overflow-wrap:anywhere] sm:truncate">{job.name}</span>
               <Badge
                 variant={job.job_type === 'agent_task' ? 'default' : 'secondary'}
                 className="hidden shrink-0 px-1.5 py-0 text-[10px] sm:inline-flex"
@@ -131,13 +131,16 @@ function JobRow({
       </td>
 
       {/* Schedule */}
-      <td className="px-3 py-2 align-middle sm:px-4">
+      <td className="col-span-2 min-w-0 pb-3 pt-2 align-middle sm:px-4 sm:py-2">
         <div className="flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="whitespace-nowrap font-mono text-xs">{job.cron_expression}</span>
         </div>
-        <div className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+        <div className="mt-1 text-xs text-muted-foreground sm:mt-0.5">
           {describeCron(job.cron_expression)}
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground sm:hidden">
+          {nextRun ? `Next run ${formatRelativeTime(nextRun)}` : 'Not scheduled'}
         </div>
       </td>
 
@@ -193,7 +196,7 @@ function JobRow({
       </td>
 
       {/* Enabled switch */}
-      <td className="px-2 py-2 text-center align-middle">
+      <td className="col-start-2 row-start-1 self-center text-center align-middle sm:px-2 sm:py-2">
         <Switch
           checked={job.enabled}
           onCheckedChange={handleToggle}
@@ -203,8 +206,8 @@ function JobRow({
       </td>
 
       {/* Actions */}
-      <td className="px-2 py-2 align-middle sm:px-3">
-        <div className="flex items-center justify-end gap-0.5">
+      <td className="col-span-2 border-t pt-2 align-middle sm:border-0 sm:px-3 sm:py-2">
+        <div className="grid grid-cols-4 gap-1 sm:flex sm:items-center sm:justify-end sm:gap-0.5">
           <TooltipHint content="Run now" side="top">
             <Button
               variant="ghost"
@@ -246,7 +249,7 @@ function JobRow({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              className="h-10 w-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:w-8"
               onClick={() => onDelete(job.id)}
               aria-label={`Delete job ${job.name}`}
               data-testid={`job-delete-${job.id}`}
@@ -271,9 +274,9 @@ export function JobsTable({
   isLoading = false,
 }: JobsTableProps) {
   return (
-    <div className="overflow-x-auto rounded-lg border bg-background">
-      <table className="w-full text-sm">
-        <thead>
+    <div className="min-w-0 rounded-lg border bg-background sm:overflow-x-auto">
+      <table className="block w-full text-sm sm:table">
+        <thead className="hidden sm:table-header-group">
           <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th scope="col" className="px-3 py-2 font-medium sm:px-4">Job</th>
             <th scope="col" className="px-3 py-2 font-medium sm:px-4">Schedule</th>
@@ -285,7 +288,7 @@ export function JobsTable({
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="block sm:table-row-group">
           {jobs.map((job) => (
             <JobRow
               key={job.id}
