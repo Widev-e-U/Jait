@@ -1897,6 +1897,62 @@ async fn trust_levels_are_authenticated_and_listed() {
 }
 
 #[tokio::test]
+async fn read_routes_require_login_and_answer_for_the_caller() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    // (path, status for a logged-in caller)
+    let paths = [
+        ("/api/auth/me", 200),
+        ("/api/auth/settings/env-status", 200),
+        ("/api/consent/count", 200),
+        ("/api/consent/policy", 200),
+        ("/api/consent/pending/missing-session", 404),
+        ("/api/consent/missing-consent", 404),
+        ("/api/calendar/calendars", 400),
+        ("/api/calendar/events", 400),
+        ("/api/email/config", 200),
+        ("/api/filesystem/browse", 200),
+    ];
+    for (path, _) in paths {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path} must require auth");
+    }
+    let token = token(&client, &base).await;
+    for (path, expected) in paths {
+        let r = client
+            .get(format!("{base}{path}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), expected, "{path}");
+    }
+    let me: serde_json::Value = client
+        .get(format!("{base}/api/auth/me"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(me["username"], "mounter");
+    let count: serde_json::Value = client
+        .get(format!("{base}/api/consent/count"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(count["count"], 0);
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn tools_list_and_execute_need_login_and_an_owned_session() {
     let (base, stop, task, dir) = start_seeded(false, |d| {
         std::fs::write(d.join("notes.txt"), "tool-marker-7").unwrap();

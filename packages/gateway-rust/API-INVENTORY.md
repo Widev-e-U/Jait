@@ -6,8 +6,8 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 153 | 35.9% |
-| native-untested | 224 | 52.6% |
+| native-tested | 161 | 37.8% |
+| native-untested | 216 | 50.7% |
 | missing | 49 | 11.5% |
 | total Node HTTP routes | 426 | 100% |
 
@@ -39,14 +39,14 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/auth/invitations` | routes/auth.ts | native-tested |
 | POST | `/api/auth/login` | routes/auth.ts | native-untested |
 | POST | `/api/auth/logout` | routes/auth.ts | native-untested |
-| GET | `/api/auth/me` | routes/auth.ts | native-untested |
+| GET | `/api/auth/me` | routes/auth.ts | native-tested |
 | POST | `/api/auth/refresh` | routes/auth.ts | native-untested |
 | POST | `/api/auth/register` | routes/auth.ts | native-tested |
 | POST | `/api/auth/session/bind` | routes/auth.ts | native-untested |
 | GET | `/api/auth/settings` | routes/auth.ts | native-tested |
 | PATCH | `/api/auth/settings` | routes/auth.ts | native-tested |
 | DELETE | `/api/auth/settings/archive` | routes/auth.ts | native-untested |
-| GET | `/api/auth/settings/env-status` | routes/auth.ts | native-untested |
+| GET | `/api/auth/settings/env-status` | routes/auth.ts | native-tested |
 | GET | `/api/auth/settings/tools` | routes/auth.ts | native-untested |
 | PATCH | `/api/auth/settings/tools` | routes/auth.ts | native-untested |
 | POST | `/api/preview/devtools` | routes/browser-devtools.ts | native-tested |
@@ -54,12 +54,12 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/preview/:previewToken/devtools/:grantId/*` | routes/browser-devtools.ts | native-untested |
 | GET | `/api/calendar/accounts` | routes/calendar.ts | native-tested |
 | DELETE | `/api/calendar/accounts/:id` | routes/calendar.ts | native-untested |
-| GET | `/api/calendar/calendars` | routes/calendar.ts | native-untested |
+| GET | `/api/calendar/calendars` | routes/calendar.ts | native-tested |
 | GET | `/api/calendar/config` | routes/calendar.ts | native-tested |
 | POST | `/api/calendar/config/google` | routes/calendar.ts | native-untested |
 | GET | `/api/calendar/connect/google` | routes/calendar.ts | native-untested |
 | POST | `/api/calendar/device/sync` | routes/calendar.ts | native-untested |
-| GET | `/api/calendar/events` | routes/calendar.ts | native-untested |
+| GET | `/api/calendar/events` | routes/calendar.ts | native-tested |
 | GET | `/api/calendar/oauth/callback` | routes/calendar.ts | native-untested |
 | GET | `/api/channels` | routes/channels.ts | native-tested |
 | POST | `/api/channels/:id/pair` | routes/channels.ts | native-untested |
@@ -98,19 +98,19 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/consent/:id/approve` | routes/consent.ts | native-tested |
 | POST | `/api/consent/:id/approve-all` | routes/consent.ts | native-untested |
 | POST | `/api/consent/:id/reject` | routes/consent.ts | native-tested |
-| GET | `/api/consent/count` | routes/consent.ts | native-untested |
+| GET | `/api/consent/count` | routes/consent.ts | native-tested |
 | GET | `/api/consent/pending` | routes/consent.ts | native-tested |
 | GET | `/api/consent/pending/:sessionId` | routes/consent.ts | native-untested |
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
 | GET | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
 | POST | `/api/consent/pending/:sessionId/approve-all` | routes/consent.ts | native-untested |
-| GET | `/api/consent/policy` | routes/consent.ts | native-untested |
+| GET | `/api/consent/policy` | routes/consent.ts | native-tested |
 | GET | `/api/trust` | routes/consent.ts | native-untested |
 | GET | `/api/email/accounts` | routes/email.ts | native-tested |
 | POST | `/api/email/accounts` | routes/email.ts | native-tested |
 | DELETE | `/api/email/accounts/:id` | routes/email.ts | native-untested |
 | PATCH | `/api/email/accounts/:id` | routes/email.ts | native-untested |
-| GET | `/api/email/config` | routes/email.ts | native-untested |
+| GET | `/api/email/config` | routes/email.ts | native-tested |
 | POST | `/api/email/config/:provider` | routes/email.ts | native-untested |
 | GET | `/api/email/connect/:provider` | routes/email.ts | native-untested |
 | GET | `/api/email/discover` | routes/email.ts | native-untested |
@@ -123,7 +123,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/email/oauth/callback` | routes/email.ts | native-untested |
 | POST | `/api/email/send` | routes/email.ts | native-untested |
 | GET | `/api/environment/snapshot` | routes/environment.ts | native-tested |
-| GET | `/api/filesystem/browse` | routes/filesystem.ts | native-untested |
+| GET | `/api/filesystem/browse` | routes/filesystem.ts | native-tested |
 | GET | `/api/filesystem/nodes` | routes/filesystem.ts | native-untested |
 | GET | `/api/filesystem/roots` | routes/filesystem.ts | native-tested |
 | POST | `/api/git/branches` | routes/git.ts | native-tested |
