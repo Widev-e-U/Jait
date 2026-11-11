@@ -69559,7 +69559,7 @@
     },
     {
       "path": "packages/gateway/src/routes/preview.ts",
-      "fingerprint": "c590bb5041535c35",
+      "fingerprint": "cf32053df62b658b",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/routes/preview.test.ts"
@@ -73936,7 +73936,7 @@
     },
     {
       "path": "packages/gateway/src/services/preview.ts",
-      "fingerprint": "b02cd4eac2d00597",
+      "fingerprint": "653e78a07f3f1aff",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/services/preview.test.ts",
@@ -76980,46 +76980,14 @@
     },
     {
       "path": "packages/gateway/src/tools/gateway-tools.ts",
-      "fingerprint": "04f239491325fde3",
+      "fingerprint": "e5b1b8a4892a88b4",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/tools/runtime-service-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        },
-        {
-          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        },
-        {
-          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        },
-        {
-          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        },
-        {
-          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        },
-        {
-          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "report": ".jait/artifacts/contracts/native-review-e10df68d-801e-4174-9754-990edffba8d1/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Metadata and gateway status aggregation with optional services, uptime, enabled filtering and failure ordering. Reconciled with current reviewed differential source evidence; bounded scope only. See tests/contract/reviews/native-source-reconciliation.json. Native implementation progress and production acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/homeassistant-tools.ts",
