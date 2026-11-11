@@ -194,11 +194,13 @@ impl<'a> ProjectTools<'a> {
                 "Repository {repository} could not be resolved for this project"
             ));
         };
-        if let Err(error) = self
+        match self
             .repo
             .assign_repository(&project_id, &attached, Some(user_id))
         {
-            return fail(error.to_string());
+            Ok(Some(_)) => {}
+            Ok(None) => return fail("Project not found"),
+            Err(error) => return fail(error.to_string()),
         }
         self.host.broadcast(
             user_id,
@@ -578,6 +580,40 @@ mod tests {
                 .as_str()
                 .is_some_and(|message| message.contains("/srv/app")),
         );
+    }
+
+    #[test]
+    fn assignment_does_not_broadcast_when_ownership_changes() {
+        let mut host = FakeHost::with_node("gateway");
+        host.attach_as = Some("repo-1".into());
+        let fixture = Fixture::new(host);
+        let tools = fixture.tools();
+        let created = tools.execute(
+            "project.create",
+            &json!({ "title": "Race", "projectRoot": "/work/race" }),
+            USER,
+        );
+        let id = created["project"]["id"].as_str().expect("id");
+        fixture
+            .connection
+            .execute_batch(
+                "CREATE TRIGGER assignment_owner_race AFTER UPDATE OF metadata ON projects
+             BEGIN UPDATE projects SET user_id = NULL WHERE id = NEW.id; END;",
+            )
+            .expect("trigger");
+        let result = tools.execute(
+            "project.assign_repository",
+            &json!({ "projectId": id, "repositoryId": "repo-1" }),
+            USER,
+        );
+        assert_eq!(result["ok"], json!(false), "{result}");
+        assert_eq!(result["message"], "Project not found");
+        assert!(fixture.host.broadcasts.borrow().is_empty());
+        let project = ProjectService::new(&fixture.connection)
+            .get(id, Some(USER))
+            .unwrap()
+            .unwrap();
+        assert!(repository_id(Some(&project)).is_none());
     }
 
     #[test]

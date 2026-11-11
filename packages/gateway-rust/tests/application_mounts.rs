@@ -6010,6 +6010,197 @@ async fn assistant_profile_item_routes_validate_and_isolate_owners() {
 }
 
 #[tokio::test]
+async fn project_repository_rejects_assignment_if_ownership_changes_during_update() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let root = dir.join("assignment-race");
+    std::fs::create_dir_all(&root).unwrap();
+    let project: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"title":"Race", "rootPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let repo: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"name":"Race", "localPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER change_project_owner AFTER UPDATE OF metadata ON projects BEGIN UPDATE projects SET user_id = NULL WHERE id = NEW.id; END;").unwrap();
+    let result = client
+        .post(format!(
+            "{base}/api/projects/{}/repository",
+            project["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":repo["repo"]["id"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(result.status(), 404);
+    let body: serde_json::Value = result.json().await.unwrap();
+    assert_eq!(body["error"], "PROJECT_NOT_FOUND");
+    let unchanged: serde_json::Value = client
+        .get(format!(
+            "{base}/api/projects/{}",
+            project["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(unchanged["id"], project["id"]);
+    let metadata: Option<String> = db
+        .query_row(
+            "SELECT metadata FROM projects WHERE id = ?1",
+            [project["id"].as_str().unwrap()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(
+        !metadata
+            .as_deref()
+            .unwrap_or_default()
+            .contains("repositoryId")
+    );
+    drop(db);
+    stop.send(()).unwrap();
+    task.await.unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn project_repository_does_not_discover_remote_node_on_gateway() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let root = dir.join("remote-project");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    let project: serde_json::Value = client.post(format!("{base}/api/projects"))
+        .bearer_auth(&owner).json(&serde_json::json!({"title":"Remote", "rootPath":root.to_string_lossy(), "nodeId":"remote-node"}))
+        .send().await.unwrap().json().await.unwrap();
+    let repo: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"name":"Local", "localPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(repo["repo"]["id"].is_string());
+    let result = client
+        .post(format!(
+            "{base}/api/projects/{}/repository",
+            project["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(result.status(), 503);
+    let body: serde_json::Value = result.json().await.unwrap();
+    assert_eq!(body["error"], "SURFACE_UNAVAILABLE");
+    let unchanged: serde_json::Value = client
+        .get(format!(
+            "{base}/api/projects/{}",
+            project["id"].as_str().unwrap()
+        ))
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        !unchanged["metadata"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("repositoryId")
+    );
+    stop.send(()).unwrap();
+    task.await.unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn project_repository_propagates_existing_lookup_failure() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let owner = token(&client, &base).await;
+    let root = dir.join("lookup-failure");
+    std::fs::create_dir_all(&root).unwrap();
+    let project: serde_json::Value = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"title":"Lookup failure", "rootPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let repo: serde_json::Value = client
+        .post(format!("{base}/api/repos"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"name":"Lookup failure", "localPath":root.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let url = format!(
+        "{base}/api/projects/{}/repository",
+        project["id"].as_str().unwrap()
+    );
+    let assigned = client
+        .post(&url)
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"repoId":repo["repo"]["id"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(assigned.status(), 200);
+
+    // With no .git, swallowing the lookup failure would return PROJECT_NOT_GIT.
+    let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    db.execute("DROP TABLE automation_repositories", [])
+        .unwrap();
+    let failed = client
+        .post(&url)
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(failed.status(), 500);
+    let body: serde_json::Value = failed.json().await.unwrap();
+    assert_eq!(body["error"], "INTERNAL_ERROR");
+    drop(db);
+    stop.send(()).unwrap();
+    task.await.unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn project_repository_reconciles_gateway_device() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();

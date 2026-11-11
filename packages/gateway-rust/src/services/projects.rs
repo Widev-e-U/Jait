@@ -591,6 +591,7 @@ impl<'a> ProjectService<'a> {
         repository: &str,
         user: Option<&str>,
     ) -> rusqlite::Result<Option<ProjectRecord>> {
+        let transaction = self.db.unchecked_transaction()?;
         let Some(project) = self.get(id, user)? else {
             return Ok(None);
         };
@@ -601,7 +602,11 @@ impl<'a> ProjectService<'a> {
             json!({"metadata":metadata}).as_object().expect("object"),
             user,
         )?;
-        self.get(id, user)
+        let updated = self.get(id, user)?;
+        if updated.is_some() {
+            transaction.commit()?;
+        }
+        Ok(updated)
     }
     pub fn clear_repository(
         &self,

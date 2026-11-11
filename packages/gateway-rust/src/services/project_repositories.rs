@@ -126,7 +126,10 @@ impl<G: RepositoryGit, E: FnMut(&str, &RepositoryRecord)> ProjectRepositoryAssig
             let updated = self
                 .projects
                 .assign_repository(&project.id, &repo.id, user)?
-                .unwrap_or(project);
+                .ok_or(AssignmentError::Rejected(
+                    "PROJECT_NOT_FOUND",
+                    "Project not found.",
+                ))?;
             (self.emit)("updated", &repo);
             return Ok(Assignment {
                 project: updated,
@@ -214,7 +217,10 @@ impl<G: RepositoryGit, E: FnMut(&str, &RepositoryRecord)> ProjectRepositoryAssig
         let updated = self
             .projects
             .assign_repository(&project.id, &repo.id, user)?
-            .unwrap_or(project);
+            .ok_or(AssignmentError::Rejected(
+                "PROJECT_NOT_FOUND",
+                "Project not found.",
+            ))?;
         if !created {
             (self.emit)("updated", &repo);
         }

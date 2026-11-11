@@ -175,15 +175,16 @@ fn assign_repository(
             return outcome(&project, &repo, false, false);
         }
         return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
-            Ok(updated) => {
+            Ok(Some(updated)) => {
                 crate::routes::repositories::publish_repository(
                     events,
                     user_id,
                     "repo.updated",
                     json!({"repo": repo}),
                 );
-                outcome(&updated.unwrap_or(project), &repo, true, false)
+                outcome(&updated, &repo, true, false)
             }
+            Ok(None) => fail(404, "PROJECT_NOT_FOUND", "Project not found."),
             Err(error) => *db_err(error),
         };
     }
@@ -196,15 +197,31 @@ fn assign_repository(
     if root.is_empty() {
         return fail(400, "PROJECT_HAS_NO_ROOT", "Project has no folder path.");
     }
-    if let Some(id) = &existing_id
-        && let Ok(Some(repo)) = repos.get(id)
-        && owned(&repo)
-    {
-        let repo = match reconcile(repo) {
-            Ok(repo) => repo,
+    if let Some(id) = &existing_id {
+        match repos.get(id) {
+            Ok(Some(repo)) if owned(&repo) => {
+                let repo = match reconcile(repo) {
+                    Ok(repo) => repo,
+                    Err(error) => return *db_err(error),
+                };
+                return outcome(&project, &repo, false, false);
+            }
+            Ok(_) => {}
             Err(error) => return *db_err(error),
-        };
-        return outcome(&project, &repo, false, false);
+        }
+    }
+    // A remote node's path is not authority to inspect the gateway filesystem.
+    // Discovery on that node needs an explicit remote execution boundary.
+    if project
+        .node_id
+        .as_deref()
+        .is_some_and(|node| node != "gateway")
+    {
+        return fail(
+            503,
+            "SURFACE_UNAVAILABLE",
+            "Repository discovery on remote nodes is not available in the native gateway",
+        );
     }
     let git_metadata = std::path::Path::new(&root).join(".git");
     if !(git_metadata.is_file() || git_metadata.is_dir()) {
@@ -221,15 +238,16 @@ fn assign_repository(
                 Err(error) => return *db_err(error),
             };
             return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
-                Ok(updated) => {
+                Ok(Some(updated)) => {
                     crate::routes::repositories::publish_repository(
                         events,
                         user_id,
                         "repo.updated",
                         json!({"repo": repo}),
                     );
-                    outcome(&updated.unwrap_or(project), &repo, true, false)
+                    outcome(&updated, &repo, true, false)
                 }
+                Ok(None) => fail(404, "PROJECT_NOT_FOUND", "Project not found."),
                 Err(error) => *db_err(error),
             };
         }
