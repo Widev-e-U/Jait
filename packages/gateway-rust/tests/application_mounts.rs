@@ -3524,6 +3524,30 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
         s == 200 && b["commit"]["status"] == "skipped_no_changes",
         "{s} {b}"
     );
+    // A staged version and a later worktree edit must remain distinct.
+    std::fs::write(root.join("b.txt"), "staged\n").unwrap();
+    let (s, b) = call(
+        "/api/git/stage",
+        serde_json::json!({"cwd": root, "paths": ["b.txt"]}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    std::fs::write(root.join("b.txt"), "unstaged\n").unwrap();
+    let (s, b) = call(
+        "/api/git/run-stacked-action",
+        serde_json::json!({"cwd": root, "action": "commit", "commitMessage": "staged only"}),
+    )
+    .await;
+    assert!(s == 200 && b["commit"]["status"] == "created", "{s} {b}");
+    let committed = std::process::Command::new("git")
+        .args(["show", "HEAD:b.txt"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(committed.status.success());
+    assert_eq!(committed.stdout, b"staged\n");
+    assert_eq!(std::fs::read(root.join("b.txt")).unwrap(), b"unstaged\n");
+
     let (s, _) = call(
         "/api/git/run-stacked-action",
         serde_json::json!({"cwd": root, "action": "nope"}),

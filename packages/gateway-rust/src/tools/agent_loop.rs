@@ -4674,11 +4674,11 @@ mod tests {
         let runtime = FakeRuntime::new();
         // Always the same call, forever.
         let responses: Vec<LlmHttpResponse> = (0..15)
-            .map(|_| sse_tool_calls(&[("dup", "file_read", "{}")]))
+            .map(|_| sse_tool_calls(&[("dup", "repeatprobe", "{}")]))
             .collect();
         let host = FakeHost::new(responses);
         let tools = FakeTools::new(vec![(
-            "file.read",
+            "repeatprobe",
             Ok(json!({ "ok": true, "message": "same" })),
         )]);
         let observer = RecordingObserver::new();
