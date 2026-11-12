@@ -6,10 +6,10 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 226 | 53.1% |
-| native-untested | 178 | 41.8% |
-| missing | 22 | 5.2% |
-| total Node HTTP routes | 426 | 100% |
+| native-tested | 227 | 52.9% |
+| native-untested | 178 | 41.5% |
+| missing | 24 | 5.6% |
+| total Node HTTP routes | 429 | 100% |
 
 ## Routes
 
@@ -175,6 +175,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | DELETE | `/api/messenger` | routes/messenger.ts | missing |
 | GET | `/api/messenger` | routes/messenger.ts | missing |
 | POST | `/api/messenger` | routes/messenger.ts | missing |
+| DELETE | `/api/messenger/bridge-accounts/teams` | routes/messenger.ts | missing |
 | DELETE | `/api/messenger/bridge-reauth/teams` | routes/messenger.ts | missing |
 | GET | `/api/messenger/bridge-reauth/teams` | routes/messenger.ts | missing |
 | POST | `/api/messenger/bridge-reauth/teams` | routes/messenger.ts | missing |
@@ -229,7 +230,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/preview/logs/:sessionId` | routes/preview.ts | native-untested |
 | POST | `/api/preview/navigate` | routes/preview.ts | native-untested |
 | POST | `/api/preview/reload` | routes/preview.ts | native-untested |
-| POST | `/api/preview/reopen` | routes/preview.ts | missing |
+| POST | `/api/preview/reopen` | routes/preview.ts | native-tested |
 | POST | `/api/preview/restart` | routes/preview.ts | native-untested |
 | GET | `/api/preview/screenshot/:sessionId` | routes/preview.ts | native-untested |
 | GET | `/api/preview/session/:sessionId` | routes/preview.ts | native-untested |
@@ -433,11 +434,13 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | GET | `/api/dev-file/:encodedPath/*` | server.ts | native-tested |
 | ALL | `/api/dev-proxy/:port` | server.ts | native-tested |
 | ALL | `/api/dev-proxy/:port/*` | server.ts | native-untested |
+| GET | `/api/live-view/:port/focus` | server.ts | missing |
 | DELETE | `/api/nodes/:id/credential` | server.ts | native-tested |
 | POST | `/api/nodes/:id/credential` | server.ts | native-tested |
 | POST | `/api/preview/access` | server.ts | native-tested |
 | GET | `/api/voice-assistant/status` | server.ts | native-tested |
 | GET | `/preview/:previewToken/file/:encodedPath` | server.ts | native-tested |
 | GET | `/preview/:previewToken/file/:encodedPath/*` | server.ts | native-untested |
+| GET | `/preview/:previewToken/live/:port/focus` | server.ts | missing |
 | ALL | `/preview/:previewToken/proxy/:port` | server.ts | native-tested |
 | ALL | `/preview/:previewToken/proxy/:port/*` | server.ts | native-untested |

@@ -44,6 +44,12 @@ pub enum PreviewOperation {
     Navigate {
         url: String,
     },
+    /// Relaunch the live browser at `url`; `project_path` is the owning chat's
+    /// project so the backend can scope file and loopback destinations.
+    Reopen {
+        url: String,
+        project_path: Option<String>,
+    },
     History {
         direction: HistoryDirection,
     },
@@ -118,6 +124,7 @@ impl PreviewRoutes {
             .route("/api/preview/start", post(write))
             .route("/api/preview/restart", post(write))
             .route("/api/preview/navigate", post(write))
+            .route("/api/preview/reopen", post(write))
             .route("/api/preview/history", post(write))
             .route("/api/preview/reload", post(write))
             .route("/api/preview/share", post(write))
@@ -201,6 +208,11 @@ impl PreviewRoutes {
                 if matches!(call.operation, PreviewOperation::Reload) =>
             {
                 error(400, "Could not refresh.")
+            }
+            Ok(Err(PreviewFailure::InvalidDestination | PreviewFailure::Failed))
+                if matches!(call.operation, PreviewOperation::Reopen { .. }) =>
+            {
+                error(400, "Could not reopen the browser.")
             }
             Ok(Err(PreviewFailure::InvalidDestination)) => error(400, "Could not navigate."),
             Ok(Err(PreviewFailure::Failed)) => error(500, "Preview operation failed"),
@@ -328,8 +340,11 @@ async fn write(State(state): State<PreviewRoutes>, request: Request) -> Response
     if session.len() > 4096 {
         return error(400, "Invalid sessionId");
     }
-    if matches!(action.as_str(), "navigate" | "history" | "reload") {
-        let allowed = if action == "navigate" {
+    if matches!(
+        action.as_str(),
+        "navigate" | "reopen" | "history" | "reload"
+    ) {
+        let allowed = if matches!(action.as_str(), "navigate" | "reopen") {
             &["sessionId", "url"][..]
         } else if action == "history" {
             &["sessionId", "direction"][..]
@@ -356,6 +371,27 @@ async fn write(State(state): State<PreviewRoutes>, request: Request) -> Response
             Some(url) => PreviewOperation::Navigate { url },
             None => return error(400, "Invalid preview URL"),
         },
+        "reopen" => {
+            let Some(url) = text(&body, "url").filter(|url| !url.is_empty() && url.len() <= 8192)
+            else {
+                return error(400, "Invalid preview URL");
+            };
+            let (owner, chat) = (user.id.clone(), session.clone());
+            let project_path = match state
+                .auth
+                .with_database(move |db| {
+                    Ok(SessionService::new(db)
+                        .get(&chat, Some(&owner))?
+                        .map(|s| s.project_path))
+                })
+                .await
+            {
+                Ok(Some(path)) => path.filter(|p| !p.is_empty()),
+                Ok(None) => return error(404, "Session not found"),
+                Err(_) => return auth::internal_error(),
+            };
+            PreviewOperation::Reopen { url, project_path }
+        }
         "history" => PreviewOperation::History {
             direction: match body.get("direction").and_then(Value::as_str) {
                 Some("back") => HistoryDirection::Back,
