@@ -1765,8 +1765,10 @@ async fn identity(State(state): State<GitRoutes>, request: Request) -> Response 
         Ok(cwd) => cwd,
         Err(response) => return *response,
     };
-    let name = string_field(&body, "name");
-    let email = string_field(&body, "email");
+    let (name, email) = match identity_fields(&body) {
+        Ok(fields) => fields,
+        Err(response) => return *response,
+    };
 
     let result = git_task(move || {
         let repo = is_repo(&cwd);
@@ -1781,9 +1783,7 @@ async fn identity(State(state): State<GitRoutes>, request: Request) -> Response 
                 }
                 Ok(json!({ "name": name, "email": email }))
             }
-            (Some(_), None) | (None, Some(_)) => {
-                Err("Both name and email are required".to_string())
-            }
+            (Some(_), None) | (None, Some(_)) => unreachable!("identity fields validated"),
             (None, None) => {
                 let name = read_config(&cwd, repo, "user.name");
                 let email = read_config(&cwd, repo, "user.email");
@@ -1800,6 +1800,25 @@ async fn identity(State(state): State<GitRoutes>, request: Request) -> Response 
         Ok(payload) => ok_json(payload),
         Err(response) => *response,
     }
+}
+
+fn identity_fields(body: &Map<String, Value>) -> HandlerResult<(Option<String>, Option<String>)> {
+    let field = |key: &str| {
+        body.get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+    let name = field("name");
+    let email = field("email");
+    if name.is_some() != email.is_some() {
+        return Err(Box::new(error_response(
+            400,
+            "Both name and email are required",
+        )));
+    }
+    Ok((name, email))
 }
 
 fn read_config(cwd: &str, repo: bool, key: &str) -> Option<String> {
@@ -2507,5 +2526,28 @@ mod status_numstat_tests {
         let rows = parse_numstat("3\t2\t\0old\0new\tname\0");
         assert_eq!(rows, vec![("new\tname".into(), 3, 2)]);
         assert!(parse_numstat("1\t0\t\0old\0").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod identity_input_tests {
+    use super::identity_fields;
+    use serde_json::json;
+
+    #[test]
+    fn trims_identity_and_rejects_partial_updates() {
+        let body = json!({"name": "  Jane Doe  ", "email": "  jane@example.com  "});
+        assert_eq!(
+            identity_fields(body.as_object().unwrap()).unwrap(),
+            (Some("Jane Doe".into()), Some("jane@example.com".into()))
+        );
+        let partial = json!({"name": "Jane", "email": "  "});
+        let error = identity_fields(partial.as_object().unwrap()).unwrap_err();
+        assert_eq!(error.status(), axum::http::StatusCode::BAD_REQUEST);
+        let empty = json!({"name": " ", "email": " "});
+        assert_eq!(
+            identity_fields(empty.as_object().unwrap()).unwrap(),
+            (None, None)
+        );
     }
 }

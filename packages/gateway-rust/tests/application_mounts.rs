@@ -3443,12 +3443,27 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     assert_eq!(s, 200, "{b}");
     let (s, b) = call(
         "/api/git/identity",
-        serde_json::json!({"cwd": root, "name": "T", "email": "t@example.com"}),
+        serde_json::json!({"cwd": root, "name": "  T  ", "email": "  t@example.com  "}),
     )
     .await;
     assert_eq!(s, 200, "{b}");
-    let (s, b) = call("/api/git/identity", cwd.clone()).await;
-    assert!(s == 200 && b["email"] == "t@example.com", "{b}");
+    assert_eq!(b["name"], "T");
+    assert_eq!(b["email"], "t@example.com");
+    let (s, b) = call(
+        "/api/git/identity",
+        serde_json::json!({"cwd": root, "name": "Other", "email": "  "}),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    assert_eq!(b["error"], "Both name and email are required");
+    let (s, b) = call(
+        "/api/git/identity",
+        serde_json::json!({"cwd": root, "name": " ", "email": " "}),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["name"], "T");
+    assert_eq!(b["email"], "t@example.com");
 
     std::fs::write(root.join("a.txt"), "one\n").unwrap();
     let (s, b) = call(
@@ -4356,7 +4371,7 @@ async fn session_loop_is_read_and_controlled_only_by_its_owner() {
         .await
         .unwrap();
     assert_eq!(anon.status(), 401);
-    let missing = control("nosuchsession", serde_json::json!({"action": "pause"}))
+    let missing = control("nosuchsession", serde_json::json!({"action": "invalid"}))
         .await
         .unwrap();
     assert_eq!(
@@ -4384,6 +4399,7 @@ async fn session_loop_is_read_and_controlled_only_by_its_owner() {
             )
             .unwrap();
     }
+    let mut ws = WsClient::connect(&base, &token).await;
     let paused: serde_json::Value = control(id, serde_json::json!({"action": "pause"}))
         .await
         .unwrap()
@@ -4391,6 +4407,11 @@ async fn session_loop_is_read_and_controlled_only_by_its_owner() {
         .await
         .unwrap();
     assert_eq!(paused["loop"]["status"], "paused");
+    let updated = ws
+        .until("chat.updated", Duration::from_secs(5))
+        .await
+        .expect("pause broadcasts chat.updated to the owner");
+    assert_eq!(updated["payload"]["session"]["id"], id);
     let resumed: serde_json::Value = control(id, serde_json::json!({"action": "resume"}))
         .await
         .unwrap()

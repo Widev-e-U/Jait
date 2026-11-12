@@ -70,6 +70,14 @@ fn js_text(value: Option<&Value>) -> Option<String> {
     }
 }
 
+fn requested_repository_id(body: &Value) -> Option<String> {
+    body.get("repoId")
+        .and_then(Value::as_str)
+        .map(crate::text::js_trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
 fn params(uri: &Uri) -> HashMap<String, String> {
     uri.query()
         .map(|raw| {
@@ -733,11 +741,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             Ok(body) => body,
             Err(response) => return *response,
         };
-        let requested = body
-            .get("repoId")
-            .and_then(Value::as_str)
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
+        let requested = requested_repository_id(&body);
         let user_id = uid.clone();
         let events = state.events.clone();
         return run(&state.auth, move |db| {
@@ -929,4 +933,27 @@ fn move_rejection(rejection: MoveRejection) -> Response {
         MoveRejection::TooDeep => ("TOO_DEEP", "Maximum project nesting depth exceeded"),
     };
     fail(400, code, details)
+}
+
+#[cfg(test)]
+mod repository_id_tests {
+    use super::*;
+
+    #[test]
+    fn repository_id_uses_javascript_whitespace_semantics() {
+        assert_eq!(
+            requested_repository_id(&json!({"repoId": "\u{feff}repo\u{feff}"})),
+            Some("repo".into())
+        );
+        assert_eq!(
+            requested_repository_id(&json!({"repoId": "\u{feff}"})),
+            None
+        );
+        // U+0085 is trimmed by Rust but not JavaScript.
+        assert_eq!(
+            requested_repository_id(&json!({"repoId": "\u{85}repo\u{85}"})),
+            Some("\u{85}repo\u{85}".into())
+        );
+        assert_eq!(requested_repository_id(&json!({"repoId": 42})), None);
+    }
 }

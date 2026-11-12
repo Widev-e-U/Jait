@@ -399,6 +399,17 @@ impl Application {
             ) as Arc<dyn ChatFactory>),
             (None, false) => None,
         };
+        let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
+        let repository_events: crate::routes::repositories::RepositoryEventSink = {
+            let hub = repository_hub.clone();
+            Arc::new(move |owner, kind, payload| {
+                if let Ok(slot) = hub.lock()
+                    && let Some(hub) = slot.as_ref()
+                {
+                    hub.broadcast_to_user(owner, kind, payload);
+                }
+            })
+        };
         let chat = factory
             .map(|factory| {
                 ChatRoutes::new(
@@ -407,7 +418,10 @@ impl Application {
                     super::chat_sessions::SessionTurnManager::new(NonZeroU16::new(8).unwrap()),
                     config.project_root.clone(),
                 )
-                .map(|chat| chat.with_database_owner(database_owner.clone()))
+                .map(|chat| {
+                    chat.with_database_owner(database_owner.clone())
+                        .with_user_events(repository_events.clone())
+                })
             })
             .transpose()?;
         let sessions = SessionRoutes::new(
@@ -432,17 +446,6 @@ impl Application {
         }
         let assessments =
             super::channels_mount::assessment_registry().map_err(std::io::Error::other)?;
-        let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
-        let repository_events: crate::routes::repositories::RepositoryEventSink = {
-            let hub = repository_hub.clone();
-            Arc::new(move |owner, kind, payload| {
-                if let Ok(slot) = hub.lock()
-                    && let Some(hub) = slot.as_ref()
-                {
-                    hub.broadcast_to_user(owner, kind, payload);
-                }
-            })
-        };
         let preview_ports = crate::routes::preview_proxy::PreviewPortRegistry::default();
         let live_view_ports = crate::routes::preview_proxy::PreviewPortRegistry::default();
         let mut project_collection =

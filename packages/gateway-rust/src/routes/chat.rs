@@ -168,6 +168,8 @@ pub struct ChatRoutes {
     pub(crate) limits: ChatLimits,
     active: Arc<ActiveState>,
     pub(crate) events: Arc<EventBus>,
+    /// Per-user WS fan-out for `chat.updated`; absent when no hub is mounted.
+    pub(crate) user_events: Option<super::repositories::RepositoryEventSink>,
 }
 impl ChatRoutes {
     pub fn new(
@@ -187,7 +189,15 @@ impl ChatRoutes {
             limits: ChatLimits::default(),
             active: Arc::new(ActiveState::default()),
             events: EventBus::new(),
+            user_events: None,
         })
+    }
+    pub(crate) fn with_user_events(
+        mut self,
+        sink: super::repositories::RepositoryEventSink,
+    ) -> Self {
+        self.user_events = Some(sink);
+        self
     }
     pub(crate) fn with_database_owner(mut self, owner: Arc<std::fs::File>) -> Self {
         // This is called before the routes are cloned or accept requests. TurnLease
@@ -1459,8 +1469,8 @@ async fn session_loop(
     }
 }
 /// Pause or resume the chat's loop goal. The new state is persisted; the
-/// `chat.updated` broadcast and the wake that starts the next turn on resume
-/// are not wired natively yet.
+/// `chat.updated` broadcast is delivered to the owner. The wake that starts
+/// the next turn on resume is not wired natively yet.
 async fn session_loop_control(
     State(state): State<ChatRoutes>,
     Path(session): Path<String>,
@@ -1482,23 +1492,37 @@ async fn session_loop_control(
         _ => None,
     };
     let owner = user.id.clone();
+    let broadcast: Option<crate::services::chat_loops::Broadcast> =
+        state.user_events.clone().map(|sink| {
+            Arc::new(move |user: &str, event: Value| {
+                let payload = event.get("payload").cloned().unwrap_or(Value::Null);
+                sink(user, "chat.updated", payload);
+                Ok(())
+            }) as crate::services::chat_loops::Broadcast
+        });
     // Ownership is answered before validation, as in Node.
-    let controlled =
-        state
-            .auth
-            .with_database(move |db| {
-                if SessionService::new(db)
-                    .get(&session, Some(&owner))?
-                    .is_none()
-                {
-                    return Ok(None);
-                }
-                Ok(Some(action.map(|action| {
-                    crate::services::chat_loops::ChatLoopService::new(db, Default::default())
-                        .control(&session, &action, Some(&owner))
-                })))
-            })
-            .await;
+    let controlled = state
+        .auth
+        .with_database(move |db| {
+            if SessionService::new(db)
+                .get(&session, Some(&owner))?
+                .is_none()
+            {
+                return Ok(None);
+            }
+            Ok(Some(action.map(|action| {
+                let runtime = crate::services::chat_loops::LoopRuntime {
+                    broadcast,
+                    ..Default::default()
+                };
+                crate::services::chat_loops::ChatLoopService::new(db, runtime).control(
+                    &session,
+                    &action,
+                    Some(&owner),
+                )
+            })))
+        })
+        .await;
     match controlled {
         Ok(None) => response(404, json!({"error":"NOT_FOUND"})),
         Ok(Some(None)) => response(400, json!({"error":"VALIDATION_ERROR"})),

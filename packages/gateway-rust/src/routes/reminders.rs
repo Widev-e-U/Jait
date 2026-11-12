@@ -251,16 +251,44 @@ async fn dispatch(
             return Ok(response(400, json!({"error":"content is required"})));
         };
         let project = trimmed(&body["projectId"]);
-        if let (Some(id), Some(p)) = (&project, &s.projects)
-            && !truthy(&extra(p, "getById", vec![json!(id), json!(owner)]).await?)
-        {
-            return Ok(missing("Project"));
+        if let Some(id) = &project {
+            let exists = if let Some(p) = &s.projects {
+                truthy(&extra(p, "getById", vec![json!(id), json!(owner)]).await?)
+            } else {
+                let id = id.clone();
+                let owner = owner.clone();
+                s.auth
+                    .with_database(move |db| {
+                        Ok(crate::services::projects::ProjectService::new(db)
+                            .get(&id, Some(&owner))?
+                            .is_some())
+                    })
+                    .await
+                    .map_err(|e| Box::new(auth::database_failure(&e)))?
+            };
+            if !exists {
+                return Ok(missing("Project"));
+            }
         }
         let session = trimmed(&body["sessionId"]);
-        if let (Some(id), Some(p)) = (&session, &s.sessions)
-            && !truthy(&extra(p, "getById", vec![json!(id), json!(owner)]).await?)
-        {
-            return Ok(missing("Session"));
+        if let Some(id) = &session {
+            let exists = if let Some(p) = &s.sessions {
+                truthy(&extra(p, "getById", vec![json!(id), json!(owner)]).await?)
+            } else {
+                let id = id.clone();
+                let owner = owner.clone();
+                s.auth
+                    .with_database(move |db| {
+                        Ok(crate::services::sessions::SessionService::new(db)
+                            .get(&id, Some(&owner))?
+                            .is_some())
+                    })
+                    .await
+                    .map_err(|e| Box::new(auth::database_failure(&e)))?
+            };
+            if !exists {
+                return Ok(missing("Session"));
+            }
         }
         let params = CreateReminderParams {
             user_id: Some(owner),
