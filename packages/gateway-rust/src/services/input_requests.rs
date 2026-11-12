@@ -304,25 +304,25 @@ impl UserQuestionService {
         handle
     }
     /// Creates a request whose answer is retained for repeated waits. The entry
-    /// is registered after `onRequest`, matching `createRequest` ordering, and
-    /// is dropped only when a wait collects the answer.
+    /// is registered before notifying observers so synchronous resolution is
+    /// recorded, and is dropped only when a wait collects the answer.
     pub fn start_resumable(&self, input: QuestionInput) -> String {
         let request = self.request(input);
         let (answer_send, answer) = watch::channel(Answer::Waiting);
         let handle = self
             .registry
             .insert_with(request.clone(), Some(answer_send));
-        (self.registry.on_request)(request.clone());
         self.resumable.lock().unwrap().push(Resumable {
-            request_id: request.id,
-            session_id: request.session_id,
-            user_id: request.user_id,
+            request_id: request.id.clone(),
+            session_id: request.session_id.clone(),
+            user_id: request.user_id.clone(),
             answer,
             waiters: 0,
             yielded: false,
             resolved: None,
             notified: false,
         });
+        (self.registry.on_request)(request);
         handle.id
     }
     /// Mirrors `Promise.race([result, 60 s timer])`. Lookup binds the exact
@@ -531,6 +531,45 @@ mod resume_tests {
             questions: vec![serde_json::json!({"id":"q","header":"H","question":"Q?"})],
             ..Default::default()
         }
+    }
+    #[tokio::test]
+    async fn synchronous_resolution_before_waiter_cancellation_is_not_lost() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let slot: Arc<Mutex<Option<UserQuestionService>>> = Arc::new(Mutex::new(None));
+        let observer_slot = slot.clone();
+        let service = UserQuestionService::new(
+            default_clock(),
+            Some(Arc::new(move |request| {
+                assert!(observer_slot.lock().unwrap().as_ref().unwrap().submit(
+                    &request.id,
+                    serde_json::json!({}),
+                    Some("owner")
+                ));
+            })),
+            None,
+        );
+        *slot.lock().unwrap() = Some(service.clone());
+        let notifications = Arc::new(AtomicUsize::new(0));
+        let observed = notifications.clone();
+        service.set_on_detached_resolved(Some(Arc::new(move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+        })));
+        let id = service.start_resumable(input(Some("owner")));
+        {
+            let mut entries = service.resumable.lock().unwrap();
+            entries[0].waiters += 1;
+        }
+        drop(QuestionWaitGuard {
+            entries: service.resumable.clone(),
+            id: id.clone(),
+            detached: service.on_detached_resolved.clone(),
+        });
+        assert_eq!(notifications.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            service.wait_for_answer(&id, "session", Some("owner")).await,
+            WaitOutcome::Answered(_)
+        ));
+        *slot.lock().unwrap() = None;
     }
     #[tokio::test(start_paused = true)]
     async fn timeout_keeps_answer_addressable_between_calls_and_collects_once() {
