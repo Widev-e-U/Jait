@@ -72,6 +72,8 @@ export interface MessengerMessage {
   sender: string
   /** Stable Matrix user ID, when available, for distinguishing contacts with the same name. */
   senderId?: string
+  /** Matrix media URL for the sender’s profile photo. */
+  senderAvatarUrl?: string
   body: string
   timestamp: number
   own: boolean

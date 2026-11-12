@@ -202,7 +202,7 @@ function readRoom(client: Client) {
   const accountData = new Map<string, unknown>()
   const room = {
     roomId: '!room:matrix.test', name: 'Personal',
-    getMyMembership: () => 'join', getMember: () => ({ name: 'Bob' }), getMembers: () => [],
+    getMyMembership: () => 'join', getMember: () => ({ name: 'Bob', getMxcAvatarUrl: () => 'mxc://matrix.test/bob' }), getMembers: () => [],
     getLiveTimeline: () => ({ getEvents: () => events, getPaginationToken: () => null }),
     findEventById: (id: string) => events.find(event => event.getId() === id),
     getUnfilteredTimelineSet: () => ({ compareEventOrdering: (a: string, b: string) => events.findIndex(event => event.getId() === a) - events.findIndex(event => event.getId() === b) }),

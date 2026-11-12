@@ -213,6 +213,7 @@ export class MessengerStore {
     if (!id) return null
     const attachment = content.file?.url ?? content.url
     const mime = typeof content.info?.mimetype === 'string' ? content.info.mimetype : 'application/octet-stream'
+    const senderAvatarUrl = room.getMember(event.getSender() ?? '')?.getMxcAvatarUrl()
     const replyId = content['m.relates_to']?.['m.in_reply_to']?.event_id
     const replied = typeof replyId === 'string' ? room.findEventById(replyId) : undefined
     return {
@@ -222,6 +223,7 @@ export class MessengerStore {
       } } : {}),
       id, sender: room.getMember(event.getSender() ?? '')?.name ?? event.getSender() ?? 'Unknown',
       ...(event.getSender() ? { senderId: event.getSender()! } : {}),
+      ...(senderAvatarUrl?.startsWith('mxc://') ? { senderAvatarUrl } : {}),
       body: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted' ? 'Unable to decrypt this message. Verify this device or import room keys.' : String(content.body ?? ''),
       timestamp: Number.isFinite(event.getTs()) && Math.abs(event.getTs()) <= 8.64e15 ? event.getTs() : 0, own: event.getSender() === this.session?.userId,
       encrypted: event.isEncrypted(), unableToDecrypt: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted',

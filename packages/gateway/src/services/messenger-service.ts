@@ -667,6 +667,8 @@ class Connection {
             member?.content?.displayname ?? e.sender ?? 'Unknown',
           ).slice(0, 512),
           ...(e.sender ? { senderId: e.sender } : {}),
+          ...(typeof member?.content?.avatar_url === 'string' && member.content.avatar_url.startsWith('mxc://')
+            ? { senderAvatarUrl: member.content.avatar_url } : {}),
           body: failed
             ? 'Unable to decrypt this message. Restore encrypted history keys for the gateway device.'
             : String(c.body ?? ''),

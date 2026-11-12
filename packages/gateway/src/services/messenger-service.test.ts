@@ -21,6 +21,17 @@ describe('Messenger message actions and history', () => {
     room.events.push({ event_id: '$react', type: 'm.reaction', sender: '@alice:test', content: { 'm.relates_to': { rel_type: 'm.annotation', event_id: '$one', key: '👍' } } } as any);
     expect(c.messages('!room:test')).toMatchObject([{ body: 'changed', edited: true, reactions: [{ key: '👍', count: 1, own: true }] }]);
   });
+  it('projects each group sender’s Matrix avatar and rejects external URLs', () => {
+    const { c, room, message } = setup();
+    room.states = [
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', avatar_url: 'mxc://test/bob' } },
+      { type: 'm.room.member', state_key: '@eve:test', content: { displayname: 'Eve', avatar_url: 'https://example.test/photo' } },
+    ] as any;
+    room.events = [message('$bob', '@bob:test'), message('$eve', '@eve:test')];
+    const messages = c.messages('!room:test');
+    expect(messages[0]).toMatchObject({ sender: 'Bob', senderAvatarUrl: 'mxc://test/bob' });
+    expect(messages[1]).not.toHaveProperty('senderAvatarUrl');
+  });
   it('ignores forged edits and redacted reactions', () => {
     const { c, room } = setup();
     room.events.push({ event_id: '$edit', type: 'm.room.message', sender: '@other:test', content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { body: 'forged' } } } as any);
