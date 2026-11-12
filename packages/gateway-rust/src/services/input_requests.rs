@@ -169,22 +169,37 @@ struct Resumable {
     answer: watch::Receiver<Answer>,
     waiters: usize,
     yielded: bool,
+    resolved: Option<InputRequest>,
+    notified: bool,
 }
 struct QuestionWaitGuard {
     entries: Arc<Mutex<Vec<Resumable>>>,
     id: String,
+    detached: Arc<Mutex<Option<Observer>>>,
 }
 impl Drop for QuestionWaitGuard {
     fn drop(&mut self) {
-        if let Some(entry) = self
-            .entries
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .find(|e| e.request_id == self.id)
-        {
-            entry.waiters -= 1;
-            entry.yielded = true;
+        let request = {
+            let mut entries = self.entries.lock().unwrap();
+            entries
+                .iter_mut()
+                .find(|e| e.request_id == self.id)
+                .and_then(|entry| {
+                    entry.waiters -= 1;
+                    entry.yielded = true;
+                    if entry.waiters == 0 && !entry.notified && entry.resolved.is_some() {
+                        entry.notified = true;
+                        entry.resolved.clone()
+                    } else {
+                        None
+                    }
+                })
+        };
+        if let Some(request) = request {
+            let callback = self.detached.lock().unwrap().clone();
+            if let Some(callback) = callback {
+                callback(request);
+            }
         }
     }
 }
@@ -226,10 +241,23 @@ impl UserQuestionService {
             if let Some(callback) = &on_resolved {
                 callback(request.clone());
             }
-            let should_resume =
-                entries.lock().unwrap().iter().any(|entry| {
-                    entry.request_id == request.id && entry.yielded && entry.waiters == 0
-                });
+            let should_resume = {
+                let mut entries = entries.lock().unwrap();
+                if let Some(entry) = entries
+                    .iter_mut()
+                    .find(|entry| entry.request_id == request.id)
+                {
+                    entry.resolved = Some(request.clone());
+                    if entry.yielded && entry.waiters == 0 && !entry.notified {
+                        entry.notified = true;
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            };
             let callback = detached.lock().unwrap().clone();
             if should_resume && let Some(callback) = callback {
                 callback(request);
@@ -292,6 +320,8 @@ impl UserQuestionService {
             answer,
             waiters: 0,
             yielded: false,
+            resolved: None,
+            notified: false,
         });
         handle.id
     }
@@ -334,6 +364,7 @@ impl UserQuestionService {
         let _wait = QuestionWaitGuard {
             entries: self.resumable.clone(),
             id: request_id.into(),
+            detached: self.on_detached_resolved.clone(),
         };
         // Answers that arrived between waits resolve without arming a timer.
         if let Answer::Settled(result) = &*answer.borrow() {
@@ -551,6 +582,62 @@ mod resume_tests {
             service.wait_for_answer(&id, "session", None).await,
             WaitOutcome::Answered(None)
         );
+    }
+    #[tokio::test]
+    async fn answer_before_waiter_cancellation_notifies_detached_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let service = UserQuestionService::default();
+        let notifications = Arc::new(AtomicUsize::new(0));
+        let observed = notifications.clone();
+        service.set_on_detached_resolved(Some(Arc::new(move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+        })));
+        let id = service.start_resumable(input(Some("owner")));
+        let worker = service.clone();
+        let wait_id = id.clone();
+        let task = tokio::spawn(async move {
+            worker
+                .wait_for_answer(&wait_id, "session", Some("owner"))
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(service.submit(&id, serde_json::json!({}), Some("owner")));
+        task.abort();
+        let _ = task.await;
+        assert_eq!(notifications.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            service.wait_for_answer(&id, "session", Some("owner")).await,
+            WaitOutcome::Answered(_)
+        ));
+        assert_eq!(notifications.load(Ordering::SeqCst), 1);
+    }
+    #[tokio::test]
+    async fn detached_notification_waits_for_last_cancelled_waiter() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let service = UserQuestionService::default();
+        let notifications = Arc::new(AtomicUsize::new(0));
+        let observed = notifications.clone();
+        service.set_on_detached_resolved(Some(Arc::new(move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+        })));
+        let id = service.start_resumable(input(Some("owner")));
+        let mut tasks = Vec::new();
+        for _ in 0..2 {
+            let worker = service.clone();
+            let id = id.clone();
+            tasks.push(tokio::spawn(async move {
+                worker.wait_for_answer(&id, "session", Some("owner")).await
+            }));
+        }
+        tokio::task::yield_now().await;
+        assert!(service.submit(&id, serde_json::json!({}), Some("owner")));
+        let first = tasks.remove(0);
+        let last = tasks.remove(0);
+        first.abort();
+        last.abort();
+        let _ = first.await;
+        let _ = last.await;
+        assert_eq!(notifications.load(Ordering::SeqCst), 1);
     }
     #[tokio::test(start_paused = true)]
     async fn cancelled_waiter_keeps_shared_answer_for_concurrent_waiters() {
