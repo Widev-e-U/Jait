@@ -96,7 +96,6 @@ export {
   createSshSessionRunTool,
   createSshSessionCloseTool,
 } from "./ssh-tools.js";
-export { createElevatedRunTool } from "./elevated-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
@@ -258,7 +257,6 @@ import {
 import {
   createSshRunTool,
 } from "./ssh-tools.js";
-import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createMobileAlarmScheduleTool } from "./mobile-tools.js";
@@ -715,7 +713,6 @@ export function createToolRegistry(
   tools.register(createNetworkScanTool());
   for (const tool of createSecurityTools()) tools.register(tool);
   for (const tool of createSecurityWorkbenchTools(deps.scheduler)) tools.register(tool);
-  tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
   // Architecture and code graph tools

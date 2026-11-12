@@ -151,6 +151,11 @@ export class ConsentAwareExecutor {
         }
         irreversibleReason = classifyIrreversibleCommand(command).reason;
       }
+      // Elevated runs (terminal.run with elevated:true) always re-ask, the way
+      // the standalone elevated.run tool did, regardless of earlier approvals.
+      if (toolName === "terminal.run" && (input as Record<string, unknown>)?.elevated === true) {
+        irreversibleReason ??= "Runs with elevated privileges (sudo / UAC)";
+      }
     }
 
     // ── Auto-execute if no consent required ──

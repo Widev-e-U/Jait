@@ -35,6 +35,8 @@ import { resolveCommandYieldMs } from "../lib/command-wait.js";
 import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
 import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { platform } from "node:os";
+import { runWindowsElevatedCommand } from "./windows-elevation.js";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -1267,6 +1269,12 @@ interface TerminalRunInput {
   sandboxMountMode?: SandboxMountMode;
   /** Run on another connected device instead of the project's machine. */
   nodeId?: string;
+  /** Run with elevated privileges (sudo on POSIX, UAC or credentials on Windows). */
+  elevated?: boolean;
+  /** Windows only: administrator account for credential-based elevation. */
+  username?: string;
+  /** Short human-readable reason shown in the password prompt. */
+  reason?: string;
 }
 
 interface TerminalStreamInput {
@@ -1286,6 +1294,71 @@ export type AgentEnvResolver = (
   context: ToolContext,
 ) => Promise<Record<string, string> | null | undefined> | Record<string, string> | null | undefined;
 
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * POSIX elevation runs `sudo` inside the visible PTY, so the existing
+ * interactive-prompt detection collects the password through the secret prompt
+ * (never the LLM). `-k` forces a fresh password each time, like `sudo -S` did.
+ */
+function buildSudoCommand(command: string): string {
+  return `sudo -k -p '[sudo] password for %p: ' -- sh -lc ${shellSingleQuote(command)}`;
+}
+
+function elevatedPasswordPrompt(reason: string | undefined, prompt: string): string {
+  const trimmed = reason?.trim();
+  return trimmed ? `Password to run an elevated command: ${trimmed}` : prompt;
+}
+
+/** Windows cannot elevate a persistent PTY shell, so it uses a one-shot UAC/credential wrapper. */
+async function runElevatedOnWindows(
+  input: TerminalRunInput,
+  context: ToolContext,
+  secretInput: SecretInputService | undefined,
+  timeoutMs: number,
+): Promise<ToolResult> {
+  const command = input.command.trim();
+  const username = input.username?.trim() || undefined;
+  let password: string | null = null;
+  if (username) {
+    if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
+    const reason = input.reason?.trim();
+    password = await secretInput.requestSecret({
+      sessionId: context.sessionId,
+      userId: context.userId,
+      title: "Administrator password",
+      prompt: reason
+        ? `Password for ${username} to run an elevated command: ${reason}`
+        : `Password for ${username} to run an elevated command`,
+      requestedBy: "terminal.run",
+      command,
+      timeoutMs: 120_000,
+    });
+    if (!password) return { ok: false, message: "Administrator password was not provided" };
+  }
+  const cwd = context.projectRoot;
+  const result = await runWindowsElevatedCommand({ command, cwd, timeoutMs, username, password }, context);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  return {
+    ok: !result.timedOut && result.exitCode === 0,
+    message: result.timedOut
+      ? `Elevated command timed out after ${timeoutMs}ms`
+      : `Elevated command exited with code ${result.exitCode ?? "unknown"}`,
+    data: {
+      output: output || "(no output)",
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      timedOut: result.timedOut,
+      cwd,
+      elevated: true,
+    },
+  };
+}
+
 export function createTerminalRunTool(
   registry: SurfaceRegistry,
   sandboxManager = new SandboxManager(),
@@ -1304,7 +1377,9 @@ export function createTerminalRunTool(
       "Agent commands are automatically prefixed with pager/editor-disabling variables (PAGER=cat, LESS=-FRX, GIT_EDITOR=true, GIT_MERGE_AUTOEDIT=no, …), so pagers and editors never capture the terminal; " +
       "if a pager still appears (e.g. `less -S` typed explicitly), it is detected and dismissed with `q` automatically without affecting the user's own keystrokes. " +
       "Set nodeId to run the command on another connected device (for example a Windows PC) instead of the machine that hosts the project; the command then runs with that device's working directory. " +
-      "nodeId \"gateway\" forces execution on the gateway itself. Only terminal and filesystem tools accept a nodeId target.",
+      "nodeId \"gateway\" forces execution on the gateway itself. Only terminal and filesystem tools accept a nodeId target. " +
+      "Set elevated:true to run the command with administrator privileges (sudo on Linux/macOS, UAC on Windows, or credentials when username is given); this always asks the user for approval. " +
+      "Passwords are collected through a user-only secret prompt and are never sent to the LLM or included in tool arguments.",
     tier: "standard",
     category: "terminal",
     source: "builtin",
@@ -1319,6 +1394,9 @@ export function createTerminalRunTool(
         isBackground: { type: "boolean", description: "If true, return after startup output settles (up to 5 seconds). Useful for servers and watchers. Finite commands also yield automatically after yieldTimeMs. Completion resumes the agent automatically; inspect progress or cancel with terminal.execution." },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
+        elevated: { type: "boolean", description: "Run with elevated (administrator) privileges. Linux/macOS use sudo in the terminal and prompt the user for the password; Windows shows UAC. Always requires user approval." },
+        username: { type: "string", description: "Windows only, with elevated:true: administrator account username. When omitted on Windows, the native UAC dialog is shown instead." },
+        reason: { type: "string", description: "With elevated:true: short human-readable reason shown in the password prompt." },
       },
       required: ["command"],
     },
@@ -1326,9 +1404,21 @@ export function createTerminalRunTool(
       // Every tool wait has a finite budget; live PTY commands can outlive it.
       // Agents may lift the 1-hour default up to a 24-hour cap, but
       // timeout: 0 / negative / non-numeric never disable the guard.
-      const { command, terminalId: preferredId, isBackground } = input;
+      const { terminalId: preferredId, isBackground } = input;
       const timeout = resolveCommandTimeoutMs(input.timeout);
       const yieldTimeMs = resolveCommandYieldMs(input.yieldTimeMs, timeout);
+      let command = input.command;
+
+      if (input.elevated) {
+        if (input.sandbox) return { ok: false, message: "elevated cannot be combined with sandbox" };
+        if (!command?.trim()) return { ok: false, message: "command is required" };
+        if (platform() === "win32") return runElevatedOnWindows(input, context, secretInput, timeout);
+        const alreadyRoot = typeof process.getuid === "function" && process.getuid() === 0;
+        if (!alreadyRoot) {
+          if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
+          command = buildSudoCommand(command);
+        }
+      }
 
       if (input.sandbox) {
         const sandboxCommand = rewriteProjectPathForSandboxCommand(command, context.projectRoot);
@@ -1541,10 +1631,12 @@ export function createTerminalRunTool(
               ? (prompt) => secretInput.requestSecret({
                   sessionId: context.sessionId,
                   userId: context.userId,
-                  title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
-                  prompt,
+                  title: input.elevated && /\[sudo\]/i.test(prompt)
+                    ? "Administrator password"
+                    : isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
+                  prompt: input.elevated ? elevatedPasswordPrompt(input.reason, prompt) : prompt,
                   requestedBy: "terminal.run",
-                  command,
+                  command: input.command,
                   timeoutMs: 120_000,
                 })
               : undefined,

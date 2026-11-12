@@ -766,7 +766,6 @@ const SEQUENTIAL_TOOLS = new Set([
   "terminal.exec",
   "terminal.stream",
   "jait.terminal",
-  "elevated.run",
   "os.install",
   "os.tool",
   // File mutations — ordering matters
