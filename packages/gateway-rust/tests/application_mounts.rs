@@ -3397,6 +3397,70 @@ async fn project_files_are_served_for_the_owner_and_stay_inside_the_root() {
 }
 
 #[tokio::test]
+async fn git_generation_uses_saved_model_through_composed_application() {
+    let (model_base, seen) = fake_openai().await;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let root = dir.join("generation-project");
+    std::fs::create_dir_all(&root).unwrap();
+    assert!(
+        std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    std::fs::write(root.join("fixture.txt"), "composed-generation-fixture\n").unwrap();
+    assert!(
+        std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["add", "fixture.txt"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let created = client
+        .post(format!("{base}/api/projects"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"title":"Generation", "rootPath":root}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+    let settings = client.patch(format!("{base}/api/auth/settings")).bearer_auth(&token)
+        .json(&serde_json::json!({"api_keys":{"OPENAI_BASE_URL":model_base,"OPENAI_API_KEY":"user-key"},"selected_model":"fixture-model"})).send().await.unwrap();
+    assert_eq!(settings.status(), 200);
+    let response = client
+        .post(format!("{base}/api/git/generate-commit-message"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"cwd":root}))
+        .send()
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = response.json::<serde_json::Value>().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["message"], "hello from the fake model");
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "Bearer user-key");
+    assert_eq!(calls[0].1["model"], "fixture-model");
+    assert!(
+        calls[0].1["messages"][1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("+composed-generation-fixture")
+    );
+    let _ = stop.send(());
+    let _ = task.await;
+}
+
+#[tokio::test]
 async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()

@@ -1982,10 +1982,10 @@ async fn generate_commit_message(State(state): State<GitRoutes>, request: Reques
     let requested_model = string_field(&body, "model");
     let patch = match git_task(move || {
         if has_head(&cwd) {
-            git_exec(&cwd, &["diff", "--no-color", "HEAD"])
+            git_exec(&cwd, &["diff", "--no-ext-diff", "--no-color", "HEAD"])
         } else {
-            let staged = git_exec(&cwd, &["diff", "--no-color", "--cached"])?;
-            let unstaged = git_exec(&cwd, &["diff", "--no-color"])?;
+            let staged = git_exec(&cwd, &["diff", "--no-ext-diff", "--no-color", "--cached"])?;
+            let unstaged = git_exec(&cwd, &["diff", "--no-ext-diff", "--no-color"])?;
             Ok(format!("{staged}\n{unstaged}"))
         }
     })
