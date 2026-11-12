@@ -109,6 +109,8 @@ pub struct VoiceSettings {
     pub stt_provider: Option<String>,
     /// `settings.apiKeys` — provider URLs, tokens and prompts live here.
     pub api_keys: std::collections::BTreeMap<String, String>,
+    /// `settings.disabledTools`.
+    pub disabled_tools: Vec<String>,
 }
 
 impl VoiceSettings {
@@ -149,6 +151,7 @@ impl VoiceSettingsSource for DbVoiceSettings {
             Ok(VoiceSettings {
                 stt_provider: Some(settings.stt_provider),
                 api_keys: settings.api_keys,
+                disabled_tools: settings.disabled_tools,
             })
         })
     }
@@ -258,6 +261,8 @@ pub struct VoiceRoutes {
     consent: ConsentHost,
     stt: Option<Arc<dyn ScopedTranscriptionHttp>>,
     settings: Option<Arc<dyn VoiceSettingsSource>>,
+    system_one: Option<Arc<crate::services::system_one::SystemOne>>,
+    last_wake_candidate: Arc<Mutex<std::collections::HashMap<String, std::time::Instant>>>,
     config: VoiceRouteConfig,
     clock: Arc<dyn Fn() -> String + Send + Sync>,
 }
@@ -270,6 +275,8 @@ impl VoiceRoutes {
             consent: Arc::new(Mutex::new(NoConsent)),
             stt: None,
             settings: None,
+            system_one: None,
+            last_wake_candidate: Arc::new(Mutex::new(std::collections::HashMap::new())),
             config,
             clock: Arc::new(iso_now),
         }
@@ -295,6 +302,88 @@ impl VoiceRoutes {
         self
     }
 
+    /// Decision engine used to review ambiguous wake-word transcripts.
+    pub fn with_system_one(mut self, engine: Arc<crate::services::system_one::SystemOne>) -> Self {
+        self.system_one = Some(engine);
+        self
+    }
+
+    // ── POST /api/voice/wake-candidate ─────────────────────────────
+    /// Only final ambiguous addresses reach the model; rate-limited per user.
+    /// Every non-error outcome is `{ activate: false }` unless the reviewer says yes.
+    pub async fn post_wake_candidate(&self, headers: HeaderMap, body: Body) -> Response {
+        const MIN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+        const MAX_TRACKED: usize = 512;
+        let user = match auth::require_user(&self.auth, &headers).await {
+            Ok(user) => user,
+            Err(response) => return *response,
+        };
+        let deny = || auth::response(200, json!({ "activate": false }));
+        let bytes = match axum::body::to_bytes(body, 4096).await {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                return auth::response(413, json!({ "error": "PAYLOAD_TOO_LARGE" }));
+            }
+        };
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        let transcript = parsed
+            .get("transcript")
+            .and_then(Value::as_str)
+            .map(|t| js_trim(t).to_string())
+            .unwrap_or_default();
+        if transcript.is_empty() || transcript.encode_utf16().count() > 1000 {
+            return deny();
+        }
+        let (Some(settings_source), Some(engine)) = (&self.settings, &self.system_one) else {
+            return deny();
+        };
+        let Ok(settings) = settings_source.settings(&user).await else {
+            return deny();
+        };
+        if settings
+            .disabled_tools
+            .iter()
+            .any(|t| t == "decision.evaluate")
+        {
+            return deny();
+        }
+        {
+            let mut seen = match self.last_wake_candidate.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let now = std::time::Instant::now();
+            if seen
+                .get(&user.id)
+                .is_some_and(|at| now.duration_since(*at) < MIN_INTERVAL)
+            {
+                return deny();
+            }
+            if seen.len() >= MAX_TRACKED
+                && let Some(oldest) = seen
+                    .iter()
+                    .min_by_key(|(_, at)| **at)
+                    .map(|(k, _)| k.clone())
+            {
+                seen.remove(&oldest);
+            }
+            seen.insert(user.id.clone(), now);
+        }
+        let keys: std::collections::HashMap<String, String> =
+            settings.api_keys.into_iter().collect();
+        let cancellation = crate::services::system_one::Cancellation::default();
+        let review = crate::voice::wake_candidate::is_wake_candidate(
+            &transcript,
+            Some(&keys),
+            Some(&cancellation),
+            engine,
+        );
+        let activate = tokio::time::timeout(std::time::Duration::from_secs(2), review)
+            .await
+            .unwrap_or(false);
+        auth::response(200, json!({ "activate": activate }))
+    }
+
     pub fn with_clock(mut self, clock: Arc<dyn Fn() -> String + Send + Sync>) -> Self {
         self.clock = clock;
         self
@@ -305,6 +394,7 @@ impl VoiceRoutes {
         Router::new()
             .route("/api/voice/transcribe", post(transcribe_handler))
             .route("/api/voice/speak", post(speak_handler))
+            .route("/api/voice/wake-candidate", post(wake_candidate_handler))
             .route(
                 "/api/voice/state/{session_id}",
                 get(state_handler).patch(patch_state_handler),
@@ -745,6 +835,14 @@ async fn transcribe_handler(
     routes.post_transcribe(headers, body).await
 }
 
+async fn wake_candidate_handler(
+    State(routes): State<VoiceRoutes>,
+    headers: HeaderMap,
+    body: Body,
+) -> Response {
+    routes.post_wake_candidate(headers, body).await
+}
+
 async fn speak_handler(
     State(routes): State<VoiceRoutes>,
     headers: HeaderMap,
@@ -975,6 +1073,7 @@ mod tests {
         VoiceSettings {
             stt_provider: provider.map(str::to_string),
             api_keys,
+            disabled_tools: Vec::new(),
         }
     }
 

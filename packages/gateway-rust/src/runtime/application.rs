@@ -417,6 +417,11 @@ impl Application {
         let voice_config = VoiceRouteConfig::from_env();
         let mut voice = VoiceRoutes::new(auth.clone(), voice_config.clone())
             .with_settings(Arc::new(crate::routes::voice::DbVoiceSettings::new(&auth)));
+        if let Ok(transport) = crate::services::system_one::HttpDecisionTransport::new(1 << 20) {
+            voice = voice.with_system_one(Arc::new(crate::services::system_one::SystemOne::new(
+                Arc::new(transport),
+            )));
+        }
         if let Some(stt) = crate::voice::http::configured_from_env(&voice_config).await {
             voice = voice.with_transcription(Arc::new(stt));
         }

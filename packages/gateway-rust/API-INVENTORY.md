@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 224 | 52.6% |
+| native-tested | 225 | 52.8% |
 | native-untested | 178 | 41.8% |
-| missing | 24 | 5.6% |
+| missing | 23 | 5.4% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -426,7 +426,7 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | PATCH | `/api/voice/state/:sessionId` | routes/voice.ts | native-untested |
 | POST | `/api/voice/transcribe` | routes/voice.ts | native-untested |
 | POST | `/api/voice/transcribe-audio` | routes/voice.ts | native-tested |
-| POST | `/api/voice/wake-candidate` | routes/voice.ts | missing |
+| POST | `/api/voice/wake-candidate` | routes/voice.ts | native-tested |
 | GET | `/` | server.ts | native-tested |
 | GET | `/api/browser/screenshot` | server.ts | missing |
 | GET | `/api/dev-file/:encodedPath` | server.ts | native-tested |
