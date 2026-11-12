@@ -274,9 +274,14 @@ pub struct Application {
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
     repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
+    preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
 }
 
 impl Application {
+    /// Registry of preview ports the dev proxy may reach; a host registers a port per owning user.
+    pub fn preview_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
+        self.preview_ports.clone()
+    }
     pub async fn bind(
         listener: GatewayConfig,
         config: ApplicationConfig,
@@ -428,6 +433,7 @@ impl Application {
                 }
             })
         };
+        let preview_ports = crate::routes::preview_proxy::PreviewPortRegistry::default();
         let mut project_collection =
             crate::routes::projects::ProjectCollectionRoutes::new(auth.clone());
         project_collection.events = Some(repository_events.clone());
@@ -564,6 +570,14 @@ impl Application {
             )
             // No preview port is wired yet, so owned sessions answer 503 instead of 404.
             .merge(crate::routes::preview::PreviewRoutes::new(auth.clone()).router())
+            .merge(crate::routes::preview_file::PreviewFileRoutes { auth: auth.clone() }.router())
+            .merge(
+                crate::routes::preview_proxy::PreviewProxyRoutes {
+                    auth: auth.clone(),
+                    ports: preview_ports.clone(),
+                }
+                .router(),
+            )
             .merge(
                 super::channels_mount::network_routes(&auth, assessments.clone())
                     .map_err(std::io::Error::other)?
@@ -712,6 +726,7 @@ impl Application {
                 ws_transport: None,
                 repository_hub,
                 consent: settings_chat.then_some(consent),
+                preview_ports,
             }),
             Err(error) => {
                 auth.shutdown().await?;

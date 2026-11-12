@@ -6,9 +6,9 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 
 | Status | Routes | Share |
 |---|---|---|
-| native-tested | 218 | 51.2% |
-| native-untested | 175 | 41.1% |
-| missing | 33 | 7.7% |
+| native-tested | 224 | 52.6% |
+| native-untested | 178 | 41.8% |
+| missing | 24 | 5.6% |
 | total Node HTTP routes | 426 | 100% |
 
 ## Routes
@@ -429,15 +429,15 @@ Status compares method + path shape with Rust `.route(..)` registrations. `nativ
 | POST | `/api/voice/wake-candidate` | routes/voice.ts | missing |
 | GET | `/` | server.ts | native-tested |
 | GET | `/api/browser/screenshot` | server.ts | missing |
-| GET | `/api/dev-file/:encodedPath` | server.ts | missing |
-| GET | `/api/dev-file/:encodedPath/*` | server.ts | missing |
-| ALL | `/api/dev-proxy/:port` | server.ts | missing |
-| ALL | `/api/dev-proxy/:port/*` | server.ts | missing |
+| GET | `/api/dev-file/:encodedPath` | server.ts | native-tested |
+| GET | `/api/dev-file/:encodedPath/*` | server.ts | native-tested |
+| ALL | `/api/dev-proxy/:port` | server.ts | native-tested |
+| ALL | `/api/dev-proxy/:port/*` | server.ts | native-untested |
 | DELETE | `/api/nodes/:id/credential` | server.ts | native-tested |
 | POST | `/api/nodes/:id/credential` | server.ts | native-tested |
-| POST | `/api/preview/access` | server.ts | missing |
+| POST | `/api/preview/access` | server.ts | native-tested |
 | GET | `/api/voice-assistant/status` | server.ts | native-tested |
-| GET | `/preview/:previewToken/file/:encodedPath` | server.ts | missing |
-| GET | `/preview/:previewToken/file/:encodedPath/*` | server.ts | missing |
-| ALL | `/preview/:previewToken/proxy/:port` | server.ts | missing |
-| ALL | `/preview/:previewToken/proxy/:port/*` | server.ts | missing |
+| GET | `/preview/:previewToken/file/:encodedPath` | server.ts | native-tested |
+| GET | `/preview/:previewToken/file/:encodedPath/*` | server.ts | native-untested |
+| ALL | `/preview/:previewToken/proxy/:port` | server.ts | native-tested |
+| ALL | `/preview/:previewToken/proxy/:port/*` | server.ts | native-untested |
