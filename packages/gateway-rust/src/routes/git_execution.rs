@@ -278,6 +278,12 @@ pub(super) async fn authorize(
     }
 }
 
+pub(super) fn request_cancellation() -> Option<ProcessCancellation> {
+    REQUEST_CONTEXT
+        .try_with(|context| context.cancel.clone())
+        .ok()
+}
+
 pub(super) async fn blocking<T: Send + 'static>(
     operation: impl FnOnce() -> T + Send + 'static,
 ) -> io::Result<T> {
@@ -2543,6 +2549,175 @@ mod tests {
         });
         Server { base, task }
     }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn commit_generation_uses_scoped_diff_and_user_model() {
+        use crate::services::users::{Patch, UserSettingsPatch};
+        use axum::{Json, routing::post};
+        let fixture = Fixture::new();
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.name", "Test"],
+            vec!["config", "user.email", "test@example.invalid"],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .current_dir(&fixture.root)
+                    .args(args)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        std::fs::write(fixture.root.join("file"), "before\n").unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(&fixture.root)
+                .args(["add", "file"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(&fixture.root)
+                .args(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "initial"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Value>(1);
+        let model = server(axum::Router::new().route("/chat/completions", post(move |Json(body): Json<Value>| {
+            let tx = tx.clone();
+            async move {
+                let hold = body["messages"][1]["content"].as_str().unwrap().contains("cancel-fixture");
+                tx.send(body).await.unwrap();
+                if hold { std::future::pending::<()>().await; }
+                ([("content-type", "text/event-stream")], "data: {\"choices\":[{\"delta\":{\"content\":\"Update file\"}}]}\n\ndata: [DONE]\n\n")
+            }
+        }))).await;
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let service = UserService::new(&db);
+        let user = service
+            .create_user_with_hash("git-generation", "hash")
+            .unwrap();
+        let mut keys = std::collections::BTreeMap::new();
+        keys.insert("OPENAI_BASE_URL".to_string(), model.base.clone());
+        keys.insert("OPENAI_API_KEY".to_string(), "fixture-key".to_string());
+        service
+            .update_settings(
+                &user.id,
+                UserSettingsPatch {
+                    api_keys: Some(keys),
+                    selected_model: Patch::Set(Some("fixture-model".into())),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let secret = "git-generation-secret-at-least-thirty-two-bytes";
+        let token = sign_auth_token(
+            &AuthUser {
+                id: user.id.clone(),
+                username: user.username,
+            },
+            secret,
+        )
+        .unwrap();
+        let auth = super::super::auth::AuthState::new(db, secret.into()).unwrap();
+        let root = fixture.root.clone();
+        let commands: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                if request.program != "git"
+                    || !matches!(
+                        request.arguments.first().map(String::as_str),
+                        Some("rev-parse" | "diff")
+                    )
+                {
+                    return Err("command denied".into());
+                }
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/git".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(3),
+                    output_limit: 512 * 1024,
+                })
+            })
+        });
+        let captured_cancel = Arc::new(std::sync::Mutex::new(None::<ProcessCancellation>));
+        let recorded_cancel = captured_cancel.clone();
+        let authority: GitAuthority = Arc::new(move |request, cancel| {
+            *recorded_cancel.lock().unwrap() = Some(cancel);
+            let root = root.clone();
+            let command_authority = commands.clone();
+            Box::pin(async move {
+                Ok(GitGrant {
+                    owner: request.owner,
+                    root,
+                    command_authority,
+                    allow_worktree_reads: false,
+                })
+            })
+        });
+        let gateway = server(
+            GitRoutes::new(auth.clone())
+                .with_authority(authority)
+                .router(),
+        )
+        .await;
+        let client = reqwest::Client::new();
+        let request = || {
+            client
+                .post(format!("{}/api/git/generate-commit-message", gateway.base))
+                .bearer_auth(&token)
+                .json(&json!({"cwd":fixture.root}))
+        };
+        assert_eq!(request().send().await.unwrap().status(), 400);
+        assert!(rx.try_recv().is_err());
+        std::fs::write(fixture.root.join("file"), "after\n").unwrap();
+        let response = request().send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"message":"Update file"})
+        );
+        let body = rx.recv().await.unwrap();
+        assert_eq!(body["model"], "fixture-model");
+        assert!(
+            body["messages"][1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("+after")
+        );
+        assert_eq!(
+            client
+                .post(format!("{}/api/git/generate-commit-message", gateway.base))
+                .json(&json!({"cwd":fixture.root}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            401
+        );
+        std::fs::write(fixture.root.join("file"), "cancel-fixture\n").unwrap();
+        let pending_request = request().send();
+        tokio::pin!(pending_request);
+        tokio::select! {
+            result = &mut pending_request => panic!("request completed before cancellation: {result:?}"),
+            body = rx.recv() => assert!(body.is_some()),
+            _ = tokio::time::sleep(Duration::from_secs(5)) => panic!("model was not called"),
+        }
+        captured_cancel.lock().unwrap().as_ref().unwrap().cancel();
+        let cancelled = tokio::time::timeout(Duration::from_secs(3), pending_request)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cancelled.status(), 502);
+        auth.shutdown().await.unwrap();
+    }
+
     #[cfg(unix)]
     #[cfg(unix)]
     #[tokio::test]

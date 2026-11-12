@@ -4424,6 +4424,15 @@ async fn session_loop_is_read_and_controlled_only_by_its_owner() {
             .unwrap();
     }
     let mut ws = WsClient::connect(&base, &token).await;
+    // The HTTP upgrade completes before the server registers the WebSocket. Wait
+    // for a subscription response so the following broadcast cannot race setup.
+    ws.send(serde_json::json!({"type":"subscribe", "sessionId":id}))
+        .await;
+    assert!(
+        ws.until("session.created", Duration::from_secs(5))
+            .await
+            .is_some()
+    );
     let paused: serde_json::Value = control(id, serde_json::json!({"action": "pause"}))
         .await
         .unwrap()

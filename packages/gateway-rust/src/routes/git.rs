@@ -117,6 +117,10 @@ impl GitRoutes {
             .route("/api/git/checkout", post(checkout))
             .route("/api/git/create-branch", post(create_branch))
             .route("/api/git/diff", post(diff))
+            .route(
+                "/api/git/generate-commit-message",
+                post(generate_commit_message),
+            )
             .route("/api/git/diff-stats", post(diff_stats))
             .route("/api/git/file-diffs", post(file_diffs))
             .route("/api/git/discard", post(discard))
@@ -1937,6 +1941,113 @@ async fn diff(State(state): State<GitRoutes>, request: Request) -> Response {
     match result {
         Ok(payload) => ok_json(payload),
         Err(response) => *response,
+    }
+}
+
+/// Generate a message using the authenticated user's configured model and the scoped diff.
+async fn generate_commit_message(State(state): State<GitRoutes>, request: Request) -> Response {
+    use crate::providers::openai_stream::{EventSink, OpenAiHttp};
+    use crate::services::jait_llm::{
+        JaitLlmConfig, ResolveJaitLlmOptions, resolve_jait_llm_config,
+    };
+    use crate::services::jait_models::JaitBackend;
+    use crate::services::users::UserService;
+    use std::{collections::HashMap, sync::Arc};
+
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(response) => return *response,
+    };
+    let body = match json_body(request).await {
+        Ok(body) => body,
+        Err(response) => return *response,
+    };
+    let cwd = match require_cwd(&body) {
+        Ok(cwd) => cwd,
+        Err(response) => return *response,
+    };
+    if body
+        .get("provider")
+        .and_then(Value::as_str)
+        .is_some_and(|p| p != "jait")
+    {
+        return error_response(
+            501,
+            "CLI provider-backed commit generation is not configured",
+        );
+    }
+    let Some(cancel) = execution::request_cancellation() else {
+        return error_response(503, "Git request cancellation is unavailable");
+    };
+    let requested_model = string_field(&body, "model");
+    let patch = match git_task(move || {
+        if has_head(&cwd) {
+            git_exec(&cwd, &["diff", "--no-color", "HEAD"])
+        } else {
+            let staged = git_exec(&cwd, &["diff", "--no-color", "--cached"])?;
+            let unstaged = git_exec(&cwd, &["diff", "--no-color"])?;
+            Ok(format!("{staged}\n{unstaged}"))
+        }
+    })
+    .await
+    {
+        Ok(patch) => patch,
+        Err(response) => return *response,
+    };
+    if patch.trim().is_empty() {
+        return error_response(400, "No changes to generate a commit message for");
+    }
+    let mut diff: String = patch.chars().take(8000).collect();
+    if patch.chars().count() > 8000 {
+        diff.push_str("\n... (truncated)");
+    }
+    let id = user.id;
+    let settings = match state
+        .auth
+        .worker()
+        .run(move |db| Ok(UserService::new(db).get_settings(&id)?))
+        .await
+    {
+        Ok(settings) => settings,
+        Err(_) => return error_response(500, "User settings unavailable"),
+    };
+    let keys: HashMap<String, String> = settings.api_keys.into_iter().collect();
+    let resolved = match resolve_jait_llm_config(ResolveJaitLlmOptions {
+        config: &JaitLlmConfig::default(),
+        api_keys: &keys,
+        requested_model: requested_model
+            .as_deref()
+            .or(settings.selected_model.as_deref()),
+        jait_backend: JaitBackend::parse(&settings.jait_backend),
+        strict_model: true,
+    }) {
+        Ok(config) => config,
+        Err(_) => return error_response(400, "Model configuration is unavailable"),
+    };
+    let http = match OpenAiHttp::configured(
+        &resolved.openai_base_url,
+        &resolved.openai_api_key,
+        "git-commit-message",
+    ) {
+        Ok(http) => http,
+        Err(_) => return error_response(400, "Model configuration is unavailable"),
+    };
+    let sink: EventSink = Arc::new(|_| Box::pin(async { Ok(()) }));
+    let result = http.stream(json!({
+        "model": resolved.openai_model,
+        "stream": true,
+        "max_tokens": 1024,
+        "temperature": 0.3,
+        "messages": [
+            {"role":"system", "content":"Generate a concise imperative git commit message. Keep the subject at most 72 characters. Output only the message."},
+            {"role":"user", "content":format!("Generate a git commit message for these changes:\n\n```diff\n{diff}\n```")}
+        ]
+    }), &cancel, sink).await;
+    match result {
+        Ok(result) if !result.interrupted && !result.content_text.trim().is_empty() => {
+            ok_json(json!({"message": result.content_text.trim()}))
+        }
+        _ => error_response(502, "Commit message generation failed"),
     }
 }
 
