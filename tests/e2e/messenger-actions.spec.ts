@@ -16,7 +16,7 @@ async function mount(page: Page, failHistory = false, reactionCount = 1, reactio
     messages: [
       { ...base, id: '$one', sender: 'Bob', body: 'Incoming message', own: false, timestamp: yesterday + 43_200_000, reactions: [{ key: reactionKey, count: reactionCount, own: false, senders: ['Bob'] }] },
       { ...base, id: '$two', sender: 'Alice', body: 'My message', own: true, timestamp: today + 60_000, reactions: [] },
-      { ...base, id: '$image', sender: 'Bob', body: 'photo.png', own: false, timestamp: today + 120_000, attachment: { url: 'mxc://test/photo', name: 'photo.png', mime: 'image/png', image: true } },
+      { ...base, id: '$image', sender: 'Bob', body: 'photo.png', own: false, timestamp: today + 120_000, attachment: { url: 'mxc://test/photo', name: 'photo.png', mime: 'image/png', image: true }, reactions: [{ key: '❤️', count: 1, own: false, senders: ['Bob'] }] },
     ],
   }
   await page.route('**/api/messenger**', async route => {
@@ -210,3 +210,13 @@ for (const emoji of ['👍', '😂', '🔥']) {
     await expectBadgeInkCentered(reaction, 'reaction', 'emoji-' + emoji.codePointAt(0)!.toString(16))
   })
 }
+
+
+test('image reactions overlap the center of the bottom edge', async ({ page }) => {
+  await mount(page)
+  const image = page.locator('[data-message-id="$image"]')
+  const bubble = (await image.locator('[data-messenger-bubble]').boundingBox())!
+  const reaction = (await image.locator('[data-reaction-pills] button').boundingBox())!
+  expect(Math.abs((reaction.x + reaction.width / 2) - (bubble.x + bubble.width / 2))).toBeLessThan(1)
+  expect(Math.abs((reaction.y + reaction.height / 2) - (bubble.y + bubble.height))).toBeLessThan(1)
+})

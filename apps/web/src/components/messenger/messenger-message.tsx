@@ -173,9 +173,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   // WhatsApp keeps reactions in a small pill row that sits on the bubble's
   // bottom edge instead of inside the timestamp line.
   const hasReactions = !!message.reactions?.length
-  // Text bubbles get extra bottom padding so the pills overlap empty space
-  // rather than the timestamp. Media/emoji bubbles keep their own layout.
-  const pillsOverlap = hasReactions && !emojiOnly && !standaloneImage
+  const pillsOverlap = hasReactions && !emojiOnly
 
   return <article
     ref={root}
@@ -229,7 +227,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
               : 'px-2.5 py-1.5 ' + corner + (channel
                 ? ' border ' + (message.own ? 'border-primary/15 bg-primary/10' : 'border-transparent hover:bg-muted/40')
                 : ' shadow-sm border ' + (message.own ? 'border-primary/20 bg-primary/10' : 'border-border bg-muted')))
-          + (pillsOverlap ? ' pb-4' : '')}
+          }
       >
         {showSenderName && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
         {message.replyTo && <button
@@ -270,7 +268,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       {hasReactions && <div
         data-reaction-pills
         className={'relative z-10 flex max-w-full flex-wrap items-center gap-1 ' +
-          (message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
+          (standaloneImage ? 'justify-center ' : message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
           (pillsOverlap ? '-mt-3 ' : 'mt-1 ')}
       >
         {(message.reactions ?? []).map(reaction => <TooltipHint key={reaction.key} content={reaction.senders.join(', ')}><button

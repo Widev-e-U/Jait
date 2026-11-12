@@ -2,7 +2,7 @@ import { isUserTurn } from '@/lib/conversation-turn'
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { observeConversationRect } from '@/lib/conversation-viewport'
-import { Loader2 } from 'lucide-react'
+import { ChevronUp, Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
@@ -1479,7 +1479,11 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
                     onClick={requestOlderMessages}
                     className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
                   >
-                    <Loader2 className="h-3 w-3 text-primary animate-spin" style={{ animationPlayState: loadMoreTriggeredRef.current ? 'running' : 'paused' }} />
+                    {loading && loadMoreTriggeredRef.current ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-primary" aria-hidden="true" />
+                    ) : (
+                      <ChevronUp className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                    )}
                     <span>Load earlier messages</span>
                   </button>
                 </div>
