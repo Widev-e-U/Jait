@@ -3,7 +3,7 @@ import { expectBadgeInkCentered } from './badge-ink'
 import { expect, test, type Page } from '@playwright/test'
 
 test.use({ screenshot: 'off' })
-async function mount(page: Page, failHistory = false, reactionCount = 1, reactionKey = '❤️') {
+async function mount(page: Page, failHistory = false, reactionCount = 1, reactionKey = '❤️', read = false) {
   const calls: any[] = []
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const today = startOfToday.getTime()
@@ -15,7 +15,7 @@ async function mount(page: Page, failHistory = false, reactionCount = 1, reactio
     rooms: [{ id: '!room:test', name: 'Bob', membership: 'join', unread: 0, encrypted: true, service: 'WhatsApp', network: '', timestamp: 1, preview: 'Hello' }],
     messages: [
       { ...base, id: '$one', sender: 'Bob', body: 'Incoming message', own: false, timestamp: yesterday + 43_200_000, reactions: [{ key: reactionKey, count: reactionCount, own: false, senders: ['Bob'] }] },
-      { ...base, id: '$two', sender: 'Alice', body: 'My message', own: true, timestamp: today + 60_000, reactions: [] },
+      { ...base, id: '$two', sender: 'Alice', body: 'My message', own: true, timestamp: today + 60_000, reactions: [], readBy: read ? [{ userId: '@bob:test', name: 'Bob', timestamp: today + 90_000, exact: true }] : [] },
       { ...base, id: '$image', sender: 'Bob', body: 'photo.png', own: false, timestamp: today + 120_000, attachment: { url: 'mxc://test/photo', name: 'photo.png', mime: 'image/png', image: true }, reactions: [{ key: '❤️', count: 1, own: false, senders: ['Bob'] }] },
     ],
   }
@@ -61,6 +61,20 @@ for (const width of [1280, 390, 320]) {
   })
 }
 
+test('Outgoing message status uses compact checks and retains read details', async ({ page }) => {
+  await mount(page)
+  const own = page.locator('[data-message-id="$two"]')
+  await expect(own.getByRole('img', { name: 'Sent', exact: true })).toBeVisible()
+  await expect(own).not.toContainText('Sent')
+  await mount(page, false, 1, '❤️', true)
+  const receipt = own.getByRole('button', { name: 'Read; show receipts' })
+  await expect(receipt).toBeVisible()
+  await expect(own).not.toContainText('Seen')
+  await receipt.click()
+  await expect(page.getByText('Bob', { exact: true }).last()).toBeVisible()
+  await expect(page.getByText(/Read at/)).toBeVisible()
+})
+
 test('React, remove reaction, and edit own message', async ({ page }) => {
   const calls = await mount(page)
   const own = page.locator('[data-message-id="$two"]')
@@ -96,19 +110,22 @@ test('Reaction row opens at the pointer and on a stationary finger hold', async 
   await mount(page)
   const own = page.locator('[data-message-id="$two"]')
   const bar = page.getByRole('toolbar', { name: 'Message reactions' })
-  await own.hover()
-  await expect(bar).toHaveCount(0)
+  await own.locator('p').last().hover()
+  await expect(bar).toBeVisible()
+  await expect(page.getByLabel('Message actions')).toContainText('Forward')
+  await page.keyboard.press('Escape')
   const body = own.locator('p').last()
   const box = (await body.boundingBox())!
   await body.click({ button: 'right', position: { x: 5, y: 5 } })
   await expect(bar).toBeVisible()
-  const barBox = (await bar.boundingBox())!
+  const barBox = (await page.locator('[data-reaction-bar]').boundingBox())!
   expect(Math.abs(barBox.x - Math.max(4, Math.min(box.x + 5, (page.viewportSize()?.width ?? 1280) - 242)))).toBeLessThan(3)
   expect(Math.abs(barBox.y - (box.y + 5))).toBeLessThan(3)
   await expect(bar.getByRole('button')).toHaveCount(7)
   await page.keyboard.press('Escape')
   await expect(bar).toHaveCount(0)
 
+  await page.mouse.move(0, 0)
   const incoming = page.locator('[data-message-id="$one"] p').last()
   await incoming.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 100 })
   await incoming.dispatchEvent('pointermove', { pointerType: 'touch', clientX: 100, clientY: 120 })
@@ -119,6 +136,29 @@ test('Reaction row opens at the pointer and on a stationary finger hold', async 
   await incoming.dispatchEvent('pointerup', { pointerType: 'touch' })
   await page.keyboard.press('Escape')
   await expect(bar).toHaveCount(0)
+})
+
+
+test('Reply actions and a right swipe focus the message editor', async ({ page }) => {
+  await mount(page)
+  const incoming = page.locator('[data-message-id="$one"]')
+  const editor = page.getByRole('textbox', { name: 'Message', exact: true })
+  await incoming.getByRole('button', { name: 'Message options' }).click()
+  await page.getByRole('menuitem', { name: 'Reply', exact: true }).click()
+  await expect(page.locator('[data-reply-preview]')).toContainText('Incoming message')
+  await expect(editor).toBeFocused()
+  await page.getByRole('button', { name: 'Cancel reply' }).click()
+  const body = incoming.locator('p').last()
+  await body.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 100, clientY: 100 })
+  await body.dispatchEvent('pointermove', { pointerType: 'touch', clientX: 180, clientY: 102 })
+  await body.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 180, clientY: 102 })
+  await expect(page.locator('[data-reply-preview]')).toContainText('Incoming message')
+  await expect(editor).toBeFocused()
+  await page.getByRole('button', { name: 'Cancel reply' }).click()
+  await body.hover()
+  await expect(page.getByLabel('Message actions')).toBeVisible()
+  await page.getByLabel('Message actions').getByRole('button', { name: 'Reply', exact: true }).click()
+  await expect(editor).toBeFocused()
 })
 
 test('Chat options remove conversation with clear confirmation', async ({ page }) => {

@@ -375,7 +375,8 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                     groupEnd={groupPositions[index]?.end ?? true}
                     onReply={target => {
                       setReplies(current => ({ ...current, [room.id]: { id: target.id, sender: target.sender, body: target.body.slice(0, 300) } }))
-                      requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-messenger-composer] textarea, textarea[aria-label]')?.focus())
+                      composerRef.current?.focus()
+                      requestAnimationFrame(() => composerRef.current?.focus())
                     }}
                     avatar={{ name: message.sender, ...(room.peer && room.peer.userId === message.senderId ? { presence: room.peer.presence } : {}), ...((message.senderAvatarUrl || (room.peer && room.peer.userId === message.senderId ? room.peer.avatarUrl : undefined)) ? { mxcUrl: message.senderAvatarUrl || room.peer?.avatarUrl } : {}) }}
                   />
