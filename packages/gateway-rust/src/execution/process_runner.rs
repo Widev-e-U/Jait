@@ -1162,7 +1162,12 @@ mod captured_tests {
                             .and_then(|(_, tail)| tail.chars().next())
                             == Some('Z')
                     }
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => true,
+                    Err(error)
+                        if error.kind() == io::ErrorKind::NotFound
+                            || error.raw_os_error() == Some(libc::ESRCH) =>
+                    {
+                        true
+                    }
                     Err(error) => panic!("cannot inspect descendant: {error}"),
                 };
                 if stopped {

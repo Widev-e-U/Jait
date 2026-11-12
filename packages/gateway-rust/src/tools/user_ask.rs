@@ -77,6 +77,19 @@ fn normalize(question: AskQuestion) -> Value {
     }
     result
 }
+// A dropped direct tool call must not leave an unanswerable prompt behind.
+// Resumable MCP calls deliberately retain their request across waits instead.
+struct DirectQuestionGuard {
+    service: UserQuestionService,
+    id: String,
+    user_id: Option<String>,
+}
+impl Drop for DirectQuestionGuard {
+    fn drop(&mut self) {
+        self.service.cancel(&self.id, self.user_id.as_deref());
+    }
+}
+
 pub async fn execute(
     service: &UserQuestionService,
     input: UserAskInput,
@@ -125,6 +138,11 @@ pub async fn execute(
         return wait_for_answer(service, &request_id, context).await;
     }
     let handle = service.ask(request);
+    let _guard = DirectQuestionGuard {
+        service: service.clone(),
+        id: handle.id.clone(),
+        user_id: context.user_id.clone(),
+    };
     match handle.result.await {
         Ok(Some(result)) => {
             json!({"ok":true,"message":"User answered the question request.","data":result})
@@ -162,5 +180,48 @@ async fn wait_for_answer(
             "ok":false,
             "message":"The user cancelled the question request."
         }),
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn dropping_direct_call_removes_pending_question() {
+        let service = UserQuestionService::default();
+        let task_service = service.clone();
+        let task = tokio::spawn(async move {
+            execute(
+                &task_service,
+                UserAskInput {
+                    questions: vec![AskQuestion {
+                        id: "q".into(),
+                        header: "Question".into(),
+                        question: "Proceed?".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                &AskContext {
+                    session_id: "session".into(),
+                    user_id: Some("owner".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        assert_eq!(
+            service.list_pending(Some("session"), Some("owner")).len(),
+            1
+        );
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(
+            service
+                .list_pending(Some("session"), Some("owner"))
+                .is_empty()
+        );
     }
 }
