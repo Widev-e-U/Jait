@@ -763,34 +763,37 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                 .and_then(|unsigned| unsigned.get("jaitEncrypted"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let reply_target = path(&event.content, &["m.relates_to", "m.in_reply_to", "event_id"])
-                .and_then(Value::as_str);
+            let reply_target = path(
+                &event.content,
+                &["m.relates_to", "m.in_reply_to", "event_id"],
+            )
+            .and_then(Value::as_str);
             let is_reply = reply_target.is_some();
             let reply_to = reply_target.and_then(|target| {
-                    let original = originals.get(target)?;
-                    let target_sender = original.sender.clone().unwrap_or_default();
-                    let name = room
-                        .and_then(|room| room.member(&target_sender))
-                        .and_then(|member| text_at(&member.content, &["displayname"]))
-                        .unwrap_or(target_sender);
-                    let quoted = if original.kind == "m.room.encrypted" {
-                        UNABLE_TO_DECRYPT.to_string()
-                    } else {
-                        let source = edits
-                            .get(target)
-                            .and_then(|edit| path(&edit.content, &["m.new_content"]))
-                            .unwrap_or(&original.content);
-                        strip_reply_fallback(&text_at(source, &["body"]).unwrap_or_default())
-                            .chars()
-                            .take(300)
-                            .collect()
-                    };
-                    Some(MessageReply {
-                        id: target.to_string(),
-                        sender: truncate_name(&name),
-                        body: quoted,
-                    })
-                });
+                let original = originals.get(target)?;
+                let target_sender = original.sender.clone().unwrap_or_default();
+                let name = room
+                    .and_then(|room| room.member(&target_sender))
+                    .and_then(|member| text_at(&member.content, &["displayname"]))
+                    .unwrap_or(target_sender);
+                let quoted = if original.kind == "m.room.encrypted" {
+                    UNABLE_TO_DECRYPT.to_string()
+                } else {
+                    let source = edits
+                        .get(target)
+                        .and_then(|edit| path(&edit.content, &["m.new_content"]))
+                        .unwrap_or(&original.content);
+                    strip_reply_fallback(&text_at(source, &["body"]).unwrap_or_default())
+                        .chars()
+                        .take(300)
+                        .collect()
+                };
+                Some(MessageReply {
+                    id: target.to_string(),
+                    sender: truncate_name(&name),
+                    body: quoted,
+                })
+            });
             MessengerMessage {
                 id: event_id,
                 sender: truncate_name(&sender_name),
