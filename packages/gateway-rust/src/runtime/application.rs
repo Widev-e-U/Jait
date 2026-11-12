@@ -274,6 +274,7 @@ pub struct Application {
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
     repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
+    questions: crate::services::input_requests::UserQuestionService,
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
 }
@@ -386,6 +387,31 @@ impl Application {
         let consent = crate::security::consent_manager::ConsentManager::default();
         // Network Git prompts go through the same queue and need the owner's approval.
         let git_network = super::git_network::NetworkGuard::new(consent.clone());
+        let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
+        let question_observer = |kind: &'static str| {
+            let hub = repository_hub.clone();
+            Arc::new(
+                move |request: crate::services::input_requests::InputRequest| {
+                    if let Some(owner) =
+                        request.user_id.as_deref().filter(|owner| !owner.is_empty())
+                        && let Ok(slot) = hub.lock()
+                        && let Some(hub) = slot.as_ref()
+                    {
+                        let payload = if kind == "user-question.resolved" {
+                            serde_json::json!({"id": request.id, "sessionId": request.session_id, "status": request.status})
+                        } else {
+                            serde_json::json!(request)
+                        };
+                        hub.broadcast_to_user_session(owner, &request.session_id, kind, payload);
+                    }
+                },
+            ) as crate::services::input_requests::Observer
+        };
+        let questions = crate::services::input_requests::UserQuestionService::new(
+            crate::time::default_clock(),
+            Some(question_observer("user-question.requested")),
+            Some(question_observer("user-question.resolved")),
+        );
         // The settings factory needs the opened auth state, so it is built here on request.
         let factory = match (factory, settings_chat) {
             (Some(factory), _) => Some(factory),
@@ -395,11 +421,11 @@ impl Application {
                     consent.clone(),
                     config.project_root.clone(),
                 )
-                .with_acp(super::chat_settings::SettingsChatFactory::acp_from_env()),
+                .with_acp(super::chat_settings::SettingsChatFactory::acp_from_env())
+                .with_questions(questions.clone()),
             ) as Arc<dyn ChatFactory>),
             (None, false) => None,
         };
-        let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
         let repository_events: crate::routes::repositories::RepositoryEventSink = {
             let hub = repository_hub.clone();
             Arc::new(move |owner, kind, payload| {
@@ -483,7 +509,7 @@ impl Application {
             .merge(
                 UserQuestionRoutes {
                     auth: auth.clone(),
-                    questions: Default::default(),
+                    questions: questions.clone(),
                 }
                 .router(),
             )
@@ -756,6 +782,7 @@ impl Application {
                 ws_transport: None,
                 repository_hub,
                 consent: settings_chat.then_some(consent),
+                questions,
                 preview_ports,
                 live_view_ports,
             }),
@@ -819,6 +846,11 @@ impl Application {
         if self.ws_transport.is_some() {
             return Err("websocket hub already mounted".into());
         }
+        config.questions = Some(self.questions.clone());
+        config.session_authority = Some(Arc::new(crate::ws_user_authority::WsUserAuthority::new(
+            self.auth.worker(),
+            authority_timeout,
+        )));
         config.user_authority = Some(Arc::new(crate::ws_user_authority::WsUserAuthority::new(
             self.auth.worker(),
             authority_timeout,

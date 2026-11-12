@@ -6968,3 +6968,67 @@ async fn project_repository_assignment_enforces_ownership_and_is_idempotent() {
     let _ = task.await;
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn question_requests_are_mounted_and_require_authentication() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+    let url = format!("{base}/api/user-questions/requests");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 401);
+    let token = token(&client, &base).await;
+    let response = client.get(&url).bearer_auth(token).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["requests"], serde_json::json!([]));
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn websocket_session_subscribe_requires_owned_session() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let response = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+    let session: serde_json::Value = response.json().await.unwrap();
+    let id = session["id"].as_str().unwrap();
+    let mut socket = WsClient::connect(&base, &token).await;
+    socket
+        .send(serde_json::json!({"type":"subscribe", "sessionId":"not-owned-or-present"}))
+        .await;
+    let denied = socket.until("error", Duration::from_secs(5)).await.unwrap();
+    assert_eq!(denied["payload"]["code"], "SESSION_FORBIDDEN");
+    socket
+        .send(serde_json::json!({"type":"subscribe", "sessionId":id}))
+        .await;
+    let accepted = socket
+        .until("session.created", Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(accepted["sessionId"], id);
+    assert_eq!(accepted["payload"]["subscribed"], true);
+    drop(socket);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}

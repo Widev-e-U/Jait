@@ -24,6 +24,27 @@ impl WsUserAuthority {
         Self { database, timeout }
     }
 
+    /// Check current ownership through the same sessions table used by HTTP routes.
+    pub async fn session_owned(&self, user_id: &str, session_id: &str) -> bool {
+        if user_id.is_empty() || session_id.is_empty() || self.timeout.is_zero() {
+            return false;
+        }
+        let user_id = user_id.to_owned();
+        let session_id = session_id.to_owned();
+        matches!(
+            tokio::time::timeout(
+                self.timeout,
+                self.database.run(move |db| {
+                    Ok(crate::services::sessions::SessionService::new(db)
+                        .get(&session_id, Some(&user_id))?
+                        .is_some())
+                })
+            )
+            .await,
+            Ok(Ok(true))
+        )
+    }
+
     /// Returns true only when the exact ID is present and the check completes
     /// successfully before the deadline. Invalid IDs, overload and errors deny.
     pub async fn user_exists(&self, user_id: &str) -> bool {
@@ -83,6 +104,28 @@ mod tests {
         assert!(!authority.user_exists("alice").await);
         db.shutdown().await.unwrap();
         assert!(!authority.user_exists("alice").await);
+    }
+
+    #[tokio::test]
+    async fn session_ownership_is_current_and_fails_closed() {
+        let db = worker(true);
+        db.run(|db| {
+            db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);")?;
+            Ok(())
+        }).await.unwrap();
+        let authority = WsUserAuthority::new(db.clone(), Duration::from_secs(2));
+        assert!(authority.session_owned("alice", "s").await);
+        assert!(!authority.session_owned("bob", "s").await);
+        assert!(!authority.session_owned("", "s").await);
+        db.run(|db| {
+            db.execute("DELETE FROM sessions WHERE id = ?1", ["s"])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(!authority.session_owned("alice", "s").await);
+        db.shutdown().await.unwrap();
+        assert!(!authority.session_owned("alice", "s").await);
     }
 
     #[tokio::test]

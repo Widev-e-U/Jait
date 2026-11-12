@@ -188,6 +188,51 @@ mod cancellation_tests {
     use super::*;
 
     #[tokio::test]
+    async fn shared_service_rejects_other_user_and_delivers_answer() {
+        let service = UserQuestionService::default();
+        let tool_service = service.clone();
+        let task = tokio::spawn(async move {
+            execute(
+                &tool_service,
+                UserAskInput {
+                    questions: vec![AskQuestion {
+                        id: "q".into(),
+                        header: "Question".into(),
+                        question: "Proceed?".into(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                &AskContext {
+                    session_id: "session".into(),
+                    user_id: Some("owner".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            service
+                .list_pending(Some("session"), Some("other"))
+                .is_empty()
+        );
+        let pending = service.list_pending(Some("session"), Some("owner"));
+        assert_eq!(pending.len(), 1);
+        let answer = json!({"answers": {"q": {"selected": ["yes"]}}});
+        assert!(!service.submit(&pending[0].id, answer.clone(), Some("other")));
+        assert!(service.submit(&pending[0].id, answer.clone(), Some("owner")));
+        let result = task.await.unwrap();
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["data"], answer);
+        assert!(
+            service
+                .list_pending(Some("session"), Some("owner"))
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
     async fn dropping_direct_call_removes_pending_question() {
         let service = UserQuestionService::default();
         let task_service = service.clone();

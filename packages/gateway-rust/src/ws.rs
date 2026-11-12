@@ -790,6 +790,11 @@ enum DeliveryScope {
         generation: u64,
         requires_auth: bool,
     },
+    OwnerSessions {
+        user_id: String,
+        session_ids: Vec<String>,
+        generation: u64,
+    },
     Session {
         user_id: String,
         session_id: String,
@@ -909,6 +914,8 @@ pub struct WsHubConfig {
     /// fail, or report a missing user deny, and public denials keep the
     /// existing wording. When unset the hub stays in-memory only.
     pub user_authority: Option<Arc<dyn WsUserAuthorityCheck>>,
+    pub questions: Option<crate::services::input_requests::UserQuestionService>,
+    pub session_authority: Option<Arc<crate::ws_user_authority::WsUserAuthority>>,
 }
 
 impl std::fmt::Debug for WsHubConfig {
@@ -937,6 +944,8 @@ impl Default for WsHubConfig {
             dispatcher: Arc::new(OfflineNodes),
             authorizer: None,
             user_authority: None,
+            questions: None,
+            session_authority: None,
         }
     }
 }
@@ -1173,6 +1182,23 @@ impl WsHub {
         })
     }
 
+    /// Send a session-labelled event to the owning user, including clients not bound to that session.
+    pub fn broadcast_to_user_session(
+        &self,
+        user_id: &str,
+        session_id: &str,
+        kind: &str,
+        payload: Value,
+    ) -> usize {
+        self.fan_out_scoped(envelope(kind, Some(session_id), payload), |client| {
+            (client.user_id.as_deref() == Some(user_id)).then(|| DeliveryScope::OwnerSessions {
+                user_id: user_id.to_owned(),
+                session_ids: vec![session_id.to_owned()],
+                generation: client.generation,
+            })
+        })
+    }
+
     /// Mirror of `broadcastAll`: every authorized client on the hub.
     ///
     /// `broadcastAll` additionally applies `canAccessSession` when the event
@@ -1227,6 +1253,15 @@ impl WsHub {
                 client.generation == *generation
                     && (!requires_auth || Self::credential_current(client))
             }
+            DeliveryScope::OwnerSessions {
+                user_id,
+                generation,
+                ..
+            } => {
+                Self::credential_current(client)
+                    && client.generation == *generation
+                    && client.user_id.as_ref() == Some(user_id)
+            }
             DeliveryScope::Session {
                 user_id,
                 session_id,
@@ -1273,11 +1308,22 @@ impl WsHub {
             // resource and terminal access require an explicit authority.
             return matches!(
                 scope,
-                DeliveryScope::Unscoped { .. } | DeliveryScope::Session { .. }
+                DeliveryScope::Unscoped { .. }
+                    | DeliveryScope::Session { .. }
+                    | DeliveryScope::OwnerSessions { .. }
             );
         };
         match scope {
             DeliveryScope::Unscoped { .. } => true,
+            DeliveryScope::OwnerSessions {
+                user_id,
+                session_ids,
+                ..
+            } => session_ids.iter().all(|session| {
+                authorizer
+                    .can_access_session(user_id, session)
+                    .unwrap_or(false)
+            }),
             DeliveryScope::Session {
                 user_id,
                 session_id,
@@ -1360,6 +1406,38 @@ impl WsHub {
             .is_some_and(|c| c.outbound.same_channel(&sender) && Self::matches_scope(c, scope))
     }
 
+    async fn may_deliver_with_session_authority(
+        &self,
+        client_id: &str,
+        scope: &DeliveryScope,
+    ) -> bool {
+        if !self.may_deliver(client_id, scope) {
+            return false;
+        }
+        if let Some(authority) = &self.config.session_authority {
+            match scope {
+                DeliveryScope::OwnerSessions {
+                    user_id,
+                    session_ids,
+                    ..
+                } => {
+                    for session_id in session_ids {
+                        if !authority.session_owned(user_id, session_id).await {
+                            return false;
+                        }
+                    }
+                }
+                DeliveryScope::Session {
+                    user_id,
+                    session_id,
+                    ..
+                } if !authority.session_owned(user_id, session_id).await => return false,
+                _ => {}
+            }
+        }
+        self.may_deliver(client_id, scope)
+    }
+
     /// `allow_when_unconfigured` mirrors ws.ts: binding a *session* from the `subscribe`
     /// control message refuses only when an access callback exists and denies
     /// (`canAccessSession && !canAccessSession(...)`, L501-513). Resource and terminal
@@ -1433,6 +1511,50 @@ impl WsHub {
 
     pub fn bind_session(&self, client_id: &str, session_id: &str) -> bool {
         self.bind_checked(client_id, session_id, 0, true)
+    }
+    async fn bind_session_with_authority(&self, client_id: &str, session_id: &str) -> bool {
+        let Some(authority) = &self.config.session_authority else {
+            return self.bind_session(client_id, session_id);
+        };
+        if session_id.is_empty() {
+            return false;
+        }
+        let (user_id, generation, sender) = {
+            let inner = self.inner.lock().expect("hub state");
+            let Some(client) = inner.clients.get(client_id) else {
+                return false;
+            };
+            let Some(user) = client
+                .user_id
+                .as_ref()
+                .filter(|_| Self::credential_current(client))
+            else {
+                return false;
+            };
+            (user.clone(), client.generation, client.outbound.clone())
+        };
+        let scope = DeliveryScope::Session {
+            user_id: user_id.clone(),
+            session_id: session_id.into(),
+            generation,
+        };
+        if !self.authorized(&scope) || !authority.session_owned(&user_id, session_id).await {
+            return false;
+        }
+        let mut inner = self.inner.lock().expect("hub state");
+        let Some(client) = inner.clients.get_mut(client_id) else {
+            return false;
+        };
+        if !Self::credential_current(client)
+            || client.generation != generation
+            || client.user_id.as_deref() != Some(&user_id)
+            || !client.outbound.same_channel(&sender)
+        {
+            return false;
+        }
+        client.generation = client.generation.wrapping_add(1);
+        client.session_id = Some(session_id.into());
+        true
     }
     pub fn subscribe(&self, client_id: &str, key: &str) -> bool {
         self.bind_checked(client_id, key, 1, false)
@@ -1800,7 +1922,7 @@ impl WsHub {
                             frame = &mut read => break frame,
                     message = outbound_rx.recv() => {
                         let Some(message) = message else { break 'connection; };
-                        if !self.may_deliver(&client_id, &message.scope) { continue; }
+                        if !self.may_deliver_with_session_authority(&client_id, &message.scope).await { continue; }
                         let text = serde_json::to_string(&message.value).unwrap_or_else(|_| "{}".into());
                         if tokio::select! { result = write_frame(&mut writer, OpCode::Text, text.as_bytes()) => result.is_err(), _ = shutdown.recv() => true, _ = &mut disconnected => true } {
                             break 'connection;
@@ -2105,13 +2227,11 @@ async fn handle_message(
 
     match kind {
         "subscribe" => {
-            if session
-                .as_deref()
-                .is_some_and(|id| hub.bind_session(client_id, id))
-                // Reference: a subscribe without `sessionId` binds nothing and is
-                // still acknowledged with an empty session id.
-                || session.is_none()
-            {
+            let permitted = match session.as_deref() {
+                Some(id) => hub.bind_session_with_authority(client_id, id).await,
+                None => true,
+            };
+            if permitted {
                 let _ = hub.send_to_client(
                     client_id,
                     envelope(
@@ -2132,18 +2252,80 @@ async fn handle_message(
             }
         }
         "resource.subscribe" => {
-            // The reference serves registry snapshots for the root resources and the
-            // browser registry through hub callbacks the native hub does not bind yet
-            // (documented divergence). Any other resource is rejected with this exact
-            // message and no machine code.
+            // Pending questions use the application's shared service. Other root
+            // registry snapshots are not yet wired.
             let resource = payload
                 .get("resource")
                 .and_then(Value::as_str)
                 .unwrap_or("undefined");
-            let _ = hub.send_to_client(
-                client_id,
-                error_message(session.as_deref(), &format!("Unknown resource: {resource}")),
-            );
+            if resource == "root:/pending-questions"
+                && let Some(questions) = &hub.config.questions
+            {
+                // Bind the snapshot to the exact authenticated connection generation.
+                let identity = {
+                    let inner = hub.inner.lock().expect("hub state");
+                    inner.clients.get(client_id).and_then(|client| {
+                        if WsHub::credential_current(client) {
+                            client.user_id.clone().map(|user| (user, client.generation))
+                        } else {
+                            None
+                        }
+                    })
+                };
+                if let Some((user, generation)) = identity {
+                    let mut requests = Vec::new();
+                    for request in questions.list_pending(None, Some(&user)) {
+                        if request.user_id.as_deref() != Some(&user) {
+                            continue;
+                        }
+                        let scope = DeliveryScope::OwnerSessions {
+                            user_id: user.clone(),
+                            session_ids: vec![request.session_id.clone()],
+                            generation,
+                        };
+                        if !hub.authorized(&scope) {
+                            continue;
+                        }
+                        if let Some(authority) = &hub.config.session_authority
+                            && !authority.session_owned(&user, &request.session_id).await
+                        {
+                            continue;
+                        }
+                        requests.push(request);
+                    }
+                    let session_ids = requests
+                        .iter()
+                        .map(|request| request.session_id.clone())
+                        .collect();
+                    let mut inner = hub.inner.lock().expect("hub state");
+                    if let Some(client) = inner.clients.get_mut(client_id)
+                        && client.generation == generation
+                        && WsHub::credential_current(client)
+                        && client.user_id.as_deref() == Some(&user)
+                    {
+                        let result = client.outbound.try_send(OutboundMessage {
+                            value: envelope(
+                                "user-question.pending-snapshot",
+                                Some(""),
+                                json!({"requests": requests}),
+                            ),
+                            scope: DeliveryScope::OwnerSessions {
+                                user_id: user.clone(),
+                                session_ids,
+                                generation,
+                            },
+                        });
+                        if result.is_err() {
+                            inner.clients.remove(client_id);
+                        }
+                    }
+                }
+            } else {
+                let _ = hub.send_to_client(
+                    client_id,
+                    error_message(session.as_deref(), &format!("Unknown resource: {resource}")),
+                );
+            }
         }
         "terminal.subscribe" => {
             let id = parsed
@@ -2240,6 +2422,306 @@ impl WsControlPlane for WsHub {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn question_snapshot_and_events_are_owner_scoped() {
+        use crate::services::input_requests::{QuestionInput, UserQuestionService};
+        let questions = UserQuestionService::default();
+        let alice_request = questions.ask(QuestionInput {
+            session_id: "alice-session".into(),
+            user_id: Some("alice".into()),
+            ..Default::default()
+        });
+        let _bob_request = questions.ask(QuestionInput {
+            session_id: "bob-session".into(),
+            user_id: Some("bob".into()),
+            ..Default::default()
+        });
+        let _unowned_request = questions.ask(QuestionInput {
+            session_id: "unowned".into(),
+            ..Default::default()
+        });
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            questions: Some(questions),
+            ..Default::default()
+        }));
+        let (alice_tx, mut alice_rx) = mpsc::channel(8);
+        let (bob_tx, mut bob_rx) = mpsc::channel(8);
+        hub.register("alice-client", alice_tx);
+        hub.register("bob-client", bob_tx);
+        for (client, user) in [("alice-client", "alice"), ("bob-client", "bob")] {
+            hub.authenticate_client(
+                client,
+                WsIdentity {
+                    user_id: user.into(),
+                    session_id: None,
+                    expires_at: u64::MAX,
+                },
+            );
+        }
+        handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-questions"}}"#,
+        )
+        .await
+        .unwrap();
+        let snapshot = alice_rx.try_recv().unwrap();
+        assert_eq!(snapshot.value["type"], "user-question.pending-snapshot");
+        assert_eq!(
+            snapshot.value["payload"]["requests"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            snapshot.value["payload"]["requests"][0]["id"],
+            alice_request.id
+        );
+        assert_eq!(
+            hub.broadcast_to_user_session(
+                "alice",
+                "alice-session",
+                "user-question.requested",
+                json!({"id":alice_request.id})
+            ),
+            1
+        );
+        let event = alice_rx.try_recv().unwrap();
+        assert_eq!(event.value["sessionId"], "alice-session");
+        assert!(hub.may_deliver("alice-client", &event.scope));
+        assert!(bob_rx.try_recv().is_err());
+        hub.authenticate_client(
+            "alice-client",
+            WsIdentity {
+                user_id: "bob".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        assert!(!hub.may_deliver("alice-client", &event.scope));
+    }
+
+    #[tokio::test]
+    async fn question_delivery_respects_session_denial_and_revocation() {
+        use crate::services::input_requests::{QuestionInput, UserQuestionService};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        struct Authority(AtomicBool);
+        impl WsAuthorizer for Authority {
+            fn can_access_session(&self, user: &str, session: &str) -> Result<bool, String> {
+                Ok(self.0.load(Ordering::SeqCst) && user == "alice" && session == "allowed")
+            }
+            fn can_access_resource(&self, _: &str, _: &str) -> Result<bool, String> {
+                Ok(false)
+            }
+        }
+        let authority = Arc::new(Authority(AtomicBool::new(true)));
+        let questions = UserQuestionService::default();
+        for session in ["allowed", "denied"] {
+            questions.ask(QuestionInput {
+                session_id: session.into(),
+                user_id: Some("alice".into()),
+                ..Default::default()
+            });
+        }
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            questions: Some(questions),
+            authorizer: Some(authority.clone()),
+            ..Default::default()
+        }));
+        let (tx, mut rx) = mpsc::channel(8);
+        hub.register("client", tx);
+        hub.authenticate_client(
+            "client",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        handle_message(
+            &hub,
+            "client",
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-questions"}}"#,
+        )
+        .await
+        .unwrap();
+        let snapshot = rx.try_recv().unwrap();
+        let requests = snapshot.value["payload"]["requests"].as_array().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["sessionId"], "allowed");
+        assert!(hub.may_deliver("client", &snapshot.scope));
+        assert_eq!(
+            hub.broadcast_to_user_session("alice", "denied", "user-question.requested", json!({})),
+            0
+        );
+        assert_eq!(
+            hub.broadcast_to_user_session("alice", "allowed", "user-question.requested", json!({})),
+            1
+        );
+        let event = rx.try_recv().unwrap();
+        assert!(hub.may_deliver("client", &event.scope));
+        authority.0.store(false, Ordering::SeqCst);
+        assert!(!hub.may_deliver("client", &snapshot.scope));
+        assert!(!hub.may_deliver("client", &event.scope));
+        assert_eq!(
+            hub.broadcast_to_user_session("alice", "allowed", "user-question.resolved", json!({})),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn question_delivery_rechecks_database_ownership() {
+        use crate::db::worker::DatabaseWorker;
+        use crate::services::input_requests::{QuestionInput, UserQuestionService};
+        use crate::ws_user_authority::WsUserAuthority;
+        use std::num::NonZeroU16;
+        use std::time::Duration;
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('allowed', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL); INSERT INTO sessions VALUES ('denied', 'bob', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);").unwrap();
+        let db = DatabaseWorker::new(db, NonZeroU16::new(4).unwrap()).unwrap();
+        let questions = UserQuestionService::default();
+        for session in ["allowed", "denied"] {
+            questions.ask(QuestionInput {
+                session_id: session.into(),
+                user_id: Some("alice".into()),
+                ..Default::default()
+            });
+        }
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            questions: Some(questions),
+            session_authority: Some(Arc::new(WsUserAuthority::new(
+                db.clone(),
+                Duration::from_secs(2),
+            ))),
+            ..Default::default()
+        }));
+        let (tx, mut rx) = mpsc::channel(8);
+        hub.register("client", tx);
+        hub.authenticate_client(
+            "client",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        handle_message(
+            &hub,
+            "client",
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-questions"}}"#,
+        )
+        .await
+        .unwrap();
+        let snapshot = rx.try_recv().unwrap();
+        let requests = snapshot.value["payload"]["requests"].as_array().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["sessionId"], "allowed");
+        assert!(
+            hub.may_deliver_with_session_authority("client", &snapshot.scope)
+                .await
+        );
+        hub.broadcast_to_user_session("alice", "allowed", "user-question.requested", json!({}));
+        let event = rx.try_recv().unwrap();
+        assert!(
+            hub.may_deliver_with_session_authority("client", &event.scope)
+                .await
+        );
+        db.run(|db| {
+            db.execute("DELETE FROM sessions WHERE id = ?1", ["allowed"])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(
+            !hub.may_deliver_with_session_authority("client", &snapshot.scope)
+                .await
+        );
+        assert!(
+            !hub.may_deliver_with_session_authority("client", &event.scope)
+                .await
+        );
+        db.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn session_binding_and_delivery_recheck_after_identity_change() {
+        use crate::db::worker::DatabaseWorker;
+        use crate::ws_user_authority::WsUserAuthority;
+        use std::num::NonZeroU16;
+        use std::time::Duration;
+
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);").unwrap();
+        let db = DatabaseWorker::new(connection, NonZeroU16::new(4).unwrap()).unwrap();
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            session_authority: Some(Arc::new(WsUserAuthority::new(
+                db.clone(),
+                Duration::from_secs(5),
+            ))),
+            ..Default::default()
+        }));
+        let (tx, mut rx) = mpsc::channel(8);
+        hub.register("client", tx);
+        let identity = || WsIdentity {
+            user_id: "alice".into(),
+            session_id: None,
+            expires_at: u64::MAX,
+        };
+        hub.authenticate_client("client", identity());
+        assert!(hub.bind_session_with_authority("client", "s").await);
+        hub.broadcast_to_session("s", "test", json!({}));
+        let event = rx.try_recv().unwrap();
+        assert!(
+            hub.may_deliver_with_session_authority("client", &event.scope)
+                .await
+        );
+        db.run(|db| {
+            db.execute("DELETE FROM sessions WHERE id = 's'", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(
+            !hub.may_deliver_with_session_authority("client", &event.scope)
+                .await
+        );
+        db.run(|db| { db.execute("INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL)", [])?; Ok(()) }).await.unwrap();
+
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let worker = db.clone();
+        let blocker = tokio::spawn(async move {
+            worker
+                .run(move |_| {
+                    let _ = started_tx.send(());
+                    release_rx.recv_timeout(Duration::from_secs(5))?;
+                    Ok(())
+                })
+                .await
+        });
+        started_rx.await.unwrap();
+        let binding = hub.bind_session_with_authority("client", "s");
+        tokio::pin!(binding);
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(
+                binding.as_mut().poll(cx).is_pending()
+            ))
+            .await
+        );
+        hub.authenticate_client("client", identity());
+        release_tx.send(()).unwrap();
+        blocker.await.unwrap().unwrap();
+        assert!(!binding.await);
+        assert!(
+            hub.inner.lock().unwrap().clients["client"]
+                .session_id
+                .is_none()
+        );
+        db.shutdown().await.unwrap();
+    }
 
     #[test]
     fn focused_control_interleaves_with_fragmented_message() {

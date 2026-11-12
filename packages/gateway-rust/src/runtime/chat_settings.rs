@@ -29,6 +29,7 @@ pub struct SettingsChatFactory {
     consent: ConsentManager,
     project_root: std::path::PathBuf,
     acp: Option<AcpProviderConfig>,
+    questions: Option<crate::services::input_requests::UserQuestionService>,
 }
 
 impl SettingsChatFactory {
@@ -39,7 +40,16 @@ impl SettingsChatFactory {
             consent,
             project_root,
             acp: None,
+            questions: None,
         }
+    }
+
+    pub fn with_questions(
+        mut self,
+        questions: crate::services::input_requests::UserQuestionService,
+    ) -> Self {
+        self.questions = Some(questions);
+        self
     }
 
     /// Operator-chosen ACP agent. Users opt in with `JAIT_CHAT_PROVIDER=acp` in their saved
@@ -115,8 +125,12 @@ impl ChatFactory for SettingsChatFactory {
                     .map(std::path::PathBuf::from)
                     .filter(|p| p.is_absolute())
                     .unwrap_or_else(|| self.project_root.clone());
-                let (tools, executor) =
-                    super::chat_tools::project_tools(&user.id, &session.id, self.consent.clone())?;
+                let (tools, executor) = super::chat_tools::project_tools_with_questions(
+                    &user.id,
+                    &session.id,
+                    self.consent.clone(),
+                    self.questions.clone(),
+                )?;
                 drop(tools);
                 return Ok(PreparedChat {
                     config: TurnConfig {
@@ -144,8 +158,12 @@ impl ChatFactory for SettingsChatFactory {
                 jait_backend: JaitBackend::parse(&settings.jait_backend),
                 strict_model: true,
             })?;
-            let (tools, executor) =
-                super::chat_tools::project_tools(&user.id, &session.id, self.consent.clone())?;
+            let (tools, executor) = super::chat_tools::project_tools_with_questions(
+                &user.id,
+                &session.id,
+                self.consent.clone(),
+                self.questions.clone(),
+            )?;
             Ok(PreparedChat {
                 config: TurnConfig {
                     model: resolved.openai_model.clone(),

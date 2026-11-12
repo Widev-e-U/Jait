@@ -244,6 +244,15 @@ pub fn project_tools(
     session_id: &str,
     consent: ConsentManager,
 ) -> Result<(Vec<TurnTool>, Arc<ConsentAwareExecutor>), String> {
+    project_tools_with_questions(user_id, session_id, consent, None)
+}
+
+pub fn project_tools_with_questions(
+    user_id: &str,
+    session_id: &str,
+    consent: ConsentManager,
+    questions: Option<crate::services::input_requests::UserQuestionService>,
+) -> Result<(Vec<TurnTool>, Arc<ConsentAwareExecutor>), String> {
     let read_definition = metadata("read")
         .ok_or("file.read definition missing")?
         .clone();
@@ -261,13 +270,21 @@ pub fn project_tools(
     let patch_definition = metadata("patch")
         .ok_or("file.patch definition missing")?
         .clone();
-    let turn_tools = vec![
+    let mut turn_tools = vec![
         turn_tool(&read_definition, "file.read"),
         turn_tool(&write_definition, "file.write"),
         turn_tool(&terminal_definition, "terminal.run"),
         turn_tool(&list_definition, "file.list"),
         turn_tool(&patch_definition, "file.patch"),
     ];
+    let question_context = crate::tools::user_ask::AskContext {
+        session_id: session_id.to_owned(),
+        user_id: Some(user_id.to_owned()),
+        requested_by: None,
+    };
+    if questions.is_some() {
+        turn_tools.push(turn_tool(crate::tools::user_ask::metadata(), "user.ask"));
+    }
     let terminal_definition_for_registry = terminal_definition.clone();
     let (handle_tx, handle_rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
@@ -319,6 +336,34 @@ pub fn project_tools(
                         })
                     }),
                 );
+                if let Some(questions) = questions {
+                    registry.register(
+                        crate::tools::user_ask::metadata().clone(),
+                        Rc::new(move |_definition, input, _ctx| {
+                            let questions = questions.clone();
+                            let context = question_context.clone();
+                            let input = input.value();
+                            Box::pin(async move {
+                                let out = match serde_json::from_value(input) {
+                                    Ok(input) => {
+                                        crate::tools::user_ask::execute(&questions, input, &context)
+                                            .await
+                                    }
+                                    Err(_) => {
+                                        json!({"ok": false, "message": "Invalid user.ask input"})
+                                    }
+                                };
+                                Ok(RegistryResult {
+                                    ok: json!(out["ok"].as_bool().unwrap_or(false)),
+                                    message: Utf16Text::from(
+                                        out["message"].as_str().unwrap_or_default().to_owned(),
+                                    ),
+                                    data: out.get("data").cloned(),
+                                })
+                            })
+                        }),
+                    );
+                }
                 let (owner, handle) =
                     RegistryOwner::new(registry, None, NonZeroUsize::new(8).unwrap());
                 let _ = handle_tx.send(handle);
@@ -350,6 +395,12 @@ pub fn project_tools(
             user_id: user_id.into(),
             session_id: session_id.into(),
             permissions: HashMap::from([
+                permission(
+                    "user.ask",
+                    ConsentLevel::None,
+                    Risk::Low,
+                    "Ask the user a question",
+                ),
                 permission(
                     "file.read",
                     ConsentLevel::None,
@@ -390,4 +441,77 @@ pub fn project_tools(
         delegate,
     );
     Ok((turn_tools, Arc::new(executor)))
+}
+
+#[cfg(test)]
+mod question_integration_tests {
+    use super::*;
+    use crate::security::consent_executor::{
+        ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext,
+    };
+
+    #[tokio::test]
+    async fn settings_dispatcher_shares_owner_scoped_question_service() {
+        let questions = crate::services::input_requests::UserQuestionService::default();
+        let (tools, executor) = project_tools_with_questions(
+            "owner",
+            "session",
+            ConsentManager::default(),
+            Some(questions.clone()),
+        )
+        .unwrap();
+        assert!(tools.iter().any(|tool| tool.name == "user.ask"));
+        let context = ToolExecutionContext {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            action_id: "action".into(),
+            project_root: PathBuf::from("/"),
+            origin: ExecutionOrigin::Agent,
+            runtime_mode: RuntimeMode::Guarded,
+            cancellation: Default::default(),
+            on_output: None,
+        };
+        let task = tokio::spawn(async move {
+            executor
+                .execute(
+                    "user.ask",
+                    &json!({"questions":[{"id":"q","header":"Question","question":"Proceed?"}]}),
+                    &context,
+                    ExecuteOptions::default(),
+                )
+                .await
+                .unwrap()
+        });
+        let request = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if let Some(request) = questions
+                    .list_pending(Some("session"), Some("owner"))
+                    .into_iter()
+                    .next()
+                {
+                    break request;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("dispatcher should create a question");
+        assert!(
+            questions
+                .list_pending(Some("session"), Some("other"))
+                .is_empty()
+        );
+        assert!(!questions.submit(&request.id, json!({"answers":{}}), Some("other")));
+        assert!(questions.submit(
+            &request.id,
+            json!({"answers":{"q":{"selected":["yes"]}}}),
+            Some("owner")
+        ));
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(result.ok, "{}", result.message);
+        assert_eq!(result.data.unwrap()["answers"]["q"]["selected"][0], "yes");
+    }
 }
