@@ -3441,6 +3441,14 @@ async fn git_routes_run_local_operations_only_inside_the_callers_projects() {
 
     let (s, b) = call("/api/git/init", cwd.clone()).await;
     assert_eq!(s, 200, "{b}");
+    let (s, b) = call("/api/git/generate-commit-message", cwd.clone()).await;
+    assert_eq!(s, 400, "empty repository must not contact a model: {b}");
+    let (s, b) = call(
+        "/api/git/generate-commit-message",
+        serde_json::json!({"cwd": dir}),
+    )
+    .await;
+    assert_eq!(s, 403, "generation must enforce project ownership: {b}");
     let (s, b) = call(
         "/api/git/identity",
         serde_json::json!({"cwd": root, "name": "  T  ", "email": "  t@example.com  "}),

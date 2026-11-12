@@ -2701,6 +2701,34 @@ mod tests {
                 .status(),
             401
         );
+        // An unborn branch has no HEAD; staged changes still form the prompt.
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(&fixture.root)
+                .args(["symbolic-ref", "HEAD", "refs/heads/unborn-fixture"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        std::fs::write(fixture.root.join("file"), "initial-staged-fixture\n").unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(&fixture.root)
+                .args(["add", "file"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let response = request().send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body = rx.recv().await.unwrap();
+        assert!(
+            body["messages"][1]["content"]
+                .as_str()
+                .unwrap()
+                .contains("+initial-staged-fixture")
+        );
+
         std::fs::write(fixture.root.join("file"), "cancel-fixture\n").unwrap();
         let pending_request = request().send();
         tokio::pin!(pending_request);
