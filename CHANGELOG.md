@@ -4,6 +4,46 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.972](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.972) — 2026-11-12
+
+- fix(web): toast close button no longer overlaps action buttons; restyle toast actions — 95c2733c
+- chore: commit pending web, email, messenger and gateway work — ecde1c13
+- feat(gateway): replace elevated.run with terminal.run elevated option (sudo via PTY secret prompt, UAC on Windows, per-call consent) — f43daeec
+- feat(gateway-rust): native preview reopen route; regenerate API inventory (227/429 native-tested) — 1da9de00
+- test(gateway-rust): black-box test for preview reopen route mounted through composed binary — 7aae11d3
+- feat(gateway-rust): native browser screenshot route, auth-gated and project-scoped, with black-box test — 56a5512c
+- feat(gateway-rust): native voice wake-candidate route with auth, size/rate limits and System One review; black-box test — 3a6e0d8e
+- feat(gateway-rust): native preview file and owner-scoped dev/preview proxy routes with black-box tests — 3961c3f5
+- docs(gateway-rust): document network git/forge consent model; inventory counts web UI fallback and literal forge test paths — 456e5c8b
+- feat(gateway-rust): consent-gated GitHub forge status/auth/pr-checks routes with read-only gh allowlist and black-box test — 307b0128
+- feat(gateway-rust): per-destination consent for network git fetch/pull/push with black-box test — 4c7302ef
+- feat(gateway-rust): project repository assignment with ownership-change rollback and black-box tests — e6b5218b
+- feat: improve mobile layouts and gateway functionality — bbc70ff4
+- feat(gateway-rust): plan execute, retry-tool and project download routes with black-box tests — 373edfaf
+- feat(gateway-rust): session restart-from route with black-box test — 321b7aab
+- feat(gateway-rust): session approve, steer and trajectory routes with black-box test — dd2fb2b2
+- feat(gateway-rust): session message context-flow and sub-agent history routes with black-box test — 1d0113f0
+- test(gateway-rust): black-box repo, todo, proposal, plan and user-question routes — 1b5ed0b7
+- test(gateway-rust): black-box reminder, trust level and assistant profile item routes — 7c537626
+- test(gateway-rust): black-box consent, session and terminal routes through the composed binary — a6f3904f
+- feat(gateway-rust): wire tool catalog into settings so /api/auth/settings/tools works in the composed binary — dc460a04
+- test(gateway-rust): black-box read routes for auth, consent, calendar, email, filesystem — 85f89097
+- feat(gateway-rust): native git run-stacked-action (commit, commit_push) under command authority — 1169d49c
+- test(gateway-rust): template node credential test paths so inventory counts them — ca746179
+- feat(gateway-rust): native node credential issue/revoke routes mounted on the composition root — 23ade2f4
+- test(gateway-rust): project hierarchy/sessions/state black-box test, restore 400 parity, inventory sees mid() dispatch — 09975839
+- feat(gateway-rust): native thread approve validation and provider-support conflict — 32585b39
+- feat(gateway-rust): native thread steer (stop and restart on the thread session) — 567e1cbb
+- feat(gateway-rust): native thread start, send and resume on the thread session — 4ab14bba
+- docs(gateway-rust): generated API inventory with per-route Rust status — 2cc0e64c
+- feat(gateway-rust): expose consent-gated project tools over /mcp — 838c8b65
+- feat(gateway-rust): mount file.list and file.patch in chat tools with consent — 10945e1f
+- chore(contract): refresh behavior inventory for changed preview and gateway-tools sources — 5c050973
+- feat(messenger): filter chips row, blob cache, service logo updates — 015fcef6
+- feat(browser): keep last page URL and reopen stopped chat browser on demand — 558a1942
+
+Fix overlapping close/Open buttons in toast notifications.
+
 ## [v0.1.971](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.971) — 2026-11-12
 
 - chore: commit pending web, email, messenger and gateway work — ecde1c13
