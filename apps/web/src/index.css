@@ -217,29 +217,61 @@
     color: hsl(var(--toast-error-accent));
   }
 
-  [data-sonner-toast] [data-button],
-  [data-sonner-toast] [data-cancel] {
-    border-radius: calc(var(--radius) - 0.05rem) !important;
-    border: 1px solid hsl(var(--border)) !important;
-    background: hsl(var(--secondary)) !important;
-    color: hsl(var(--secondary-foreground)) !important;
+  /* Reserve a gutter on the right so the close button never sits on top of the action buttons. */
+  [data-sonner-toast][data-styled='true'] {
+    padding-right: 2.5rem !important;
   }
 
+  [data-sonner-toast] [data-button],
+  [data-sonner-toast] [data-cancel] {
+    height: 1.75rem !important;
+    margin: 0 0 0 0.5rem !important;
+    padding: 0 0.625rem !important;
+    border-radius: calc(var(--radius) - 0.125rem) !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    white-space: nowrap;
+  }
+
+  [data-sonner-toast] [data-button] {
+    border: 1px solid transparent !important;
+    background: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+
+  [data-sonner-toast] [data-cancel] {
+    border: 1px solid hsl(var(--border)) !important;
+    background: transparent !important;
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  [data-sonner-toast] [data-cancel]:hover {
+    background: hsl(var(--accent)) !important;
+    color: hsl(var(--accent-foreground)) !important;
+  }
+
+  /* Borderless X pinned top-right, inside the toast (sonner's default hangs it off the corner). */
   [data-sonner-toast] [data-close-button] {
     position: absolute !important;
-    top: 50% !important;
+    top: 0.5rem !important;
     left: auto !important;
-    right: 8px !important;
-    width: 1.25rem !important;
-    min-width: 1.25rem !important;
-    height: 1.25rem !important;
-    min-height: 1.25rem !important;
+    right: 0.5rem !important;
+    width: 1.5rem !important;
+    min-width: 1.5rem !important;
+    height: 1.5rem !important;
+    min-height: 1.5rem !important;
     padding: 0 !important;
-    transform: translateY(-50%) !important;
-    border: 1px solid hsl(var(--border)) !important;
-    border-radius: 9999px !important;
-    background: hsl(var(--secondary)) !important;
+    transform: none !important;
+    border: 0 !important;
+    border-radius: calc(var(--radius) - 0.125rem) !important;
+    background: transparent !important;
     color: hsl(var(--muted-foreground)) !important;
+    opacity: 1 !important;
+  }
+
+  [data-sonner-toast] [data-close-button]:hover {
+    background: hsl(var(--accent)) !important;
+    color: hsl(var(--accent-foreground)) !important;
   }
 
   /* Safe-area inset utilities for devices with camera cutouts / notches */
