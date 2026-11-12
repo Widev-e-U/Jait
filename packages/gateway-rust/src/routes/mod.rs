@@ -71,6 +71,7 @@ pub mod repo_proposals;
 
 pub mod pull_requests;
 
+pub mod browser_screenshot;
 pub mod preview;
 pub mod preview_file;
 pub mod preview_proxy;

@@ -577,6 +577,10 @@ impl Application {
             .merge(crate::routes::preview::PreviewRoutes::new(auth.clone()).router())
             .merge(crate::routes::preview_file::PreviewFileRoutes { auth: auth.clone() }.router())
             .merge(
+                crate::routes::browser_screenshot::BrowserScreenshotRoutes { auth: auth.clone() }
+                    .router(),
+            )
+            .merge(
                 crate::routes::preview_proxy::PreviewProxyRoutes {
                     auth: auth.clone(),
                     ports: preview_ports.clone(),
