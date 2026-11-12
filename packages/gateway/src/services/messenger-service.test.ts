@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { MessengerService, messengerHomeserver } from './messenger-service.js';
 
 function setup() {
@@ -14,7 +16,53 @@ function setup() {
   return { c, room, message };
 }
 
+describe('Messenger assistant access persistence', () => {
+  it('restores enabled and disabled access across gateway restarts', async () => {
+    const directory = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-access-${randomUUID()}`, import.meta.url));
+    try {
+      const service = new MessengerService('test-secret', directory);
+      const connection = (service as any).connection('owner');
+      connection.session = { userId: '@alice:test' };
+      await connection.command({ action: 'assistantAccess', enabled: true });
+      const restarted = new MessengerService('test-secret', directory);
+      const restored = (restarted as any).connection('owner');
+      restored.start = vi.fn(async (session: unknown) => { restored.session = session; });
+      await restarted.resume('owner');
+      expect(restored.assistantAccess).toBe(true);
+      await restored.command({ action: 'assistantAccess', enabled: false });
+      const next = new MessengerService('test-secret', directory);
+      const nextConnection = (next as any).connection('owner');
+      nextConnection.start = vi.fn(async (session: unknown) => { nextConnection.session = session; });
+      await next.resume('owner');
+      expect(nextConnection.assistantAccess).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('Messenger message actions and history', () => {
+  it('uses sender names for direct alerts and prefixes group messages', async () => {
+    vi.useFakeTimers();
+    try {
+      const { c, room } = setup();
+      const notify = vi.fn();
+      c.incoming = () => notify;
+      room.summary = { ...room.summary, name: 'Teams bridge', service: 'Teams' } as any;
+      room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob' } }] as any;
+      const event = { event_id: '$direct', sender: '@bob:test', type: 'm.room.message', origin_server_ts: Date.now(), content: { body: 'Hello' } };
+      (room as any).peer = { userId: '@bob:test' };
+      c.announce(room, event);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(notify).toHaveBeenLastCalledWith('test', expect.objectContaining({ title: 'Bob', body: 'Hello' }));
+      delete (room as any).peer;
+      room.summary.name = 'Team-Chat';
+      c.announce(room, { ...event, event_id: '$group', origin_server_ts: Date.now() });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(notify).toHaveBeenLastCalledWith('test', expect.objectContaining({ title: 'Team-Chat', body: 'Bob: Hello' }));
+    } finally { vi.useRealTimers(); }
+  });
+
   it('projects edits and reactions onto their original message', () => {
     const { c, room } = setup();
     room.events.push({ event_id: '$edit', type: 'm.room.message', sender: '@alice:test', origin_server_ts: 2, content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { msgtype: 'm.text', body: 'changed' } } } as any);
@@ -31,6 +79,12 @@ describe('Messenger message actions and history', () => {
     const messages = c.messages('!room:test');
     expect(messages[0]).toMatchObject({ sender: 'Bob', senderAvatarUrl: 'mxc://test/bob' });
     expect(messages[1]).not.toHaveProperty('senderAvatarUrl');
+  });
+  it('projects reply references after a message is sent, including edits', () => {
+    const { c, room, message } = setup();
+    room.events.push({ ...message('$reply'), content: { body: 'reply', 'm.relates_to': { 'm.in_reply_to': { event_id: '$one' } } } });
+    room.events.push({ event_id: '$edit', type: 'm.room.message', sender: room.events[0].sender, content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { body: 'updated' } } } as any);
+    expect(c.messages('!room:test')[1].replyTo).toEqual({ id: '$one', sender: room.events[0].sender, body: 'updated' });
   });
   it('ignores forged edits and redacted reactions', () => {
     const { c, room } = setup();

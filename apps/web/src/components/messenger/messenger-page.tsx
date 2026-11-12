@@ -323,7 +323,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
           search={search}
           onSearch={setSearch}
           />
-          <MessengerFilterBar filter={chatFilter} onFilter={setChatFilter} unreadCount={unreadCount} />
+          <MessengerFilterBar filter={chatFilter} onFilter={setChatFilter} unreadCount={unreadCount} service={service} onService={item => setService(item === 'All' ? '' : item)} />
           <div className="min-h-0 flex-1 overflow-y-auto">
             {search && <div aria-label="Message search results" className="border-b">
               {searchResults.map(item => <button key={item.roomId + item.message.id} onClick={() => selectRoom(item.roomId)} className="block w-full space-y-1 border-b p-3 text-left text-sm hover:bg-muted/60"><span className="block truncate font-medium">{item.roomName}</span><span className="line-clamp-2 break-words text-xs text-muted-foreground">{item.message.body.slice(0, 300)}</span></button>)}

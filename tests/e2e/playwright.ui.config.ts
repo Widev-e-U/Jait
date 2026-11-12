@@ -27,6 +27,7 @@ export default defineConfig({
     'messenger-tools.spec.ts',
     'messenger-list.spec.ts',
     'messenger-status.spec.ts',
+    'teams-tenant.spec.ts',
     'agent-controls.spec.ts',
     'team-scroll.spec.ts',
     'automation-refresh.spec.ts',

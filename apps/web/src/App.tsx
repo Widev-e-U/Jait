@@ -2783,7 +2783,7 @@ function App() {
     setManagerProvider(resolvedManagerProvider)
     if (!cachedProjectManagerProvider) saveProjectManagerProviderSelection(projectId, resolvedManagerProvider)
 
-    setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
+    setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project, Boolean(nextSessionId)))
     setProjectFiles([])
     setActiveProjectFileId(null)
     handleAvailableFilesForMentionChange([])
@@ -2799,7 +2799,7 @@ function App() {
     // response rather than relying on the WS `project.open` event, which is
     // session-scoped and may arrive before the WS re-subscribes to the new session.
     // A draft has no chat yet, and the gateway scopes an open project to a chat.
-    if (project.rootPath && !draft) {
+    if (project.rootPath && nextSessionId) {
       try {
         const openPanel = resolveProjectPanelOpenAfterChatSelection({
           isMobile,
@@ -2809,6 +2809,7 @@ function App() {
         const res = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(20_000),
           body: JSON.stringify({
             path: project.rootPath,
             sessionId: nextSessionId,
@@ -2837,7 +2838,9 @@ function App() {
         if (requestId !== projectSwitchRequestRef.current) return
         setActiveProjectIfChanged(null)
         console.error('Failed to open project:', e)
-        toast.error('Failed to open project files.')
+        toast.error(e instanceof Error && e.name === 'TimeoutError'
+          ? 'Opening project files timed out. Try again.'
+          : 'Failed to open project files.')
       }
     }
   }, [projects, loadProject, switchProject, startProjectDraft, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)

@@ -815,6 +815,13 @@ export function ProviderModelSelector({
   }, [favoriteModels, instanceSections, modelRows])
 
   const modelListRef = useRef<HTMLDivElement | null>(null)
+  // The popover mounts its portal after opening; notify the virtualizer when
+  // the scroll element appears instead of waiting for another state update.
+  const [modelListElement, setModelListElement] = useState<HTMLDivElement | null>(null)
+  const attachModelList = useCallback((element: HTMLDivElement | null) => {
+    modelListRef.current = element
+    setModelListElement(element)
+  }, [])
   // Stable per-row keys: a row's measurement must follow the row when the list
   // changes shape (favorite toggled, group collapsed, search filtered). With
   // index keys the size of e.g. the Favorites header sticks to slot 0 and every
@@ -823,7 +830,7 @@ export function ProviderModelSelector({
   const modelRowKey = useCallback((index: number) => modelRows[index]?.key ?? index, [modelRows])
   const modelVirtualizer = useVirtualizer({
     count: modelRows.length,
-    getScrollElement: () => modelListRef.current,
+    getScrollElement: () => modelListElement,
     // Header rows have a 24px icon and equal vertical padding (44px tall). Keeping the
     // estimate at/above the real height means rows never get positioned on top of
     // a group header while measurements settle.
@@ -1402,7 +1409,7 @@ export function ProviderModelSelector({
       </div>
       <div className="flex min-h-0 flex-1">
         <div
-          ref={modelListRef}
+          ref={attachModelList}
           id="model-selector-listbox"
           role="listbox"
           aria-labelledby="model-selector-heading"

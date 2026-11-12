@@ -16,13 +16,15 @@ test('todos sort by creation date and remember the selection without replacing m
     sessionStorage.setItem('jait-auth-token', token)
     localStorage.setItem('token', token)
     localStorage.setItem('jait-gateway-url', api)
-    localStorage.setItem('jait.todo.order.v1', JSON.stringify({ 'sort-repo': ['middle', 'old', 'new'] }))
+    if (!localStorage.getItem('jait.todo.order.v1')) {
+      localStorage.setItem('jait.todo.order.v1', JSON.stringify({ 'sort-repo': ['middle', 'old', 'new'] }))
+    }
   }, { token, api: API_URL })
   await page.route('**/api/repos', (route) => route.fulfill({ json: { repos: [
     { id: 'sort-repo', name: 'Sorting test', localPath: '/tmp/sort-repo', defaultBranch: 'main' },
   ] } }))
   await page.route('**/api/repos/sort-repo/todos', (route) => route.fulfill({ json: { todos: [
-    { id: 'new', createdAt: '2026-10-03T12:00:00Z', status: 'done' },
+    { id: 'new', createdAt: '2026-10-03T12:00:00Z', status: 'open' },
     { id: 'old', createdAt: '2026-10-01T12:00:00Z', status: 'open' },
     { id: 'middle', createdAt: '2026-10-02T12:00:00Z', status: 'in_progress' },
   ].map((todo) => ({
@@ -55,6 +57,24 @@ test('todos sort by creation date and remember the selection without replacing m
   await page.getByRole('option', { name: 'Manual order' }).click()
   await expect.poll(order).toEqual(['middle', 'old', 'new'])
   await expect(page.getByLabel('Drag to reorder', { exact: true })).toHaveCount(3)
+
+  const handle = rows.first().getByLabel('Drag to reorder', { exact: true })
+  const handleBox = await handle.boundingBox()
+  const secondBox = await rows.nth(1).boundingBox()
+  const lastBox = await rows.nth(2).boundingBox()
+  if (!handleBox || !secondBox || !lastBox) throw new Error('Todo rows are not visible')
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handleBox.x + handleBox.width / 2, secondBox.y + secondBox.height * 0.75, { steps: 5 })
+  await expect.poll(order).toEqual(['old', 'middle', 'new'])
+  await page.mouse.move(handleBox.x + handleBox.width / 2, lastBox.y + lastBox.height * 0.9, { steps: 5 })
+  await expect.poll(order).toEqual(['old', 'new', 'middle'])
+  await page.mouse.up()
+  await expect.poll(order).toEqual(['old', 'new', 'middle'])
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('jait.todo.order.v1') || '{}')['sort-repo'])).toEqual(['old', 'new', 'middle'])
+  await page.reload()
+  await page.getByRole('button', { name: 'Todo', exact: true }).click()
+  await expect.poll(order).toEqual(['old', 'new', 'middle'])
 })
 
 test('todo pagination keeps selection on its page and resets when filtering on mobile', async ({ page, request }) => {

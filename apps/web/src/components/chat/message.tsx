@@ -1057,7 +1057,7 @@ function MessageInner({
                                 ) : segment.type === 'file' ? (
                                   <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
@@ -1066,7 +1066,7 @@ function MessageInner({
                                 ) : segment.type === 'project' ? (
                                   <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <FolderIcon name={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
@@ -1075,7 +1075,7 @@ function MessageInner({
                                 ) : segment.type === 'terminal' ? (
                                   <TooltipHint key={`${segment.terminalId}-${index}`} content={segment.projectRoot ? `${segment.terminalId} · ${segment.projectRoot}` : segment.terminalId}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
@@ -1084,7 +1084,7 @@ function MessageInner({
                                 ) : segment.type === 'skill' ? (
                                   <TooltipHint key={`${segment.id}-${index}`} content={'/' + segment.id}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">/{segment.name}</span>
@@ -1093,7 +1093,7 @@ function MessageInner({
                                 ) : segment.type === 'chat' ? (
                                   <TooltipHint key={`chat-${segment.sessionId}-${index}`} content={`Chat: ${segment.sessionId}`}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>

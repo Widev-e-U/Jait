@@ -4,6 +4,7 @@ import { evaluateDecision, systemOneEnabled, type DecisionQuestion } from "./sys
 import type { SessionService } from "./sessions.js";
 import { backgroundCommandMonitor } from "./background-command-monitor.js";
 import type { WsControlPlane } from "../ws.js";
+import { sessionWaits } from "./session-waits.js";
 
 type LoopCheckInput = {
   revision: number; outcome: "continue" | "complete" | "waiting";
@@ -11,7 +12,7 @@ type LoopCheckInput = {
   executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }>;
 };
 const MAX_LOOP_TURNS = 50;
-const MAX_STALLED_CHECKS = 3;
+const COMPLETION_NEXT_MESSAGE = "The acceptance criteria are verified. Present the result and use user.ask to ask the user for the next instruction. Do not invent additional work or stop the loop yourself.";
 
 export class ChatLoopService {
   onWake?: (sessionId: string) => void;
@@ -65,12 +66,14 @@ export class ChatLoopService {
     return this.save(sessionId, { ...loop, status: "paused", summary: summary.slice(0, 8000) }, userId);
   }
 
-  resumeAfterAnswer(sessionId: string, requestId: string, userId?: string): ChatLoop | null {
+  resumeAfterAnswer(sessionId: string, requestId?: string, userId?: string): ChatLoop | null {
     const loop = this.get(sessionId, userId);
     if (loop?.status !== "waiting") return loop;
     return this.save(sessionId, {
       ...loop, status: "running", checkedIteration: -1,
-      nextMessage: `The user submitted an answer. Retrieve it with user.ask using requestId=${JSON.stringify(requestId)} before taking dependent actions, then continue the goal.`,
+      nextMessage: requestId
+        ? `The user submitted an answer. Retrieve it with user.ask using requestId=${JSON.stringify(requestId)} before taking dependent actions, then continue the goal.`
+        : "The user replied directly in chat. Read the latest instruction before continuing the goal.",
     }, userId);
   }
 
@@ -81,6 +84,9 @@ export class ChatLoopService {
     }
     if (!["continue", "complete", "waiting"].includes(input.outcome)) throw new Error("Invalid loop outcome");
     if (typeof input.summary !== "string" || !input.summary.trim()) throw new Error("A progress summary is required");
+    if (input.outcome === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question" && wait.blocking)) {
+      throw new Error("Waiting requires a pending user.ask Q&A request in this chat");
+    }
     if (input.outcome === "continue" && !input.nextMessage?.trim()) throw new Error("Define the next message before continuing");
     const evidence = input.evidence ?? [];
     if (input.outcome === "complete" && (evidence.length !== loop.criteria.length || evidence.some(item => typeof item !== "string" || !item.trim()))) {
@@ -95,8 +101,8 @@ export class ChatLoopService {
     const loop = this.validateCheck(sessionId, input, userId);
     if (input.outcome === "complete" && (loop.executionCriteria?.length ?? 0) > 0) throw new Error("Execution criteria require monitored verification");
     return this.save(sessionId, {
-      ...loop, status: input.outcome === "complete" ? "completed" : input.outcome === "waiting" ? "waiting" : "running",
-      checkedIteration: loop.iteration, summary: input.summary.trim(), nextMessage: input.nextMessage?.trim() ?? "", evidence: input.evidence ?? [],
+      ...loop, status: input.outcome === "waiting" ? "waiting" : "running",
+      checkedIteration: loop.iteration, summary: input.summary.trim(), nextMessage: input.outcome === "complete" ? COMPLETION_NEXT_MESSAGE : input.nextMessage?.trim() ?? "", evidence: input.evidence ?? [],
     }, userId);
   }
 
@@ -175,22 +181,17 @@ export class ChatLoopService {
     this.validateCheck(sessionId, input, userId);
     const repeated = loop.checkedIteration < loop.iteration && loop.summary === input.summary.trim()
       && JSON.stringify(loop.evidence) === JSON.stringify(input.evidence ?? []);
-    // An unreachable reviewer is transient infrastructure, not a work blocker: a
-    // continue checkpoint keeps going. Completion cannot be confirmed without the
-    // review, so it is retried and only repeated failures to confirm pause the loop.
-    const unavailable = monitor.status === "unavailable";
-    const unconfirmed = unavailable && input.outcome === "complete";
+    // Monitoring is advisory for continuation. It can reject reported completion,
+    // but repeated stalls or unavailable reviews never revoke user authorization.
+    const unconfirmed = monitor.status === "unavailable" && input.outcome === "complete";
     const stalledChecks = monitor.progress === "stalled" || repeated || unconfirmed ? (loop.stalledChecks ?? 0) + 1 : 0;
     const completionAccepted = input.outcome === "complete" && (monitor.status === "accepted" || monitor.status === "disabled");
-    const stopped = !completionAccepted && stalledChecks >= MAX_STALLED_CHECKS;
     const rejected = monitor.status === "rejected";
-    const pauseReason = unconfirmed ? `Loop paused: System One could not review completion ${MAX_STALLED_CHECKS} times in a row. Check its configuration and explicitly resume.`
-      : "Loop paused after three stalled checkpoints. Review the goal and explicitly resume.";
     return this.save(sessionId, {
       ...loop, monitor, stalledChecks, executionEvidence, checkedIteration: loop.iteration,
-      status: stopped ? "paused" : completionAccepted ? "completed" : "running",
-      summary: stopped ? `${pauseReason} Last checkpoint: ${input.summary.trim()}`.slice(0, 8000) : input.summary.trim(), evidence: input.evidence ?? [],
-      nextMessage: stopped ? pauseReason
+      status: "running",
+      summary: input.summary.trim(), evidence: input.evidence ?? [],
+      nextMessage: completionAccepted ? COMPLETION_NEXT_MESSAGE
         : rejected ? `System One did not accept completion. Recheck acceptance criteria ${monitor.criteriaPassed.flatMap((passed, i) => passed ? [] : [i + 1]).join(", ")}. Inspect actual results, obtain missing verification, then call loop.check again.`
         : unconfirmed ? "System One review was unavailable, so completion is not confirmed. Re-verify the criteria and call loop.check with outcome=complete again." : input.nextMessage?.trim() ?? "",
     }, userId);
@@ -200,12 +201,13 @@ export class ChatLoopService {
     const loop = this.get(sessionId);
     if (!loop) return loop;
     const uncheckedTurns = loop.checkedIteration === loop.iteration ? 0 : (loop.uncheckedTurns ?? 0) + 1;
-    const exhausted = loop.status === "running" && (loop.iteration + 1 - (loop.budgetStartIteration ?? 0) >= MAX_LOOP_TURNS || uncheckedTurns >= 3);
+    const exhausted = (loop.status === "running" || loop.status === "waiting")
+      && loop.iteration + 1 - (loop.budgetStartIteration ?? 0) >= MAX_LOOP_TURNS;
     return this.save(sessionId, {
       ...loop, iteration: loop.iteration + 1, uncheckedTurns,
-      ...(exhausted ? { status: "paused" as const, summary: uncheckedTurns >= 3
-        ? `Loop paused after three turns without a checkpoint. Review progress and explicitly resume. Last checkpoint: ${loop.summary}`.slice(0, 8000)
-        : `Loop paused after ${MAX_LOOP_TURNS} turns since the last resume. Review progress and explicitly resume to renew the budget. Last checkpoint: ${loop.summary}`.slice(0, 8000) } : {}),
+      ...(loop.status === "running" && sessionWaits.list(sessionId).some(wait => wait.kind === "question" && wait.blocking)
+        ? { status: "waiting" as const } : {}),
+      ...(exhausted ? { status: "paused" as const, summary: `Loop paused after ${MAX_LOOP_TURNS} turns since the last resume. Review progress and explicitly resume to renew the budget. Last checkpoint: ${loop.summary}`.slice(0, 8000) } : {}),
       ...(error ? { status: "error" as const, summary: error.slice(0, 8000) }
         : cancelled ? { status: "paused" as const } : {}),
       // A turn that skipped its check must review the goal rather than replay
@@ -239,7 +241,7 @@ export function chatLoopInstructions(loop: ChatLoop | null): string | undefined 
     `Criteria requiring tracked execution evidence (zero-based indices): ${JSON.stringify(loop.executionCriteria ?? [])}.`,
     `Loop revision: ${loop.revision}; completed turns: ${loop.iteration}.`,
     `Progress: ${JSON.stringify(loop.summary)}`,
-    `Gateway monitor: ${JSON.stringify(loop.monitor ?? null)}. At most 50 turns per explicit resume; three stalled checkpoints or unchecked turns pause continuation. System One reviews reported evidence when configured and can reject completion; an unavailable review never completes the goal but does not pause a continue checkpoint.`,
-    "Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Report failed or incomplete verification as an explicit blocker and prioritize fixing it before relying on older passes. Cite tracked terminal executions using executionRefs when available; a successful exit alone does not establish a criterion or prove the current workspace is unchanged. Report concrete new progress and its evidence on continue checks, including integrated code, focused passing tests or resolved blockers; an unchanged overall completion count does not mean no progress. Distinguish provider or capacity failures from unresolved work, and do not present a plan or repeated claim as completed progress. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; if the turn must end awaiting input, use outcome=waiting and describe the question. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them.",
+    `Gateway monitor: ${JSON.stringify(loop.monitor ?? null)}. At most 50 turns per explicit resume. Stalled checkpoints and unchecked turns do not stop continuation. System One reviews reported evidence when configured and can reject completion; an unavailable review never completes the goal but does not pause a continue checkpoint.`,
+    "Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Report failed or incomplete verification as an explicit blocker and prioritize fixing it before relying on older passes. Cite tracked terminal executions using executionRefs when available; a successful exit alone does not establish a criterion or prove the current workspace is unchanged. Report concrete new progress and its evidence on continue checks, including integrated code, focused passing tests or resolved blockers; an unchanged overall completion count does not mean no progress. Distinguish provider or capacity failures from unresolved work, and do not present a plan or repeated claim as completed progress. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. This records verified progress and keeps the loop active: present the result and ask the user what to do next with user.ask. Do not invent work beyond the authorized goal. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; only a pending user.ask Q&A request permits outcome=waiting. A text question alone cannot stop the loop. Never pause the loop merely because you want to stop. The user controls Stop/Pause in the UI; no model-facing pause tool is exposed. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them.",
   ].join("\n");
 }

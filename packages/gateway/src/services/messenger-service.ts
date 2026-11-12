@@ -103,6 +103,7 @@ interface Saved {
   owner: string;
   session: MessengerSession;
   ownPresence?: { state: 'online' | 'unavailable' | 'offline'; keep: boolean };
+  assistantAccess?: boolean;
 }
 
 /** Reject credentials and parameters before any network activity. Local homeservers are explicitly supported. */
@@ -339,7 +340,7 @@ class Connection {
     const message: IncomingMessengerMessage = {
       roomId: room.summary.id,
       eventId,
-      title: String(room.summary.name).slice(0, 120),
+      title: String(direct && sender ? sender : room.summary.name).slice(0, 120),
       body: (direct ? body : `${String(sender).slice(0, 60)}: ${body}`).slice(0, 200),
       timestamp,
       service: room.summary.service,
@@ -649,6 +650,10 @@ class Connection {
         const member = room?.states.find(
           (s) => s.type === 'm.room.member' && s.state_key === e.sender,
         );
+        const replyId = e.content?.['m.relates_to']?.['m.in_reply_to']?.event_id;
+        const replied = typeof replyId === 'string' ? originals.get(replyId) : undefined;
+        const repliedEdit = replied?.event_id ? edits.get(replied.event_id) : undefined;
+        const replyBody = repliedEdit?.content?.['m.new_content']?.body ?? replied?.content?.body;
         const index = receiptIndex.get(e.event_id!);
         const readBy =
           index === undefined
@@ -663,6 +668,11 @@ class Connection {
                 }));
         return {
           id: e.event_id!,
+          ...(replied && typeof replyId === 'string' ? { replyTo: {
+            id: replyId,
+            sender: readerName(replied.sender ?? 'Unknown'),
+            body: String(replyBody ?? '').slice(0, 300),
+          } } : {}),
           sender: String(
             member?.content?.displayname ?? e.sender ?? 'Unknown',
           ).slice(0, 512),
@@ -769,7 +779,7 @@ class Connection {
         return;
       }
       // Only persist after crypto initialization succeeded. Never run without a crypto store.
-      this.save({ owner: this.owner, session, ownPresence: this.ownPresence });
+      this.save({ owner: this.owner, session, ownPresence: this.ownPresence, assistantAccess: this.assistantAccess });
       if (this.ownPresence.keep) {
         void client.setPresenceStatus(this.ownPresence.state).catch(() => {});
         this.startPresenceTimer();
@@ -1027,6 +1037,7 @@ class Connection {
         }
         const latest = this.messages(id).at(-1);
         room.summary.timestamp = latest?.timestamp ?? 0;
+        room.summary.latestSender = latest?.sender;
         room.summary.preview =
           latest?.body ??
           (membership === 'invite' ? 'Invitation' : 'No messages yet');
@@ -1129,7 +1140,10 @@ class Connection {
 
   async command(body: any): Promise<any> {
     if (body.action === 'assistantAccess') {
-      this.assistantAccess = body.enabled === true;
+      if (!this.session) throw new Error('Matrix is not connected.');
+      const enabled = body.enabled === true;
+      this.save({ owner: this.owner, session: this.session, ownPresence: this.ownPresence, assistantAccess: enabled });
+      this.assistantAccess = enabled;
       return {};
     }
     const client = this.connected();
@@ -1348,7 +1362,7 @@ class Connection {
     const client = this.client;
     if (!client || !this.session) throw new Error('Matrix is not connected.');
     await client.setPresenceStatus(state);
-    this.save({ owner: this.owner, session: this.session, ownPresence: { state, keep } });
+    this.save({ owner: this.owner, session: this.session, ownPresence: { state, keep }, assistantAccess: this.assistantAccess });
     this.ownPresence = { state, keep };
     this.startPresenceTimer();
   }
@@ -1531,6 +1545,7 @@ export class MessengerService {
         ) as Saved;
         if (saved.owner !== owner) throw new Error('Owner mismatch');
         if (saved.ownPresence && ['online', 'unavailable', 'offline'].includes(saved.ownPresence.state) && typeof saved.ownPresence.keep === 'boolean') c.ownPresence = saved.ownPresence;
+        c.assistantAccess = saved.assistantAccess === true;
         await c.start(saved.session);
       } catch {
         if (!c.session) {

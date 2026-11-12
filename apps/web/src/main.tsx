@@ -1,7 +1,6 @@
 import { installGatewayFetchAuth } from '@/lib/api-fetch'
-import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Toaster } from 'sonner'
+import { NotificationToaster } from '@/components/ui/notification-toaster'
 import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { HotkeysProvider } from '@/components/hotkeys'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -16,28 +15,6 @@ import './index.css'
 // running stale code (e.g. an old bundle that surfaced React #185).
 installGatewayFetchAuth()
 installVersionWatchdog()
-
-function ThemeAwareToaster() {
-  const [theme, setTheme] = React.useState<'light' | 'dark'>(() =>
-    document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-  )
-
-  React.useEffect(() => {
-    const root = document.documentElement
-    const syncTheme = () => setTheme(root.classList.contains('dark') ? 'dark' : 'light')
-    syncTheme()
-
-    const observer = new MutationObserver(syncTheme)
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
-
-    return () => observer.disconnect()
-  }, [])
-
-  // On Desktop/Windows, offset toasts below the titlebar overlay controls
-  const isDesktopWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
-
-  return <Toaster position="top-right" theme={theme} closeButton gap={8} visibleToasts={4} offset={isDesktopWin32 ? 44 : undefined} />
-}
 
 // Note: this app intentionally does NOT wrap the tree in <React.StrictMode>.
 // StrictMode double-invokes effects on every mount (mount -> cleanup -> mount),
@@ -57,7 +34,7 @@ function renderApp() {
         <ConfirmDialogProvider>
           <HotkeysProvider>
             <App />
-            <ThemeAwareToaster />
+            <NotificationToaster />
           </HotkeysProvider>
         </ConfirmDialogProvider>
         </MessengerProvider>

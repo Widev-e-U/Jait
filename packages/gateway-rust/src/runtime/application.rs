@@ -662,7 +662,18 @@ impl Application {
                     project_root: config.project_root.to_string_lossy().into_owned(),
                     clock: crate::time::default_clock(),
                     providers: Some(provider_registry.clone()),
-                    provider_models: Arc::new(|_| Box::pin(async { Ok(Vec::new()) })),
+                    provider_models: {
+                        let registry = provider_registry.clone();
+                        Arc::new(move |id| {
+                            let provider = registry.get(&id);
+                            Box::pin(async move {
+                                let Some(provider) = provider else { return Ok(Vec::new()) };
+                                provider.catalogue_models().await?.into_iter().map(|model| {
+                                    serde_json::from_value(model).map_err(|error| error.to_string())
+                                }).collect()
+                            })
+                        })
+                    },
                     jait_models: None,
                 }
                 .router(),

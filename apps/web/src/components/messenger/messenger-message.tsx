@@ -288,7 +288,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           <span
             aria-hidden
             data-reaction-emoji
-            className="grid size-4 shrink-0 place-items-center overflow-visible text-center text-[13px] leading-none"
+            className="relative -top-px grid size-4 shrink-0 place-items-center overflow-visible text-center text-[13px] leading-none"
             style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }}
           >{reaction.key}</span>
           {reaction.count > 1 && <CenteredBadgeText

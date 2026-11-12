@@ -250,8 +250,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         const message = snapshot.messages.at(-1);
         void triggerSystemNotification({
           id: 'matrix-room:' + room.id,
-          title: room.name,
-          body: room.preview || 'New message',
+          title: room.peer && room.latestSender ? room.latestSender : room.name,
+          body: !room.peer && room.latestSender ? `${room.latestSender}: ${room.preview || 'New message'}` : room.preview || 'New message',
           independentOfAttention: true,
           link: '/messenger?roomId=' + encodeURIComponent(room.id),
           ...(message && snapshot.selectedRoomId === room.id && snapshot.session

@@ -13,7 +13,7 @@ interface BridgeStatus {
   expiresAt?: string
   detail?: string
   reauth?: { command?: string; hint?: string }
-  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string }[]
+  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string; tenants?: { id: string; name: string; connected: boolean }[]; tenantError?: string }[]
 }
 
 interface ReauthState {
@@ -81,6 +81,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
   const [error, setError] = useState('')
   const [reauth, setReauth] = useState<ReauthState | null>(null)
   const [reauthOpen, setReauthOpen] = useState(false)
+  const [selectedTenant, setSelectedTenant] = useState<{ accountId: string; tenantId: string; name: string } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
 
@@ -110,12 +111,13 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     return () => window.clearInterval(timer)
   }, [load])
 
-  const callReauth = useCallback(async (method: 'GET' | 'POST' | 'DELETE') => {
+  const callReauth = useCallback(async (method: 'GET' | 'POST' | 'DELETE', tenant?: { accountId: string; tenantId: string }) => {
     try {
       const response = await fetch(REAUTH_URL, {
         method,
         credentials: 'include',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...(tenant ? { 'Content-Type': 'application/json' } : {}) },
+        ...(method === 'POST' && tenant ? { body: JSON.stringify(tenant) } : {}),
       })
       if (!response.ok) throw new Error(`Re-authentication request failed (${response.status})`)
       setReauth((await response.json()) as ReauthState)
@@ -128,10 +130,11 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     }
   }, [])
 
-  const startReauth = () => {
+  const startReauth = (tenant: { accountId: string; tenantId: string; name: string } | null = null) => {
+    setSelectedTenant(tenant)
     setReauthOpen(true)
     setReauth({ phase: 'starting', message: 'Starting browser…', liveViewUrl: null })
-    void callReauth('POST')
+    void callReauth('POST', tenant ? { accountId: tenant.accountId, tenantId: tenant.tenantId } : undefined)
   }
 
   const closeReauth = () => {
@@ -239,7 +242,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                 <span className="min-w-0 flex-1 truncate font-medium" title={account.detail}>{account.name}</span>
                 <Badge variant={accountLook.variant}>{accountLook.text}</Badge>
                 {account.state !== 'connected' && (
-                  <Button size="sm" variant="outline" onClick={startReauth}>
+                  <Button size="sm" variant="outline" onClick={() => startReauth()}>
                     <LogIn className="mr-2 h-3.5 w-3.5" />
                     Sign in again
                   </Button>
@@ -258,6 +261,21 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
+                {account.tenants && account.tenants.length > 0 && (
+                  <ul aria-label={`Organizations for ${account.name}`} className="w-full space-y-1 border-t pt-2 pl-6">
+                    {account.tenants.map(tenant => (
+                      <li key={tenant.id} className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate">{tenant.name}</span>
+                        {tenant.connected ? <Badge variant="secondary">Connected</Badge> : (
+                          <Button size="sm" variant="outline" onClick={() => startReauth({ accountId: account.id, tenantId: tenant.id, name: tenant.name })}>
+                            <LogIn className="mr-2 h-3.5 w-3.5" /> Sign in
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {account.tenantError && <p role="status" className="w-full pl-6 text-xs text-muted-foreground">{account.tenantError}</p>}
                 {confirming && (
                   <p className="w-full text-xs text-muted-foreground">
                     Stops syncing this Teams account. Its chats stay in Matrix but no longer update.
@@ -275,7 +293,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
         </p>
       )}
 
-      <Button variant="outline" size="sm" className="mt-3" onClick={startReauth}>
+      <Button variant="outline" size="sm" className="mt-3" onClick={() => startReauth()}>
         <Plus className="mr-2 h-4 w-4" />
         Add Teams account
       </Button>
@@ -283,7 +301,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
       <Dialog open={reauthOpen} onOpenChange={open => { if (!open) closeReauth() }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Sign in to Microsoft Teams</DialogTitle>
+            <DialogTitle>{selectedTenant ? `Sign in to ${selectedTenant.name}` : 'Sign in to Microsoft Teams'}</DialogTitle>
             <DialogDescription>
               Sign in with the Teams account you want to add or renew in the window below. Jait picks up the new session automatically; no passwords or tokens pass through this page.
             </DialogDescription>
@@ -302,7 +320,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
             </div>
           )}
           {reauth?.phase === 'error' && (
-            <Button size="sm" onClick={startReauth}>Try again</Button>
+            <Button size="sm" onClick={() => startReauth(selectedTenant)}>Try again</Button>
           )}
         </DialogContent>
       </Dialog>

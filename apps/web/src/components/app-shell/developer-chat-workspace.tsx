@@ -758,11 +758,10 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {!showDebugPanel && loop && activeSessionId && (
-            // The card may grow for readable text up to the centre of the chat panel,
-            // and stops above the composer dock instead of covering it.
+            // Keep the card above the composer and allow more room for text on mobile.
             <div
               data-testid="chat-goal-overlay"
-              className={`pointer-events-none absolute z-40 flex w-[calc(50%-0.5rem)] flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2' : 'top-12 left-2'}`}
+              className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2 w-[calc(100%-1rem)]' : 'top-12 left-2 w-[calc(50%-0.5rem)]'}`}
               style={{ maxHeight: `calc(100% - ${(isMobile ? 56 : 48) + composerDockHeight + 8}px)` }}
             >
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />

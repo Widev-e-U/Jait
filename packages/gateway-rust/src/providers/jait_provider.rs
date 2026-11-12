@@ -712,6 +712,23 @@ impl ProviderAdapter for JaitProvider {
     fn info(&self) -> Value {
         json!({"id":"jait","name":"Jait (Built-in)","description":"Jait's native agent loop using OpenAI-compatible APIs with full tool access","available":true,"modes":["full-access","supervised"],"auth":crate::providers::provider_auth::NO_PROVIDER_AUTH})
     }
+    fn catalogue_models(&self) -> BoxFuture<'static, Result<Vec<Value>, String>> {
+        Box::pin(async {
+            Ok(vec![
+                json!({"id":"gpt-4o","name":"GPT-4o","description":"OpenAI's flagship multimodal model","isDefault":true}),
+                json!({"id":"gpt-4o-mini","name":"GPT-4o Mini","description":"Fast and affordable"}),
+                json!({"id":"gpt-4.1","name":"GPT-4.1","description":"Latest GPT-4 series"}),
+                json!({"id":"gpt-4.1-mini","name":"GPT-4.1 Mini","description":"Fast GPT-4.1"}),
+                json!({"id":"gpt-4.1-nano","name":"GPT-4.1 Nano","description":"Ultra-fast, lightweight"}),
+                json!({"id":"o4-mini","name":"o4 Mini","description":"Reasoning model","reasoningEffortSupported":true}),
+                json!({"id":"o3","name":"o3","description":"Advanced reasoning","reasoningEffortSupported":true}),
+                json!({"id":"o3-mini","name":"o3 Mini","description":"Fast reasoning","reasoningEffortSupported":true}),
+                json!({"id":"claude-sonnet-4-6-20250318","name":"Claude Sonnet 4.6","description":"Via OpenRouter/compatible API"}),
+                json!({"id":"deepseek-chat","name":"DeepSeek V3","description":"DeepSeek's latest"}),
+                json!({"id":"deepseek-reasoner","name":"DeepSeek R1","description":"DeepSeek reasoning model"}),
+            ])
+        })
+    }
     fn check_availability(&self) -> BoxFuture<'static, Result<(), String>> {
         let disposed = self.disposed.load(Ordering::Acquire);
         Box::pin(async move {

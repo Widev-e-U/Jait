@@ -177,7 +177,7 @@ describe('personal Matrix client lifecycle', () => {
     await store.connect(input)
     await store.enableNotifications(true)
     const client = clients.at(-1)!
-    const room = { name: 'Personal', roomId: '!room:matrix.test', getLiveTimeline: () => ({ getEvents: () => [], getPaginationToken: () => null }) }
+    const room = { name: 'Personal', roomId: '!room:matrix.test', getMember: () => ({ name: 'Bob' }), getJoinedMemberCount: () => 2, getLiveTimeline: () => ({ getEvents: () => [], getPaginationToken: () => null }) }
     const event = {
       getId: () => '$message', getRoomId: () => room.roomId, getType: () => 'm.room.message',
       isDecryptionFailure: () => false, getSender: () => '@bob:matrix.test', status: null,

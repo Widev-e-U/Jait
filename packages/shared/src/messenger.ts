@@ -121,6 +121,8 @@ export interface MessengerRoom {
   encrypted: boolean
   timestamp: number
   preview: string
+  /** Sender of the latest message, for notification display. */
+  latestSender?: string
   /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */
   status?: boolean
   /** Structural shape of the room. Absent means a plain chat. */

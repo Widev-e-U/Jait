@@ -2,12 +2,20 @@ import { exec } from 'node:child_process';
 
 export type BridgeState = 'connected' | 'expired' | 'error' | 'unknown';
 
+export interface BridgeTenant {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
 export interface BridgeAccount {
   id: string;
   name: string;
   state: BridgeState;
   detail?: string;
   expiresAt?: string;
+  tenants?: BridgeTenant[];
+  tenantError?: string;
 }
 
 export interface BridgeStatus {
@@ -34,7 +42,7 @@ interface ProbeResult {
   accounts?: unknown;
 }
 
-function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
+export function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const accounts: BridgeAccount[] = [];
   for (const item of value) {
@@ -47,9 +55,28 @@ function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
       state: normaliseState(entry.state),
       detail: typeof entry.detail === 'string' ? entry.detail : undefined,
       expiresAt: typeof entry.expiresAt === 'string' ? entry.expiresAt : undefined,
+      tenants: normaliseTenants(entry.tenants),
+      tenantError: typeof entry.tenantError === 'string' ? entry.tenantError.slice(0, 200) : undefined,
     });
   }
   return accounts;
+}
+
+function normaliseTenants(value: unknown): BridgeTenant[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const seen = new Set<string>();
+  const tenants: BridgeTenant[] = [];
+  for (const item of value.slice(0, 200)) {
+    if (!item || typeof item !== 'object') continue;
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.id !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(entry.id)) continue;
+    if (typeof entry.name !== 'string' || !entry.name.trim() || entry.name.length > 200) continue;
+    const id = entry.id.toLowerCase();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    tenants.push({ id, name: entry.name.trim(), connected: entry.connected === true });
+  }
+  return tenants;
 }
 
 interface BridgeDefinition {
@@ -71,7 +98,7 @@ const BRIDGES: BridgeDefinition[] = [
 ];
 
 const CACHE_TTL_MS = 45_000;
-const PROBE_TIMEOUT_MS = 20_000;
+const PROBE_TIMEOUT_MS = 45_000;
 
 interface CacheEntry {
   status: BridgeStatus;

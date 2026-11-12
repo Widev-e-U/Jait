@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Brain, Copy, KeyRound, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertCircle, Brain, ChevronLeft, ChevronRight, Copy, KeyRound, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 type ReminderStatusFilter = 'active' | 'archived' | 'all'
+
+const MEMORY_PAGE_SIZE = 20
 
 function parseTags(value: string | string[] | null | undefined): string[] {
   if (Array.isArray(value)) return value
@@ -48,6 +50,7 @@ export function MemoryPage() {
   const [statusFilter, setStatusFilter] = useState<ReminderStatusFilter>('active')
   const [projectFilter, setProjectFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [memoryPage, setMemoryPage] = useState(0)
   const [showAdd, setShowAdd] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newTags, setNewTags] = useState('')
@@ -85,6 +88,11 @@ export function MemoryPage() {
       && (projectFilter === 'all' || reminder.projectId === projectFilter)
       && reminder.content.toLowerCase().includes(search.trim().toLowerCase()))
   }, [snapshot?.reminders, projectFilter, search, statusFilter])
+  const memoryPageCount = Math.max(1, Math.ceil(reminders.length / MEMORY_PAGE_SIZE))
+  const currentMemoryPage = Math.min(memoryPage, memoryPageCount - 1)
+  const pagedReminders = reminders.slice(currentMemoryPage * MEMORY_PAGE_SIZE, (currentMemoryPage + 1) * MEMORY_PAGE_SIZE)
+  useEffect(() => { setMemoryPage(0) }, [search, projectFilter, statusFilter])
+  useEffect(() => { setMemoryPage((page) => Math.min(page, memoryPageCount - 1)) }, [memoryPageCount])
   const threads = snapshot?.threads ?? []
 
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
@@ -217,7 +225,7 @@ export function MemoryPage() {
         </TabsList>
         <TabsContent value="memories" className="mt-6 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div><h2 className="text-lg font-semibold">Saved memories</h2><p className="mt-1 text-sm text-muted-foreground">{isLoading && !snapshot ? 'Loading memories…' : `${reminders.length} shown${snapshot && snapshot.reminders.length >= 200 ? ' · showing up to 200' : ''}`} · Chat history is separate.</p></div>
+            <div><h2 className="text-lg font-semibold">Saved memories</h2><p className="mt-1 text-sm text-muted-foreground">{isLoading && !snapshot ? 'Loading memories…' : `${reminders.length} matching${snapshot && snapshot.reminders.length >= 200 ? ' · showing up to 200' : ''}`} · Chat history is separate.</p></div>
             <Button onClick={() => setShowAdd(!showAdd)}><Plus className="mr-2 h-4 w-4" />{showAdd ? 'Close' : 'Add memory'}</Button>
           </div>
           {showAdd && <Card><CardContent className="space-y-4 p-4 sm:p-5">
@@ -226,7 +234,7 @@ export function MemoryPage() {
             <Button onClick={() => void handleAdd()} disabled={isSaving || !newContent.trim()}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save memory</Button>
           </CardContent></Card>}
           <div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Search memories" placeholder="Search memories…" value={search} onChange={(event) => setSearch(event.target.value)} className="sm:flex-1" /><Select value={projectFilter} onValueChange={setProjectFilter}><SelectTrigger aria-label="Filter by project" className="sm:w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All projects</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.title || project.rootPath || 'Untitled project'}</SelectItem>)}</SelectContent></Select><Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as ReminderStatusFilter)}><SelectTrigger aria-label="Filter by status" className="sm:w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="archived">Archived</SelectItem><SelectItem value="all">All statuses</SelectItem></SelectContent></Select></div>
-          {isLoading && !snapshot ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> : reminders.length === 0 ? <div className="rounded-xl border border-dashed px-4 py-16 text-center"><Brain className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="font-medium">No memories found</h3><p className="mt-1 text-sm text-muted-foreground">Try another filter or add a memory.</p></div> : <div className="divide-y rounded-xl border">{reminders.map((reminder) => {
+          {isLoading && !snapshot ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> : reminders.length === 0 ? <div className="rounded-xl border border-dashed px-4 py-16 text-center"><Brain className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="font-medium">No memories found</h3><p className="mt-1 text-sm text-muted-foreground">Try another filter or add a memory.</p></div> : <div><div className="divide-y rounded-xl border">{pagedReminders.map((reminder) => {
             const isEngineMemory = reminder.kind === 'engine'
             const project = reminder.projectId ? projectById.get(reminder.projectId) : null
             const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
@@ -236,7 +244,15 @@ export function MemoryPage() {
               {tags.length > 0 && <div className="flex flex-wrap gap-1">{tags.map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}</div>}
               <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Details and actions</summary><div className="mt-3 space-y-3"><div className="space-y-1 text-xs text-muted-foreground"><p>Source: {reminder.sourceType} · {reminder.sourceSurface}{reminder.sourceId ? ` · ${reminder.sourceId}` : ''}</p>{session && <p>Chat: {session.name || 'Chat'}</p>}<p>Used {reminder.usageCount ?? 0} times · Last retrieved: {formatDate(reminder.lastRetrievedAt)}</p>{isEngineMemory && <p>Engine memories cannot be edited or archived here.</p>}</div><div className="flex flex-wrap gap-2">{!isEngineMemory && <Button variant="outline" size="sm" onClick={() => void updateReminder(reminder, { status: reminder.status === 'active' ? 'archived' : 'active' })}>{reminder.status === 'active' ? 'Archive' : 'Restore'}</Button>}<Button variant="outline" size="sm" onClick={() => void removeReminder(reminder.id)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button></div></div></details>
             </div>
-          })}</div>}
+          })}</div>
+            <nav aria-label="Memory pages" className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t bg-background px-1 py-3 text-sm text-muted-foreground">
+              <span>Page {currentMemoryPage + 1} of {memoryPageCount} · {currentMemoryPage * MEMORY_PAGE_SIZE + 1}–{Math.min((currentMemoryPage + 1) * MEMORY_PAGE_SIZE, reminders.length)} of {reminders.length}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setMemoryPage((page) => Math.max(0, page - 1))} disabled={currentMemoryPage === 0}><ChevronLeft className="mr-1 h-4 w-4" /> Previous</Button>
+                <Button variant="outline" size="sm" onClick={() => setMemoryPage((page) => Math.min(memoryPageCount - 1, page + 1))} disabled={currentMemoryPage >= memoryPageCount - 1}>Next <ChevronRight className="ml-1 h-4 w-4" /></Button>
+              </div>
+            </nav>
+          </div>}
           <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={() => void copyMarkdownExport()}><Copy className="mr-2 h-4 w-4" />{exportCopied ? 'Copied' : 'Copy by project and status as Markdown'}</Button></div>
         </TabsContent>
             <TabsContent value="projects" className="mt-6">

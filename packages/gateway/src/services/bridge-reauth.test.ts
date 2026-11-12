@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, pickRefreshToken, removeCommand } from './bridge-reauth.js';
+import { applyCommand, pickRefreshToken, removeCommand, tenantApplyCommand, TeamsReauthService } from './bridge-reauth.js';
 
 const CID = '5e3ce6c0-2b1f-4285-8d4b-75ee78787346';
 const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
@@ -36,5 +36,20 @@ describe('applyCommand', () => {
     expect(applyCommand({ JAIT_TEAMS_REAUTH_CMD: 'ssh a@b /x/teams-reauth.sh' })).toBe('ssh a@b /x/teams-apply-token.sh');
     expect(applyCommand({ JAIT_TEAMS_APPLY_CMD: 'foo' })).toBe('foo');
     expect(applyCommand({})).toBeUndefined();
+  });
+});
+
+
+describe('tenant sign-in', () => {
+  it('uses only a dedicated tenant importer', () => {
+    expect(tenantApplyCommand({ JAIT_TEAMS_REAUTH_CMD: 'ssh a@b /x/teams-reauth.sh' })).toBe('ssh a@b /x/teams-apply-tenant.sh');
+    expect(tenantApplyCommand({ JAIT_TEAMS_APPLY_CMD: 'custom-generic' })).toBeUndefined();
+    expect(tenantApplyCommand({ JAIT_TEAMS_TENANT_APPLY_CMD: 'tenant-import' })).toBe('tenant-import');
+  });
+  it('rejects malformed tenant IDs without starting a browser', async () => {
+    const registry = { stopSurface: () => { throw new Error('should not start'); } };
+    const service = new TeamsReauthService(registry as never);
+    const state = await service.start('user', { accountId: 'invalid', tenantId: 'invalid' });
+    expect(state.phase).toBe('error');
   });
 });

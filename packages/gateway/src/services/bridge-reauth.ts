@@ -28,6 +28,7 @@ interface Run {
   nextSeq: number;
   polling: boolean;
   deadline: number;
+  tenant?: { accountId: string; tenantId: string };
 }
 
 /**
@@ -47,10 +48,19 @@ export class TeamsReauthService {
     return this.runs.get(userId)?.state ?? IDLE;
   }
 
-  async start(userId: string): Promise<TeamsReauthState> {
+  async start(userId: string, tenant?: { accountId: string; tenantId: string }): Promise<TeamsReauthState> {
     const existing = this.runs.get(userId);
-    if (existing && ['starting', 'waiting_login', 'applying'].includes(existing.state.phase)) return existing.state;
-    if (!applyCommand()) {
+    if (existing && ['starting', 'waiting_login', 'applying'].includes(existing.state.phase)) {
+      if (existing.tenant?.accountId !== tenant?.accountId || existing.tenant?.tenantId !== tenant?.tenantId) {
+        return { phase: 'error', message: 'Another Teams sign-in is already in progress.', liveViewUrl: null, startedAt: existing.state.startedAt };
+      }
+      return existing.state;
+    }
+    if (tenant && (!LOGIN_ID.test(tenant.accountId) || !TENANT_ID.test(tenant.tenantId))) {
+      return this.fail(userId, 'Invalid account or organization.');
+    }
+    if (tenant && !tenantApplyCommand()) return this.fail(userId, 'Tenant sign-in is not configured.');
+    if (!tenant && !applyCommand()) {
       return this.fail(userId, 'Kein Apply-Befehl konfiguriert (JAIT_TEAMS_APPLY_CMD oder JAIT_TEAMS_REAUTH_CMD).');
     }
 
@@ -62,6 +72,7 @@ export class TeamsReauthService {
       nextSeq: 0,
       polling: false,
       deadline: Date.now() + MAX_WAIT_MS,
+      tenant,
     };
     this.runs.set(userId, run);
 
@@ -74,7 +85,7 @@ export class TeamsReauthService {
       })) as BrowserSurface;
       const live = surface.getLiveViewInfo();
       if (!live) throw new Error('Der Browser stellt keine Live-Ansicht bereit.');
-      await surface.navigate(TEAMS_URL);
+      await surface.navigate(tenant ? `${TEAMS_URL}v2/?tenantId=${encodeURIComponent(tenant.tenantId)}` : TEAMS_URL);
       run.state = {
         ...run.state,
         phase: 'waiting_login',
@@ -152,7 +163,13 @@ export class TeamsReauthService {
 
   private async apply(userId: string, run: Run, token: string): Promise<void> {
     try {
-      await runApply(token);
+      if (run.tenant) {
+        const command = tenantApplyCommand();
+        if (!command) throw new Error('Tenant sign-in is not configured.');
+        await runHostCommand(command, JSON.stringify({ ...run.tenant, token }));
+      } else {
+        await runApply(token);
+      }
     } catch (error) {
       await this.fail(userId, error instanceof Error ? error.message : 'Übernahme fehlgeschlagen.');
       return;
@@ -216,6 +233,15 @@ export function removeCommand(env: NodeJS.ProcessEnv = process.env): string | un
 }
 
 const LOGIN_ID = /^8:orgid:[0-9a-fA-F-]{36}$/;
+const TENANT_ID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+export function tenantApplyCommand(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const explicit = env.JAIT_TEAMS_TENANT_APPLY_CMD?.trim();
+  if (explicit) return explicit;
+  const apply = applyCommand(env);
+  return apply && /teams-apply-token\.sh\s*$/.test(apply)
+    ? apply.replace(/teams-apply-token\.sh\s*$/, 'teams-apply-tenant.sh') : undefined;
+}
 
 function runApply(token: string): Promise<void> {
   const command = applyCommand();

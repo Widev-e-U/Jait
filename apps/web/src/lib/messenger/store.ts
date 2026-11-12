@@ -368,8 +368,10 @@ export class MessengerStore {
     const notified = this.notifiedEvents.get(room.roomId) ?? new Set<string>()
     notified.add(id)
     this.notifiedEvents.set(room.roomId, notified)
+    const sender = room.getMember(event.getSender() ?? '')?.name || event.getSender()
+    const isGroup = room.getJoinedMemberCount() > 2
     await triggerSystemNotification({
-      id: 'matrix:' + id, title: room.name, body: 'New message',
+      id: 'matrix:' + id, title: !isGroup && sender ? sender : room.name, body: isGroup && sender ? `${sender}: New message` : 'New message',
       independentOfAttention: true,
       link: '/messenger?roomId=' + encodeURIComponent(room.roomId),
       markReadLink: messengerReadLink(room.roomId, id, this.session!.userId, this.session!.homeserver),

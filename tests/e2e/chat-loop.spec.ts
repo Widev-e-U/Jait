@@ -244,7 +244,7 @@ for (const width of [390, 900, 1440]) {
       expect(clearPoint).toBe(true)
       await page.getByRole('button', { name: 'Expand goal card' }).click()
       await expect(page.getByText('Lorem ipsum dolor sit amet', { exact: false })).toBeVisible()
-      await expect.poll(async () => (await frame.boundingBox())!.width).toBeGreaterThan(compactWidth + 80)
+      await expect.poll(async () => (await frame.boundingBox())!.width).toBeGreaterThan(width / 2)
       expect((await scroll.boundingBox())!.y).toBe(transcriptTop)
       expect((await previous.boundingBox())!.y).toBe(previousTop)
       await page.getByRole('button', { name: 'Collapse goal card' }).click()

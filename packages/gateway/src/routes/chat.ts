@@ -3859,7 +3859,7 @@ export function registerChatRoutes(
     // A direct user reply releases a loop's explicit question checkpoint.
     // Paused loops require an explicit resume and never restart on ordinary chat.
     if (!systemNotification && chatLoops?.get(sessionId, authUser.id)?.status === "waiting") {
-      chatLoops.control(sessionId, "resume", authUser.id);
+      chatLoops.resumeAfterAnswer(sessionId, undefined, authUser.id);
     }
 
     // Queue identity belongs to the gateway, including explicit client sends.

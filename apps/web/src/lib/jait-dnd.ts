@@ -162,8 +162,10 @@ export function setDragImageRow(
     const clone = row.cloneNode(true) as HTMLElement
     clone.removeAttribute('draggable')
     clone.style.cssText += [
+      // Keep the clone in the viewport so browsers can capture it as a drag
+      // image. Place it behind the page until it is removed on the next tick.
       ';position:fixed',
-      'left:-10000px',
+      'left:0',
       'top:0',
       'z-index:-1',
       'pointer-events:none',

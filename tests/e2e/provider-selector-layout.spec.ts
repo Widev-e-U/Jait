@@ -127,3 +127,31 @@ for (const width of [320, 390, 1280]) {
     await expect(page.getByRole('button', { name: /^Provider Codex, model/ })).toHaveAccessibleName(/extended model name/)
   })
 }
+
+test('shows cached models promptly when the selector reopens', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await page.route(/\/api\/providers(?:\?|$)/, route => route.fulfill({ json: {
+    providers: [{ id: 'codex', providerType: 'codex', name: 'Codex', available: true, modes: ['full-access'], nodeId: 'gateway' }],
+    remoteProviders: [],
+  } }))
+  await page.route('**/api/providers/*/models*', route => route.fulfill({ json: { models: [
+    { id: 'gpt-6.1', name: 'GPT-6.1', isDefault: true },
+  ] } }))
+  await page.route(url => url.pathname === '/', async route => {
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replace('/src/main.tsx', '/src/e2e-fixtures/provider-selector-layout.tsx') })
+  })
+  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { access_token: 'layout-fixture-token' } }))
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { id: 'fixture', username: 'fixture' } }))
+  await page.route('**/api/settings', route => route.fulfill({ json: {} }))
+  await page.goto('/')
+  const trigger = page.getByRole('button', { name: /^Provider Codex, model/ })
+  await expect(trigger).toHaveAccessibleName(/GPT-6.1/)
+  const option = page.getByRole('listbox', { name: 'Models', exact: true }).getByRole('option', { name: /GPT-6.1/ })
+  for (let i = 0; i < 3; i++) {
+    await trigger.click()
+    await expect(option).toBeVisible({ timeout: 1000 })
+    await page.keyboard.press('Escape')
+    await expect(option).toHaveCount(0)
+  }
+})

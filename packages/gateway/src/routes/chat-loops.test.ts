@@ -32,6 +32,15 @@ describe("chat loop automatic continuation", () => {
   let sessions: SessionService;
   let userId: string;
 
+  const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+
   beforeEach(async () => {
     calls = [];
     responseStatus = 200;
@@ -91,29 +100,34 @@ describe("chat loop automatic continuation", () => {
     closeDb();
   });
 
-  it("runs hidden self-messages, checks progress and stops without completion notifications", async () => {
+  it("continues after verified completion until an actual Q&A request", async () => {
     onTurn = () => {
       const loop = loops.get(sessionId)!;
+      if (calls.length === 3) {
+        sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+        return;
+      }
       loops.check(sessionId, calls.length === 1
         ? { revision: loop.revision, outcome: "continue", summary: "Fix prepared", nextMessage: "Run the regression test" }
         : { revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Regression command exited 0"] });
     };
     loops.goal(sessionId, "Fix the bug", ["Regression passes"]);
-    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "completed", iteration: 2 }), { timeout: 10000 });
-    expect(calls).toHaveLength(2);
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "waiting", iteration: 3 }), { timeout: 10000 });
+    expect(calls).toHaveLength(3);
     expect(JSON.stringify(calls[1])).toContain("Run the regression test");
+    expect(JSON.stringify(calls[2])).toContain("Do not invent additional work");
     expect(readMessages().filter(message => message.role === "user")).toHaveLength(0);
-    expect(readMessages().filter(message => message.role === "assistant")).toHaveLength(2);
+    expect(readMessages().filter(message => message.role === "assistant")).toHaveLength(3);
     expect(publish).not.toHaveBeenCalled();
   });
 
   it("restores a running loop after gateway startup without an open browser", async () => {
     loops.goal(sessionId, "Finish saved work", ["Check passes"]);
     await app.close();
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
     app = await reopen();
     await app.ready();
-    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("completed"), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("waiting"), { timeout: 10000 });
     expect(calls).toHaveLength(1);
     expect(publish).not.toHaveBeenCalled();
   });
@@ -124,22 +138,24 @@ describe("chat loop automatic continuation", () => {
       provider: "stale-marker-provider",
       sessionId: "another-chat", _systemNotification: "Wrong hidden task",
     } });
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
     loops.goal(sessionId, "Fix the authorized target", ["Pass"]);
-    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("completed"), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("waiting"), { timeout: 10000 });
     expect(calls[0]?.model).toBe("fixture-model");
     expect(JSON.stringify(calls[0])).toContain("Fix the authorized target");
     expect(JSON.stringify(calls[0])).not.toContain("Wrong hidden task");
   });
 
-  it("restores ordinary notifications for new turns after goal completion", async () => {
+  it("restores ordinary notifications for new turns after an explicit user pause", async () => {
     onTurn = () => {
       const loop = loops.get(sessionId)!;
-      if (loop.status === "running") loops.check(sessionId, { revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Passed"] });
+      if (loop.status === "running") checkpointAndAsk({ revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Passed"] });
     };
     loops.goal(sessionId, "Fix", ["Pass"]);
     await vi.waitFor(() => expect(loops.get(sessionId)?.iteration).toBe(1), { timeout: 10000 });
     expect(publish).not.toHaveBeenCalled();
+    loops.control(sessionId, "pause");
+    sessionWaits.clear("question:fixture");
     await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Explain the result" } });
     await vi.waitFor(() => expect(publish).toHaveBeenCalled());
     expect(publish.mock.calls[0]?.[1]).toMatchObject({ kind: "completion", title: "Response ready · Fix goal" });
@@ -163,12 +179,12 @@ describe("chat loop automatic continuation", () => {
 
   it("blocks on pending human input and wakes when the wait is cleared", async () => {
     sessionWaits.raise({ key: "loop-question", sessionId, kind: "question" });
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
     loops.goal(sessionId, "Fix", ["Pass"]);
     await new Promise(resolve => setTimeout(resolve, 350));
     expect(calls).toHaveLength(0);
     sessionWaits.clear("loop-question");
-    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("completed"), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("waiting"), { timeout: 10000 });
     expect(calls).toHaveLength(1);
   });
 
@@ -195,50 +211,51 @@ describe("chat loop automatic continuation", () => {
         // Model follows the explicit user request through the same service as
         // loop.resume. Its checkpoint must restart automatic continuation.
         const resumed = loops.control(sessionId, "resume");
-        loops.check(sessionId, { revision: resumed.revision, outcome: "continue", summary: "Recovered", nextMessage: "Run the remaining regression" });
+        checkpointAndAsk({ revision: resumed.revision, outcome: "continue", summary: "Recovered", nextMessage: "Run the remaining regression" });
       } else {
         expect(JSON.stringify(calls.at(-1))).toContain("Run the remaining regression");
-        loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passes"] });
+        checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passes"] });
       }
     };
     await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Continue the saved migration goal" } });
-    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "completed", iteration: 3 }), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "waiting", iteration: 3 }), { timeout: 10000 });
     expect(calls).toHaveLength(3);
   });
 
   it("continues a goal created mid-turn even when the model omits its check", async () => {
     onTurn = () => {
       if (calls.length === 1) loops.goal(sessionId, "Finish work", ["Check passes"]);
-      if (calls.length === 3) loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passes"] });
+      if (calls.length === 3) checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passes"] });
     };
     await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Work until the check passes" } });
-    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "completed", iteration: 3 }), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "waiting", iteration: 3 }), { timeout: 10000 });
     expect(calls).toHaveLength(3);
     expect(JSON.stringify(calls[1])).toContain("Verify completed work before repeating actions");
   });
 
   it("a direct answer resumes a waiting goal and validates owner access", async () => {
     const goal = loops.goal(sessionId, "Fix", ["Pass"]);
-    loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "Which target?" });
+    checkpointAndAsk({ revision: goal.revision, outcome: "waiting", summary: "Which target?" });
     expect((await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/loop`, headers: otherHeaders })).statusCode).toBe(404);
     expect((await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/loop`, headers: otherHeaders, payload: { action: "resume" } })).statusCode).toBe(404);
     onTurn = () => {
       expect(loops.get(sessionId)?.status).toBe("running");
-      loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passed"] });
+      checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passed"] });
     };
+    sessionWaits.clear("question:fixture");
     const response = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Use the authorized lab target" } });
     expect(response.statusCode).toBe(200);
     await vi.waitFor(() => expect(loops.get(sessionId)?.iteration).toBe(1));
-    expect(loops.get(sessionId)?.status).toBe("completed");
+    expect(loops.get(sessionId)?.status).toBe("waiting");
     expect(calls).toHaveLength(1);
   });
 
-  it("waits for a user answer and sends attention instead of a completion notification", async () => {
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "waiting", summary: "Which network is authorized?" });
+  it("waits for Q&A without duplicating the question notification", async () => {
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "waiting", summary: "Which network is authorized?" });
     loops.goal(sessionId, "Check the authorized network", ["Authorized checks pass"]);
-    await vi.waitFor(() => expect(publish).toHaveBeenCalled(), { timeout: 10000 });
+    await vi.waitFor(() => expect(loops.get(sessionId)?.iteration).toBe(1), { timeout: 10000 });
     expect(calls).toHaveLength(1);
-    expect(publish.mock.calls[0]?.[1]).toMatchObject({ kind: "attention", title: "Loop needs your answer" });
+    expect(publish).not.toHaveBeenCalled();
     expect(loops.get(sessionId)?.status).toBe("waiting");
   });
 

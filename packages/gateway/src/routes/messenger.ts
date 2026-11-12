@@ -152,7 +152,9 @@ export function registerMessengerRoutes(
     if (!user) return;
     reply.header('Cache-Control', 'no-store');
     if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
-    return teamsReauth.start(user.id);
+    const parsed = z.object({ accountId: z.string().regex(/^8:orgid:[0-9a-fA-F-]{36}$/), tenantId: z.string().uuid() }).strict().optional().safeParse(request.body ?? undefined);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid tenant login request.' });
+    return teamsReauth.start(user.id, parsed.data);
   });
   app.delete('/api/messenger/bridge-reauth/teams', async (request, reply) => {
     const user = await auth(request, reply);

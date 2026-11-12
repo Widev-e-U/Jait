@@ -32,7 +32,7 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
   return [
     {
       ...base, name: "loop.goal", displayName: "Chat loop goal",
-      description: "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until verified complete, paused, waiting for input, or an error. For criteria that can be verified by a terminal command, set executionCriteria to their zero-based indices; completion then requires successful session-tracked execution references. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
+      description: "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until a real user.ask Q&A request, an explicit user stop, a turn limit, or a provider error. Verified completion prompts a Q&A handoff instead of stopping automatically. For criteria that can be verified by a terminal command, set executionCriteria to their zero-based indices; completion then requires successful session-tracked execution references. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
       parameters: { type: "object", properties: {
         goal: { type: "string", minLength: 1, maxLength: 8000 },
         criteria: { type: "array", minItems: 1, maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
@@ -48,7 +48,7 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
     },
     {
       ...base, name: "loop.check", displayName: "Check loop goal",
-      description: "Evaluate the active goal before ending each turn. On continuation, report concrete new progress and supporting evidence, including integrated code, a passing focused regression, or a resolved blocker even if overall completion counts are unchanged. Distinguish provider capacity failures from work blockers. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, and pauses on review failure or repeated stalls. Inspect the returned status and monitor.",
+      description: "Evaluate the active goal before ending each turn. On continuation, report concrete new progress and supporting evidence, including integrated code, a passing focused regression, or a resolved blocker even if overall completion counts are unchanged. Distinguish provider capacity failures from work blockers. Continue with a concrete next message, wait for user input, or report verified completion with one evidence entry per criterion and then hand off through user.ask. Completion alone does not stop the loop. Waiting requires a pending user.ask request. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, while review failures and repeated stalls do not pause continuation. Inspect the returned status and monitor.",
       parameters: { type: "object", properties: {
         executionRefs: { type: "array", maxItems: 20, description: "Optional tracked terminal executions supporting criteria; criterion is the zero-based criterion index. Completion rejects missing or unsuccessful executions. A successful exit does not establish relevance or workspace freshness.", items: { type: "object", required: ["criterion", "terminalId", "executionId"], properties: { criterion: { type: "number" }, terminalId: { type: "string" }, executionId: { type: "string" } } } },
         revision: { type: "number" }, outcome: { type: "string", enum: ["continue", "complete", "waiting"] },
@@ -58,11 +58,11 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
       }, required: ["revision", "outcome", "summary"] },
       execute: execute("loop.check", (input, ctx) => service.checkMonitored(ctx.sessionId, input, ctx.userId, ctx.apiKeys, ctx.signal)),
     },
-    ...(["pause", "resume"] as const).map(action => ({
-      ...base, name: `loop.${action}`, displayName: `${action === "pause" ? "Pause" : "Resume"} chat loop`,
-      description: action === "pause" ? "Pause automatic continuation after the current turn. The goal and progress remain saved." : "Resume this chat's saved goal loop after the user requests continuation. Does not bypass pending questions or approvals.",
-      parameters: { type: "object" as const, properties: {} },
-      execute: execute(`loop.${action}`, (_input, ctx) => service.control(ctx.sessionId, action, ctx.userId)),
-    })),
+    {
+      ...base, name: "loop.resume", displayName: "Resume chat loop",
+      description: "Resume this chat's saved goal loop after the user requests continuation. Does not bypass pending questions or approvals.",
+      parameters: { type: "object", properties: {} },
+      execute: execute("loop.resume", (_input, ctx) => service.control(ctx.sessionId, "resume", ctx.userId)),
+    },
   ];
 }

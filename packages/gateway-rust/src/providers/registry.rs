@@ -17,6 +17,10 @@ pub trait ProviderAdapter: Send + Sync {
     }
     fn info(&self) -> Value;
     fn check_availability(&self) -> BoxFuture<'static, Result<(), String>>;
+    /// Models offered by this adapter, without selecting one for the user.
+    fn catalogue_models(&self) -> BoxFuture<'static, Result<Vec<Value>, String>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     /// Optional model discovery used by scheduled-job preflight.
     fn preflight_list_models(&self) -> Option<BoxFuture<'static, Result<(), String>>> {
         None

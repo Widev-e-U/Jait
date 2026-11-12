@@ -10,13 +10,13 @@
     "This inventory does not enumerate route/tool/schema/event contracts or prove gateway behavior."
   ],
   "summary": {
-    "test_files": 380,
-    "test_declarations": 3177,
+    "test_files": 379,
+    "test_declarations": 3193,
     "runtime_source_files": 390,
     "source_files_without_direct_test_import": 99,
-    "rust_verified_declarations": 1512,
-    "retained_test_files": 1,
-    "retained_test_declarations": 1
+    "rust_verified_declarations": 1486,
+    "retained_test_files": 2,
+    "retained_test_declarations": 2
   },
   "test_files": [
     {
@@ -75,42 +75,6 @@
           "status": "pending",
           "rust_cases": [],
           "boundary": "public-behavior-or-isolated-protocol-fixture"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/__scratch-pr.test.ts",
-      "fingerprint": "0306a6369e3d52d4",
-      "lane": "http-tools-config",
-      "direct_source_imports": [
-        "packages/gateway/src/config.ts",
-        "packages/gateway/src/db/index.ts",
-        "packages/gateway/src/providers/contracts.ts",
-        "packages/gateway/src/providers/registry.ts",
-        "packages/gateway/src/security/http-auth.ts",
-        "packages/gateway/src/server.ts",
-        "packages/gateway/src/services/threads.ts"
-      ],
-      "declaration_count": 1,
-      "cases": [
-        {
-          "id": "packages/gateway/src/__scratch-pr.test.ts:27:1",
-          "line": 27,
-          "column": 1,
-          "name": "scratch: replicate pr-state flow",
-          "suite": [],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed scratch: replicate pr-state flow. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
         }
       ]
     },
@@ -14255,7 +14219,7 @@
     },
     {
       "path": "packages/gateway/src/routes/chat-loops.test.ts",
-      "fingerprint": "a9b87b7c6f4520b6",
+      "fingerprint": "478392453dcfc888",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -14273,10 +14237,10 @@
       "declaration_count": 12,
       "cases": [
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:94:3",
-          "line": 94,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:103:3",
+          "line": 103,
           "column": 3,
-          "name": "runs hidden self-messages, checks progress and stops without completion notifications",
+          "name": "continues after verified completion until an actual Q&A request",
           "suite": [
             "chat loop automatic continuation"
           ],
@@ -14287,24 +14251,10 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:110:3",
-          "line": 110,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:124:3",
+          "line": 124,
           "column": 3,
           "name": "restores a running loop after gateway startup without an open browser",
-          "suite": [
-            "chat loop automatic continuation"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [],
-          "boundary": "http-or-websocket-contract"
-        },
-        {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:121:3",
-          "line": 121,
-          "column": 3,
-          "name": "uses the chat's selected model and never lets saved UI state retarget a continuation",
           "suite": [
             "chat loop automatic continuation"
           ],
@@ -14318,7 +14268,7 @@
           "id": "packages/gateway/src/routes/chat-loops.test.ts:135:3",
           "line": 135,
           "column": 3,
-          "name": "restores ordinary notifications for new turns after goal completion",
+          "name": "uses the chat's selected model and never lets saved UI state retarget a continuation",
           "suite": [
             "chat loop automatic continuation"
           ],
@@ -14332,6 +14282,20 @@
           "id": "packages/gateway/src/routes/chat-loops.test.ts:149:3",
           "line": 149,
           "column": 3,
+          "name": "restores ordinary notifications for new turns after an explicit user pause",
+          "suite": [
+            "chat loop automatic continuation"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:165:3",
+          "line": 165,
+          "column": 3,
           "name": "cancel during the gap pauses continuation, and controls require ownership",
           "suite": [
             "chat loop automatic continuation"
@@ -14343,8 +14307,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:164:3",
-          "line": 164,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:180:3",
+          "line": 180,
           "column": 3,
           "name": "blocks on pending human input and wakes when the wait is cleared",
           "suite": [
@@ -14357,8 +14321,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:175:3",
-          "line": 175,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:191:3",
+          "line": 191,
           "column": 3,
           "name": "stops on provider errors and resumes only on request",
           "suite": [
@@ -14371,8 +14335,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:184:3",
-          "line": 184,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:200:3",
+          "line": 200,
           "column": 3,
           "name": "exposes a stopped goal on a manual retry and continues automatically after resume",
           "suite": [
@@ -14385,24 +14349,10 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:209:3",
-          "line": 209,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:225:3",
+          "line": 225,
           "column": 3,
           "name": "continues a goal created mid-turn even when the model omits its check",
-          "suite": [
-            "chat loop automatic continuation"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [],
-          "boundary": "http-or-websocket-contract"
-        },
-        {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:220:3",
-          "line": 220,
-          "column": 3,
-          "name": "a direct answer resumes a waiting goal and validates owner access",
           "suite": [
             "chat loop automatic continuation"
           ],
@@ -14416,7 +14366,7 @@
           "id": "packages/gateway/src/routes/chat-loops.test.ts:236:3",
           "line": 236,
           "column": 3,
-          "name": "waits for a user answer and sends attention instead of a completion notification",
+          "name": "a direct answer resumes a waiting goal and validates owner access",
           "suite": [
             "chat loop automatic continuation"
           ],
@@ -14427,8 +14377,22 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:245:3",
-          "line": 245,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:253:3",
+          "line": 253,
+          "column": 3,
+          "name": "waits for Q&A without duplicating the question notification",
+          "suite": [
+            "chat loop automatic continuation"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:262:3",
+          "line": 262,
           "column": 3,
           "name": "stops and asks the user instead of choosing a provider and model by itself",
           "suite": [
@@ -20521,7 +20485,7 @@
     },
     {
       "path": "packages/gateway/src/routes/team-chat.test.ts",
-      "fingerprint": "f5fa16a5a2e821b3",
+      "fingerprint": "55b3b69137398dcd",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -20538,11 +20502,25 @@
         "packages/gateway/src/services/users.ts",
         "packages/gateway/src/tools/registry.ts"
       ],
-      "declaration_count": 11,
+      "declaration_count": 12,
       "cases": [
         {
           "id": "packages/gateway/src/routes/team-chat.test.ts:83:3",
           "line": 83,
+          "column": 3,
+          "name": "paginates messages in insertion order and limits historical deliveries",
+          "suite": [
+            "team room routes and work chat integration"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/team-chat.test.ts:105:3",
+          "line": 105,
           "column": 3,
           "name": "creates named chats, validates owned members, and returns only selected agents",
           "suite": [
@@ -20550,20 +20528,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: creates named chats, validates owned members, and returns only selected agents.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: fc9ec3d3dc0f78c98bdceb666b18f50e0feab1c8c3beac296f238462b9df633f.\n8 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(first.statusCode).toBe(200)\n[2] expect(second.statusCode).toBe(200)\n[3] expect(first.json().room.id).not.toBe(second.json().room.id)\n[4] expect(snapshot.json().members.map((agent: { id: string }) => agent.id)).toEqual([\"Developer\"])\n[5] expect((await create(\"Invalid\", [\"missing\"])).statusCode).toBe(400)\n[6] expect((await create(\"Empty\", [])).statusCode).toBe(400)\n[7] expect((await app.inject({ method: \"POST\", url: \"/api/team-rooms\", payload: { name: \"No auth\", memberIds: [\"Developer\"] } })).statusCode).toBe(401)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 1 original runtime expected operand(s) are preserved verbatim in addition to actual operands. Their complete original expressions, evaluation order and lexical bindings match the peer. Composite literal/asymmetric patterns retain their Rust-owned structure and bind indexed runtime leaves to exact original source selectors in order. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-operands/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:96:3",
-          "line": 96,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:118:3",
+          "line": 118,
           "column": 3,
           "name": "automatically addresses role-matched team messages with shared-composer attachments",
           "suite": [
@@ -20571,20 +20542,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: automatically addresses role-matched team messages with shared-composer attachments.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 00318497a6d294b0b9b9ec69f44fe21f5e842743cf9c5f63baaf45c7b1eae1e8.\n4 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(response.statusCode).toBe(201)\n[2] expect(response.json().message.recipientIds).toEqual([\"Developer\"])\n[3] expect(response.json().message.attachments[0].name).toBe(\"notes.txt\")\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-setup/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:104:3",
-          "line": 104,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:126:3",
+          "line": 126,
           "column": 3,
           "name": "selects an owned persona per ordinary-chat turn and snapshots attribution across edits and switches",
           "suite": [
@@ -20592,20 +20556,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_104_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: selects an owned persona per ordinary-chat turn and snapshots attribution across edits and switches.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 29b13850452f7035f906391f92cde5ab3f34737f2d38d8e4dbb11adc5bcf1f46.\n16 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(response.statusCode).toBe(200)\n[2] expect(response.body).toContain('\"persona\":{\"id\":\"Developer\"')\n[3] expect(provider.startSession.mock.calls[0]?.[0]).toMatchObject({ model: \"saved-model\", mode: \"supervised\" })\n[4] expect(provider.sendTurn.mock.calls[0]?.[1]).toContain(\"Persona for Developer\")\n[5] expect(provider.startSession).toHaveBeenCalledTimes(1)\n[6] expect(provider.startSession).toHaveBeenCalledTimes(2)\n[7] expect(provider.sendTurn.mock.calls[2]?.[1]).toContain(\"Persona for QA\")\n[8] expect(provider.startSession).toHaveBeenCalledTimes(3)\n[9] expect(provider.sendTurn.mock.calls[3]?.[1]).toContain(\"New QA instructions\")\n[10] expect(assistantSnapshots.map(item => item.name)).toEqual([\"Developer\", \"Developer\", \"QA\", \"Renamed QA\"])\n[11] expect(history.json().messages.filter((item: {role: string}) => item.role === \"assistant\").map((item: {persona: {name: string}}) => item.persona.name)).toEqual([\"Developer\", \"Developer\", \"QA\", \"Renamed QA\"])\n[12] expect(getPersonaChatRuntime(user.id, \"QA\")).toEqual({ count: 0, state: \"idle\" })\n[13] expect(provider.startSession).toHaveBeenCalledTimes(4)\n[14] expect(provider.sendTurn.mock.calls[4]?.[1]).not.toContain(\"New QA instructions\")\n[15] expect(JSON.parse(sessions.getById(session.id, user.id)!.metadata!).chatPersonaAgentId).toBeNull()\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-setup/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_104_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:137:3",
-          "line": 137,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:159:3",
+          "line": 159,
           "column": 3,
           "name": "rejects foreign, missing and paused personas before starting execution",
           "suite": [
@@ -20613,20 +20570,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_137_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: rejects foreign, missing and paused personas before starting execution.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 39f0d3fdb11fd715b7d8fedd46819131af9c38b684e32728f58b8885bb2cc174.\n4 source assertion site(s); observed repetition counts by Rust slot: [1, 4, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(response.statusCode).toBe(status)\n[2] expect(provider.startSession).not.toHaveBeenCalled()\n[3] expect(opened.db.select().from(messages).where(eq(messages.sessionId, session.id)).all()).toHaveLength(0)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 1 original runtime expected operand(s) are preserved verbatim in addition to actual operands; only simple original identifiers/property selectors are accepted. Their original expression and lexical bindings match the peer. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-setup/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_137_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:153:3",
-          "line": 153,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:175:3",
+          "line": 175,
           "column": 3,
           "name": "keeps otherwise identical queued requests addressed to different personas separate",
           "suite": [
@@ -20634,20 +20584,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_153_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: keeps otherwise identical queued requests addressed to different personas separate.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: adb079e45957e46c2db1b083f61e288e1760d8e316072b80e75f724fadcebd26.\n3 source assertion site(s); observed repetition counts by Rust slot: [1, 2, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(response.statusCode).toBe(202)\n[2] expect(queue.map(item => item.personaAgentId)).toEqual([\"Developer\", \"QA\"])\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-setup/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_153_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:170:3",
-          "line": 170,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:192:3",
+          "line": 192,
           "column": 3,
           "name": "resumes the selected persona after restart and attributes owned live runtime",
           "suite": [
@@ -20655,20 +20598,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_170_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: resumes the selected persona after restart and attributes owned live runtime.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: d66b62da4e26c8c5f759d38fc0c4373e0ce740c0c5dc94db87c71f4064336e08.\n11 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(getPersonaChatRuntime(user.id, \"QA\")).toEqual({ count: 1, state: \"running\" })\n[2] expect(getPersonaChatRuntime(\"foreign-owner\", \"QA\")).toEqual({ count: 0, state: \"idle\" })\n[3] expect(getPersonaChatRuntime(user.id, \"Developer\")).toEqual({ count: 0, state: \"idle\" })\n[4] expect((state.get(session.id, [\"chat.activeTurn\"])[\"chat.activeTurn\"] as {personaAgentId: string}).personaAgentId).toBe(\"QA\")\n[5] expect((app as typeof app & { recoverInterruptedChatTurns: () => Promise<number> }).recoverInterruptedChatTurns()).resolves.toBe(1)\n[6] expect(provider.sendTurn).toHaveBeenCalledOnce()\n[7] expect(getPersonaChatRuntime(user.id, \"QA\")).toEqual({ count: 0, state: \"idle\" })\n[8] expect(provider.startSession.mock.calls[0]?.[0]).toMatchObject({ model: \"saved-model\", mode: \"supervised\" })\n[9] expect(provider.sendTurn.mock.calls[0]?.[1]).toContain(\"Persona for QA\")\n[10] expect(opened.db.select().from(messages).where(eq(messages.sessionId, session.id)).all().filter(row => row.role === \"assistant\" && row.persona).map(row => JSON.parse(row.persona!).id)).toEqual([\"QA\"])\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-async/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_170_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:191:3",
-          "line": 191,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:213:3",
+          "line": 213,
           "column": 3,
           "name": "dispatches through thread routes with identity and supervised settings without creating empty chats",
           "suite": [
@@ -20677,19 +20613,12 @@
           "declaration": "it",
           "parameterized": false,
           "status": "pending",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_191_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: dispatches through thread routes with identity and supervised settings without creating empty chats.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 7f830892fe96258d96902fc692352f953858901ae50548e3c81da047749a521d.\n13 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1]. Every reachable site executed at least once, every observed comparison agrees with original Vitest and each retry site ends in a passing observation. Earlier false observations are allowed only inside a preserved vi.waitFor callback, where the original test explicitly catches and retries assertion failures, and peer completion was observed. Zero-count optional slots belong exclusively to lexically unreferenced helpers, proven by unused-assertion-helpers.mjs: identifier references retain aliases, callback arguments, lifecycle hooks, initialization effects and exports; ambiguous scopes and dynamic lookup fail closed. Each omitted slot and its enclosing helper source range are recorded in combined-selected.json. This does not certify an unexecuted conditional assertion in a reachable function. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(response.statusCode).toBe(201)\n[2] expect((await snapshot()).deliveries[0]?.status).toBe(\"completed\")\n[3] expect(provider.startSession.mock.calls[0]?.[0]).toMatchObject({ model: \"saved-model\", mode: \"supervised\" })\n[4] expect(provider.sendTurn.mock.calls[0]?.[1]).toContain(\"Persona for Developer\")\n[5] expect(provider.sendTurn.mock.calls[0]?.[1]).toContain(\"team.chat\")\n[6] expect(state.messages.at(-1)).toMatchObject({ kind: \"result\", content: \"Work checked and ready.\", sender: { kind: \"agent\", id: \"Developer\" } })\n[7] expect(state.messages.at(-1).workThreadId).toBe(workId)\n[8] expect(state.deliveries[0]).toMatchObject({ threadId: workId, threadStatus: \"completed\" })\n[9] expect(sessions.getById(workId)).toBeUndefined()\n[10] expect(provider.startSession).toHaveBeenCalledTimes(1)\n[11] expect((await snapshot()).deliveries.at(-1)?.status).toBe(\"completed\")\n[12] expect((await snapshot()).messages.filter((message: { kind: string }) => message.kind === \"result\")).toHaveLength(2)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Numeric hook timeout metadata is recorded, with passing original Vitest execution for the affected files; this does not claim cross-platform scheduling equivalence. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 2 original runtime expected operand(s) are preserved verbatim in addition to actual operands. Their complete original expressions, evaluation order and lexical bindings match the peer. Composite literal/asymmetric patterns retain their Rust-owned structure and bind indexed runtime leaves to exact original source selectors in order. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Reviewed plain-object identity operands retain WeakMap reference IDs; the Vitest differential reconstruction preserves shared versus distinct references. Custom-object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved. Unicode inputs are admitted only when the reviewed pattern consumes ASCII characters exclusively; dot, negated-class and broader Unicode behavior remain outside that extension. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and module mock factories are bound to the same original target and callback, awaited before affected imports, and compared with passing original Vitest files. Partial factories use one original-namespace snapshot and object spread. Broader live binding and module reset semantics remain uncredited. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/parity-snapshot-guard/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_191_3/result.json and fresh full source-bound translated report. The complete execution report is bound to the isolated parity-continue/source-checkpoint snapshot; live checkout freshness is audited separately. Instance checks use the same constructor/prototype bindings; the extra raw guard excludes proxies and custom Symbol.hasInstance semantics. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:216:3",
-          "line": 216,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:238:3",
+          "line": 238,
           "column": 3,
           "name": "runs independent tasks for a busy member and stops only the selected thread's queued work",
           "suite": [
@@ -20698,19 +20627,12 @@
           "declaration": "it",
           "parameterized": false,
           "status": "pending",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_216_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: runs independent tasks for a busy member and stops only the selected thread's queued work.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: c5f94bec5709fc3ad71cfd67d08e2e1b28ffad1d698a5265ca2bc0cdb47f2883.\n10 source assertion site(s); observed repetition counts by Rust slot: [1, 2, 2, 1, 1, 1, 1, 1, 1, 1]. Every reachable site executed at least once, every observed comparison agrees with original Vitest and each retry site ends in a passing observation. Earlier false observations are allowed only inside a preserved vi.waitFor callback, where the original test explicitly catches and retries assertion failures, and peer completion was observed. Zero-count optional slots belong exclusively to lexically unreferenced helpers, proven by unused-assertion-helpers.mjs: identifier references retain aliases, callback arguments, lifecycle hooks, initialization effects and exports; ambiguous scopes and dynamic lookup fail closed. Each omitted slot and its enclosing helper source range are recorded in combined-selected.json. This does not certify an unexecuted conditional assertion in a reachable function. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect(provider.sendTurn).toHaveBeenCalledTimes(3)\n[2] expect(provider.sendTurn).toHaveBeenCalledTimes(4)\n[3] expect(queued).toBeDefined()\n[4] expect(queued.sessionId).toBe(active.sessionId)\n[5] expect(independent).toBeDefined()\n[6] expect(provider.sendTurn).toHaveBeenCalledTimes(4)\n[7] expect(result.statusCode).toBe(200)\n[8] expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === queued.id)?.status).toBe(\"cancelled\")\n[9] expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === independent.id)?.status).toBe(\"running\")\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Numeric hook timeout metadata is recorded, with passing original Vitest execution for the affected files; this does not claim cross-platform scheduling equivalence. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 1 original runtime expected operand(s) are preserved verbatim in addition to actual operands. Their complete original expressions, evaluation order and lexical bindings match the peer. Composite literal/asymmetric patterns retain their Rust-owned structure and bind indexed runtime leaves to exact original source selectors in order. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Reviewed plain-object identity operands retain WeakMap reference IDs; the Vitest differential reconstruction preserves shared versus distinct references. Custom-object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved. Unicode inputs are admitted only when the reviewed pattern consumes ASCII characters exclusively; dot, negated-class and broader Unicode behavior remain outside that extension. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and module mock factories are bound to the same original target and callback, awaited before affected imports, and compared with passing original Vitest files. Partial factories use one original-namespace snapshot and object spread. Broader live binding and module reset semantics remain uncredited. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/parity-snapshot-guard/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_216_3/result.json and fresh full source-bound translated report. The complete execution report is bound to the isolated parity-continue/source-checkpoint snapshot; live checkout freshness is audited separately. Instance checks use the same constructor/prototype bindings; the extra raw guard excludes proxies and custom Symbol.hasInstance semantics. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:243:3",
-          "line": 243,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:265:3",
+          "line": 265,
           "column": 3,
           "name": "reports the latest answer after opening progress and fails empty completions",
           "suite": [
@@ -20719,19 +20641,12 @@
           "declaration": "it",
           "parameterized": false,
           "status": "pending",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_243_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: reports the latest answer after opening progress and fails empty completions.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: f9562598cca1073bba08001d43b6bb91bebbce574c27650bcf61c45a988bd111.\n5 source assertion site(s); observed repetition counts by Rust slot: [1, 3, 1, 3, 3]. Every reachable site executed at least once, every observed comparison agrees with original Vitest and each retry site ends in a passing observation. Earlier false observations are allowed only inside a preserved vi.waitFor callback, where the original test explicitly catches and retries assertion failures, and peer completion was observed. Zero-count optional slots belong exclusively to lexically unreferenced helpers, proven by unused-assertion-helpers.mjs: identifier references retain aliases, callback arguments, lifecycle hooks, initialization effects and exports; ambiguous scopes and dynamic lookup fail closed. Each omitted slot and its enclosing helper source range are recorded in combined-selected.json. This does not certify an unexecuted conditional assertion in a reachable function. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect((await snapshot()).deliveries[0]?.status).toBe(\"completed\")\n[2] expect((await snapshot()).messages.at(-1).content).toBe(\"Work checked and ready.\")\n[3] expect((await snapshot()).deliveries.find((item: {agentId: string; status: string; error?: string}) =>\n      item.agentId === \"Developer\" && item.status === \"failed\")?.error).toContain(\"without an answer\")\n[4] expect((await snapshot()).deliveries.every((item: {status: string}) =>\n      ![\"queued\", \"running\"].includes(item.status))).toBe(true)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Numeric hook timeout metadata is recorded, with passing original Vitest execution for the affected files; this does not claim cross-platform scheduling equivalence. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Reviewed plain-object identity operands retain WeakMap reference IDs; the Vitest differential reconstruction preserves shared versus distinct references. Custom-object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved. Unicode inputs are admitted only when the reviewed pattern consumes ASCII characters exclusively; dot, negated-class and broader Unicode behavior remain outside that extension. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and module mock factories are bound to the same original target and callback, awaited before affected imports, and compared with passing original Vitest files. Partial factories use one original-namespace snapshot and object spread. Broader live binding and module reset semantics remain uncredited. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/parity-snapshot-guard/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_243_3/result.json and fresh full source-bound translated report. The complete execution report is bound to the isolated parity-continue/source-checkpoint snapshot; live checkout freshness is audited separately. Instance checks use the same constructor/prototype bindings; the extra raw guard excludes proxies and custom Symbol.hasInstance semantics. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:261:3",
-          "line": 261,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:283:3",
+          "line": 283,
           "column": 3,
           "name": "relays as the actual named normal chat and rejects empty or foreign-chat messages",
           "suite": [
@@ -20739,20 +20654,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: relays as the actual named normal chat and rejects empty or foreign-chat messages.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: cad3c369626d9654c04a671351aaa40a907681947ea485b1c8c71073c5b578bc.\n5 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect((await tool.execute({ action: \"send\", roomId, content: \"Use the board\", recipientIds: [] }, context)).ok).toBe(true)\n[2] expect(state.messages[0]).toMatchObject({ content: \"Use the board\", sender: { kind: \"chat\", name: \"Developer Chat\", avatar: null, sourceSessionId: source.id } })\n[3] expect((await tool.execute({ action: \"send\", roomId, content: \"\" }, context)).ok).toBe(false)\n[4] expect((await tool.execute({ action: \"send\", roomId, content: \"Spoof\" }, { ...context, sessionId: privateChat.id })).ok).toBe(false)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 1 original runtime expected operand(s) are preserved verbatim in addition to actual operands. Their complete original expressions, evaluation order and lexical bindings match the peer. Composite literal/asymmetric patterns retain their Rust-owned structure and bind indexed runtime leaves to exact original source selectors in order. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-operands/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/team-chat.test.ts:273:3",
-          "line": 273,
+          "id": "packages/gateway/src/routes/team-chat.test.ts:295:3",
+          "line": 295,
           "column": 3,
           "name": "requires authentication and enforces room ownership and recipients",
           "suite": [
@@ -20760,16 +20668,9 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "http-or-websocket-contract",
-          "parity_review": "Reviewed declaration: requires authentication and enforces room ownership and recipients.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 12a7766af9ebc4e8d4333fd83fac4c7edc7b534ae38daee0a565fcd5e67ac0b6.\n5 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(created.statusCode).toBe(200)\n[1] expect((await app.inject({ method: \"GET\", url: \"/api/team-rooms\" })).statusCode).toBe(401)\n[2] expect((await app.inject({ method: \"GET\", url: \"/api/team-rooms/\" + roomId, headers: otherHeaders })).statusCode).toBe(404)\n[3] expect(bad.statusCode).toBe(400)\n[4] expect((await snapshot()).deliveries).toHaveLength(0)\nSetup consists of 12 preserved lexical declaration/effect(s), in matched initialization order. 2 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-setup/focused-runs/tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
         }
       ]
     },
@@ -27196,12 +27097,12 @@
     },
     {
       "path": "packages/gateway/src/services/bridge-reauth.test.ts",
-      "fingerprint": "090217ac50c7d0fd",
+      "fingerprint": "7ffee7a60d4b3813",
       "lane": "security-execution",
       "direct_source_imports": [
         "packages/gateway/src/services/bridge-reauth.ts"
       ],
-      "declaration_count": 3,
+      "declaration_count": 6,
       "cases": [
         {
           "id": "packages/gateway/src/services/bridge-reauth.test.ts:15:3",
@@ -27235,9 +27136,51 @@
           "id": "packages/gateway/src/services/bridge-reauth.test.ts:27:3",
           "line": 27,
           "column": 3,
+          "name": "derives the remove script next to the apply script",
+          "suite": [
+            "removeCommand"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:35:3",
+          "line": 35,
+          "column": 3,
           "name": "derives the apply script from the reauth command",
           "suite": [
             "applyCommand"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:44:3",
+          "line": 44,
+          "column": 3,
+          "name": "uses only a dedicated tenant importer",
+          "suite": [
+            "tenant sign-in"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/bridge-reauth.test.ts:49:3",
+          "line": 49,
+          "column": 3,
+          "name": "rejects malformed tenant IDs without starting a browser",
+          "suite": [
+            "tenant sign-in"
           ],
           "declaration": "it",
           "parameterized": false,
@@ -27709,21 +27652,22 @@
     },
     {
       "path": "packages/gateway/src/services/chat-loops.test.ts",
-      "fingerprint": "cd8173c71e87d885",
+      "fingerprint": "eed0a6d1ab1e7139",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/db/index.ts",
         "packages/gateway/src/services/background-command-monitor.ts",
         "packages/gateway/src/services/chat-loops.ts",
+        "packages/gateway/src/services/session-waits.ts",
         "packages/gateway/src/services/sessions.ts",
         "packages/gateway/src/services/system-one.ts",
         "packages/gateway/src/tools/loop-tools.ts"
       ],
-      "declaration_count": 26,
+      "declaration_count": 32,
       "cases": [
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:24:3",
-          "line": 24,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:25:3",
+          "line": 25,
           "column": 3,
           "name": "checks cited execution status within the chat before accepting completion",
           "suite": [
@@ -27736,8 +27680,78 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:41:3",
-          "line": 41,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:42:3",
+          "line": 42,
+          "column": 3,
+          "name": "rejects waiting without a real blocking Q&A in the same chat",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:53:3",
+          "line": 53,
+          "column": 3,
+          "name": "waits for actual Q&A even when the model omits its checkpoint",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:61:3",
+          "line": 61,
+          "column": 3,
+          "name": "bounds unchecked continuation by the turn budget instead of stopping after three turns",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:67:3",
+          "line": 67,
+          "column": 3,
+          "name": "does not let Q&A on the last turn bypass the budget",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:77:3",
+          "line": 77,
+          "column": 3,
+          "name": "keeps the turn budget when a waiting goal receives a direct chat reply",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:87:3",
+          "line": 87,
           "column": 3,
           "name": "requires execution references for designated criteria",
           "suite": [
@@ -27750,8 +27764,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:48:3",
-          "line": 48,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:94:3",
+          "line": 94,
           "column": 3,
           "name": "rejects malformed execution references",
           "suite": [
@@ -27764,8 +27778,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:54:3",
-          "line": 54,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:100:3",
+          "line": 100,
           "column": 3,
           "name": "persists checkpoints, uses the next self-message once and keeps unrelated metadata",
           "suite": [
@@ -27778,8 +27792,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:68:3",
-          "line": 68,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:114:3",
+          "line": 114,
           "column": 3,
           "name": "rejects empty goals and false completion without verification for every criterion",
           "suite": [
@@ -27792,8 +27806,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:78:3",
-          "line": 78,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:124:3",
+          "line": 124,
           "column": 3,
           "name": "pause, replacement and resume invalidate stale agent checks",
           "suite": [
@@ -27806,8 +27820,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:90:3",
-          "line": 90,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:136:3",
+          "line": 136,
           "column": 3,
           "name": "pauses on cancellation and errors and preserves an explicit waiting checkpoint",
           "suite": [
@@ -27820,8 +27834,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:101:3",
-          "line": 101,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:148:3",
+          "line": 148,
           "column": 3,
           "name": "keeps stopped goals visible without granting permission to resume",
           "suite": [
@@ -27834,8 +27848,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:120:3",
-          "line": 120,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:167:3",
+          "line": 167,
           "column": 3,
           "name": "collects submitted structured answers before continuing and preserves explicit pauses",
           "suite": [
@@ -27848,8 +27862,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:129:3",
-          "line": 129,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:177:3",
+          "line": 177,
           "column": 3,
           "name": "does not copy autorun into question branches",
           "suite": [
@@ -27862,8 +27876,22 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:137:3",
-          "line": 137,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:185:3",
+          "line": 185,
+          "column": 3,
+          "name": "does not expose a model-facing pause tool while preserving user controls",
+          "suite": [
+            "persistent chat goal loops"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/chat-loops.test.ts:191:3",
+          "line": 191,
           "column": 3,
           "name": "tools reject unauthenticated and worker contexts",
           "suite": [
@@ -27876,8 +27904,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:152:3",
-          "line": 152,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:206:3",
+          "line": 206,
           "column": 3,
           "name": "requires configured System One to accept completion and records its review",
           "suite": [
@@ -27890,8 +27918,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:166:3",
-          "line": 166,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:220:3",
+          "line": 220,
           "column": 3,
           "name": "rejects uncertain or missing criterion decisions",
           "suite": [
@@ -27904,8 +27932,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:175:3",
-          "line": 175,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:229:3",
+          "line": 229,
           "column": 3,
           "name": "keeps running on monitor failure without leaking errors or accepting completion",
           "suite": [
@@ -27918,8 +27946,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:184:3",
-          "line": 184,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:238:3",
+          "line": 238,
           "column": 3,
           "name": "logs the review failure cause server-side and records only the error class",
           "suite": [
@@ -27932,8 +27960,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:194:3",
-          "line": 194,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:248:3",
+          "line": 248,
           "column": 3,
           "name": "does not pause continue checkpoints when System One is unavailable",
           "suite": [
@@ -27946,10 +27974,10 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:205:3",
-          "line": 205,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:259:3",
+          "line": 259,
           "column": 3,
-          "name": "pauses when completion cannot be reviewed three times in a row",
+          "name": "keeps running when completion cannot be reviewed repeatedly",
           "suite": [
             "persistent chat goal loops"
           ],
@@ -27960,8 +27988,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:216:3",
-          "line": 216,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:270:3",
+          "line": 270,
           "column": 3,
           "name": "does not overwrite pauses or replacement goals during model evaluation",
           "suite": [
@@ -27974,10 +28002,10 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:231:3",
-          "line": 231,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:285:3",
+          "line": 285,
           "column": 3,
-          "name": "pauses after three stalled checkpoints and renews budgets only on explicit resume",
+          "name": "keeps running after stalled checkpoints and renews budgets only on explicit resume",
           "suite": [
             "persistent chat goal loops"
           ],
@@ -27988,8 +28016,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:243:3",
-          "line": 243,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:297:3",
+          "line": 297,
           "column": 3,
           "name": "bounds unchecked turns and total turns even without System One",
           "suite": [
@@ -28002,8 +28030,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:258:3",
-          "line": 258,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:312:3",
+          "line": 312,
           "column": 3,
           "name": "awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints",
           "suite": [
@@ -28016,8 +28044,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:271:3",
-          "line": 271,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:326:3",
+          "line": 326,
           "column": 3,
           "name": "scrubs configured credentials and authorization text from review state",
           "suite": [
@@ -28030,8 +28058,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:284:3",
-          "line": 284,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:339:3",
+          "line": 339,
           "column": 3,
           "name": "does not accept oversized review state without sending incomplete criteria",
           "suite": [
@@ -28044,8 +28072,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:293:3",
-          "line": 293,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:348:3",
+          "line": 348,
           "column": 3,
           "name": "allows verified completion after previous stalled checkpoints",
           "suite": [
@@ -28058,8 +28086,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:308:3",
-          "line": 308,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:363:3",
+          "line": 363,
           "column": 3,
           "name": "routes configured tool checks through System One and waits for the verdict",
           "suite": [
@@ -28072,8 +28100,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/chat-loops.test.ts:319:3",
-          "line": 319,
+          "id": "packages/gateway/src/services/chat-loops.test.ts:374:3",
+          "line": 374,
           "column": 3,
           "name": "requires a separate supported verdict for every acceptance criterion",
           "suite": [
@@ -28830,14 +28858,14 @@
     },
     {
       "path": "packages/gateway/src/services/disk-janitor.test.ts",
-      "fingerprint": "e3a01fec50c29e2a",
+      "fingerprint": "59d30971ffb7a769",
       "lane": "http-tools-config",
       "direct_source_imports": [
         "packages/gateway/src/db/index.ts",
         "packages/gateway/src/services/disk-janitor.ts",
         "packages/gateway/src/services/threads.ts"
       ],
-      "declaration_count": 20,
+      "declaration_count": 21,
       "cases": [
         {
           "id": "packages/gateway/src/services/disk-janitor.test.ts:128:3",
@@ -28871,6 +28899,20 @@
           "id": "packages/gateway/src/services/disk-janitor.test.ts:187:3",
           "line": 187,
           "column": 3,
+          "name": "preserves the shared build lock even when it is old",
+          "suite": [
+            "DiskJanitor"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:198:3",
+          "line": 198,
+          "column": 3,
           "name": "measures nested trees, individual files, and missing paths",
           "suite": [
             "DiskJanitor"
@@ -28882,8 +28924,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:197:3",
-          "line": 197,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:208:3",
+          "line": 208,
           "column": 3,
           "name": "reports foreign-owned scratch in a sticky directory once",
           "suite": [
@@ -28896,8 +28938,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:215:3",
-          "line": 215,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:226:3",
+          "line": 226,
           "column": 3,
           "name": "reaps a worktree whose thread finished outside the grace period",
           "suite": [
@@ -28910,8 +28952,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:232:3",
-          "line": 232,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:243:3",
+          "line": 243,
           "column": 3,
           "name": "never reaps a worktree belonging to a running thread",
           "suite": [
@@ -28924,24 +28966,10 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:247:3",
-          "line": 247,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:258:3",
+          "line": 258,
           "column": 3,
           "name": "keeps a finished worktree until the grace period elapses",
-          "suite": [
-            "DiskJanitor"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [],
-          "boundary": "public-behavior-or-isolated-protocol-fixture"
-        },
-        {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:262:3",
-          "line": 262,
-          "column": 3,
-          "name": "reaps an orphaned worktree that has no thread row",
           "suite": [
             "DiskJanitor"
           ],
@@ -28955,6 +28983,20 @@
           "id": "packages/gateway/src/services/disk-janitor.test.ts:273:3",
           "line": 273,
           "column": 3,
+          "name": "reaps an orphaned worktree that has no thread row",
+          "suite": [
+            "DiskJanitor"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:284:3",
+          "line": 284,
+          "column": 3,
           "name": "reaps an empty per-repo container once its worktrees are gone",
           "suite": [
             "DiskJanitor"
@@ -28966,8 +29008,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:289:3",
-          "line": 289,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:300:3",
+          "line": 300,
           "column": 3,
           "name": "keeps a container that still holds a worktree",
           "suite": [
@@ -28980,8 +29022,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:307:3",
-          "line": 307,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:318:3",
+          "line": 318,
           "column": 3,
           "name": "preserves the git branch so committed work stays recoverable",
           "suite": [
@@ -28994,8 +29036,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:323:3",
-          "line": 323,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:334:3",
+          "line": 334,
           "column": 3,
           "name": "matches worktrees recorded with a foreign-platform path",
           "suite": [
@@ -29008,8 +29050,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:339:3",
-          "line": 339,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:350:3",
+          "line": 350,
           "column": 3,
           "name": "reports bytes without deleting anything on a dry run",
           "suite": [
@@ -29022,8 +29064,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:351:3",
-          "line": 351,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:362:3",
+          "line": 362,
           "column": 3,
           "name": "skips the run entirely when disabled",
           "suite": [
@@ -29036,8 +29078,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:361:3",
-          "line": 361,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:372:3",
+          "line": 372,
           "column": 3,
           "name": "refuses to treat a path outside the managed root as reapable",
           "suite": [
@@ -29050,8 +29092,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:370:3",
-          "line": 370,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:381:3",
+          "line": 381,
           "column": 3,
           "name": "enables the janitor by default so shipped installs self-clean",
           "suite": [
@@ -29064,24 +29106,10 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:375:3",
-          "line": 375,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:386:3",
+          "line": 386,
           "column": 3,
           "name": "reaps only Jait scratch entries inside its configured temp root",
-          "suite": [
-            "DiskJanitor"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [],
-          "boundary": "public-behavior-or-isolated-protocol-fixture"
-        },
-        {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:389:3",
-          "line": 389,
-          "column": 3,
-          "name": "reaps stale sandbox storage only inside its configured root",
           "suite": [
             "DiskJanitor"
           ],
@@ -29095,6 +29123,20 @@
           "id": "packages/gateway/src/services/disk-janitor.test.ts:400:3",
           "line": 400,
           "column": 3,
+          "name": "reaps stale sandbox storage only inside its configured root",
+          "suite": [
+            "DiskJanitor"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:411:3",
+          "line": 411,
+          "column": 3,
           "name": "keeps an old scratch directory whose contents are still being written",
           "suite": [
             "DiskJanitor"
@@ -29106,8 +29148,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/disk-janitor.test.ts:416:3",
-          "line": 416,
+          "id": "packages/gateway/src/services/disk-janitor.test.ts:427:3",
+          "line": 427,
           "column": 3,
           "name": "notifies once about scratch it cannot unlink instead of failing silently",
           "suite": [
@@ -29850,7 +29892,7 @@
     },
     {
       "path": "packages/gateway/src/services/email/service.test.ts",
-      "fingerprint": "88d667c84c9507c4",
+      "fingerprint": "8269205553e13f4f",
       "lane": "native-integrations",
       "direct_source_imports": [
         "packages/gateway/src/db/connection.ts",
@@ -29861,11 +29903,25 @@
         "packages/gateway/src/services/email/service.ts",
         "packages/gateway/src/services/user-secrets.ts"
       ],
-      "declaration_count": 15,
+      "declaration_count": 16,
       "cases": [
         {
           "id": "packages/gateway/src/services/email/service.test.ts:32:3",
           "line": 32,
+          "column": 3,
+          "name": "caches inbox summaries per owner and invalidates them after changes",
+          "suite": [
+            "EmailService"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/email/service.test.ts:46:3",
+          "line": 46,
           "column": 3,
           "name": "reports providers as unconfigured until credentials are saved",
           "suite": [
@@ -29873,20 +29929,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_32_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:38:3",
-          "line": 38,
+          "id": "packages/gateway/src/services/email/service.test.ts:52:3",
+          "line": 52,
           "column": 3,
           "name": "resolves env credentials as a fallback",
           "suite": [
@@ -29894,20 +29943,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_38_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:44:3",
-          "line": 44,
+          "id": "packages/gateway/src/services/email/service.test.ts:58:3",
+          "line": 58,
           "column": 3,
           "name": "startConnect throws a helpful error when unconfigured",
           "suite": [
@@ -29915,20 +29957,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_44_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:49:3",
-          "line": 49,
+          "id": "packages/gateway/src/services/email/service.test.ts:63:3",
+          "line": 63,
           "column": 3,
           "name": "builds an authorize URL with PKCE + state when configured",
           "suite": [
@@ -29936,20 +29971,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_49_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:60:3",
-          "line": 60,
+          "id": "packages/gateway/src/services/email/service.test.ts:74:3",
+          "line": 74,
           "column": 3,
           "name": "rejects an unknown OAuth state on callback",
           "suite": [
@@ -29957,20 +29985,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_60_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:64:3",
-          "line": 64,
+          "id": "packages/gateway/src/services/email/service.test.ts:78:3",
+          "line": 78,
           "column": 3,
           "name": "disconnecting an account removes it and its stored tokens",
           "suite": [
@@ -29978,20 +29999,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_64_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:81:3",
-          "line": 81,
+          "id": "packages/gateway/src/services/email/service.test.ts:95:3",
+          "line": 95,
           "column": 3,
           "name": "scopes accounts to the owning user",
           "suite": [
@@ -29999,20 +30013,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_81_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:99:3",
-          "line": 99,
+          "id": "packages/gateway/src/services/email/service.test.ts:113:3",
+          "line": 113,
           "column": 3,
           "name": "keeps accounts distinct and requires an explicit id when there is more than one",
           "suite": [
@@ -30020,20 +30027,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_99_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:108:3",
-          "line": 108,
+          "id": "packages/gateway/src/services/email/service.test.ts:122:3",
+          "line": 122,
           "column": 3,
           "name": "appends each account's signature once to new messages and replies",
           "suite": [
@@ -30041,20 +30041,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_108_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:119:3",
-          "line": 119,
+          "id": "packages/gateway/src/services/email/service.test.ts:133:3",
+          "line": 133,
           "column": 3,
           "name": "escapes signatures for HTML and supports both per-send and per-account opt out",
           "suite": [
@@ -30062,20 +30055,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_119_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:131:3",
-          "line": 131,
+          "id": "packages/gateway/src/services/email/service.test.ts:145:3",
+          "line": 145,
           "column": 3,
           "name": "scopes signature changes and deletes settings on disconnect",
           "suite": [
@@ -30083,20 +30069,13 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_131_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:140:3",
-          "line": 140,
+          "id": "packages/gateway/src/services/email/service.test.ts:154:3",
+          "line": 154,
           "column": 3,
           "name": "verifies IMAP/SMTP before storing encrypted credentials and never exposes them in account metadata",
           "suite": [
@@ -30104,73 +30083,45 @@
           ],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_140_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:155:1",
-          "line": 155,
+          "id": "packages/gateway/src/services/email/service.test.ts:169:1",
+          "line": 169,
           "column": 1,
           "name": "rejects header injection and malformed send flags before provider access",
           "suite": [],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_155_1",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:163:1",
-          "line": 163,
+          "id": "packages/gateway/src/services/email/service.test.ts:177:1",
+          "line": 177,
           "column": 1,
           "name": "rejects expired OAuth state before exchanging tokens and consumes it",
           "suite": [],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_163_1",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/email/service.test.ts:184:1",
-          "line": 184,
+          "id": "packages/gateway/src/services/email/service.test.ts:198:1",
+          "line": 198,
           "column": 1,
           "name": "preserves the OAuth expiry boundary and rejects a repeated callback",
           "suite": [],
           "declaration": "it",
           "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_184_1",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate."
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
       ]
     },
@@ -32262,16 +32213,44 @@
     },
     {
       "path": "packages/gateway/src/services/messenger-service.test.ts",
-      "fingerprint": "69a4fa3c5d3c1ed9",
+      "fingerprint": "01e2b911b300e400",
       "lane": "http-tools-config",
       "direct_source_imports": [
         "packages/gateway/src/services/messenger-service.ts"
       ],
-      "declaration_count": 16,
+      "declaration_count": 22,
       "cases": [
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:18:3",
-          "line": 18,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:20:3",
+          "line": 20,
+          "column": 3,
+          "name": "restores enabled and disabled access across gateway restarts",
+          "suite": [
+            "Messenger assistant access persistence"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:45:3",
+          "line": 45,
+          "column": 3,
+          "name": "uses sender names for direct alerts and prefixes group messages",
+          "suite": [
+            "Messenger message actions and history"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:66:3",
+          "line": 66,
           "column": 3,
           "name": "projects edits and reactions onto their original message",
           "suite": [
@@ -32284,8 +32263,36 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:24:3",
-          "line": 24,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:72:3",
+          "line": 72,
+          "column": 3,
+          "name": "projects each group sender’s Matrix avatar and rejects external URLs",
+          "suite": [
+            "Messenger message actions and history"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:83:3",
+          "line": 83,
+          "column": 3,
+          "name": "projects reply references after a message is sent, including edits",
+          "suite": [
+            "Messenger message actions and history"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:89:3",
+          "line": 89,
           "column": 3,
           "name": "ignores forged edits and redacted reactions",
           "suite": [
@@ -32298,8 +32305,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:31:3",
-          "line": 31,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:96:3",
+          "line": 96,
           "column": 3,
           "name": "retains newly fetched history when more than 2000 events are loaded",
           "suite": [
@@ -32312,8 +32319,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:38:3",
-          "line": 38,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:103:3",
+          "line": 103,
           "column": 3,
           "name": "records exhausted history even after subsequent syncs",
           "suite": [
@@ -32326,8 +32333,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:47:3",
-          "line": 47,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:112:3",
+          "line": 112,
           "column": 3,
           "name": "rejects edits of another sender and toggles own reactions",
           "suite": [
@@ -32340,8 +32347,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:56:3",
-          "line": 56,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:121:3",
+          "line": 121,
           "column": 3,
           "name": "lists each reader once no matter how many messages they acknowledged",
           "suite": [
@@ -32354,8 +32361,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:68:3",
-          "line": 68,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:133:3",
+          "line": 133,
           "column": 3,
           "name": "keeps receipt positions stable when an earlier message is redacted",
           "suite": [
@@ -32368,8 +32375,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:77:3",
-          "line": 77,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:142:3",
+          "line": 142,
           "column": 3,
           "name": "removes a conversation after leaving and forgetting",
           "suite": [
@@ -32382,8 +32389,36 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:87:3",
-          "line": 87,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:152:3",
+          "line": 152,
+          "column": 3,
+          "name": "persists and refreshes the requested status, then stops refreshing",
+          "suite": [
+            "Own Matrix presence"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:167:3",
+          "line": 167,
+          "column": 3,
+          "name": "does not save a status rejected by the homeserver",
+          "suite": [
+            "Own Matrix presence"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/services/messenger-service.test.ts:178:3",
+          "line": 178,
           "column": 3,
           "name": "normalises an https homeserver to its origin",
           "suite": [
@@ -32396,8 +32431,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:93:3",
-          "line": 93,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:184:3",
+          "line": 184,
           "column": 3,
           "name": "rejects credentials in the url",
           "suite": [
@@ -32410,8 +32445,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:98:3",
-          "line": 98,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:189:3",
+          "line": 189,
           "column": 3,
           "name": "rejects query strings and fragments",
           "suite": [
@@ -32424,8 +32459,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:103:3",
-          "line": 103,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:194:3",
+          "line": 194,
           "column": 3,
           "name": "rejects any path beyond the server root",
           "suite": [
@@ -32438,8 +32473,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:107:3",
-          "line": 107,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:198:3",
+          "line": 198,
           "column": 3,
           "name": "rejects plaintext http unless it is loopback",
           "suite": [
@@ -32452,8 +32487,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:114:3",
-          "line": 114,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:205:3",
+          "line": 205,
           "column": 3,
           "name": "rejects schemes other than http and https",
           "suite": [
@@ -32466,8 +32501,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:122:3",
-          "line": 122,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:213:3",
+          "line": 213,
           "column": 3,
           "name": "projects status room metadata and preserves sender IDs and captions (%s)",
           "suite": [
@@ -32480,8 +32515,8 @@
           "boundary": "public-behavior-or-isolated-protocol-fixture"
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.test.ts:155:3",
-          "line": 155,
+          "id": "packages/gateway/src/services/messenger-service.test.ts:246:3",
+          "line": 246,
           "column": 3,
           "name": "recognizes Teams metadata after joining an invitation (%s)",
           "suite": [
@@ -54759,107 +54794,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/tools/elevated-tools.test.ts",
-      "fingerprint": "68e921637b2eb826",
-      "lane": "http-tools-config",
-      "direct_source_imports": [
-        "packages/gateway/src/services/audit.ts",
-        "packages/gateway/src/services/secret-input.ts",
-        "packages/gateway/src/surfaces/registry.ts",
-        "packages/gateway/src/tools/agent-loop.ts",
-        "packages/gateway/src/tools/elevated-tools.ts",
-        "packages/gateway/src/tools/index.ts",
-        "packages/gateway/src/tools/registry.ts"
-      ],
-      "declaration_count": 4,
-      "cases": [
-        {
-          "id": "packages/gateway/src/tools/elevated-tools.test.ts:78:3",
-          "line": 78,
-          "column": 3,
-          "name": "executes with a secret prompt and keeps the password out of tool inputs and audit output",
-          "suite": [
-            "elevated.run for external providers"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_78_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed declaration: executes with a secret prompt and keeps the password out of tool inputs and audit output.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 5e929d7dc512299f9187fe0d02ec3c5ef6bb00cf3ab78e9293ae363101d5284b.\n7 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(result.ok).toBe(true)\n[1] expect((result.data as { output: string }).output).toContain(\"root-owned output\")\n[2] expect(requests).toEqual([{\n      title: \"Administrator password\",\n      prompt: \"Password to run an elevated command: install system packages\",\n      requestedBy: \"elevated.run\",\n    }])\n[3] expect(calls[0]?.command).toBe(\"sudo\")\n[4] expect(calls[0]?.args).toEqual([\"-S\", \"-k\", \"-p\", \"\", \"--\", \"sh\", \"-lc\", \"apt-get update\"])\n[5] expect(JSON.stringify(auditEntries)).not.toContain(secret)\n[6] expect(auditEntries[0]).toMatchObject({\n      actionType: \"tool.execute\",\n      toolName: \"elevated.run\",\n    })\nSetup consists of 4 preserved lexical declaration/effect(s), in matched initialization order. 0 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. 1 original runtime expected operand(s) are preserved verbatim in addition to actual operands; only simple original identifiers/property selectors are accepted. Their original expression and lexical bindings match the peer. Expected values are not invented from observed results or a new formula.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-dynamic/focused-runs/tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_78_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
-        },
-        {
-          "id": "packages/gateway/src/tools/elevated-tools.test.ts:122:3",
-          "line": 122,
-          "column": 3,
-          "name": "exposes the elevated tool through the schema path without password parameters",
-          "suite": [
-            "elevated.run for Jait provider tool discovery"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_122_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed declaration: exposes the elevated tool through the schema path without password parameters.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 8ebe57d3e715d96c06b0101176dd6874cb25f4c8722247650bb492d4205758b8.\n2 source assertion site(s); observed repetition counts by Rust slot: [1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(byName.has(\"elevated_run\")).toBe(true)\n[1] expect(byName.get(\"elevated_run\")?.function.parameters).not.toHaveProperty(\"properties.password\")\nSetup consists of 4 preserved lexical declaration/effect(s), in matched initialization order. 0 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-predicates/focused-runs/tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_122_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
-        },
-        {
-          "id": "packages/gateway/src/tools/elevated-tools.test.ts:136:3",
-          "line": 136,
-          "column": 3,
-          "name": "uses UAC elevation via -Verb RunAs when no username is provided",
-          "suite": [
-            "elevated.run on Windows"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "verified",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_136_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/contracts/26143582-1bfe-489e-8306-bab5b86776e3/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed declaration: uses UAC elevation via -Verb RunAs when no username is provided.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 789abb5b0b028db123eb21a5b9be6b48c5b0aa5627ba0d77260aabde94703a31.\n6 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(args).toContain(\"-EncodedCommand\")\n[1] expect(script).toContain(\"-Verb RunAs\")\n[2] expect(script).not.toContain(\"-Credential\")\n[3] expect(result.ok).toBe(true)\n[4] expect((result.data as { output: string }).output).toContain(\"uac-elevated-output\")\n[5] expect(calls[0]?.command).toBe(\"powershell.exe\")\nSetup consists of 4 preserved lexical declaration/effect(s), in matched initialization order. 0 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-expanded/focused-runs/tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_136_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
-        },
-        {
-          "id": "packages/gateway/src/tools/elevated-tools.test.ts:169:3",
-          "line": 169,
-          "column": 3,
-          "name": "runs powershell under the provided administrator account without exposing the password in inputs",
-          "suite": [
-            "elevated.run on Windows"
-          ],
-          "declaration": "it",
-          "parameterized": false,
-          "status": "pending",
-          "rust_cases": [
-            {
-              "id": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_169_3",
-              "source": "tests/contract/tests/tail_static.rs",
-              "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
-            }
-          ],
-          "boundary": "public-behavior-or-isolated-protocol-fixture",
-          "parity_review": "Reviewed runs powershell under the provided administrator account without exposing the password in inputs. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/tools/email-tools.test.ts",
       "fingerprint": "a0dbd5e959e01068",
       "lane": "native-integrations",
@@ -63256,6 +63190,64 @@
       ]
     },
     {
+      "path": "packages/gateway/src/tools/windows-elevation.test.ts",
+      "fingerprint": "592b1023e2bcf6ea",
+      "lane": "http-tools-config",
+      "direct_source_imports": [
+        "packages/gateway/src/services/secret-input.ts",
+        "packages/gateway/src/surfaces/registry.ts",
+        "packages/gateway/src/tools/agent-loop.ts",
+        "packages/gateway/src/tools/contracts.ts",
+        "packages/gateway/src/tools/index.ts",
+        "packages/gateway/src/tools/windows-elevation.ts"
+      ],
+      "declaration_count": 3,
+      "cases": [
+        {
+          "id": "packages/gateway/src/tools/windows-elevation.test.ts:47:3",
+          "line": 47,
+          "column": 3,
+          "name": "exposes elevated/username/reason without a password parameter and drops elevated.run",
+          "suite": [
+            "terminal.run elevated schema"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/tools/windows-elevation.test.ts:60:3",
+          "line": 60,
+          "column": 3,
+          "name": "uses UAC (-Verb RunAs) when no username is provided",
+          "suite": [
+            "runWindowsElevatedCommand"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/tools/windows-elevation.test.ts:72:3",
+          "line": 72,
+          "column": 3,
+          "name": "uses credential elevation with the password only in the child environment",
+          "suite": [
+            "runWindowsElevatedCommand"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/voice-assistant/background.test.ts",
       "fingerprint": "e09698133cc3a63c",
       "lane": "native-integrations",
@@ -66409,7 +66401,6 @@
       "fingerprint": "601152d57481efba",
       "lane": "http-tools-config",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/config.test.ts",
         "packages/gateway/src/parallel-sessions.test.ts",
         "packages/gateway/src/pr-state.test.ts",
@@ -66591,7 +66582,6 @@
       "fingerprint": "4be5e2cd1134e9e0",
       "lane": "storage-scheduler",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/channels/reminders.integration.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/routes/agent-control.test.ts",
@@ -66957,7 +66947,7 @@
     },
     {
       "path": "packages/gateway/src/index.ts",
-      "fingerprint": "13f8818255179145",
+      "fingerprint": "10eef0b73ceec93f",
       "lane": "http-tools-config",
       "direct_test_references": [],
       "status": "pending",
@@ -67933,7 +67923,6 @@
       "fingerprint": "fafce7c81e2bd85e",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/providers/acp-provider-attachments.test.ts",
         "packages/gateway/src/providers/acp-provider-errors.test.ts",
@@ -68288,7 +68277,6 @@
       "fingerprint": "d04da0ce71754607",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/providers/acp-provider-startup.test.ts",
         "packages/gateway/src/providers/registry.test.ts",
@@ -68906,7 +68894,7 @@
     },
     {
       "path": "packages/gateway/src/routes/chat.ts",
-      "fingerprint": "4610c42314bb4f34",
+      "fingerprint": "e532f8e804684433",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/agent-runtime.test.ts",
@@ -69213,7 +69201,7 @@
     },
     {
       "path": "packages/gateway/src/routes/email.ts",
-      "fingerprint": "844962e050fff4a2",
+      "fingerprint": "5a6ac1fe2d9cb556",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/routes/email.test.ts"
@@ -69469,7 +69457,7 @@
     },
     {
       "path": "packages/gateway/src/routes/messenger.ts",
-      "fingerprint": "0301e2c4be668316",
+      "fingerprint": "9ff996d8e929c75c",
       "lane": "http-tools-config",
       "direct_test_references": [],
       "status": "pending",
@@ -69857,7 +69845,7 @@
     },
     {
       "path": "packages/gateway/src/routes/team-chat.ts",
-      "fingerprint": "6efc35e0dc097d55",
+      "fingerprint": "71c05ca4070da159",
       "lane": "providers-streams-coordination",
       "direct_test_references": [],
       "status": "pending",
@@ -70243,7 +70231,7 @@
     },
     {
       "path": "packages/gateway/src/security/consent-executor.ts",
-      "fingerprint": "c538e45f4ff86e95",
+      "fingerprint": "6bdedfd8daa91942",
       "lane": "security-execution",
       "direct_test_references": [
         "packages/gateway/src/security/consent-executor.test.ts",
@@ -70347,7 +70335,6 @@
       "fingerprint": "a60a15b562c274d1",
       "lane": "security-execution",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/parallel-sessions.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/routes/agent-control.test.ts",
@@ -70803,10 +70790,9 @@
     },
     {
       "path": "packages/gateway/src/server.ts",
-      "fingerprint": "5020f7ad7901e59a",
+      "fingerprint": "2a44e3f116ab9dbb",
       "lane": "http-tools-config",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/parallel-sessions.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/routes/agent-control.test.ts",
@@ -71117,7 +71103,6 @@
         "packages/gateway/src/routes/terminals-remote.test.ts",
         "packages/gateway/src/services/audit.test.ts",
         "packages/gateway/src/sprint2.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
         "packages/gateway/src/tools/registry.test.ts",
         "packages/gateway/src/tools/ssh-tools.test.ts"
       ],
@@ -71185,7 +71170,7 @@
     },
     {
       "path": "packages/gateway/src/services/bridge-reauth.ts",
-      "fingerprint": "6707569be52d3b19",
+      "fingerprint": "9d8a8498d85922ba",
       "lane": "security-execution",
       "direct_test_references": [
         "packages/gateway/src/services/bridge-reauth.test.ts"
@@ -71196,7 +71181,7 @@
     },
     {
       "path": "packages/gateway/src/services/bridge-status.ts",
-      "fingerprint": "7f0fcbeedd5f0dff",
+      "fingerprint": "cba5de29a6538b7c",
       "lane": "http-tools-config",
       "direct_test_references": [],
       "status": "pending",
@@ -71420,7 +71405,7 @@
     },
     {
       "path": "packages/gateway/src/services/chat-loops.ts",
-      "fingerprint": "8b0c1d76781a8f19",
+      "fingerprint": "123f0ac552a8391c",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/chat-loops.test.ts",
@@ -71749,7 +71734,7 @@
     },
     {
       "path": "packages/gateway/src/services/disk-janitor.ts",
-      "fingerprint": "bfd2d42853ed8ca1",
+      "fingerprint": "d59cef04a33ac076",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/disk-janitor.test.ts"
@@ -72594,92 +72579,15 @@
     },
     {
       "path": "packages/gateway/src/services/email/service.ts",
-      "fingerprint": "5fe479d2d836e990",
+      "fingerprint": "b1fc5f1bab9bdffb",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/routes/email.test.ts",
         "packages/gateway/src/services/email/service.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_32_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_38_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_44_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_49_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_60_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_64_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_81_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_99_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_108_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_119_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_131_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_140_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_155_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_163_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_184_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all 15 independently reviewed Rust-owned original email-service declarations: credential configuration/fallback, PKCE authorization URL and unknown state, owner-scoped account/token deletion and multi-account selection, signature isolation/HTML escaping/opt-outs, verified encrypted IMAP credentials and failure preservation, send validation before provider dispatch, callback expiry without another start, exact ten-minute cutoff and state consumption/replay after failure. SQLite is in-memory, credentials are synthetic and all exercised provider calls are spies. Successful OAuth exchange/profile persistence, token refresh and malformed secrets, untested mailbox forwarding operations, credential clearing and broader failure/concurrency paths remain explicit gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/email/types.ts",
@@ -73327,7 +73235,7 @@
     },
     {
       "path": "packages/gateway/src/services/messenger-service.ts",
-      "fingerprint": "a82c70170d7e699c",
+      "fingerprint": "d21e7ace63283cb7",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/messenger-service.test.ts"
@@ -73338,7 +73246,7 @@
     },
     {
       "path": "packages/gateway/src/services/mobile-push.ts",
-      "fingerprint": "9f727336c4f028df",
+      "fingerprint": "7cba2263949a7148",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/routes/chat-openrouter.test.ts",
@@ -73346,131 +73254,9 @@
         "packages/gateway/src/services/mobile-push.test.ts",
         "packages/gateway/src/tools/mobile-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.push-revoke-None",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-revoke-a",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-revoke-missing",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-list-owner-enabled",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-register",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-register-update",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-register-token-transfer",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-unregister-owner",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-environment-disabled-None",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-environment-disabled-bad JSON",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-environment-disabled-{}",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-completed-owner-only",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-completed-error-isolation",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-completed-server-error-retains-device",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-attention-no-deadline",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-attention-expired",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-attention-deadline",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-cleared-excludes-origin-device",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-notification-read",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-alarm",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-alarm-failure",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-oauth-cache-boundary",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-oauth-error",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.push-unattributed-no-send",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Checks real SQLite registration upsert/token transfer, enabled owner filters and unregister ownership; disabled/invalid environment behavior, revoke target exclusion, fixed-origin JWT OAuth with actual synthetic RSA signature verification and exact claims, token cache boundary, completion/read/attention/clear/alarm payload/TTL behavior, per-device completion failure isolation and stale-token removal versus server-error retention. Keys/tokens are synthetic and fetch is a spy; no Firebase request or notification occurs. Concurrent OAuth dedup, all provider error forms and registration transaction failure recovery remain separate. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/network-resources.ts",
@@ -74637,8 +74423,8 @@
       "direct_test_references": [
         "packages/gateway/src/services/secret-input.test.ts",
         "packages/gateway/src/terminal-tools.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
-        "packages/gateway/src/tools/ssh-tools.test.ts"
+        "packages/gateway/src/tools/ssh-tools.test.ts",
+        "packages/gateway/src/tools/windows-elevation.test.ts"
       ],
       "status": "verified",
       "rust_cases": [
@@ -74997,6 +74783,7 @@
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/chat-loops.test.ts",
+        "packages/gateway/src/services/chat-loops.test.ts",
         "packages/gateway/src/services/session-waits.test.ts"
       ],
       "status": "pending",
@@ -75135,7 +74922,7 @@
     },
     {
       "path": "packages/gateway/src/services/team-chat.ts",
-      "fingerprint": "f7f3d9e2b91f4e70",
+      "fingerprint": "b1a6e0011811e1c1",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/mcp-server.test.ts",
@@ -75259,7 +75046,6 @@
       "fingerprint": "b1cf4b4b4a2e537c",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
-        "packages/gateway/src/__scratch-pr.test.ts",
         "packages/gateway/src/pr-state.test.ts",
         "packages/gateway/src/routes/agent-control.test.ts",
         "packages/gateway/src/routes/agent-runtime.test.ts",
@@ -75765,7 +75551,6 @@
         "packages/gateway/src/tools/core/edit.test.ts",
         "packages/gateway/src/tools/core/get-fs.test.ts",
         "packages/gateway/src/tools/core/read.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
         "packages/gateway/src/tools/file-tools.test.ts",
         "packages/gateway/src/tools/preview-tools.test.ts",
         "packages/gateway/src/tools/registry.test.ts",
@@ -75774,7 +75559,8 @@
         "packages/gateway/src/tools/terminal-sandbox-background.integration.test.ts",
         "packages/gateway/src/tools/terminal-sandbox-background.test.ts",
         "packages/gateway/src/tools/thread-tools.test.ts",
-        "packages/gateway/src/tools/tool-contracts.test.ts"
+        "packages/gateway/src/tools/tool-contracts.test.ts",
+        "packages/gateway/src/tools/windows-elevation.test.ts"
       ],
       "status": "verified",
       "rust_cases": [
@@ -76090,7 +75876,7 @@
     },
     {
       "path": "packages/gateway/src/tools/agent-loop.ts",
-      "fingerprint": "53ca74f691192f91",
+      "fingerprint": "f90d9ef4dccf2468",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/channels/manager.test.ts",
@@ -76106,12 +75892,12 @@
         "packages/gateway/src/tools/agent-loop-rate-limit.test.ts",
         "packages/gateway/src/tools/agent-loop.test.ts",
         "packages/gateway/src/tools/agent-tools.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
         "packages/gateway/src/tools/preview-tools.test.ts",
         "packages/gateway/src/tools/ssh-tools.test.ts",
         "packages/gateway/src/tools/stream-tool-call-slots.test.ts",
         "packages/gateway/src/tools/swarm-stream-repro.test.ts",
-        "packages/gateway/src/tools/tool-recovery.test.ts"
+        "packages/gateway/src/tools/tool-recovery.test.ts",
+        "packages/gateway/src/tools/windows-elevation.test.ts"
       ],
       "status": "pending",
       "rust_cases": [],
@@ -76599,6 +76385,7 @@
         "packages/gateway/src/tools/thread-nested-events.test.ts",
         "packages/gateway/src/tools/tool-contracts.test.ts",
         "packages/gateway/src/tools/user-question-tools.test.ts",
+        "packages/gateway/src/tools/windows-elevation.test.ts",
         "packages/gateway/src/voice-assistant/tools.registry.test.ts"
       ],
       "status": "verified",
@@ -76946,17 +76733,6 @@
       "parity_review": "Diagram tools reject non-string, blank and over-limit source; accept exactly 20,000 characters. Title limit exactly 200; non-string/over-limit rejected; whitespace normalization and default title retained. Metadata compared explicitly. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
     },
     {
-      "path": "packages/gateway/src/tools/elevated-tools.ts",
-      "fingerprint": "6be3860e745497bd",
-      "lane": "http-tools-config",
-      "direct_test_references": [
-        "packages/gateway/src/tools/elevated-tools.test.ts"
-      ],
-      "status": "pending",
-      "rust_cases": [],
-      "gap": "Existing direct imports do not establish Rust behavioral parity."
-    },
-    {
       "path": "packages/gateway/src/tools/email-tools.ts",
       "fingerprint": "2f9876bf301d92d6",
       "lane": "native-integrations",
@@ -77249,7 +77025,7 @@
     },
     {
       "path": "packages/gateway/src/tools/index.ts",
-      "fingerprint": "93a16867e8abc57a",
+      "fingerprint": "31b2689a17609c28",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/routes/chat-swarm-live-prose.test.ts",
@@ -77257,12 +77033,12 @@
         "packages/gateway/src/sprint11.test.ts",
         "packages/gateway/src/sprint3.test.ts",
         "packages/gateway/src/sprint7.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
         "packages/gateway/src/tools/preview-tools.test.ts",
         "packages/gateway/src/tools/registry.test.ts",
         "packages/gateway/src/tools/ssh-tools.test.ts",
         "packages/gateway/src/tools/thread-tools.test.ts",
-        "packages/gateway/src/tools/tool-contracts.test.ts"
+        "packages/gateway/src/tools/tool-contracts.test.ts",
+        "packages/gateway/src/tools/windows-elevation.test.ts"
       ],
       "status": "pending",
       "rust_cases": [],
@@ -77309,7 +77085,7 @@
     },
     {
       "path": "packages/gateway/src/tools/loop-tools.ts",
-      "fingerprint": "fa56503052ae8acc",
+      "fingerprint": "e2b6d7daad78d6c6",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/chat-loops.test.ts"
@@ -78485,7 +78261,6 @@
         "packages/gateway/src/tools/catalog-tools.test.ts",
         "packages/gateway/src/tools/context-overhead.test.ts",
         "packages/gateway/src/tools/diagram-tools.test.ts",
-        "packages/gateway/src/tools/elevated-tools.test.ts",
         "packages/gateway/src/tools/link-tools.test.ts",
         "packages/gateway/src/tools/persona-agent-tools.test.ts",
         "packages/gateway/src/tools/registry.test.ts",
@@ -78574,7 +78349,7 @@
     },
     {
       "path": "packages/gateway/src/tools/screen-share-tools.ts",
-      "fingerprint": "eb770c5af4a502c7",
+      "fingerprint": "e56ab9e8ac22355d",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/tools/screen-share-tools-coverage.test.ts",
@@ -78901,7 +78676,7 @@
     },
     {
       "path": "packages/gateway/src/tools/ssh-tools.ts",
-      "fingerprint": "f980a8fa5470a4a1",
+      "fingerprint": "b7c6fcf589228327",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/tools/ssh-tools.test.ts"
@@ -78998,7 +78773,7 @@
     },
     {
       "path": "packages/gateway/src/tools/terminal-tools.ts",
-      "fingerprint": "bb72126fb42a9b6b",
+      "fingerprint": "8ada08d2bf6fbead",
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/sprint13.test.ts",
@@ -79072,7 +78847,7 @@
     },
     {
       "path": "packages/gateway/src/tools/tool-names.ts",
-      "fingerprint": "3bcb665575d674fb",
+      "fingerprint": "8ac0960e16b2da69",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/channels/assistant.test.ts",
@@ -79178,6 +78953,17 @@
       ],
       "gap": "Existing direct imports do not establish Rust behavioral parity.",
       "parity_review": "Exact metadata/schema; missing/null/non-string/blank text returns error without service calls; text trims and forwards session; byte field characterizes base64 length, not decoded bytes; service exception propagates. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+    },
+    {
+      "path": "packages/gateway/src/tools/windows-elevation.ts",
+      "fingerprint": "1c9dcd6e51d625ae",
+      "lane": "http-tools-config",
+      "direct_test_references": [
+        "packages/gateway/src/tools/windows-elevation.test.ts"
+      ],
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/voice-assistant/router.ts",
@@ -79325,6 +79111,35 @@
           "parity_review": "Preserves the archived authenticated GET /api/messenger request, real createServer/loadConfig/signAuthToken setup and finally app.close. Rust enforces exact HTTP 200 and exact disconnected snapshot status; no Matrix browser, route response or authorization result is stubbed. Both saved source assertions are retained. Reviewed original source, generated fixture body and Rust matcher/expected rules. This is reference-test equivalence only, not Rust gateway runtime parity."
         }
       ]
+    },
+    {
+      "path": "packages/gateway/src/__scratch-pr.test.ts",
+      "fingerprint": "0306a6369e3d52d4",
+      "lane": "http-tools-config",
+      "declaration_count": 1,
+      "cases": [
+        {
+          "id": "packages/gateway/src/__scratch-pr.test.ts:27:1",
+          "line": 27,
+          "column": 1,
+          "name": "scratch: replicate pr-state flow",
+          "suite": [],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [
+            {
+              "id": "tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1",
+              "source": "tests/contract/tests/tail_static.rs",
+              "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+            }
+          ],
+          "boundary": "public-behavior-or-isolated-protocol-fixture",
+          "parity_review": "Reviewed scratch: replicate pr-state flow. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance. Verification withdrawn: the current audit could not validate the recorded evidence; review and rerun before restoring credit."
+        }
+      ],
+      "retained_source": "tests/contract/tooling/sources/scratch-pr.test.ts.txt",
+      "retained_reason": "Preserve the previously inventoried scratch test contract after removing the debugging test from the gateway test suite, pending explicit replacement."
     }
   ]
 }

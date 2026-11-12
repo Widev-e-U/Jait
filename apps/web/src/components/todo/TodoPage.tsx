@@ -736,6 +736,7 @@ export function TodoPage({
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ targetId: string | null; placement: 'before' | 'after' } | null>(null)
+  const dropTargetRef = useRef<typeof dropTarget>(null)
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
 
   const loadRepos = useCallback(async () => {
@@ -1108,13 +1109,17 @@ export function TodoPage({
     document.body.style.touchAction = 'none'
 
     const updateTarget = (clientY: number) => {
+      const update = (target: NonNullable<typeof dropTarget>) => {
+        dropTargetRef.current = target
+        setDropTarget(target)
+      }
       const rows = Array.from(
         document.querySelectorAll<HTMLElement>('[data-todo-id]'),
       )
       const candidateRows = rows.filter((row) => row.dataset.todoId && row.dataset.todoId !== dragSourceId)
 
       if (candidateRows.length === 0) {
-        setDropTarget({ targetId: null, placement: 'after' })
+        update({ targetId: null, placement: 'after' })
         return
       }
 
@@ -1123,20 +1128,21 @@ export function TodoPage({
         if (!rowId) continue
         const rect = row.getBoundingClientRect()
         if (clientY < rect.top + rect.height / 2) {
-          setDropTarget({ targetId: rowId, placement: 'before' })
+          update({ targetId: rowId, placement: 'before' })
           return
         }
       }
 
       const lastRowId = candidateRows[candidateRows.length - 1]?.dataset.todoId ?? null
-      setDropTarget(lastRowId ? { targetId: lastRowId, placement: 'after' } : { targetId: null, placement: 'after' })
+      update(lastRowId ? { targetId: lastRowId, placement: 'after' } : { targetId: null, placement: 'after' })
     }
 
     const finishDrag = (event?: PointerEvent) => {
       if (event && event.pointerId !== dragPreview.pointerId) return
-      if (dropTarget && dropTarget.targetId !== dragSourceId) {
+      const target = dropTargetRef.current
+      if (target && target.targetId !== dragSourceId) {
         setTodos((current) => {
-          const next = moveItemByPlacement(current, dragSourceId, dropTarget.targetId, dropTarget.placement)
+          const next = moveItemByPlacement(current, dragSourceId, target.targetId, target.placement)
           if (next === current) return current
           persistTodoOrder(repoId, next)
           return next
@@ -1165,7 +1171,8 @@ export function TodoPage({
     window.addEventListener('pointerup', finishDrag)
     window.addEventListener('pointercancel', finishDrag)
     window.addEventListener('blur', handleWindowBlur)
-    dragCaptureElementRef.current?.addEventListener('lostpointercapture', handleLostPointerCapture)
+    const captureElement = dragCaptureElementRef.current
+    captureElement?.addEventListener('lostpointercapture', handleLostPointerCapture)
 
     return () => {
       document.body.style.cursor = ''
@@ -1175,7 +1182,7 @@ export function TodoPage({
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
       window.removeEventListener('blur', handleWindowBlur)
-      dragCaptureElementRef.current?.removeEventListener('lostpointercapture', handleLostPointerCapture)
+      captureElement?.removeEventListener('lostpointercapture', handleLostPointerCapture)
     }
   }, [dragPreview, dragSourceId, dropTarget, repoId])
 
@@ -1185,11 +1192,14 @@ export function TodoPage({
     event.preventDefault()
     const row = event.currentTarget.closest<HTMLElement>('[data-todo-id]')
     if (!row) return
-    dragCaptureElementRef.current = row
-    row.setPointerCapture?.(event.pointerId)
+    // The row moves in the DOM during the preview, which releases its pointer capture.
+    // Capture on the stable body so dragging can continue across multiple rows.
+    dragCaptureElementRef.current = document.body
+    document.body.setPointerCapture?.(event.pointerId)
     const rect = row.getBoundingClientRect()
     setDragSourceId(id)
-    setDropTarget({ targetId: id, placement: 'before' })
+    dropTargetRef.current = { targetId: id, placement: 'before' }
+    setDropTarget(dropTargetRef.current)
     setDragPreview({
       id,
       pointerId: event.pointerId,
@@ -1621,7 +1631,7 @@ export function TodoPage({
                     </button>
                   </div>
                   <div className="min-w-0 flex-1 focus-within:ring-1 focus-within:ring-ring/60">
-                    <Textarea className={cn('min-h-12 resize-y border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', todo.status === 'done' && 'text-muted-foreground line-through')} defaultValue={todo.message} onBlur={(event) => {
+                    <Textarea className={cn('min-h-16 resize-y border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', todo.status === 'done' && 'text-muted-foreground line-through')} defaultValue={todo.message} onBlur={(event) => {
                       const message = event.target.value.trim()
                       if (message && message !== todo.message) void updateTodo(todo, { message })
                     }} />
@@ -1698,7 +1708,7 @@ export function TodoPage({
               </div>
             )
           })}
-          <nav aria-label="Todo pages" className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground">
+          <nav aria-label="Todo pages" className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t bg-background px-1 py-3 text-sm text-muted-foreground">
             <span>Page {currentTodoPage + 1} of {todoPageCount}</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setTodoPage((page) => Math.max(0, page - 1))} disabled={currentTodoPage === 0 || Boolean(dragSourceId)}>

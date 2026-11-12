@@ -862,13 +862,6 @@ export function SessionSelector({
                       onDragStart={(e) => {
                         dragProjectRef.current = project.id
                         e.dataTransfer.effectAllowed = 'copyMove'
-                        // Project/folder rows snapshot to nothing during a
-                        // native drag, so supply the row clone as the ghost.
-                        setDragImageRow(
-                          e,
-                          isFolder ? 'folder' : 'project',
-                          project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')
-                        )
                         e.dataTransfer.setData(JAIT_PROJECT_MOVE_MIME, project.id)
                         if (project.rootPath) {
                           e.dataTransfer.setData(
@@ -876,6 +869,11 @@ export function SessionSelector({
                             JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined))
                           )
                         }
+                        setDragImageRow(
+                          e,
+                          isFolder ? 'folder' : 'project',
+                          project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')
+                        )
                       }}
                       onDragEnd={() => { dragProjectRef.current = null; setOrderTarget(null) }}
                       onDragOver={(e) => {

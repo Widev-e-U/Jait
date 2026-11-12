@@ -264,6 +264,16 @@ describe('gateway Messenger notifications', () => {
     expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
   })
 
+  it('includes group senders and uses direct sender names in notifications', async () => {
+    await start()
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1, name: 'Team-Chat', preview: 'Hello', latestSender: 'Bob' }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Team-Chat', body: 'Bob: Hello' }))
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 3_000, unread: 2, name: 'Teams bridge', latestSender: 'Alice', peer: { userId: '@alice:test', name: 'Alice', presence: 'unknown' } }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Alice', body: 'Hello' }))
+  })
+
   it('detects unread messages received while the gateway was reconnecting', async () => {
     const store = await start()
     await store.enableNotifications(true)
