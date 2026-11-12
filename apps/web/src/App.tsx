@@ -86,7 +86,7 @@ import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/lib/view-mode'
 import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { ProjectEditorOpenData, ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
 import { ProjectContextDialog, type ProjectContextDraft } from '@/components/project/project-context-dialog'
@@ -120,7 +120,6 @@ import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
   mergeAttachmentsIntoSegments
 } from '@/lib/message-segment-builders'
-import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
 import { activeProjectDuringSwitch, areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
 import {
@@ -260,7 +259,7 @@ function App() {
   const [nodeSettingsTargetId, setNodeSettingsTargetId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
-    return parseAppView(path) ?? (path === '' && readStoredViewMode() === 'manager' ? 'agents' : 'chat')
+    return parseAppView(path) ?? 'chat'
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
@@ -354,10 +353,7 @@ function App() {
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
   const managerCliModel = cliModelsByProvider[managerProvider] ?? null
-  const viewMode: ViewMode = currentView === 'settings' ? readStoredViewMode() : currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
-  const setViewMode = useCallback((mode: ViewMode) => {
-    setCurrentView(mode === 'manager' ? 'agents' : 'chat')
-  }, [])
+  const viewMode: ViewMode = currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
   const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
   const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
   const threadCliModel = viewMode === 'manager' ? managerCliModel : cliModel
@@ -453,7 +449,6 @@ function App() {
         nodeId: prev?.nodeId,
       }
     })
-    setViewMode('developer')
     setCurrentView('chat')
     if (!showProject) {
       showProjectRef.current = true
@@ -478,7 +473,6 @@ function App() {
       displayState: trimmed ? 'connected' : 'blank',
       displayTarget: trimmed,
     }
-    setViewMode('developer')
     setCurrentView('chat')
     setDevPreviewTarget(trimmed)
     setProjectPreviewState(nextPreviewState)
@@ -2148,7 +2142,6 @@ function App() {
         if (requestedRoot && activeRoot && requestedRoot !== activeRoot) return
 
         setCurrentView('chat')
-        setViewMode('developer')
         showProjectRef.current = true
         setShowProject(true)
         if (isMobile) {
@@ -2579,10 +2572,6 @@ function App() {
 
 
   useEffect(() => {
-    if (currentView !== 'settings') window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
-  }, [currentView, viewMode])
-
-  useEffect(() => {
     if (viewMode === 'manager' && showDebugPanel) {
       setShowDebugPanel(false)
     }
@@ -2992,7 +2981,6 @@ function App() {
         if (!session) { toast.error('Chat unavailable. Reconnect and tap the notification again.'); return false }
         if (session.projectId && !await loadProject(session.projectId)) return false
         setCurrentView('chat')
-        setViewMode('developer')
         if (session.projectId) await handleSelectProjectSession(session.projectId, session.id)
         else await handleSelectPersonalSession(session.id)
       } else if (threadId) {
@@ -3023,7 +3011,6 @@ function App() {
 
   const handleOpenSecretChat = useCallback(async (sessionId: string) => {
     setCurrentView('chat')
-    setViewMode('developer')
     setChatCollapsed(false)
     setShowMobileToolbar(false)
     if (isMobile) {
@@ -5285,7 +5272,6 @@ function App() {
             onOpenProject={async (path, nodeId) => {
               await handleProjectFolderSelected(path, nodeId, { openEditor: false })
               setCurrentView('chat')
-              setViewMode('developer')
               finishFirstProjectSetup()
             }}
             onProviderSettings={() => {
@@ -5350,7 +5336,6 @@ function App() {
               setShowLoginDialog={setShowLoginDialog}
               setShowProject={setShowProject}
               setShowProjectEditor={setShowProjectEditor}
-              setViewMode={setViewMode}
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               showScreenShare={showScreenShare}
               themeMode={themeMode}
@@ -5360,7 +5345,6 @@ function App() {
               releases={releases}
               user={user}
               userInitial={userInitial}
-              viewMode={viewMode}
               voiceAssistant={voiceAssistant}
               voiceControlProps={voiceControlProps}
               voiceOverlayOpen={voiceOverlayOpen}
@@ -5413,7 +5397,7 @@ function App() {
             />
 
             {currentView === 'threads' || currentView === 'agents' ? (
-              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile} account={sidebarAccount} viewMode={viewMode} onViewModeChange={setViewMode}>
+              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile} account={sidebarAccount}>
                 {currentView === 'threads' ? (
                     <ThreadsPage
                       automation={automation}
@@ -5501,9 +5485,7 @@ function App() {
                   <AppNavigationSidebar
                     account={sidebarAccount}
                     currentView={currentView}
-                    viewMode={viewMode}
                     onNavigate={setCurrentView}
-                    onViewModeChange={setViewMode}
                     onOpenSettings={() => setCurrentView('settings')}
                     screenShareActive={showScreenShare}
                     onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
@@ -5573,9 +5555,7 @@ function App() {
                       changedFilesCount={gitCounts.fileCount}
                       account={sidebarAccount}
                       currentView={currentView}
-                      viewMode={viewMode}
                       onNavigate={setCurrentView}
-                      onViewModeChange={setViewMode}
                       screenShareActive={showScreenShare}
                       onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                       activeProject={activeProject}

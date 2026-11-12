@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Loader2, LogIn, RefreshCw, ShieldQuestion } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, LogIn, Plus, RefreshCw, ShieldQuestion, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +13,7 @@ interface BridgeStatus {
   expiresAt?: string
   detail?: string
   reauth?: { command?: string; hint?: string }
+  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string }[]
 }
 
 interface ReauthState {
@@ -80,6 +81,8 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
   const [error, setError] = useState('')
   const [reauth, setReauth] = useState<ReauthState | null>(null)
   const [reauthOpen, setReauthOpen] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const load = useCallback(async (force: boolean) => {
     setBusy(true)
@@ -136,6 +139,26 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     if (reauth && ['starting', 'waiting_login', 'applying'].includes(reauth.phase)) void callReauth('DELETE')
   }
 
+  const removeAccount = useCallback(async (id: string) => {
+    setRemoving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/messenger/bridge-accounts/teams?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
+      const body = (await response.json().catch(() => ({}))) as { bridges?: BridgeStatus[]; error?: string }
+      if (!response.ok) throw new Error(body.error || `Removing the account failed (${response.status})`)
+      setStatus(body.bridges?.find(bridge => bridge.platform === 'teams') ?? body.bridges?.[0] ?? null)
+      setConfirmRemove(null)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Removing the account failed')
+    } finally {
+      setRemoving(false)
+    }
+  }, [])
+
   const reauthPhase = reauth?.phase
   useEffect(() => {
     if (!reauthOpen || !reauthPhase || !['starting', 'waiting_login', 'applying'].includes(reauthPhase)) return
@@ -179,6 +202,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
   const checked = timeOf(status.checkedAt)
   const expires = timeOf(status.expiresAt)
   const needsAttention = status.state === 'expired' || status.state === 'error'
+  const accounts = status.accounts ?? []
 
   return (
     <section aria-label="Teams connection" className={className}>
@@ -203,34 +227,65 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
         </Button>
       </div>
 
-      {needsAttention && (
-        <div className="mt-3 space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <p className="text-xs text-destructive">
-            {status.state === 'expired'
-              ? 'The Teams session has expired. Sign in again to resume syncing.'
-              : 'The Teams connection could not be verified.'}
-          </p>
-          <Button size="sm" onClick={startReauth}>
-            <LogIn className="mr-2 h-4 w-4" />
-            Reconnect Teams
-          </Button>
-          <p className="text-xs text-muted-foreground">Messages from Teams stay missing until the session is renewed.</p>
-        </div>
+      {accounts.length > 0 && (
+        <ul className="mt-3 space-y-1.5" aria-label="Teams accounts">
+          {accounts.map(account => {
+            const accountLook = presentation({ ...status, state: account.state })
+            const AccountIcon = accountLook.Icon
+            const confirming = confirmRemove === account.id
+            return (
+              <li key={account.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm">
+                <AccountIcon className={`h-4 w-4 shrink-0 ${accountLook.className}`} />
+                <span className="min-w-0 flex-1 truncate font-medium" title={account.detail}>{account.name}</span>
+                <Badge variant={accountLook.variant}>{accountLook.text}</Badge>
+                {account.state !== 'connected' && (
+                  <Button size="sm" variant="outline" onClick={startReauth}>
+                    <LogIn className="mr-2 h-3.5 w-3.5" />
+                    Sign in again
+                  </Button>
+                )}
+                {confirming ? (
+                  <>
+                    <Button size="sm" variant="destructive" disabled={removing} onClick={() => void removeAccount(account.id)}>
+                      {removing ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                      Remove
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={removing} onClick={() => setConfirmRemove(null)}>Cancel</Button>
+                  </>
+                ) : (
+                  <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={`Remove ${account.name}`} title="Remove account"
+                    onClick={() => setConfirmRemove(account.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+                {confirming && (
+                  <p className="w-full text-xs text-muted-foreground">
+                    Stops syncing this Teams account. Its chats stay in Matrix but no longer update.
+                  </p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
 
-      {!needsAttention && status.state === 'connected' && (
-        <Button variant="ghost" size="sm" className="mt-2" onClick={startReauth}>
-          <LogIn className="mr-2 h-4 w-4" />
-          Sign in again
-        </Button>
+      {needsAttention && accounts.length === 0 && (
+        <p className="mt-3 text-xs text-destructive">
+          {status.state === 'expired' ? 'No Teams account is signed in.' : 'The Teams connection could not be verified.'}
+        </p>
       )}
+
+      <Button variant="outline" size="sm" className="mt-3" onClick={startReauth}>
+        <Plus className="mr-2 h-4 w-4" />
+        Add Teams account
+      </Button>
 
       <Dialog open={reauthOpen} onOpenChange={open => { if (!open) closeReauth() }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Reconnect Microsoft Teams</DialogTitle>
+            <DialogTitle>Sign in to Microsoft Teams</DialogTitle>
             <DialogDescription>
-              Sign in to Teams in the window below. Jait picks up the new session automatically; no passwords or tokens pass through this page.
+              Sign in with the Teams account you want to add or renew in the window below. Jait picks up the new session automatically; no passwords or tokens pass through this page.
             </DialogDescription>
           </DialogHeader>
           {reauth?.liveViewUrl && reauth.phase === 'waiting_login' ? (

@@ -225,6 +225,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     stateSecret: config.jwtSecret,
   });
   const emailService = new EmailService(db, userSecretService);
+  emailService.startInboxRefresh();
   const calendarService = new CalendarService(db, userSecretService);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
@@ -1665,6 +1666,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     if (forceTimer.unref) forceTimer.unref();
     try {
       browserWorkflows.stop();
+      emailService.stopInboxRefresh();
       consentManager.cancelAll("shutdown");
       await jaitProvider.dispose();
       await pluginManager.disposeAll();

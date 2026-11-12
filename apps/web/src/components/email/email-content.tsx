@@ -36,7 +36,7 @@ export function prepareEmailHtml(html: string, images: Record<string, string> = 
   }
 }
 
-export function EmailContent({ bodyHtml, bodyText, accountId }: { bodyHtml: string; bodyText: string; accountId?: string }) {
+export function EmailContent({ bodyHtml, bodyText, accountId, expanded = false }: { bodyHtml: string; bodyText: string; accountId?: string; expanded?: boolean }) {
   const [images, setImages] = useState<{ html: string; values: Record<string, string> }>({ html: '', values: {} })
   const [loading, setLoading] = useState(false)
   const [imageError, setImageError] = useState('')
@@ -61,7 +61,7 @@ export function EmailContent({ bodyHtml, bodyText, accountId }: { bodyHtml: stri
           {imageError && <span role="status">{imageError}</span>}
         </div>
       )}
-      <iframe title="Email content" referrerPolicy="no-referrer" sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-[38vh] max-h-64 min-h-44 w-full bg-white sm:h-[min(60vh,600px)] sm:max-h-none sm:min-h-72" srcDoc={prepared.srcDoc} />
+      <iframe title="Email content" referrerPolicy="no-referrer" sandbox="allow-popups allow-popups-to-escape-sandbox" className={expanded ? "h-[75vh] min-h-72 w-full bg-white sm:h-[min(75vh,900px)]" : "h-[38vh] max-h-64 min-h-44 w-full bg-white sm:h-[min(60vh,600px)] sm:max-h-none sm:min-h-72"} srcDoc={prepared.srcDoc} />
     </div>
   )
 }

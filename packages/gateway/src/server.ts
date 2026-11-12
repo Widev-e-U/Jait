@@ -265,7 +265,28 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   const teamsReauth = deps.surfaceRegistry
     ? new TeamsReauthService(deps.surfaceRegistry, () => { void bridgeStatuses(true); })
     : undefined;
-  registerMessengerRoutes(app, config, deps.ws?.messenger, teamsReauth);
+  registerMessengerRoutes(app, config, deps.ws?.messenger, teamsReauth, (owner, message) => {
+    // Connected desktop/web clients are alerted over the socket, phones via push.
+    // The shared replaceId collapses it with the web store's own per-room notification.
+    deps.ws?.broadcastToUser(owner, {
+      type: 'notification',
+      sessionId: '',
+      timestamp: new Date().toISOString(),
+      payload: {
+        id: `matrix-message:${message.eventId}`,
+        replaceId: `matrix-room:${message.roomId}`,
+        title: message.title,
+        body: message.body,
+        level: 'info',
+        includeToast: false,
+        independentOfAttention: true,
+        link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
+      },
+    });
+    void deps.mobilePush?.sendMessengerMessage(owner, message).catch((error) => {
+      app.log.warn({ error }, 'Messenger push failed');
+    });
+  });
   registerHealthRoutes(app, config, {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
     getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,
@@ -935,7 +956,38 @@ function registerLiveViewProxyRoutes(app: FastifyInstance, config: AppConfig, de
       liveViewWss.emit("connection", ws, request);
     });
   });
+
+  // Touch viewers cannot see which remote element has focus; they poll this to open the phone keyboard for text fields.
+  const focusHandler = async (request: any, reply: any) => {
+    const port = Number(request.params?.port);
+    const user = await previewUser(request, reply, config, deps, "live:" + request.params?.port);
+    if (!user) return;
+    reply.header("Cache-Control", "no-store");
+    if (!Number.isInteger(port) || !canAccessPreviewPort(port, user.id, deps, access, true)) return reply.status(403).send({ error: "LIVE_VIEW_NOT_REGISTERED" });
+    const surface = (deps.surfaceRegistry?.listSurfaces() ?? []).find((candidate) =>
+      candidate.type === "browser" && (candidate as unknown as { getLiveViewInfo?: () => { websockifyPort: number } | null }).getLiveViewInfo?.()?.websockifyPort === port,
+    ) as unknown as { state?: string; evaluate?: (expression: string, options?: { timeoutMs?: number }) => Promise<{ ok: boolean; value?: unknown }> } | undefined;
+    if (!surface?.evaluate || surface.state !== "running") return { editing: false };
+    try {
+      const result = await surface.evaluate(EDITABLE_FOCUS_EXPRESSION, { timeoutMs: 1500 });
+      return { editing: result.ok && result.value === true };
+    } catch {
+      return { editing: false };
+    }
+  };
+  app.get("/api/live-view/:port/focus", focusHandler);
+  app.get("/preview/:previewToken/live/:port/focus", focusHandler);
 }
+
+/** True when the remote page's focused element accepts typed text. */
+const EDITABLE_FOCUS_EXPRESSION = `(() => {
+  let el = document.activeElement;
+  while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+  if (!el || el.disabled || el.readOnly) return false;
+  if (el.tagName === "TEXTAREA") return true;
+  if (el.tagName === "INPUT") return !["button", "submit", "reset", "checkbox", "radio", "file", "image", "range", "color", "hidden"].includes((el.type || "text").toLowerCase());
+  return el.isContentEditable === true;
+})()`;
 
 function canAccessPreviewPort(port: number, userId: string, deps: ServerDeps, access: ControlAccess, liveView = false): boolean {
   for (const preview of deps.previewService?.list() ?? []) {

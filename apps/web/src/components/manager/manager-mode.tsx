@@ -5,7 +5,6 @@ import { TeamChatsPanel } from './team-chats-panel'
 import { Button } from '@/components/ui/button'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
 import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { AppView, ManagerPage } from '@/lib/app-view'
 
 export type ManagerSidebarSection = 'threads' | 'repositories'
@@ -22,11 +21,9 @@ interface ManagerModeProps {
   isMobile: boolean
   children: ReactNode
   account: SidebarAccount
-  viewMode: ViewMode
-  onViewModeChange: (mode: ViewMode) => void
 }
 
-export function ManagerMode({ currentPage, onPageChange, isMobile, children, account, viewMode, onViewModeChange }: ManagerModeProps) {
+export function ManagerMode({ currentPage, onPageChange, isMobile, children, account }: ManagerModeProps) {
   const [section, setSection] = useState<ManagerSidebarSection>('threads')
 
   const readTeamChatsParam = () => {
@@ -73,9 +70,7 @@ export function ManagerMode({ currentPage, onPageChange, isMobile, children, acc
           <AppNavigationSidebar
             account={account}
             currentView={currentPage}
-            viewMode={viewMode}
             onNavigate={navigate}
-            onViewModeChange={onViewModeChange}
             items={currentPage === 'threads' ? [
               { id: 'repositories', label: 'Repositories', description: 'Browse connected repositories', icon: FolderGit2, active: section === 'repositories', onSelect: toggleRepositories },
             ] : [{ id: 'team-chats', label: 'Team Chats', description: 'Browse and create team chats', icon: MessagesSquare, active: teamChats, onSelect: openTeamChats }]}

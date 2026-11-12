@@ -573,11 +573,12 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   // events, and the ResizeObserver above keeps the view glued to the bottom as
   // that history lands — so the replayed log never appears from the top and
   // there is no visible scroll-down; the panel simply opens at the end.
+  const ready = sessionId ? sessionTrajectory.loaded : true
   useLayoutEffect(() => {
     stickToBottomRef.current = true
     setShowScrollToBottom(false)
     pinToBottom()
-  }, [sessionId, pinToBottom])
+  }, [sessionId, ready, pinToBottom])
 
   const scrollToBottom = useCallback(() => {
     stickToBottomRef.current = true
@@ -688,7 +689,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
 
       <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/[0.08]" aria-label="Trajectory timeline">
-          <div ref={contentRef} className="mx-auto w-full max-w-4xl p-3 sm:p-4">
+          <div ref={contentRef} className={cn('mx-auto w-full max-w-4xl p-3 sm:p-4', !ready && 'invisible')}>
             {filtered.length === 0 ? (
               <div className="flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/50 px-6 text-center">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">

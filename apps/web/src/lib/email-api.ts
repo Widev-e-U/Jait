@@ -93,6 +93,13 @@ export const emailApi = {
     return asJson(res)
   },
 
+  async cachedInbox(accountId: string): Promise<EmailMessageSummary[] | null> {
+    const params = new URLSearchParams({ accountId, cached: 'true' })
+    const res = await apiFetch(`${API_URL}/api/email/messages?${params}`)
+    const data = await asJson<{ messages: EmailMessageSummary[] | null }>(res)
+    return data.messages
+  },
+
   async getMessage(id: string, accountId?: string): Promise<EmailMessageFull> {
     const params = new URLSearchParams()
     if (accountId) params.set('accountId', accountId)

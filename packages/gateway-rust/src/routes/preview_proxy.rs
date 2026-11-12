@@ -13,7 +13,7 @@ use axum::{
     extract::{Path, Request, State},
     http::{HeaderMap, HeaderValue, header},
     response::Response,
-    routing::{any, post},
+    routing::{any, get, post},
 };
 use regex::{Regex, RegexBuilder};
 use serde_json::{Value, json};
@@ -61,10 +61,14 @@ impl PreviewPortRegistry {
 pub struct PreviewProxyRoutes {
     pub auth: AuthState,
     pub ports: PreviewPortRegistry,
+    /// noVNC ports of live browser views, keyed by owner. Same no-ambient-fallback rule as `ports`.
+    pub live_ports: PreviewPortRegistry,
 }
 impl PreviewProxyRoutes {
     pub fn router(self) -> Router {
         Router::new()
+            .route("/api/live-view/{port}/focus", get(focus_dev))
+            .route("/preview/{token}/live/{port}/focus", get(focus_token))
             .route("/api/preview/access", post(access))
             .route("/api/dev-proxy/{port}", any(dev_root))
             .route("/api/dev-proxy/{port}/", any(dev_root))
@@ -102,6 +106,66 @@ async fn token_rest(
     r: Request,
 ) -> Response {
     proxy(&s, Some(token), port, r).await
+}
+
+async fn focus_dev(
+    State(s): State<PreviewProxyRoutes>,
+    Path(port): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    focus(&s, None, port, headers).await
+}
+async fn focus_token(
+    State(s): State<PreviewProxyRoutes>,
+    Path((token, port)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    focus(&s, Some(token), port, headers).await
+}
+
+/// `GET .../live/{port}/focus` (server.ts focusHandler). The remote page is only evaluated for a port
+/// registered to the caller. The native browser surface has no script evaluation yet, so a registered
+/// port reports `editing: false`, which is what Node answers when the surface cannot evaluate.
+async fn focus(
+    s: &PreviewProxyRoutes,
+    token: Option<String>,
+    port_param: String,
+    headers: HeaderMap,
+) -> Response {
+    let user_id = match &token {
+        None => match auth::require_user(&s.auth, &headers).await {
+            Ok(u) => u.id,
+            Err(e) => return *e,
+        },
+        Some(t) => {
+            let secret = s.auth.signing_secret();
+            let Some(id) = verify_preview_token(t, &format!("live:{port_param}"), &secret) else {
+                return auth::response(401, json!({"detail":"preview_access_required"}));
+            };
+            let owner = id.clone();
+            match s
+                .auth
+                .with_database(move |db| Ok(UserService::new(db).find_by_id(&owner)?.is_some()))
+                .await
+            {
+                Ok(true) => id,
+                Ok(false) => {
+                    return auth::response(401, json!({"detail":"preview_access_required"}));
+                }
+                Err(_) => return auth::internal_error(),
+            }
+        }
+    };
+    let mut response = match parse_port(&port_param) {
+        Some(port) if s.live_ports.allows(&user_id, port) => {
+            auth::response(200, json!({"editing": false}))
+        }
+        _ => auth::response(403, json!({"error":"LIVE_VIEW_NOT_REGISTERED"})),
+    };
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 fn err(status: u16, code: &str, message: &str) -> Response {

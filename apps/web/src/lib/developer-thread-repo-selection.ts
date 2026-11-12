@@ -1,5 +1,5 @@
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/lib/view-mode'
 
 interface RepositoryIdLike {
   id: string

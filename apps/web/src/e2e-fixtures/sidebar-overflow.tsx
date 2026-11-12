@@ -10,7 +10,6 @@ import '@/index.css'
 function Harness() {
   const [lastAction, setLastAction] = useState('')
   const [currentView, setCurrentView] = useState<AppView>('chat')
-  const [viewMode, setViewMode] = useState<'developer' | 'manager'>('developer')
   const [extraTool, setExtraTool] = useState(false)
   return <TooltipProvider><main className="flex h-dvh bg-background text-foreground">
     <AppNavigationSidebar
@@ -21,9 +20,9 @@ function Harness() {
           releases={[]} updateApplying={false} updateAwaitingRestart={false}
           onApplyUpdate={async () => { setLastAction('Update') }} />,
         agentControl: () => <button className="h-9 shrink-0">Agents</button> }}
-      currentView={currentView} viewMode={viewMode}
+      currentView={currentView}
       onNavigate={view => { setCurrentView(view); setLastAction(view) }}
-      onViewModeChange={setViewMode} onOpenSettings={() => setLastAction('settings')}
+      onOpenSettings={() => setLastAction('settings')}
       onToggleScreenShare={() => setLastAction('Screen Share')}
       items={[
         { id: 'projects', label: 'Projects & Chats', icon: Folders, onSelect: () => setLastAction('Projects & Chats') },

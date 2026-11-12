@@ -5,6 +5,7 @@ import { requireAuth } from '../security/http-auth.js';
 import {
   MessengerService,
   messengerHomeserver,
+  type IncomingMessengerHandler,
 } from '../services/messenger-service.js';
 import type { MessengerBridge } from '../services/messenger-bridge.js';
 import { bridgeStatuses } from '../services/bridge-status.js';
@@ -84,8 +85,10 @@ export function registerMessengerRoutes(
   config: AppConfig,
   bridge?: MessengerBridge,
   teamsReauth?: TeamsReauthService,
+  onIncoming?: IncomingMessengerHandler,
 ) {
   const messenger = new MessengerService(config.jwtSecret);
+  messenger.onIncoming(onIncoming);
   const auth = (request: FastifyRequest, reply: FastifyReply) =>
     requireAuth(request, reply, config.jwtSecret);
   bridge?.setGatewayHandler((owner, cmd, signal) =>
@@ -156,6 +159,20 @@ export function registerMessengerRoutes(
     reply.header('Cache-Control', 'no-store');
     if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
     return teamsReauth.cancel(user.id);
+  });
+  app.delete('/api/messenger/bridge-accounts/teams', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    reply.header('Cache-Control', 'no-store');
+    if (!teamsReauth) return reply.status(404).send({ error: 'Teams account management is unavailable.' });
+    const parsed = z.object({ id: z.string().min(1).max(100) }).strict().safeParse(request.query);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid account ID.' });
+    try {
+      await teamsReauth.removeAccount(parsed.data.id);
+      return { bridges: await bridgeStatuses(true) };
+    } catch (error) {
+      return reply.status(502).send({ error: error instanceof Error ? error.message.slice(0, 300) : 'Removing the account failed.' });
+    }
   });
   app.get('/api/messenger', async (request, reply) => {
     const user = await auth(request, reply);

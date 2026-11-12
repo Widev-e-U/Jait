@@ -151,6 +151,24 @@ export class MobilePushService {
     return targets.length;
   }
 
+  /**
+   * Alert the owner's phones about a new chat message, even when the app is
+   * asleep. Reuses the completion payload so the installed app shows it as-is;
+   * `replaceId` collapses a burst from one room into a single card.
+   */
+  async sendMessengerMessage(
+    userId: string,
+    message: { roomId: string; eventId: string; title: string; body: string },
+  ): Promise<number> {
+    return this.sendChatCompleted(userId, {
+      id: `matrix-message:${message.eventId}`,
+      replaceId: `matrix-room:${message.roomId}`,
+      title: message.title,
+      body: message.body,
+      link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
+    });
+  }
+
   /** WebSockets carry reads live; data push also reaches a sleeping Android app. */
   async sendChatNotificationRead(userId: string, state: ChatNotificationState): Promise<void> {
     if (!this.serviceAccount) return;

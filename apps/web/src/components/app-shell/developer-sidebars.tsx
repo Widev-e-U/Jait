@@ -5,7 +5,6 @@ import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
 import type { ModeSidebarItem, SidebarAccount } from '@/components/app-shell/mode-sidebar'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { AppView } from '@/lib/app-view'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
@@ -22,9 +21,7 @@ interface DeveloperSidebarsProps {
   changedFilesCount?: number
   account: SidebarAccount
   currentView: AppView
-  viewMode: ViewMode
   onNavigate: (view: AppView) => void
-  onViewModeChange: (mode: ViewMode) => void
   screenShareActive: boolean
   onToggleScreenShare: () => void
   activeProject: ActiveProjectState
@@ -89,9 +86,7 @@ export function DeveloperSidebars({
   changedFilesCount = 0,
   account,
   currentView,
-  viewMode,
   onNavigate,
-  onViewModeChange,
   screenShareActive,
   onToggleScreenShare,
   activeProject,
@@ -176,9 +171,7 @@ export function DeveloperSidebars({
         <AppNavigationSidebar
           account={account}
           currentView={currentView}
-          viewMode={viewMode}
           onNavigate={onNavigate}
-          onViewModeChange={onViewModeChange}
           screenShareActive={screenShareActive}
           onToggleScreenShare={onToggleScreenShare}
           items={[

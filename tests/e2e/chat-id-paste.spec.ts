@@ -97,6 +97,46 @@ test('resolves a first mobile insertion without a clipboard paste event', async 
   await expect(editor.locator(`[data-chat-id="${chatId}"]`)).toHaveCount(1)
 })
 
+test('converts a chat token inserted by a mobile keyboard without a paste event', async ({ page }) => {
+  await page.goto('/src/e2e-fixtures/index.html')
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+  const editor = page.locator('[contenteditable="true"]')
+  await editor.click()
+  await editor.evaluate((element, id) => {
+    const text = `look at [chat:${id}] please`
+    element.appendChild(document.createTextNode(text))
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
+  }, chatId)
+  await expect(editor.locator(`[data-chat-id="${chatId}"]`)).toHaveCount(1)
+  await expect(editor).toContainText('look at')
+  await expect(editor).toContainText('please')
+  await editor.pressSequentially('!')
+  await expect(editor).toContainText('please!')
+})
+
+test('converts a mobile insertion inside an existing draft', async ({ page }) => {
+  await page.goto('/src/e2e-fixtures/index.html')
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+  const editor = page.locator('[contenteditable="true"]')
+  await editor.click()
+  await editor.evaluate((element, id) => {
+    const token = `[chat:${id}]`
+    const node = document.createTextNode(`before ${token} after`)
+    element.appendChild(node)
+    const range = document.createRange()
+    range.setStart(node, `before ${token}`.length)
+    range.collapse(true)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: token }))
+  }, chatId)
+  await expect(editor.locator(`[data-chat-id="${chatId}"]`)).toHaveCount(1)
+  await editor.pressSequentially('!')
+  await expect(editor).toContainText('before')
+  await expect(editor).toContainText('! after')
+})
+
 test('resolves a paste when the browser replaces an equivalent text node', async ({ page }) => {
   let release!: () => void
   const pending = new Promise<void>(resolve => { release = resolve })

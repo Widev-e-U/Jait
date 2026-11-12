@@ -10,9 +10,7 @@ describe('AppNavigationSidebar', () => {
       <AppNavigationSidebar
         account={{ username: 'Jakob', initial: 'J', loading: false, onLogin: () => {}, onLogout: () => {}, themeMode: 'system', onThemeModeChange: () => {}, updateControl: (collapsed) => <UpdateButton appPlatform="web" updateInfo={{ currentVersion: '1.0.0', latestVersion: '1.0.1', hasUpdate: true }} releases={[]} updateApplying={false} updateAwaitingRestart={false} onApplyUpdate={async () => {}} collapsed={collapsed} /> }}
         currentView="settings"
-        viewMode="developer"
         onNavigate={() => {}}
-        onViewModeChange={() => {}}
         onOpenSettings={() => {}}
       />,
     )

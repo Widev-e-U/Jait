@@ -31,7 +31,7 @@ import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { isMobileProjectTargetActive, type MobileProjectControlState, type MobileProjectTarget } from '@/lib/mobile-project-controls'
 import type { AppView } from '@/lib/app-view'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/lib/view-mode'
 import { canStopThread } from '@/lib/thread-status'
 
 interface ChatToolbarProps {

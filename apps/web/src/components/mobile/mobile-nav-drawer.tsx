@@ -25,7 +25,9 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { view: 'chat', label: 'Chat', icon: MessageSquare },
+  { view: 'agents', label: 'Agents', icon: UsersRound },
   { view: 'messenger', label: 'Messenger', icon: MessagesSquare },
+  { view: 'threads', label: 'Threads', icon: MessagesSquare },
   { view: 'pulls', label: 'PRs', icon: GitPullRequest },
   { view: 'todo', label: 'Todo', icon: Boxes },
   { view: 'email', label: 'Email', icon: Mail },
@@ -34,11 +36,6 @@ const NAV_ITEMS: readonly NavItem[] = [
   { view: 'jobs', label: 'Jobs', icon: Calendar },
   { view: 'network', label: 'Network', icon: Wifi },
 ] as const
-
-const MANAGER_NAV_ITEMS: readonly NavItem[] = [
-  { view: 'agents', label: 'Agents', icon: UsersRound },
-  { view: 'threads', label: 'Threads', icon: MessagesSquare },
-]
 
 interface MobileNavDrawerProps {
   open: boolean
@@ -94,7 +91,7 @@ export function MobileNavDrawer({
           {/* Nav items */}
           <nav className="shrink-0 border-b p-1.5">
             <div className="grid grid-cols-3 gap-0.5">
-              {(managerMode ? MANAGER_NAV_ITEMS : NAV_ITEMS).map(({ view, label, icon: Icon }) => (
+              {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
                 <button
                   key={view}
                   onClick={() => { onNavigate(view); onClose() }}

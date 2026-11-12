@@ -1715,8 +1715,35 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       isSyncing.current = false
       pushUndoRef.current()
       // Some mobile keyboards deliver a paste as a single insertText event.
-      if (inputEvent.inputType?.startsWith('insert') && inputEvent.data && text === inputEvent.data) {
-        resolveChatId(inputEvent.data)
+      if (variant !== 'messenger' && inputEvent.inputType?.startsWith('insert') && inputEvent.data) {
+        const segments = parseUserMessageMarkdown(inputEvent.data)
+        const selection = window.getSelection()
+        const node = selection?.anchorNode
+        const offset = selection?.anchorOffset ?? 0
+        const insertedAtCaret = selection?.isCollapsed && node?.nodeType === Node.TEXT_NODE && el.contains(node)
+          && (node.textContent ?? '').slice(offset - inputEvent.data.length, offset) === inputEvent.data
+        const entireDraft = text === inputEvent.data && !hasChipRefs(el)
+        if (segments.some(segment => segment.type === 'chat') && (insertedAtCaret || entireDraft)) {
+          if (insertedAtCaret && selection && node) {
+            const range = document.createRange()
+            range.setStart(node, offset - inputEvent.data.length)
+            range.setEnd(node, offset)
+            selection.removeAllRanges()
+            selection.addRange(range)
+            insertSegmentsAtCursor(el, segments, handleRemoveChip)
+          } else {
+            el.replaceChildren()
+            appendSegmentNodes(el, segments, handleRemoveChip)
+            moveCursorToEnd(el)
+          }
+          draftSegmentsRef.current = syncComposerSegments(el)
+          isSyncing.current = true
+          onChangeRef.current(getTextFromEditable(el))
+          isSyncing.current = false
+          setIsEmpty(false)
+          return
+        }
+        if (entireDraft) resolveChatId(inputEvent.data)
       }
 
       if (variant === 'messenger') return
@@ -1803,7 +1830,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     el.addEventListener('input', handleNativeInput)
     return () => el.removeEventListener('input', handleNativeInput)
-  }, [syncComposerSegments, variant, resolveChatId]) // other dependencies are read from refs
+  }, [syncComposerSegments, variant, resolveChatId, handleRemoveChip]) // other dependencies are read from refs
 
   /**
    * Run one composer send action with the payload the caller already collected.

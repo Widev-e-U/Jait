@@ -1,30 +1,18 @@
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   BarChart3,
   Network,
-  Brain,
-  Calendar,
-  CalendarDays,
   Cast,
-  GitPullRequest,
   Menu,
-  ListChecks,
   LogOut,
-  Mail,
-  MessageSquare,
-  MessagesSquare,
-  UsersRound,
   Monitor,
   Moon,
   Settings,
   Sun,
-  Wifi,
 } from 'lucide-react'
 
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
-import { ViewModeSelector } from '@/components/chat/view-mode-selector'
-import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
 import { JaitIcon } from '@/components/icons/model-icons'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
@@ -70,7 +58,6 @@ interface AppHeaderProps {
   setShowLoginDialog: any
   setShowProject: any
   setShowProjectEditor: any
-  setViewMode: any
   setVoiceOverlayOpen: any
   showScreenShare: any
   themeMode: any
@@ -80,7 +67,6 @@ interface AppHeaderProps {
   releases: any
   user: any
   userInitial: any
-  viewMode: any
   voiceAssistant: any
   voiceControlProps: any
   voiceOverlayOpen: any
@@ -93,8 +79,6 @@ export function AppHeader(props: AppHeaderProps) {
     activeManagerThreads,
     appPlatform,
     automation,
-    closeScreenSharePanel,
-    currentView,
     desktopPlatform,
     desktopRuntime,
     handleApplyUpdate,
@@ -106,16 +90,13 @@ export function AppHeader(props: AppHeaderProps) {
     isMaximized,
     isMobile,
     onOpenMobileNav,
-    openScreenSharePanel,
     remainingPrompts,
     screenShare,
     setCurrentView,
     setShowLoginDialog,
     setShowProject,
     setShowProjectEditor,
-    setViewMode,
     setVoiceOverlayOpen,
-    showScreenShare,
     themeMode,
     updateApplying,
     updateAwaitingRestart,
@@ -123,76 +104,17 @@ export function AppHeader(props: AppHeaderProps) {
     releases,
     user,
     userInitial,
-    viewMode,
     voiceAssistant,
     voiceControlProps,
     voiceOverlayOpen,
     activeProjectTitle,
   } = props
 
-  // ── Dynamic nav: measure how much horizontal room is available for the
-  // inline nav buttons so items can overflow into the ⋯ menu progressively. ──
-  const navRef = useRef<HTMLElement>(null)
-  const rightRef = useRef<HTMLDivElement>(null)
-  const selectorRef = useRef<HTMLDivElement>(null)
-  const [navAvailableWidth, setNavAvailableWidth] = useState(0)
-
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
   const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
 
   const sidebarOwnsNavigation = !isMobile
-  const hasCentered = !voiceOverlayOpen && !sidebarOwnsNavigation
-
-  useEffect(() => {
-    const update = () => {
-      const nav = navRef.current
-      const right = rightRef.current
-      if (!nav || !right) return
-      const navLeft = nav.getBoundingClientRect().left
-      let boundary = right.getBoundingClientRect().left
-      // Keep the nav from sliding underneath the centered view-mode selector.
-      if (hasCentered && selectorRef.current) {
-        const sel = selectorRef.current.getBoundingClientRect()
-        boundary = Math.min(boundary, sel.left - 16)
-      }
-      setNavAvailableWidth(Math.max(0, boundary - navLeft))
-    }
-    update()
-    const ro = new ResizeObserver(update)
-    if (navRef.current) ro.observe(navRef.current)
-    if (rightRef.current) ro.observe(rightRef.current)
-    if (selectorRef.current) ro.observe(selectorRef.current)
-    window.addEventListener('resize', update)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', update)
-    }
-  }, [hasCentered])
-
-  // Nav items in display order (leftmost first). Items overflow right-to-left.
-  const navItems: ProgressiveNavItem[] = viewMode === 'manager' ? [
-    { id: 'agents', label: 'Agents', icon: UsersRound, active: currentView === 'agents', onSelect: () => setCurrentView('agents') },
-    { id: 'threads', label: 'Threads', icon: MessagesSquare, active: currentView === 'threads', onSelect: () => setCurrentView('threads') },
-  ] : [
-    { id: 'chat', label: 'Chat', icon: MessageSquare, active: currentView === 'chat', onSelect: () => setCurrentView('chat') },
-    { id: 'pulls', label: 'Pull Requests', shortLabel: 'PRs', icon: GitPullRequest, active: currentView === 'pulls', onSelect: () => setCurrentView('pulls') },
-    { id: 'todo', label: 'Todo', icon: ListChecks, active: currentView === 'todo', onSelect: () => setCurrentView('todo') },
-    { id: 'email', label: 'Email', icon: Mail, active: currentView === 'email', onSelect: () => setCurrentView('email') },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays, active: currentView === 'calendar', onSelect: () => setCurrentView('calendar') },
-    { id: 'memory', label: 'Memory', icon: Brain, active: currentView === 'memory', onSelect: () => setCurrentView('memory') },
-    { id: 'jobs', label: 'Jobs', icon: Calendar, active: currentView === 'jobs', onSelect: () => setCurrentView('jobs') },
-    { id: 'network', label: 'Network', icon: Wifi, active: currentView === 'network', onSelect: () => setCurrentView('network') },
-    ...(viewMode === 'developer' && !isMobile
-      ? [{
-          id: 'screenShare',
-          label: 'Screen Share',
-          icon: Cast,
-          active: showScreenShare,
-          onSelect: () => (showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()),
-        }]
-      : []),
-  ]
 
   // Linux uses native window-manager decorations. Besides matching KDE/GNOME
   // conventions, this avoids WebKitGTK/X11 swallowing clicks on controls that
@@ -230,20 +152,8 @@ export function AppHeader(props: AppHeaderProps) {
             {isMobile && agentControl}
           </div>
 
-          {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          {!isMobile && !sidebarOwnsNavigation && (
-            <ProgressiveNav
-              items={navItems}
-              availableWidth={navAvailableWidth}
-              navRef={navRef}
-              tauriDragRegion={hasCustomTitleBar}
-              className="flex-1"
-            />
-          )}
-
-
-          {/* Center: ViewModeSelector OR voice controls when voice active */}
-          {voiceOverlayOpen ? (
+          {/* Center: voice controls when voice active */}
+          {voiceOverlayOpen && (
             <VoiceActiveControls
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               voiceAssistant={voiceAssistant}
@@ -252,21 +162,13 @@ export function AppHeader(props: AppHeaderProps) {
               isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}
             />
-          ) : !sidebarOwnsNavigation ? (
-            /* Absolutely centered on the header itself: as a flex child the
-               switch would be centered only in the space left over by the
-               unequal left/right clusters, which sits off the true center. */
-            <div ref={selectorRef} className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-              <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} className={isMobile ? "h-8 [&_[role=tab]]:w-8" : undefined} />
-            </div>
-          ) : null}
+          )}
 
-          {/* Spacer — on mobile this absorbs the gap so the right cluster stays
-              pinned to the trailing edge under the absolutely centered switch. */}
+          {/* Spacer — on mobile this keeps the right cluster pinned to the trailing edge. */}
           <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
 
           {/* Right: Context + Model + Account */}
-          <div ref={rightRef} className={`flex items-center gap-2 sm:gap-1.5 shrink-0 ${isMobile ? 'py-0.5 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div className={`flex items-center gap-2 sm:gap-1.5 shrink-0 ${isMobile ? 'py-0.5 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
 
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">

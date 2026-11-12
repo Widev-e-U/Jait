@@ -15,7 +15,6 @@ function Harness() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [agentsPage, setAgentsPage] = useState(false)
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false)
-  const [viewMode, setViewMode] = useState<'manager' | 'developer'>('manager')
   const mobile = window.innerWidth < 768
   const renderControl = (collapsed: boolean, placement: 'sidebar' | 'header' = 'sidebar') => <AgentControlButton state={control.state}
     placement={placement} avatars={control.avatars} runningCount={3} pending={control.pending} error={control.error}
@@ -28,14 +27,14 @@ function Harness() {
       handleApplyUpdate={async () => {}} handleLogout={noop} handleThemeModeChange={noop} isAuthLoading={false}
       isAuthenticated isDesktop={false} isMaximized={false} isMobile onOpenMobileNav={() => setDrawerOpen(true)}
       openScreenSharePanel={noop} remainingPrompts={null} screenShare={{ isActive: false }} setCurrentView={noop}
-      setShowLoginDialog={noop} setShowProject={noop} setShowProjectEditor={noop} setViewMode={setViewMode}
+      setShowLoginDialog={noop} setShowProject={noop} setShowProjectEditor={noop}
       setVoiceOverlayOpen={noop} showScreenShare={false} themeMode="system" updateApplying={false}
       updateAwaitingRestart={false} updateInfo={{ hasUpdate: true, latestVersion: '1.2.3', currentVersion: '1.2.2' }} releases={[]} user={{ username: 'Jakob' }} userInitial="J"
-      viewMode={viewMode} voiceAssistant={{}} voiceControlProps={{ wakeWord: { isSupported: true, isListening: false }, wakeWordEnabled, toggleWakeWord: () => setWakeWordEnabled(enabled => !enabled), startVoiceSession: noop, canStartVoice: true }}
+      voiceAssistant={{}} voiceControlProps={{ wakeWord: { isSupported: true, isListening: false }, wakeWordEnabled, toggleWakeWord: () => setWakeWordEnabled(enabled => !enabled), startVoiceSession: noop, canStartVoice: true }}
       voiceOverlayOpen={false} activeProjectTitle={null} />}
     <main className={`flex min-h-0 flex-1 ${mobile ? 'pt-14' : ''}`}>
-      {!mobile && <AppNavigationSidebar account={account} currentView="agents" viewMode="manager"
-        onNavigate={noop} onViewModeChange={noop} onOpenSettings={noop} />}
+      {!mobile && <AppNavigationSidebar account={account} currentView="agents"
+        onNavigate={noop} onOpenSettings={noop} />}
       <div className="flex-1 p-6"><h1 className="text-lg font-semibold">{agentsPage ? 'Agents page' : 'Agent controls'}</h1><p className="text-sm text-muted-foreground">Work stays visible while agents run.</p></div>
     </main>
     {mobile && <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Archive, ArchiveRestore, ChevronDown, Search, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, Search, Settings2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { CenteredBadgeText } from './centered-badge-text'
@@ -188,8 +188,6 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
     <div className={'flex shrink-0 items-center gap-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out ' + (searching ? 'pointer-events-none max-w-0 opacity-0' : 'max-w-[16rem] opacity-100')}>
       <button type="button" tabIndex={searching ? -1 : 0} aria-pressed={service === 'All'} onClick={() => onService('All')}
         className={'h-7 whitespace-nowrap rounded-md border px-2 text-xs font-medium hover:bg-muted ' + (service === 'All' ? 'bg-secondary' : '')}>All chats</button>
-      <button type="button" tabIndex={searching ? -1 : 0} onClick={onOptions}
-        className="h-7 whitespace-nowrap rounded-md border px-2 text-xs font-medium hover:bg-muted">Connections</button>
     </div>
     <div role="tablist" aria-label="Filter by service" className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto py-1">
       {items.map(({ name, rooms, unread, state }) => {
@@ -217,6 +215,9 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
     >
       {hiddenOpen ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
       {badge(hiddenCount, 'bg-muted text-muted-foreground')}
+    </button>
+    <button type="button" onClick={onOptions} aria-label="Connections" title="Connections" className={icon}>
+      <Settings2 className="h-4 w-4" />
     </button>
   </div>
 }

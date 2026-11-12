@@ -141,8 +141,9 @@ export function registerEmailRoutes(
   app.get("/api/email/messages", async (request, reply) => {
     const user = await auth(request, reply);
     if (!user) return;
-    const q = request.query as { accountId?: string; folder?: string; q?: string; limit?: string };
+    const q = request.query as { accountId?: string; folder?: string; q?: string; limit?: string; cached?: string };
     try {
+      if (q.cached === "true") return { messages: email.cachedInbox(user.id, q.accountId) };
       const result = await email.listMessages(user.id, q.accountId, {
         folder: q.folder,
         query: q.q,

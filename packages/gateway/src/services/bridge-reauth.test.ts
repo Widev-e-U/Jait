@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, pickRefreshToken } from './bridge-reauth.js';
+import { applyCommand, pickRefreshToken, removeCommand } from './bridge-reauth.js';
 
 const CID = '5e3ce6c0-2b1f-4285-8d4b-75ee78787346';
 const url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
@@ -20,6 +20,14 @@ describe('pickRefreshToken', () => {
     expect(pickRefreshToken([entry({ status: 400 })])).toBeNull();
     expect(pickRefreshToken([entry({ responseBody: { text: '{"refresh_token":"short"}' } })])).toBeNull();
     expect(pickRefreshToken([entry({ responseBody: { text: '{"refresh' } })])).toBeNull();
+  });
+});
+
+describe('removeCommand', () => {
+  it('derives the remove script next to the apply script', () => {
+    expect(removeCommand({ JAIT_TEAMS_REAUTH_CMD: 'ssh a@b /x/teams-reauth.sh' })).toBe('ssh a@b /x/teams-remove-login.sh');
+    expect(removeCommand({ JAIT_TEAMS_REMOVE_CMD: 'rm-it' })).toBe('rm-it');
+    expect(removeCommand({})).toBeUndefined();
   });
 });
 

@@ -102,3 +102,32 @@ for (const width of [390, 1280]) {
     await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `email-chat-${width}.png`) })
   })
 }
+
+test('mobile inbox shows cached mail while fresh mail loads', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => localStorage.setItem('jait-gateway-url', window.location.origin))
+  let releaseFresh!: () => void
+  const freshReady = new Promise<void>(resolve => { releaseFresh = resolve })
+  const account = { id: 'personal', userId: 'test', provider: 'gmail', email: 'personal@example.test', status: 'connected', createdAt: '', updatedAt: '' }
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/email/accounts') return route.fulfill({ json: { accounts: [account] } })
+    if (url.pathname === '/api/email/config') return route.fulfill({ json: { providers: { gmail: true, outlook: true } } })
+    if (url.pathname === '/api/email/folders') return route.fulfill({ json: { folders: [] } })
+    if (url.pathname === '/api/email/messages' && url.searchParams.has('cached')) return route.fulfill({ json: { messages: [message] } })
+    if (url.pathname === '/api/email/messages') {
+      await freshReady
+      return route.fulfill({ json: { account, messages: [{ ...message, id: 'm2', subject: 'Fresh mail' }, message] } })
+    }
+    if (url.pathname === '/api/email/messages/m1') return route.fulfill({ json: { message } })
+    return route.fulfill({ json: {} })
+  })
+  await page.goto('/src/e2e-fixtures/email-workspace.html')
+  await expect(page.getByRole('button', { name: /Welcome aboard/ })).toBeVisible()
+  releaseFresh()
+  await expect(page.getByRole('button', { name: /Fresh mail/ })).toBeVisible()
+  await page.getByRole('button', { name: /Welcome aboard/ }).click()
+  const frame = page.locator('iframe[title="Email content"]')
+  await expect(frame).toBeVisible()
+  expect((await frame.boundingBox())!.height).toBeGreaterThan(500)
+})

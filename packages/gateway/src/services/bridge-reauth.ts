@@ -165,6 +165,15 @@ export class TeamsReauthService {
     });
     this.onApplied();
   }
+
+  /** Deletes one Teams account (login) from the bridge. Throws with a user-facing message. */
+  async removeAccount(loginId: string): Promise<void> {
+    if (!LOGIN_ID.test(loginId)) throw new Error('Ungültige Konto-ID.');
+    const command = removeCommand();
+    if (!command) throw new Error('Kein Entfernen-Befehl konfiguriert (JAIT_TEAMS_REMOVE_CMD).');
+    await runHostCommand(command, loginId);
+    this.onApplied();
+  }
 }
 
 interface NetworkEntryLike {
@@ -198,9 +207,24 @@ export function applyCommand(env: NodeJS.ProcessEnv = process.env): string | und
   return undefined;
 }
 
+/** Host script that deletes one Teams login; sits next to the apply script. */
+export function removeCommand(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const apply = applyCommand(env);
+  return apply && /teams-apply-token\.sh\s*$/.test(apply)
+    ? apply.replace(/teams-apply-token\.sh\s*$/, 'teams-remove-login.sh')
+    : env.JAIT_TEAMS_REMOVE_CMD?.trim() || undefined;
+}
+
+const LOGIN_ID = /^8:orgid:[0-9a-fA-F-]{36}$/;
+
 function runApply(token: string): Promise<void> {
   const command = applyCommand();
   if (!command) return Promise.reject(new Error('Kein Apply-Befehl konfiguriert.'));
+  return runHostCommand(command, token);
+}
+
+/** Pipes `secret` to the host command's stdin and checks its JSON status line. */
+function runHostCommand(command: string, token: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, { shell: true, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     let stdout = '';
@@ -220,7 +244,8 @@ function runApply(token: string): Promise<void> {
       }
       try {
         const status = JSON.parse(stdout.trim().split('\n').pop() ?? '') as { state?: string; detail?: string };
-        if (status.state && status.state !== 'connected') {
+        // Only a down bridge fails the call; other accounts being expired is not this command's fault.
+        if (status.state === 'error') {
           reject(new Error(status.detail || `Bridge meldet Status "${status.state}".`));
           return;
         }

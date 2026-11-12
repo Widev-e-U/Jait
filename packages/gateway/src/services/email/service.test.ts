@@ -29,6 +29,20 @@ afterEach(() => {
 });
 
 describe("EmailService", () => {
+  it("caches inbox summaries per owner and invalidates them after changes", async () => {
+    const account = (service as unknown as { upsertAccount: (u: string, p: string, e: string) => { id: string } }).upsertAccount("u1", "gmail", "me@gmail.com");
+    (service as unknown as { storeTokens: (id: string, u: string, t: unknown) => void }).storeTokens(account.id, "u1", { accessToken: "a", refreshToken: "r", expiresAt: Date.now() + 1e6 });
+    const messages = [{ id: "one" }] as Awaited<ReturnType<GmailClient["listMessages"]>>;
+    vi.spyOn(GmailClient.prototype, "listMessages").mockResolvedValue(messages);
+    vi.spyOn(GmailClient.prototype, "deleteMessage").mockResolvedValue();
+    expect(service.cachedInbox("u1", account.id)).toBeNull();
+    await service.listMessages("u1", account.id, { folder: "inbox", limit: 30 });
+    expect(service.cachedInbox("u1", account.id)).toEqual(messages);
+    expect(() => service.cachedInbox("u2", account.id)).toThrow();
+    await service.deleteMessage("u1", account.id, "one");
+    expect(service.cachedInbox("u1", account.id)).toBeNull();
+  });
+
   it("reports providers as unconfigured until credentials are saved", () => {
     expect(service.configuredProviders("u1")).toEqual({ gmail: false, outlook: false });
     service.saveAppCredentials("u1", "gmail", { clientId: "cid", clientSecret: "secret" });

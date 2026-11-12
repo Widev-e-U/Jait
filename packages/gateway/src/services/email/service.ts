@@ -50,6 +50,44 @@ export class EmailService {
     outlook: new OutlookClient(),
   };
   private readonly pending = new Map<string, PendingConnect>();
+  // Summaries only, held in memory and scoped by the resolved account.
+  private readonly inboxCache = new Map<string, EmailMessageSummary[]>();
+  private readonly inboxGeneration = new Map<string, number>();
+  private refreshTimer: ReturnType<typeof setInterval> | undefined;
+  private refreshing = false;
+
+  startInboxRefresh(): void {
+    if (this.refreshTimer) return;
+    const refresh = async () => {
+      if (this.refreshing) return;
+      this.refreshing = true;
+      try {
+        const accounts = this.db.select().from(emailAccounts).all();
+        for (const account of accounts) {
+          try { await this.listMessages(account.userId, account.id, { folder: "inbox", limit: 30 }); }
+          catch { /* A disconnected or temporarily unavailable mailbox should not stop others. */ }
+        }
+      } finally { this.refreshing = false; }
+    };
+    void refresh();
+    this.refreshTimer = setInterval(() => void refresh(), 10 * 60 * 1000);
+    this.refreshTimer.unref();
+  }
+
+  stopInboxRefresh(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = undefined;
+  }
+
+  cachedInbox(userId: string | null, accountId?: string): EmailMessageSummary[] | null {
+    const account = this.resolveAccount(userId, accountId);
+    return this.inboxCache.get(account.id) ?? null;
+  }
+
+  private invalidateInbox(accountId: string): void {
+    this.inboxCache.delete(accountId);
+    this.inboxGeneration.set(accountId, (this.inboxGeneration.get(accountId) ?? 0) + 1);
+  }
 
   constructor(
     private readonly db: JaitDB,
@@ -202,6 +240,7 @@ export class EmailService {
   disconnect(userId: string | null, accountId: string): boolean {
     const acct = this.getAccount(userId, accountId);
     if (!acct) return false;
+    this.invalidateInbox(accountId);
     this.db.delete(emailAccounts).where(eq(emailAccounts.id, accountId)).run();
     const secretId = this.findTokenSecretId(userId, accountId);
     if (secretId) this.secrets.delete(secretId, userId);
@@ -336,8 +375,12 @@ export class EmailService {
     opts: ListMessagesOptions,
   ): Promise<{ account: EmailAccount; messages: EmailMessageSummary[] }> {
     const account = this.resolveAccount(userId, accountId);
+    const cacheable = (!opts.folder || opts.folder.toLowerCase() === "inbox") && !opts.query && opts.limit === 30;
+    const generation = (this.inboxGeneration.get(account.id) ?? 0) + (cacheable ? 1 : 0);
+    if (cacheable) this.inboxGeneration.set(account.id, generation);
     const { client, token } = await this.mailbox(account);
     const messages = await client.listMessages(token, opts);
+    if (cacheable && generation === (this.inboxGeneration.get(account.id) ?? 0) && this.getAccount(userId, account.id)) this.inboxCache.set(account.id, messages);
     return { account, messages };
   }
 
@@ -370,12 +413,14 @@ export class EmailService {
     const account = this.resolveAccount(userId, accountId);
     const { client, token } = await this.mailbox(account);
     await client.tagMessage(token, id, add, remove);
+    this.invalidateInbox(account.id);
   }
 
   async deleteMessage(userId: string | null, accountId: string | undefined, id: string): Promise<void> {
     const account = this.resolveAccount(userId, accountId);
     const { client, token } = await this.mailbox(account);
     await client.deleteMessage(token, id);
+    this.invalidateInbox(account.id);
   }
 
   async listFolders(userId: string | null, accountId: string | undefined): Promise<EmailFolder[]> {

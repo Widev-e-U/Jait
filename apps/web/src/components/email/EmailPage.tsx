@@ -54,6 +54,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   const [query, setQuery] = useState(appliedQuery)
   useEffect(() => setQuery(appliedQuery), [appliedQuery])
   const listRequest = useRef(0)
+  const listScope = useRef('')
   const [loadingList, setLoadingList] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState(false)
   const [connecting, setConnecting] = useState<EmailProvider | null>(null)
@@ -101,13 +102,21 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   const loadMessages = useCallback(async (accountId: string, folder: string, q: string) => {
     const request = ++listRequest.current
     setLoadingList(true)
+    const scope = JSON.stringify([accountId, folder, q])
+    if (listScope.current !== scope) { setMessages([]); listScope.current = scope }
+    let fresh = false
+    if (folder === 'inbox' && !q) {
+      void emailApi.cachedInbox(accountId).then(cached => {
+        if (!fresh && request === listRequest.current && cached) setMessages(cached)
+      }).catch(() => {})
+    }
     try {
       const res = await emailApi.listMessages({ accountId, folder, q: q || undefined, limit: 30 })
+      fresh = true
       if (request === listRequest.current) setMessages(res.messages)
     } catch (err) {
       if (request !== listRequest.current) return
       toast.error(err instanceof Error ? err.message : 'Failed to load messages')
-      setMessages([])
     } finally {
       if (request === listRequest.current) setLoadingList(false)
     }
@@ -446,7 +455,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
                   </div>
                 )}
                 <hr className="my-3" />
-                <EmailContent key={activeAccount?.id + openMessage.id} accountId={activeAccount?.id} bodyHtml={openMessage.bodyHtml} bodyText={openMessage.bodyText} />
+                <EmailContent expanded key={activeAccount?.id + openMessage.id} accountId={activeAccount?.id} bodyHtml={openMessage.bodyHtml} bodyText={openMessage.bodyText} />
               </div>
             </>
           ) : (

@@ -21,14 +21,15 @@ describe('MobileNavDrawer', () => {
     expect(markup).not.toContain('aria-label="Terminal"')
   })
 
-  it('shows Manager pages without Developer navigation in Manager mode', () => {
+  it('lists Agents after Chat and Threads after Messenger in one navigation', () => {
     const markup = renderToStaticMarkup(
       <MobileNavDrawer open onClose={() => {}} currentView="agents" onNavigate={() => {}} sessionSelector={<div>Session list</div>} />,
     )
-    expect(markup).toContain('aria-label="Threads"')
-    expect(markup).toContain('aria-label="Agents"')
-    expect(markup.indexOf('aria-label="Agents"')).toBeLessThan(markup.indexOf('aria-label="Threads"'))
-    expect(markup).not.toContain('aria-label="Chat"')
+    const at = (label: string) => markup.indexOf(`aria-label="${label}"`)
+    expect(at('Chat')).toBeGreaterThan(-1)
+    expect(at('Chat')).toBeLessThan(at('Agents'))
+    expect(at('Agents')).toBeLessThan(at('Messenger'))
+    expect(at('Messenger')).toBeLessThan(at('Threads'))
     expect(markup).not.toContain('Projects &amp; Chats')
   })
 

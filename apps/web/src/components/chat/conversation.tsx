@@ -555,6 +555,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
   const initialRevealFrameRef = useRef<number | null>(null)
+  const initialRevealTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Pending re-anchor after a minimap scrub (see detachFromBottom).
   const scrubAnchorFrameRef = useRef<number | null>(null)
   // In-flight "chase the end of the list" frame (see scrollToBottom).
@@ -1032,7 +1033,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     }
   }, [findPreviousUserMessage])
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false) => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false, onSettled?: () => void) => {
     const el = scrollRef.current
     if (!el) return
     if (bottomSettleFrameRef.current !== null) {
@@ -1040,7 +1041,10 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       bottomSettleFrameRef.current = null
     }
     el.scrollTo({ top: el.scrollHeight, behavior })
-    if (!settle) return
+    if (!settle) {
+      onSettled?.()
+      return
+    }
 
     // Rows measure only as they render, so the ones this scroll reveals push
     // the real bottom further down while the scroll is still running — which is
@@ -1060,7 +1064,10 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       const current = scrollRef.current
       // Bail out the moment the user takes over — chasing the bottom against
       // someone scrolling up is exactly the yank detaching exists to prevent.
-      if (!current || !stickToBottomRef.current || detachedRef.current) return
+      if (!current || !stickToBottomRef.current || detachedRef.current) {
+        onSettled?.()
+        return
+      }
       const target = current.scrollHeight
       const remaining = target - current.scrollTop - current.clientHeight
       if (remaining > BOTTOM_SETTLE_EPSILON_PX) {
@@ -1085,6 +1092,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
         current.scrollTop = current.scrollHeight
       }
       updateBottomState()
+      onSettled?.()
     }
     bottomSettleFrameRef.current = requestAnimationFrame(step)
   }, [updateBottomState])
@@ -1310,17 +1318,29 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
         // paint). Dropping back to the bottom here would undo it — and on a
         // one-message chat "the bottom" is a screen of reserved empty space.
         const holdingNewTurnSpace = heldNewTurnSpaceRef.current || pendingTopAlignIdRef.current != null
-        if (!holdingNewTurnSpace) {
-          positionConversationAtBottom(currentEl)
-          setIsAtBottom(true)
+        if (holdingNewTurnSpace) {
+          setInitialScrollReady(true)
+          return
         }
-        setInitialScrollReady(true)
+        positionConversationAtBottom(currentEl)
+        setIsAtBottom(true)
+        // Rows are still being measured, so revealing now would show the list
+        // visibly sliding to its real bottom. Stay hidden until the chase
+        // settles; the timer covers a settle that another scroll cancelled.
+        const reveal = () => {
+          clearTimeout(initialRevealTimerRef.current)
+          setInitialScrollReady(true)
+        }
+        clearTimeout(initialRevealTimerRef.current)
+        initialRevealTimerRef.current = setTimeout(reveal, BOTTOM_SETTLE_MS + 100)
+        scrollToBottom('auto', true, reveal)
       })
     }
-  }, [childItems.length, loading, initialScrollReady])
+  }, [childItems.length, loading, initialScrollReady, scrollToBottom])
 
   useEffect(() => {
     return () => {
+      clearTimeout(initialRevealTimerRef.current)
       if (initialRevealFrameRef.current !== null) {
         cancelAnimationFrame(initialRevealFrameRef.current)
       }

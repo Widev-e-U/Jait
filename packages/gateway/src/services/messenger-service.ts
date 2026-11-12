@@ -85,6 +85,20 @@ type Room = {
   peer?: { userId: string; name: string; avatarUrl?: string };
 };
 type PresenceRecord = { presence: MessengerPresence; lastActiveAgo?: number; at: number };
+/** A new message from someone else, reported once so it can be pushed to the user's devices. */
+export interface IncomingMessengerMessage {
+  roomId: string;
+  eventId: string;
+  title: string;
+  body: string;
+  timestamp: number;
+  service: string;
+}
+export type IncomingMessengerHandler = (owner: string, message: IncomingMessengerMessage) => void;
+/** Messages older than this are bridge backfill or catch-up, not something to wake the user for. */
+const INCOMING_MAX_AGE_MS = 10 * 60_000;
+/** Grace period in which reading the room elsewhere (the open Jait UI) cancels the push. */
+const INCOMING_READ_GRACE_MS = 5_000;
 interface Saved {
   owner: string;
   session: MessengerSession;
@@ -274,6 +288,9 @@ class Connection {
   private retryTimer?: ReturnType<typeof setTimeout>;
   private work: Promise<unknown> = Promise.resolve();
   private generation = 0;
+  /** The first sync after a start replays history; only later syncs carry genuinely new messages. */
+  private baselined = false;
+  private notified = new Set<string>();
   constructor(
     readonly owner: string,
     readonly directory: string,
@@ -282,7 +299,61 @@ class Connection {
       read: (name: string) => string | undefined;
       write: (name: string, value: string) => void;
     },
+    private incoming: () => IncomingMessengerHandler | undefined = () => undefined,
   ) {}
+  /** Latest own read receipt or own message; unlike `readPosition` it never assumes a fresh room is read. */
+  private ownActivityAt(room: Room): number {
+    const self = this.session?.userId;
+    if (!self) return 0;
+    let at = 0;
+    for (const users of Object.values(room.receipts)) at = Math.max(at, users[self]?.ts ?? 0);
+    for (const event of room.events)
+      if (event.sender === self) at = Math.max(at, event.origin_server_ts ?? 0);
+    return at;
+  }
+  /**
+   * Report a new message once. Undecryptable events are reported too: a message
+   * whose key has not arrived yet must still alert the user.
+   */
+  private announce(room: Room, event: Event) {
+    const handler = this.incoming();
+    const self = this.session?.userId;
+    const eventId = event.event_id;
+    if (!handler || !self || !eventId || event.sender === self || this.notified.has(eventId)) return;
+    if (!['m.room.message', 'm.sticker', 'm.room.encrypted'].includes(event.type)) return;
+    const relation = event.content?.['m.relates_to']?.rel_type;
+    if (relation === 'm.replace' || (event.type === 'm.room.encrypted' && relation)) return;
+    const timestamp = event.origin_server_ts ?? 0;
+    if (Date.now() - timestamp > INCOMING_MAX_AGE_MS) return;
+    if (room.summary.membership !== 'join' || room.summary.status || room.summary.hidden) return;
+    this.notified.add(eventId);
+    if (this.notified.size > 2000) this.notified.delete(this.notified.values().next().value!);
+    const failed = event.type === 'm.room.encrypted';
+    const text = failed ? '' : String(event.content?.body ?? '').replace(/\s+/g, ' ').trim();
+    const sender =
+      room.states.find((s) => s.type === 'm.room.member' && s.state_key === event.sender)?.content
+        ?.displayname ?? event.sender ?? '';
+    const direct = !!room.peer && room.peer.userId === event.sender;
+    const body = failed ? 'New message' : text || 'Sent an attachment';
+    const message: IncomingMessengerMessage = {
+      roomId: room.summary.id,
+      eventId,
+      title: String(room.summary.name).slice(0, 120),
+      body: (direct ? body : `${String(sender).slice(0, 60)}: ${body}`).slice(0, 200),
+      timestamp,
+      service: room.summary.service,
+    };
+    // Reading the room in the open UI sends a receipt within seconds; that
+    // user is already looking at the message and must not be buzzed twice.
+    setTimeout(() => {
+      if (this.rooms.get(room.summary.id) !== room || this.ownActivityAt(room) >= timestamp) return;
+      try {
+        handler(this.owner, message);
+      } catch {
+        /* a failing push transport must never break syncing */
+      }
+    }, INCOMING_READ_GRACE_MS).unref?.();
+  }
   serialize<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.work.catch(() => {}).then(operation);
     this.work = next;
@@ -336,10 +407,12 @@ class Connection {
     if (memo?.signature === signature) return memo.unread;
     let unread = 0;
     for (const event of room.events) {
-      if (event.type !== 'm.room.message' && event.type !== 'm.sticker') continue;
+      // Not-yet-decryptable events count too: an unread message must never be invisible.
+      if (event.type !== 'm.room.message' && event.type !== 'm.sticker' && event.type !== 'm.room.encrypted') continue;
       if (!event.sender || event.sender === self) continue;
       if (event.unsigned?.redacted_because) continue;
-      if (event.content?.['m.relates_to']?.rel_type === 'm.replace') continue;
+      const relation = event.content?.['m.relates_to']?.rel_type;
+      if (relation === 'm.replace' || (event.type === 'm.room.encrypted' && relation)) continue;
       if ((event.origin_server_ts ?? 0) > read) unread += 1;
     }
     this.unreadMemo.set(room.summary.id, { signature, unread });
@@ -645,6 +718,7 @@ class Connection {
     this.presence.clear();
     this.presenceProbes.clear();
     this.direct.clear();
+    this.baselined = false;
     mkdirSync(this.directory, { recursive: true, mode: 0o700 });
     const cryptoPath = join(this.directory, session.cryptoStore);
     mkdirSync(cryptoPath, { recursive: true, mode: 0o700 });
@@ -908,13 +982,19 @@ class Connection {
                 ...types['m.read'],
               };
         if (room.previous === undefined) room.previous = data.timeline?.prev_batch;
+        const hadHistory = room.events.length > 0;
+        const fresh: Event[] = [];
         for (const event of data.timeline?.events ?? []) {
           if (!event.event_id) continue;
           const index = room.events.findIndex(
             (e) => e.event_id === event.event_id,
           );
           if (index >= 0) room.events[index] = await this.decrypt(id, event);
-          else room.events.push(await this.decrypt(id, event));
+          else {
+            const decrypted = await this.decrypt(id, event);
+            room.events.push(decrypted);
+            fresh.push(decrypted);
+          }
           if (event.type === 'm.room.redaction')
             room.events = room.events.filter(
               (e) => e.event_id !== (event.redacts ?? event.content?.redacts),
@@ -926,6 +1006,18 @@ class Connection {
             room.events[i] = await this.decrypt(id, room.events[i]!);
         room.events = room.events.slice(-MAX_EVENTS);
         this.rooms.set(id, room);
+        if (this.baselined && membership === 'join') {
+          // A chat that starts after Jait is running (a new contact writing first)
+          // has no read history: its recent messages are unread, only old backfill is not.
+          if (!hadHistory && room.events.length && (this.readMarkers.get(id) ?? 0) === 0) {
+            const cutoff = Date.now() - INCOMING_MAX_AGE_MS;
+            const older = room.events
+              .map((e) => e.origin_server_ts ?? 0)
+              .filter((ts) => ts < cutoff);
+            this.readMarkers.set(id, Math.max(1, ...older));
+          }
+          for (const event of fresh) this.announce(room, event);
+        }
         const latest = this.messages(id).at(-1);
         room.summary.timestamp = latest?.timestamp ?? 0;
         room.summary.preview =
@@ -933,6 +1025,7 @@ class Connection {
           (membership === 'invite' ? 'Invitation' : 'No messages yet');
       }
     }
+    this.baselined = true;
   }
   private joiningTeams = new Set<string>();
   private teamsJoinQueue: string[] = [];
@@ -1275,6 +1368,11 @@ class Connection {
 /** One persistent device per Jait account, independent of all browser lifecycles. */
 export class MessengerService {
   private connections = new Map<string, Connection>();
+  private incomingHandler?: IncomingMessengerHandler;
+  /** Receives every new message from another person, so alerts do not depend on an open UI. */
+  onIncoming(handler: IncomingMessengerHandler | undefined) {
+    this.incomingHandler = handler;
+  }
   private key: Buffer;
   readonly directory: string;
   constructor(
@@ -1382,6 +1480,7 @@ export class MessengerService {
           read: (name) => this.readHistory(owner, name),
           write: (name, value) => this.writeHistory(owner, name, value),
         },
+        () => this.incomingHandler,
       );
       this.connections.set(owner, c);
     }

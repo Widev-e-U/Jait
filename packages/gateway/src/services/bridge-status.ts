@@ -2,6 +2,14 @@ import { exec } from 'node:child_process';
 
 export type BridgeState = 'connected' | 'expired' | 'error' | 'unknown';
 
+export interface BridgeAccount {
+  id: string;
+  name: string;
+  state: BridgeState;
+  detail?: string;
+  expiresAt?: string;
+}
+
 export interface BridgeStatus {
   platform: string;
   label: string;
@@ -9,6 +17,8 @@ export interface BridgeStatus {
   checkedAt: string;
   expiresAt?: string;
   detail?: string;
+  /** One entry per signed-in account when the probe reports them. */
+  accounts?: BridgeAccount[];
   reauth?: {
     command?: string;
     hint?: string;
@@ -21,6 +31,25 @@ interface ProbeResult {
   state?: BridgeState;
   expiresAt?: string;
   detail?: string;
+  accounts?: unknown;
+}
+
+function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const accounts: BridgeAccount[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.id !== 'string' || !entry.id) continue;
+    accounts.push({
+      id: entry.id,
+      name: typeof entry.name === 'string' && entry.name ? entry.name : entry.id,
+      state: normaliseState(entry.state),
+      detail: typeof entry.detail === 'string' ? entry.detail : undefined,
+      expiresAt: typeof entry.expiresAt === 'string' ? entry.expiresAt : undefined,
+    });
+  }
+  return accounts;
 }
 
 interface BridgeDefinition {
@@ -108,6 +137,7 @@ async function probeBridge(definition: BridgeDefinition): Promise<BridgeStatus> 
       checkedAt: new Date().toISOString(),
       expiresAt: result.expiresAt,
       detail: result.detail,
+      accounts: normaliseAccounts(result.accounts),
     };
     if (status.state !== 'connected') {
       status.reauth = {
