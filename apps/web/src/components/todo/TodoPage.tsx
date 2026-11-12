@@ -26,6 +26,7 @@ type TodoPriority = JaitTodo['priority']
 const TODO_ORDER_STORAGE_KEY = 'jait.todo.order.v1'
 const TODO_FILTER_STORAGE_KEY = 'jait.todo.filters.v1'
 const COMPLETION_HISTORY_PAGE_SIZE = 8
+const TODO_PAGE_SIZE = 20
 
 const statusOptions: { value: TodoStatus; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -709,6 +710,7 @@ export function TodoPage({
   const [repoId, setRepoId] = useState('')
   const [todos, setTodos] = useState<JaitTodo[]>([])
   const [mode, setMode] = useState<TodoMode>('list')
+  const [todoPage, setTodoPage] = useState(0)
   const [statusFilter, setStatusFilter] = useState<TodoStatus | 'all'>('all')
   const [metadataSearch, setMetadataSearch] = useUrlSearchState('todo')
   const [sort, setSort] = useState<TodoSort>('manual')
@@ -812,6 +814,13 @@ export function TodoPage({
     })
   }, [metadataSearch, statusFilter, todos, sort])
 
+  const todoPageCount = Math.max(1, Math.ceil(filteredTodos.length / TODO_PAGE_SIZE))
+  const currentTodoPage = Math.min(todoPage, todoPageCount - 1)
+  const pageTodos = filteredTodos.slice(currentTodoPage * TODO_PAGE_SIZE, (currentTodoPage + 1) * TODO_PAGE_SIZE)
+
+  useEffect(() => { setTodoPage(0) }, [repoId, metadataSearch, statusFilter, sort])
+  useEffect(() => { setTodoPage((page) => Math.min(page, todoPageCount - 1)) }, [todoPageCount])
+
   const counts = useMemo(() => ({
     open: todos.filter((todo) => todo.status === 'open').length,
     inProgress: todos.filter((todo) => todo.status === 'in_progress').length,
@@ -821,8 +830,8 @@ export function TodoPage({
   const selectedRepo = repos.find((repo) => repo.id === repoId)
   const repoOptions = useMemo(() => repos.map((repo) => ({ value: repo.id, label: repo.name })), [repos])
   const selectedTodos = useMemo(() => todos.filter((todo) => selectedTodoIds.has(todo.id)), [selectedTodoIds, todos])
-  const selectedVisibleCount = useMemo(() => filteredTodos.filter((todo) => selectedTodoIds.has(todo.id)).length, [filteredTodos, selectedTodoIds])
-  const allVisibleSelected = filteredTodos.length > 0 && selectedVisibleCount === filteredTodos.length
+  const selectedVisibleCount = useMemo(() => pageTodos.filter((todo) => selectedTodoIds.has(todo.id)).length, [pageTodos, selectedTodoIds])
+  const allVisibleSelected = pageTodos.length > 0 && selectedVisibleCount === pageTodos.length
   const completionEvents = useMemo(() => buildCompletionEvents(todos), [todos])
   const historyPageCount = Math.max(1, Math.ceil(completionEvents.length / COMPLETION_HISTORY_PAGE_SIZE))
   const pagedCompletionEvents = completionEvents.slice(
@@ -963,13 +972,13 @@ export function TodoPage({
   const toggleVisibleSelection = useCallback((selected: boolean) => {
     setSelectedTodoIds((current) => {
       const next = new Set(current)
-      for (const todo of filteredTodos) {
+      for (const todo of pageTodos) {
         if (selected) next.add(todo.id)
         else next.delete(todo.id)
       }
       return next
     })
-  }, [filteredTodos])
+  }, [pageTodos])
 
   const applyBulkUpdate = async (
     buildPatch: (todo: JaitTodo) => Partial<Pick<JaitTodo, 'status' | 'priority' | 'dueDate'>> & { tags?: string[] },
@@ -1196,6 +1205,7 @@ export function TodoPage({
   const displayTodos = dragSourceId && dropTarget && (dropTarget.targetId !== dragSourceId || dropTarget.placement === 'after')
     ? moveItemByPlacement(filteredTodos, dragSourceId, dropTarget.targetId, dropTarget.placement)
     : filteredTodos
+  const pagedDisplayTodos = displayTodos.slice(currentTodoPage * TODO_PAGE_SIZE, (currentTodoPage + 1) * TODO_PAGE_SIZE)
   const dragTodo = dragPreview ? displayTodos.find((todo) => todo.id === dragPreview.id) : null
 
   return (
@@ -1275,7 +1285,7 @@ export function TodoPage({
 
       <div className="rounded-lg border p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1 rounded-lg border border-input bg-background/90 shadow-sm focus-within:ring-2 focus-within:ring-ring/60 focus-within:ring-offset-2 focus-within:ring-offset-background">
+          <div className="min-w-0 flex-1 focus-within:ring-1 focus-within:ring-ring/60">
             <Textarea
               ref={newMessageRef}
               value={newMessage}
@@ -1288,7 +1298,7 @@ export function TodoPage({
               value={newTags}
               onChange={setNewTags}
               placeholder="Add tags..."
-              className="min-h-9 rounded-none rounded-b-lg border-x-0 border-b-0 border-t bg-transparent px-2 py-1 shadow-none focus-within:ring-0 focus-within:ring-offset-0"
+              className="min-h-8 border-0 bg-transparent px-2 py-1 shadow-none focus-within:ring-0 focus-within:ring-offset-0"
               inputClassName="text-xs"
             />
           </div>
@@ -1369,7 +1379,7 @@ export function TodoPage({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-2 border-b pb-3">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -1553,8 +1563,8 @@ export function TodoPage({
           <p className="text-sm text-muted-foreground">Change filters or add the first repo-wide item.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card/40 px-3 py-2 text-sm text-muted-foreground">
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-1 py-3 text-sm text-muted-foreground">
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
@@ -1562,18 +1572,18 @@ export function TodoPage({
                 checked={allVisibleSelected}
                 onChange={(event) => toggleVisibleSelection(event.target.checked)}
               />
-              <span>{selectedVisibleCount > 0 ? `${selectedVisibleCount} selected in view` : 'Select visible'}</span>
+              <span>{selectedVisibleCount > 0 ? `${selectedVisibleCount} selected in view` : 'Select page'}</span>
             </label>
-            <span>{displayTodos.length} item{displayTodos.length === 1 ? '' : 's'}</span>
+            <span>{currentTodoPage * TODO_PAGE_SIZE + 1}–{Math.min((currentTodoPage + 1) * TODO_PAGE_SIZE, filteredTodos.length)} of {filteredTodos.length}</span>
           </div>
-          {displayTodos.map((todo) => {
+          {pagedDisplayTodos.map((todo) => {
             const tags = parseTags(todo.tags)
             const statusMeta = getStatusMeta(todo.status)
             const isRunningTodo = runningTodoIds.has(todo.id)
             const dropBefore = Boolean(dragSourceId && dropTarget?.targetId === todo.id && dropTarget.placement === 'before' && dragSourceId !== todo.id)
             const dropAfter = Boolean(dragSourceId && dropTarget?.targetId === todo.id && dropTarget.placement === 'after' && dragSourceId !== todo.id)
             return (
-              <div key={todo.id} className="space-y-3">
+              <div key={todo.id}>
                 {dropBefore && (
                   <div className="relative h-0">
                     <div className="absolute inset-x-2 -top-px h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]" />
@@ -1582,13 +1592,12 @@ export function TodoPage({
               <div
                 data-todo-id={todo.id}
                 className={cn(
-                  'group rounded-lg border p-2 transition-all duration-150 ease-out sm:p-3',
-                  statusMeta.itemClassName,
+                  'group border-b px-1 py-3 transition-colors duration-150 hover:bg-muted/30 sm:px-2',
                   dragSourceId && 'touch-none',
                   dragSourceId === todo.id && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
                 )}
               >
-                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
                   <div className="flex flex-col items-center gap-1">
                     <input
                       data-no-drag="true"
@@ -1611,8 +1620,8 @@ export function TodoPage({
                       <TodoStatusIcon status={todo.status} />
                     </button>
                   </div>
-                  <div className="min-w-0 flex-1 rounded-lg border border-input bg-background/90 shadow-sm focus-within:ring-2 focus-within:ring-ring/60 focus-within:ring-offset-2 focus-within:ring-offset-background">
-                    <Textarea className={cn('min-h-20 resize-y border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', todo.status === 'done' && 'text-muted-foreground line-through')} defaultValue={todo.message} onBlur={(event) => {
+                  <div className="min-w-0 flex-1 focus-within:ring-1 focus-within:ring-ring/60">
+                    <Textarea className={cn('min-h-12 resize-y border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', todo.status === 'done' && 'text-muted-foreground line-through')} defaultValue={todo.message} onBlur={(event) => {
                       const message = event.target.value.trim()
                       if (message && message !== todo.message) void updateTodo(todo, { message })
                     }} />
@@ -1626,11 +1635,11 @@ export function TodoPage({
                       }}
                       placeholder="Add tags..."
                       commitOnBlur
-                      className="min-h-9 rounded-none rounded-b-lg border-x-0 border-b-0 border-t bg-transparent px-2 py-1 shadow-none focus-within:ring-0 focus-within:ring-offset-0"
+                      className="min-h-8 border-0 bg-transparent px-2 py-1 shadow-none focus-within:ring-0 focus-within:ring-offset-0"
                       inputClassName="text-xs"
                     />
                   </div>
-                  <div className="grid w-[4.25rem] grid-cols-2 gap-0.5 text-xs text-muted-foreground">
+                  <div className="col-start-2 flex flex-wrap gap-0.5 text-xs text-muted-foreground sm:col-start-auto sm:grid sm:w-[4.25rem] sm:grid-cols-2">
                     <ControlTooltip label={`Status: ${statusMeta.label}`}>
                       <OptionSelect
                         value={todo.status}
@@ -1677,7 +1686,7 @@ export function TodoPage({
                     </Button>
                   </div>
                 </div>
-                <div className="mt-2 flex justify-end">
+                <div className="flex justify-end">
                   {todo.sourceThreadTitle && <span className="text-xs text-muted-foreground">Suggested by `{todo.sourceThreadTitle}`</span>}
                 </div>
               </div>
@@ -1689,6 +1698,17 @@ export function TodoPage({
               </div>
             )
           })}
+          <nav aria-label="Todo pages" className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground">
+            <span>Page {currentTodoPage + 1} of {todoPageCount}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setTodoPage((page) => Math.max(0, page - 1))} disabled={currentTodoPage === 0 || Boolean(dragSourceId)}>
+                <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setTodoPage((page) => Math.min(todoPageCount - 1, page + 1))} disabled={currentTodoPage >= todoPageCount - 1 || Boolean(dragSourceId)}>
+                Next <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </nav>
           {dragPreview && dragTodo && (
             <div
               className="pointer-events-none fixed z-50"

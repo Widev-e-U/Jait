@@ -83,6 +83,32 @@ describe('Messenger message actions and history', () => {
   });
 });
 
+describe('Own Matrix presence', () => {
+  it('persists and refreshes the requested status, then stops refreshing', async () => {
+    vi.useFakeTimers();
+    try {
+      const { c } = setup();
+      c.save = vi.fn();
+      c.client.setPresenceStatus = vi.fn().mockResolvedValue(undefined);
+      await c.setOwnPresence('online', true);
+      expect(c.save).toHaveBeenCalledWith(expect.objectContaining({ ownPresence: { state: 'online', keep: true } }));
+      await vi.advanceTimersByTimeAsync(45_000);
+      expect(c.client.setPresenceStatus).toHaveBeenCalledTimes(2);
+      await c.setOwnPresence('unavailable', false);
+      await vi.advanceTimersByTimeAsync(45_000);
+      expect(c.client.setPresenceStatus).toHaveBeenCalledTimes(3);
+    } finally { vi.useRealTimers(); }
+  });
+  it('does not save a status rejected by the homeserver', async () => {
+    const { c } = setup();
+    c.save = vi.fn();
+    c.client.setPresenceStatus = vi.fn().mockRejectedValue(new Error('unavailable'));
+    await expect(c.setOwnPresence('online', true)).rejects.toThrow();
+    expect(c.save).not.toHaveBeenCalled();
+    expect(c.ownPresence.keep).toBe(false);
+  });
+});
+
 describe('Messenger homeserver validation', () => {
   it('normalises an https homeserver to its origin', () => {
     expect(messengerHomeserver('https://matrix.example.org')).toBe('https://matrix.example.org');

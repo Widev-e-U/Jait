@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, AlertCircle, Archive, Brain, CheckCircle2, Clock3, Copy, KeyRound, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
+import { AlertCircle, Brain, Copy, KeyRound, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,6 +47,8 @@ export function MemoryPage() {
   const [snapshot, setSnapshot] = useState<ReminderSnapshot | null>(null)
   const [statusFilter, setStatusFilter] = useState<ReminderStatusFilter>('active')
   const [projectFilter, setProjectFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newTags, setNewTags] = useState('')
   const [newProjectId, setNewProjectId] = useState('none')
@@ -79,10 +81,10 @@ export function MemoryPage() {
   const projects = snapshot?.projects ?? []
   const reminders = useMemo(() => {
     const all = snapshot?.reminders ?? []
-    return projectFilter === 'all'
-      ? all
-      : all.filter((reminder) => reminder.projectId === projectFilter)
-  }, [snapshot?.reminders, projectFilter])
+    return all.filter((reminder) => (statusFilter === 'all' || reminder.status === statusFilter)
+      && (projectFilter === 'all' || reminder.projectId === projectFilter)
+      && reminder.content.toLowerCase().includes(search.trim().toLowerCase()))
+  }, [snapshot?.reminders, projectFilter, search, statusFilter])
   const threads = snapshot?.threads ?? []
 
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
@@ -95,13 +97,6 @@ export function MemoryPage() {
     }
     return map
   }, [projects])
-
-  const counts = useMemo(() => ({
-    reminders: snapshot?.reminders.length ?? 0,
-    projects: projects.length,
-    sessions: projects.reduce((total, project) => total + project.sessions.length, 0),
-    threads: threads.length,
-  }), [snapshot?.reminders.length, threads.length, projects])
 
   const handleAdd = async () => {
     const content = newContent.trim()
@@ -119,6 +114,7 @@ export function MemoryPage() {
       setSnapshot((current) => current ? { ...current, reminders: [created, ...current.reminders] } : current)
       setNewContent('')
       setNewTags('')
+      setShowAdd(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add memory')
     } finally {
@@ -206,221 +202,45 @@ export function MemoryPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-            <Brain className="h-6 w-6" />
-            Memory
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Agent-readable memory with project chat history and completed thread context.
-          </p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3"><span className="rounded-xl bg-primary/10 p-2.5 text-primary"><Brain className="h-6 w-6" /></span><h1 className="text-2xl font-semibold tracking-tight">Memory</h1></div>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Things Jait can remember for future conversations. Review what’s saved, update it, or remove it when it’s no longer useful.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as ReminderStatusFilter)}>
-            <SelectTrigger className="h-10 min-w-0 flex-1 sm:w-40 sm:flex-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-          <TooltipHint content="Refresh">
-          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void loadSnapshot()} disabled={isLoading} aria-label="Refresh">
-            <RefreshCw className={cn('h-4 w-4 sm:mr-2', isLoading && 'animate-spin')} />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
-          </TooltipHint>
-          <TooltipHint content="Copy Markdown">
-          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void copyMarkdownExport()} aria-label="Copy Markdown">
-            <Copy className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">{exportCopied ? 'Copied' : 'Copy Markdown'}</span>
-          </Button>
-          </TooltipHint>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge variant="outline" className="px-2 py-0.5">{counts.reminders} memories</Badge>
-        <Badge variant="secondary" className="px-2 py-0.5">{counts.projects} projects</Badge>
-        <Badge variant="secondary" className="px-2 py-0.5">{counts.sessions} chats</Badge>
-        <Badge variant="secondary" className="px-2 py-0.5">{counts.threads} threads</Badge>
-        <Badge variant="secondary" className="px-2 py-0.5">{secrets.length} secrets</Badge>
-      </div>
-
-      {error && (
-        <Card className="border-destructive/30 bg-destructive/10 shadow-none">
-          <CardContent className="flex items-center gap-2 p-3 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1">{error}</span>
-            <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setError(null)}>Dismiss</Button>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_220px_220px_auto] lg:items-end">
-          <div className="min-w-0 space-y-2">
-            <Label htmlFor="new-reminder-content">Memory</Label>
-            <Textarea
-              id="new-reminder-content"
-              value={newContent}
-              onChange={(event) => setNewContent(event.target.value)}
-              placeholder="Add agent-readable memory..."
-              className="min-h-20 lg:min-h-10"
-            />
+        <TooltipHint content="Refresh"><Button variant="outline" size="icon" onClick={() => void loadSnapshot()} disabled={isLoading} aria-label="Refresh"><RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} /></Button></TooltipHint>
+      </header>
+      {error && <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" /><span className="flex-1">{error}</span><Button variant="ghost" size="sm" onClick={() => setError(null)}>Dismiss</Button></div>}
+      <Tabs defaultValue="memories" className="min-w-0">
+        <TabsList className="flex h-auto w-full justify-start overflow-x-auto">
+          <TabsTrigger value="memories">Memories</TabsTrigger><TabsTrigger value="projects">Projects & chats</TabsTrigger><TabsTrigger value="threads">Threads</TabsTrigger><TabsTrigger value="secrets">SSH secrets</TabsTrigger>
+        </TabsList>
+        <TabsContent value="memories" className="mt-6 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-lg font-semibold">Saved memories</h2><p className="mt-1 text-sm text-muted-foreground">{isLoading && !snapshot ? 'Loading memories…' : `${reminders.length} shown${snapshot && snapshot.reminders.length >= 200 ? ' · showing up to 200' : ''}`} · Chat history is separate.</p></div>
+            <Button onClick={() => setShowAdd(!showAdd)}><Plus className="mr-2 h-4 w-4" />{showAdd ? 'Close' : 'Add memory'}</Button>
           </div>
-          <div className="min-w-0 space-y-2">
-            <Label>Project</Label>
-            <Select value={newProjectId} onValueChange={setNewProjectId}>
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="Project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No project</SelectItem>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.title || project.rootPath || 'Untitled project'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-0 space-y-2">
-            <Label htmlFor="new-reminder-tags">Tags</Label>
-            <Input
-              id="new-reminder-tags"
-              value={newTags}
-              onChange={(event) => setNewTags(event.target.value)}
-              placeholder="tags, comma separated"
-            />
-          </div>
-          <Button onClick={() => void handleAdd()} disabled={isSaving || !newContent.trim()} className="lg:self-end">
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-            Add
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="min-w-0 space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">Memory List</h2>
-            <Select value={projectFilter} onValueChange={setProjectFilter}>
-              <SelectTrigger className="h-10 w-full sm:w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All projects</SelectItem>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.title || project.rootPath || 'Untitled project'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isLoading && !snapshot ? (
-            <div className="flex items-center justify-center py-24">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          {showAdd && <Card><CardContent className="space-y-4 p-4 sm:p-5">
+            <div className="space-y-2"><Label htmlFor="new-reminder-content">What should Jait remember?</Label><Textarea id="new-reminder-content" value={newContent} onChange={(event) => setNewContent(event.target.value)} placeholder="For example, prefer concise explanations" /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Scope</Label><Select value={newProjectId} onValueChange={setNewProjectId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">All projects</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.title || project.rootPath || 'Untitled project'}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="new-reminder-tags">Tags (optional)</Label><Input id="new-reminder-tags" value={newTags} onChange={(event) => setNewTags(event.target.value)} placeholder="Separate with commas" /></div></div>
+            <Button onClick={() => void handleAdd()} disabled={isSaving || !newContent.trim()}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save memory</Button>
+          </CardContent></Card>}
+          <div className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Search memories" placeholder="Search memories…" value={search} onChange={(event) => setSearch(event.target.value)} className="sm:flex-1" /><Select value={projectFilter} onValueChange={setProjectFilter}><SelectTrigger aria-label="Filter by project" className="sm:w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All projects</SelectItem>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.title || project.rootPath || 'Untitled project'}</SelectItem>)}</SelectContent></Select><Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as ReminderStatusFilter)}><SelectTrigger aria-label="Filter by status" className="sm:w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="archived">Archived</SelectItem><SelectItem value="all">All statuses</SelectItem></SelectContent></Select></div>
+          {isLoading && !snapshot ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> : reminders.length === 0 ? <div className="rounded-xl border border-dashed px-4 py-16 text-center"><Brain className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><h3 className="font-medium">No memories found</h3><p className="mt-1 text-sm text-muted-foreground">Try another filter or add a memory.</p></div> : <div className="divide-y rounded-xl border">{reminders.map((reminder) => {
+            const isEngineMemory = reminder.kind === 'engine'
+            const project = reminder.projectId ? projectById.get(reminder.projectId) : null
+            const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
+            const tags = parseTags(reminder.tags)
+            return <div key={reminder.id} className="space-y-3 p-4 sm:p-5"><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Badge variant="secondary">{isEngineMemory ? 'Engine memory' : project ? (project.title || project.rootPath || 'Project') : 'Global'}</Badge>{reminder.status === 'archived' && <Badge variant="outline">Archived</Badge>}<span>Updated {formatDate(reminder.updatedAt)}</span></div>
+              <Textarea aria-label="Memory content" className="min-h-16 resize-y border-transparent bg-transparent px-0 shadow-none focus-visible:border-input focus-visible:px-3" defaultValue={reminder.content} readOnly={isEngineMemory} onBlur={(event) => { const content = event.target.value.trim(); if (!isEngineMemory && content && content !== reminder.content) void updateReminder(reminder, { content }); else if (!content) event.target.value = reminder.content }} />
+              {tags.length > 0 && <div className="flex flex-wrap gap-1">{tags.map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}</div>}
+              <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Details and actions</summary><div className="mt-3 space-y-3"><div className="space-y-1 text-xs text-muted-foreground"><p>Source: {reminder.sourceType} · {reminder.sourceSurface}{reminder.sourceId ? ` · ${reminder.sourceId}` : ''}</p>{session && <p>Chat: {session.name || 'Chat'}</p>}<p>Used {reminder.usageCount ?? 0} times · Last retrieved: {formatDate(reminder.lastRetrievedAt)}</p>{isEngineMemory && <p>Engine memories cannot be edited or archived here.</p>}</div><div className="flex flex-wrap gap-2">{!isEngineMemory && <Button variant="outline" size="sm" onClick={() => void updateReminder(reminder, { status: reminder.status === 'active' ? 'archived' : 'active' })}>{reminder.status === 'active' ? 'Archive' : 'Restore'}</Button>}<Button variant="outline" size="sm" onClick={() => void removeReminder(reminder.id)}><Trash2 className="mr-2 h-4 w-4" />Delete</Button></div></div></details>
             </div>
-          ) : reminders.length === 0 ? (
-            <Card className="border-2 border-dashed shadow-none">
-              <CardContent className="px-4 py-16 text-center">
-                <Brain className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-medium">No memory matches</h3>
-                <p className="text-sm text-muted-foreground">Change filters or add the first memory entry.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            reminders.map((reminder) => {
-              const isEngineMemory = reminder.kind === 'engine'
-              const project = reminder.projectId ? projectById.get(reminder.projectId) : null
-              const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
-              const tags = parseTags(reminder.tags)
-              const sourceLabel = `${reminder.sourceType}:${reminder.sourceId || 'none'}@${reminder.sourceSurface}`
-              return (
-                <Card key={reminder.id}>
-                  <CardContent className="p-3">
-                    <Textarea
-                      className="min-h-20"
-                      defaultValue={reminder.content}
-                      readOnly={isEngineMemory}
-                      onBlur={(event) => {
-                        if (isEngineMemory) return
-                        const content = event.target.value.trim()
-                        if (content && content !== reminder.content) void updateReminder(reminder, { content })
-                      }}
-                    />
-                    <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center">
-                      <span className="inline-flex items-center gap-1">
-                        <Workflow className="h-3.5 w-3.5" />
-                        {isEngineMemory ? 'Engine memory' : project ? (project.title || project.rootPath || 'Project') : 'Global memory'}
-                      </span>
-                      {session && (
-                        <span className="inline-flex items-center gap-1">
-                          <MessageSquare className="h-3.5 w-3.5" />
-                          {session.name || 'Chat'}
-                        </span>
-                      )}
-                      <TooltipHint content={sourceLabel}>
-                      <span className="inline-flex min-w-0 items-center gap-1">
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        <span className="truncate">{sourceLabel}</span>
-                      </span>
-                      </TooltipHint>
-                      <TooltipHint content="Usage count">
-                      <span className="inline-flex items-center gap-1">
-                        <Activity className="h-3.5 w-3.5" />
-                        {reminder.usageCount ?? 0} uses
-                      </span>
-                      </TooltipHint>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        Updated {formatDate(reminder.updatedAt)}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        Retrieved {formatDate(reminder.lastRetrievedAt)}
-                      </span>
-                    </div>
-                    {tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {tags.map((tag) => <Badge key={tag} variant="secondary" className="rounded-md">{tag}</Badge>)}
-                      </div>
-                    )}
-                    <Separator className="my-3" />
-                    <div className="flex flex-wrap gap-2">
-                      {isEngineMemory ? null : (
-                        <Button variant="outline" size="sm" onClick={() => void updateReminder(reminder, { status: reminder.status === 'active' ? 'archived' : 'active' })}>
-                          {reminder.status === 'active' ? <Archive className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                          {reminder.status === 'active' ? 'Archive' : 'Restore'}
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => void removeReminder(reminder.id)}>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })
-          )}
-        </div>
-
-        <div className="min-w-0">
-          <Tabs defaultValue="projects" className="min-w-0">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="projects">Projects</TabsTrigger>
-              <TabsTrigger value="threads">Threads</TabsTrigger>
-              <TabsTrigger value="secrets">Secrets</TabsTrigger>
-            </TabsList>
-            <TabsContent value="projects" className="mt-3">
+          })}</div>}
+          <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={() => void copyMarkdownExport()}><Copy className="mr-2 h-4 w-4" />{exportCopied ? 'Copied' : 'Copy by project and status as Markdown'}</Button></div>
+        </TabsContent>
+            <TabsContent value="projects" className="mt-6">
+              <p className="mb-4 text-sm text-muted-foreground">Projects and their recent chats provide context alongside saved memories.</p>
               <ScrollArea className="max-h-[42rem] pr-1">
                 <div className="space-y-2">
                   {projects.map((project) => (
@@ -454,7 +274,8 @@ export function MemoryPage() {
                 </div>
               </ScrollArea>
             </TabsContent>
-            <TabsContent value="threads" className="mt-3">
+            <TabsContent value="threads" className="mt-6">
+              <p className="mb-4 text-sm text-muted-foreground">Recent threads are listed here as context; they are separate from saved memories.</p>
               <ScrollArea className="max-h-[42rem] pr-1">
                 <div className="space-y-2">
                   {threads.slice(0, 12).map((thread) => (
@@ -478,7 +299,8 @@ export function MemoryPage() {
                 </div>
               </ScrollArea>
             </TabsContent>
-            <TabsContent value="secrets" className="mt-3">
+            <TabsContent value="secrets" className="mt-6">
+              <p className="mb-4 text-sm text-muted-foreground">SSH passwords are stored separately from memories.</p>
               <Card>
                 <CardContent className="space-y-3 p-3">
                   <div className="grid gap-2">
@@ -532,9 +354,7 @@ export function MemoryPage() {
                 </CardContent>
               </Card>
             </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+      </Tabs>
     </div>
   )
 }

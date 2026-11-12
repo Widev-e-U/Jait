@@ -1,6 +1,6 @@
 import { evaluateDecision, systemOneEnabled } from "./system-one.js";
 import { personaAgentProfileSchema } from "@jait/shared";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, inArray, or, sql } from "drizzle-orm";
 import type { PersonaAgentProfile, TeamRoom, TeamRoomMessage, TeamSender, TeamMessageKind, TeamDelivery, TeamWorkContext } from "@jait/shared";
 import type { JaitDB } from "../db/connection.js";
 import { teamRooms, teamMessages, teamDeliveries } from "../db/schema.js";
@@ -135,6 +135,23 @@ export class TeamChatService {
   history(userId: string, roomId: string): TeamRoomMessage[] {
     this.get(userId, roomId);
     return this.db.select().from(teamMessages).where(eq(teamMessages.roomId, roomId)).orderBy(sql`${teamMessages}.rowid`).all().map(row => JSON.parse(row.data));
+  }
+  /** Newest `limit` messages (optionally strictly older than `beforeId`), returned oldest first. */
+  historyPage(userId: string, roomId: string, limit: number, beforeId?: string): { messages: TeamRoomMessage[]; hasMore: boolean } {
+    this.get(userId, roomId);
+    const cursor = beforeId ? sql` and ${teamMessages}.rowid < (select rowid from ${teamMessages} where ${teamMessages.id} = ${beforeId} and ${teamMessages.roomId} = ${roomId})` : sql``;
+    const rows = this.db.select().from(teamMessages).where(sql`${teamMessages.roomId} = ${roomId}${cursor}`)
+      .orderBy(sql`${teamMessages}.rowid desc`).limit(limit + 1).all();
+    return { messages: rows.slice(0, limit).reverse().map(row => JSON.parse(row.data)), hasMore: rows.length > limit };
+  }
+  deliveriesFor(userId: string, roomId: string, messageIds: ReadonlySet<string>): TeamDelivery[] {
+    this.get(userId, roomId);
+    const pageIds = [...messageIds];
+    const selection = pageIds.length ? or(inArray(teamDeliveries.messageId, pageIds), eq(teamDeliveries.status, "running")) : eq(teamDeliveries.status, "running");
+    return this.db.select().from(teamDeliveries).where(and(eq(teamDeliveries.roomId, roomId), selection)).orderBy(sql`${teamDeliveries}.rowid`).all().map(row => {
+      const thread = this.threadById(userId, row.sessionId);
+      return { ...row, ...(thread ? { threadId: thread.id, threadStatus: thread.status } : {}) } as TeamDelivery;
+    });
   }
   // UUIDv7 suffixes are random within a millisecond. SQLite insertion order
   // is the durable event order, including for messages written before upgrade.

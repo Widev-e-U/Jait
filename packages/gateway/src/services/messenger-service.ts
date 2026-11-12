@@ -102,6 +102,7 @@ const INCOMING_READ_GRACE_MS = 5_000;
 interface Saved {
   owner: string;
   session: MessengerSession;
+  ownPresence?: { state: 'online' | 'unavailable' | 'offline'; keep: boolean };
 }
 
 /** Reject credentials and parameters before any network activity. Local homeservers are explicitly supported. */
@@ -766,7 +767,11 @@ class Connection {
         return;
       }
       // Only persist after crypto initialization succeeded. Never run without a crypto store.
-      this.save({ owner: this.owner, session });
+      this.save({ owner: this.owner, session, ownPresence: this.ownPresence });
+      if (this.ownPresence.keep) {
+        void client.setPresenceStatus(this.ownPresence.state).catch(() => {});
+        this.startPresenceTimer();
+      }
       this.status = 'syncing';
     } catch {
       client.stop();
@@ -1135,8 +1140,17 @@ class Connection {
       room?.summary.membership !== 'join'
     )
       throw new Error('Join the conversation first.');
-    if (body.action === 'send')
-      return { eventId: await client.sendText(id, body.text) };
+    if (body.action === 'send') {
+      if (!body.replyToEventId) return { eventId: await client.sendText(id, body.text) };
+      if (!room!.events.some(e => e.event_id === body.replyToEventId)) throw new Error('Message is unavailable.');
+      return {
+        eventId: await client.sendMessage(id, {
+          msgtype: 'm.text',
+          body: body.text,
+          'm.relates_to': { 'm.in_reply_to': { event_id: body.replyToEventId } },
+        }),
+      };
+    }
     if (body.action === 'edit' || body.action === 'react') {
       const original = room!.events.find(e => e.event_id === body.eventId);
       if (!original || !this.messages(id).some(m => m.id === body.eventId && !m.unableToDecrypt)) throw new Error('Message is unavailable.');
@@ -1326,17 +1340,21 @@ class Connection {
           room.events[i] = await this.decrypt(id, room.events[i]!);
   }
   /** Own presence the user asked to keep, re-asserted while the sync runs. */
-  ownPresence: { state: MessengerPresence; keep: boolean } = { state: 'online', keep: false };
+  ownPresence: { state: 'online' | 'unavailable' | 'offline'; keep: boolean } = { state: 'online', keep: false };
   private presenceTimer?: NodeJS.Timeout;
   async setOwnPresence(state: 'online' | 'unavailable' | 'offline', keep: boolean) {
     const client = this.client;
     if (!client || !this.session) throw new Error('Matrix is not connected.');
     await client.setPresenceStatus(state);
+    this.save({ owner: this.owner, session: this.session, ownPresence: { state, keep } });
     this.ownPresence = { state, keep };
+    this.startPresenceTimer();
+  }
+  private startPresenceTimer() {
     clearInterval(this.presenceTimer);
-    if (keep) {
+    if (this.ownPresence.keep) {
       this.presenceTimer = setInterval(() => {
-        void this.client?.setPresenceStatus(state).catch(() => {});
+        void this.client?.setPresenceStatus(this.ownPresence.state).catch(() => {});
       }, OWN_PRESENCE_REFRESH_MS);
       this.presenceTimer.unref?.();
     }
@@ -1510,6 +1528,7 @@ export class MessengerService {
           ]).toString(),
         ) as Saved;
         if (saved.owner !== owner) throw new Error('Owner mismatch');
+        if (saved.ownPresence && ['online', 'unavailable', 'offline'].includes(saved.ownPresence.state) && typeof saved.ownPresence.keep === 'boolean') c.ownPresence = saved.ownPresence;
         await c.start(saved.session);
       } catch {
         if (!c.session) {
@@ -1608,6 +1627,7 @@ export class MessengerService {
       c.session = null;
       c.rooms.clear();
       c.resetPresence();
+      c.ownPresence = { state: 'online', keep: false };
       c.status = 'disconnected';
       c.error = null;
       const file = join(c.directory, 'session');
@@ -1681,7 +1701,8 @@ export class MessengerService {
   }
   async setOwnPresence(owner: string, state: 'online' | 'unavailable' | 'offline', keep: boolean) {
     await this.resume(owner);
-    await this.connection(owner).setOwnPresence(state, keep);
+    const c = this.connection(owner);
+    await c.serialize(() => c.setOwnPresence(state, keep));
   }
   async command(owner: string, body: unknown) {
     await this.resume(owner);

@@ -158,25 +158,27 @@ export function DeveloperWorkspacePanes({
   const shouldShowProject = showDesktopProject && Boolean(activeProject)
   const shouldShowMobileProject = showMobileProjectFullscreen && Boolean(activeProject)
 
-  const renderProjectPanel = (mobile = false) => activeProject?.opening ? (
-    <div className={mobile ? 'flex h-full min-h-0 items-center justify-center' : 'flex min-h-0 flex-1 items-center justify-center'}>
-      <div className="flex max-w-full items-center gap-2 px-4 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-        <span className="truncate">Opening {activeProject.projectRoot}…</span>
+  const renderProjectPanel = (mobile = false) => (
+    <div className={mobile ? 'relative flex h-full min-h-0 flex-col' : 'relative flex min-h-0 flex-1 flex-col'}>
+    {activeProject?.opening && (
+      <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
+        <div role="status" className="flex max-w-full items-center gap-2 rounded-full border border-border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          <span className="truncate">Opening project…</span>
+        </div>
       </div>
-    </div>
-  ) : (
+    )}
     <ErrorBoundary
       name="Editor project"
       variant="section"
-      className={mobile ? 'h-full min-h-0' : 'flex-1 min-h-0'}
+      className="flex-1 min-h-0"
       resetKeys={[activeProject?.projectRoot, showProjectTree, showProjectEditor, mobileTreeTab]}
     >
       <ProjectPanel
         key={activeProjectId ?? `${activeProject?.nodeId ?? 'gateway'}:${activeProject?.projectRoot ?? 'project'}`}
         ref={projectRef}
-        autoOpenRemotePath={activeProject?.projectRoot ?? null}
-        surfaceId={activeProject?.surfaceId ?? null}
+        autoOpenRemotePath={activeProject?.opening ? null : activeProject?.projectRoot ?? null}
+        surfaceId={activeProject?.surfaceId || null}
         projectNodeId={activeProject?.nodeId ?? null}
         files={projectFiles as any}
         activeFileId={activeProjectFileId}
@@ -224,6 +226,7 @@ export function DeveloperWorkspacePanes({
         onLayoutSizeChange={mobile ? undefined : onLayoutSizeChange}
       />
     </ErrorBoundary>
+    </div>
   )
 
   const renderTerminalBody = () => activeTerminalId ? (

@@ -40,6 +40,7 @@ function OwnPresenceControl({ service }: { service: string }) {
   const [state, setState] = useState<OwnState>('online')
   const [keep, setKeep] = useState(false)
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(true)
   useEffect(() => {
     let live = true
     void fetch('/api/messenger/presence', { credentials: 'include', headers: { Accept: 'application/json' } })
@@ -49,11 +50,13 @@ function OwnPresenceControl({ service }: { service: string }) {
         if (body.state === 'online' || body.state === 'unavailable' || body.state === 'offline') setState(body.state)
         setKeep(!!body.keep)
       })
-      .catch(() => {})
+      .catch(() => { if (live) setError('Could not load your Matrix status.') })
+      .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
   }, [])
   const save = useCallback(async (nextState: OwnState, nextKeep: boolean) => {
     setError('')
+    setBusy(true)
     const previous = { state, keep }
     setState(nextState)
     setKeep(nextKeep)
@@ -68,13 +71,15 @@ function OwnPresenceControl({ service }: { service: string }) {
     } catch {
       setState(previous.state)
       setKeep(previous.keep)
-      setError('Could not update your status.')
+      setError('Could not update your Matrix status. Check your Matrix connection and homeserver presence support.')
+    } finally {
+      setBusy(false)
     }
   }, [state, keep])
   return <div className="space-y-2 border-t pt-3">
     <div className="flex items-center justify-between gap-3">
       <span className="text-sm font-medium">My status</span>
-      <Select value={state} onValueChange={value => void save(value as OwnState, keep)}>
+      <Select disabled={busy} value={state} onValueChange={value => void save(value as OwnState, keep)}>
         <SelectTrigger aria-label="My status" className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent align="end">
           <SelectItem value="online" className="text-xs">Available</SelectItem>
@@ -85,9 +90,9 @@ function OwnPresenceControl({ service }: { service: string }) {
     </div>
     <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
       Keep this status
-      <Switch checked={keep} onCheckedChange={value => void save(state, value)} aria-label="Keep this status" />
+      <Switch disabled={busy} checked={keep} onCheckedChange={value => void save(state, value)} aria-label="Keep this status" />
     </label>
-    <p className="text-2xs text-muted-foreground">Applies to your Matrix account and is re-sent every minute while kept. Whether {service} mirrors it depends on the bridge.</p>
+    <p className="text-2xs text-muted-foreground">Applies to your Matrix account and is re-sent every minute while kept. {service} may not mirror it; check {service} to confirm your status.</p>
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
   </div>
 }

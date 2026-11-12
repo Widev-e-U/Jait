@@ -275,9 +275,14 @@ pub struct Application {
     repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
+    live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
 }
 
 impl Application {
+    /// Registry of live browser view (noVNC) ports a caller may query; a host registers a port per owner.
+    pub fn live_view_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
+        self.live_view_ports.clone()
+    }
     /// Registry of preview ports the dev proxy may reach; a host registers a port per owning user.
     pub fn preview_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
         self.preview_ports.clone()
@@ -439,6 +444,7 @@ impl Application {
             })
         };
         let preview_ports = crate::routes::preview_proxy::PreviewPortRegistry::default();
+        let live_view_ports = crate::routes::preview_proxy::PreviewPortRegistry::default();
         let mut project_collection =
             crate::routes::projects::ProjectCollectionRoutes::new(auth.clone());
         project_collection.events = Some(repository_events.clone());
@@ -584,6 +590,7 @@ impl Application {
                 crate::routes::preview_proxy::PreviewProxyRoutes {
                     auth: auth.clone(),
                     ports: preview_ports.clone(),
+                    live_ports: live_view_ports.clone(),
                 }
                 .router(),
             )
@@ -736,6 +743,7 @@ impl Application {
                 repository_hub,
                 consent: settings_chat.then_some(consent),
                 preview_ports,
+                live_view_ports,
             }),
             Err(error) => {
                 auth.shutdown().await?;

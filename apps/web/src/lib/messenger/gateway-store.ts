@@ -127,6 +127,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     roomId: string,
     body: string,
     request: () => Promise<{ eventId?: string }>,
+    replyTo?: MessengerMessage['replyTo'],
   ) {
     const localId =
       LOCAL_ECHO_PREFIX + roomId + ':' + ++this.optimisticIds + ':' + Date.now();
@@ -142,6 +143,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         unableToDecrypt: false,
         pending: true,
         failed: false,
+        ...(replyTo ? { replyTo } : {}),
       },
     });
     this.publishMessages(roomId);
@@ -210,6 +212,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     if (!sameAccount) this.notificationRooms = null;
     if (snapshot.status === 'ready' && key && this.notificationRooms && notifications) {
       for (const room of snapshot.rooms) {
+        if (room.hidden) continue;
         const old = this.notificationRooms.get(room.id);
         const focused = this.visible === room.id &&
           document.visibilityState === 'visible' &&
@@ -328,11 +331,20 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     });
     void this.refreshRemote().catch(() => {});
   }
-  async send(roomId: string, text: string) {
+  async send(roomId: string, text: string, replyTo?: NonNullable<MessengerMessage['replyTo']>) {
     const body = text.trim();
     if (!body) return;
-    await this.sendOptimistic(roomId, body, () =>
-      this.request('/command', 'POST', { action: 'send', roomId, text: body }),
+    await this.sendOptimistic(
+      roomId,
+      body,
+      () =>
+        this.request('/command', 'POST', {
+          action: 'send',
+          roomId,
+          text: body,
+          ...(replyTo ? { replyToEventId: replyTo.id } : {}),
+        }),
+      replyTo,
     );
   }
   async edit(roomId: string, eventId: string, text: string) {

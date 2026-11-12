@@ -1,7 +1,7 @@
 import { MessageText } from '@/components/ui/message-text'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, Forward, Search, Smile } from 'lucide-react'
+import { ChevronDown, Forward, Reply, Search, Smile } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -98,9 +98,11 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef }: {
   </div>, document.body)
 }
 
-export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar }: {
+export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply }: {
   message: MessengerMessage
   messageId?: string
+  /** Offered on other people's messages only. */
+  onReply?: (message: MessengerMessage) => void
   roomId: string
   disabled: boolean
   variant?: 'chat' | 'channel'
@@ -230,6 +232,16 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           + (pillsOverlap ? ' pb-4' : '')}
       >
         {showSenderName && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
+        {message.replyTo && <button
+          type="button"
+          data-reply-quote
+          aria-label={'Jump to replied message from ' + message.replyTo.sender}
+          onClick={() => document.querySelector('[data-message-id="' + CSS.escape(message.replyTo!.id) + '"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+          className="mb-1 block w-full min-w-0 rounded-md border-l-2 border-primary bg-background/50 px-2 py-1 text-left"
+        >
+          <span className="block truncate text-[11px] font-semibold leading-4 text-primary">{message.replyTo.sender}</span>
+          <span className="line-clamp-2 break-words text-xs leading-4 text-muted-foreground">{message.replyTo.body || 'Attachment'}</span>
+        </button>}
         {editing ? <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (text.trim()) void run(async () => { await store.edit!(roomId, message.id, text); setEditing(false) }) }}>
           <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full min-w-40 resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
@@ -246,6 +258,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
             <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
           </DropdownMenuTrigger>
             <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</DropdownMenuItem>
+              {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => onReply(message)}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => setForwardOpen(true)}><Forward className="mr-2 h-4 w-4" />Forward</DropdownMenuItem>
               {store.react && <DropdownMenuItem onSelect={() => setPickerOpen(true)}><Smile className="mr-2 h-4 w-4" />React…</DropdownMenuItem>}
               {store.edit && message.own && !message.attachment && <DropdownMenuItem onSelect={() => { setText(message.body); setEditing(true) }}>Edit message</DropdownMenuItem>}

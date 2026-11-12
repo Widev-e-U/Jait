@@ -113,10 +113,17 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     try { return { room: "memberIds" in body.data ? service.createRoom(user.id, body.data) : service.ensureRoom(user.id, body.data.agentId, body.data.sourceSessionId) }; }
     catch (error) { return reply.status(400).send({ error: String(error) }); }
   });
-  app.get<{ Params: { id: string } }>("/api/team-rooms/:id", async (request, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { limit?: string; before?: string } }>("/api/team-rooms/:id", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret); if (!user) return;
     try {
       const room = service.get(user.id, request.params.id);
+      const limit = Math.floor(Number(request.query.limit));
+      // Paged mode: callers that pass `limit` get only that window plus its deliveries.
+      if (limit > 0) {
+        const page = service.historyPage(user.id, room.id, Math.min(limit, 100), request.query.before || undefined);
+        return { room, members: service.roomMembers(user.id, room.id), messages: page.messages, hasMore: page.hasMore,
+          deliveries: service.deliveriesFor(user.id, room.id, new Set(page.messages.map(message => message.id))) };
+      }
       return { room, members: service.roomMembers(user.id, room.id), messages: service.history(user.id, room.id), deliveries: service.deliveries(user.id, room.id) };
     } catch { return reply.status(404).send({ error: "Team room not found." }); }
   });

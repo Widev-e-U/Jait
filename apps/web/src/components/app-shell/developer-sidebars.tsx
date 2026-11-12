@@ -22,8 +22,6 @@ interface DeveloperSidebarsProps {
   account: SidebarAccount
   currentView: AppView
   onNavigate: (view: AppView) => void
-  screenShareActive: boolean
-  onToggleScreenShare: () => void
   activeProject: ActiveProjectState
   activeProjectId: string | null
   openSessionIds?: ReadonlySet<string>
@@ -87,8 +85,6 @@ export function DeveloperSidebars({
   account,
   currentView,
   onNavigate,
-  screenShareActive,
-  onToggleScreenShare,
   activeProject,
   activeProjectId,
   activeSessionId,
@@ -172,8 +168,6 @@ export function DeveloperSidebars({
           account={account}
           currentView={currentView}
           onNavigate={onNavigate}
-          screenShareActive={screenShareActive}
-          onToggleScreenShare={onToggleScreenShare}
           items={[
             { id: 'projects', label: 'Projects & Chats', icon: Folders, active: showSidebar && sidebarView === 'projects', onSelect: () => onSelectSidebarView('projects') },
             ...((activeProjectId || activeProject) ? [

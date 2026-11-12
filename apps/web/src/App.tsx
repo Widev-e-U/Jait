@@ -5487,8 +5487,6 @@ function App() {
                     currentView={currentView}
                     onNavigate={setCurrentView}
                     onOpenSettings={() => setCurrentView('settings')}
-                    screenShareActive={showScreenShare}
-                    onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                     items={currentView === 'messenger' ? [
                       { id: 'conversations', label: 'Chats', description: 'Show or hide the conversations list', icon: MessagesSquare, active: !messengerListHidden, onSelect: () => setMessengerListHidden(!messengerListHidden) },
                     ] : []}
@@ -5556,8 +5554,6 @@ function App() {
                       account={sidebarAccount}
                       currentView={currentView}
                       onNavigate={setCurrentView}
-                      screenShareActive={showScreenShare}
-                      onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                       activeProject={activeProject}
                       activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}

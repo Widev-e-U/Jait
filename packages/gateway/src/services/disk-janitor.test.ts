@@ -184,6 +184,17 @@ describe("DiskJanitor", () => {
     },
   );
 
+  it("preserves the shared build lock even when it is old", async () => {
+    const lock = join(tempRoot, "jait-vite-build.lock");
+    writeFileSync(lock, "");
+    const old = new Date(NOW.getTime() - 10 * DAY_MS);
+    utimesSync(lock, old, old);
+    const report = await janitor().run({ now: NOW });
+    expect(existsSync(lock)).toBe(true);
+    expect(report.tempScratch.some((entry) => entry.path === lock)).toBe(false);
+    expect(report.blockedForeignOwned).toBe(0);
+  });
+
   it("measures nested trees, individual files, and missing paths", async () => {
     const nested = join(root, "nested", "child");
     mkdirSync(nested, { recursive: true });

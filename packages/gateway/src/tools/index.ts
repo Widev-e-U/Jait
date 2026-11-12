@@ -454,9 +454,8 @@ export function createToolRegistry(
   // OS tools
   tools.register(createOsQueryTool());
   tools.register(createOsInstallTool());
-  if (deps.ws) {
-    for (const tool of createComputerTools(deps.ws, deps.computerSessions, deps.screenShare)) tools.register(tool);
-  }
+  const computerTools = deps.ws ? createComputerTools(deps.ws, deps.computerSessions, deps.screenShare) : [];
+  for (const tool of computerTools) tools.register(tool);
 
   // Surface self-control tools
   tools.register(createSurfacesListTool(surfaceRegistry));
@@ -629,7 +628,7 @@ export function createToolRegistry(
   }
 
   if (deps.screenShare) {
-    tools.register(createScreenShareTool(deps.screenShare, deps.ws, deps.screenShareControl));
+    tools.register(createScreenShareTool(deps.screenShare, deps.ws, deps.screenShareControl, computerTools));
     tools.register(createScreenCaptureTool(deps.screenShare));
     tools.register(createScreenRecordTool(deps.screenShare));
     tools.register(createOsTool(deps.screenShare, "os.tool"));

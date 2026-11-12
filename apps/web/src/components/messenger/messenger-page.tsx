@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
 import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Reply, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Conversation } from '@/components/chat/conversation'
@@ -20,7 +20,7 @@ import type { SttProvider } from '@/hooks/useAuth'
 import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { MessengerContext, useMessenger, useMessengerBadge } from './messenger-provider'
-import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
+import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerMessage, type MessengerRoom } from '@/lib/messenger/model'
 import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
@@ -109,6 +109,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const service = serviceValue || 'All'
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [replies, setReplies] = useState<Record<string, NonNullable<MessengerMessage['replyTo']>>>({})
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (snapshot.error) toast.error(snapshot.error, { id: 'messenger-connection-error' })
@@ -223,7 +224,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   }, [store, roomId, room?.id, snapshot.messages.at(-1)?.id, ready, statusRoom])
 
   useEffect(() => {
-    if (!snapshot.session) setDrafts({})
+    if (!snapshot.session) { setDrafts({}); setReplies({}) }
   }, [snapshot.session])
   const act = async (action: () => Promise<unknown>, errorText?: string) => {
     setBusy(true)
@@ -247,12 +248,15 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     const composer = composerRef.current
     // Clear the composer right away: the pending message is rendered from the
     // store's local echo, so waiting for the gateway would only look laggy.
-    const sending = store.send(target, text)
+    const replyTo = replies[target]
+    const sending = replyTo ? store.send(target, text, replyTo) : store.send(target, text)
     composer?.reset()
     setDrafts(current => ({ ...current, [target]: current[target] === text ? '' : current[target] }))
+    setReplies(current => { const { [target]: _sent, ...rest } = current; return rest })
     void sending.catch(error => {
       toast.error(messengerError(error))
       setDrafts(current => ({ ...current, [target]: current[target] || text }))
+      if (replyTo) setReplies(current => ({ ...current, [target]: current[target] ?? replyTo }))
     })
   }
 
@@ -369,6 +373,10 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                     variant={room.kind === 'channel' ? 'channel' : 'chat'}
                     groupStart={groupPositions[index]?.start ?? true}
                     groupEnd={groupPositions[index]?.end ?? true}
+                    onReply={target => {
+                      setReplies(current => ({ ...current, [room.id]: { id: target.id, sender: target.sender, body: target.body.slice(0, 300) } }))
+                      requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-messenger-composer] textarea, textarea[aria-label]')?.focus())
+                    }}
                     {...(room.peer ? { avatar: { name: room.peer.name, presence: room.peer.presence, ...(room.peer.avatarUrl ? { mxcUrl: room.peer.avatarUrl } : {}) } } : {})}
                   />
                 </div>)}
@@ -376,7 +384,15 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
               {loadingHistory && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">Loading earlier messages…</p>}
               {snapshot.historyLimited && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">10,000 events loaded. Open WhatsApp for older history.</p>}
               <ChatComposerSurface className="shrink-0 px-3 pb-3">
-                <div className="mx-auto max-w-4xl">
+                <div data-messenger-composer className="mx-auto max-w-4xl">
+                  {replies[room.id] && <div data-reply-preview className="mb-1.5 flex items-center gap-2 rounded-lg border-l-2 border-primary bg-muted px-3 py-1.5">
+                    <Reply className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-primary">Replying to {replies[room.id]!.sender}</p>
+                      <p className="truncate text-xs text-muted-foreground">{replies[room.id]!.body || 'Attachment'}</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label="Cancel reply" onClick={() => setReplies(current => { const { [room.id]: _cancelled, ...rest } = current; return rest })}><X className="h-3.5 w-3.5" /></Button>
+                  </div>}
                   <PromptInput
                     key={room.id}
                     ref={composerRef}

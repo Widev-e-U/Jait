@@ -610,7 +610,7 @@ export class DiskJanitor {
       entries = (await readdir(root, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory() || entry.isFile())
         .map((entry) => entry.name)
-        .filter((name) => name.startsWith("jait-"));
+        .filter((name) => name.startsWith("jait-") && name !== "jait-vite-build.lock");
     } catch (err) {
       errors.push(`temp root unreadable: ${String(err)}`);
       return reaped;
@@ -677,7 +677,6 @@ export class DiskJanitor {
   private async reportPermissionBlocks(report: DiskJanitorReport): Promise<void> {
     if (this.permissionFailures.length === 0 && report.blockedForeignOwned === 0) return;
     const root = this.roots.temp;
-    const days = Math.round(this.policy.tempScratchMaxAgeMs / DAY_MS);
     const foreign = report.blockedForeignOwned;
     const signature = `${root}:${foreign}:${this.permissionFailures.length}`;
     if (signature === this.lastPermissionAlert) return;
@@ -686,7 +685,7 @@ export class DiskJanitor {
     const body = foreign > 0
       ? `${foreign} jait-* entr${foreign === 1 ? "y" : "ies"} in ${root} belong to another user, ` +
         `and the sticky bit prevents this process (uid ${String(process.getuid?.())}) from removing them. ` +
-        `Clear them as root: sudo find ${root} -maxdepth 1 -name 'jait-*' -mtime +${days} -exec rm -rf {} +`
+        `Inspect the stale entries and arrange cleanup with their owner or an administrator.`
       : `${this.permissionFailures.length} jait-* entr${this.permissionFailures.length === 1 ? "y" : "ies"} in ` +
         `${root} could not be removed (permission denied). Check ownership and directory permissions at ` +
         `${this.permissionFailures[0]}.`;

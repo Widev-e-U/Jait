@@ -45,6 +45,7 @@ const command = z.discriminatedUnion('action', [
       action: z.literal('send'),
       roomId,
       text: z.string().trim().min(1).max(10000),
+      replyToEventId: z.string().min(1).max(512).optional(),
     })
     .strict(),
   z

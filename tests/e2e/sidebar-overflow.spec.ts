@@ -30,8 +30,8 @@ for (const collapsed of [false, true]) {
     await page.keyboard.press('Enter')
     const navMenu = page.getByRole('menu', { name: 'More navigation options' })
     await expect(navMenu).toBeVisible()
-    await navMenu.getByRole('menuitem', { name: 'Screen Share' }).click()
-    await expect(page.getByLabel('Last action')).toHaveText('Screen Share')
+    await navMenu.getByRole('menuitem', { name: 'Network' }).click()
+    await expect(page.getByLabel('Last action')).toHaveText('network')
     await expect(navMenu).toBeHidden()
     const sidebarBounds = await sidebar.boundingBox()
     await moreTools.click()
@@ -62,7 +62,7 @@ for (const collapsed of [false, true]) {
     await expect(moreTools).toHaveCount(0)
     await expect(moreNavigation).toHaveCount(0)
     await expect(tools.getByRole('button', { name: 'Extra tool' })).toBeVisible()
-    await expect(navigation.getByRole('button', { name: 'Screen Share' })).toBeVisible()
+    await expect(navigation.getByRole('button', { name: 'Network' })).toBeVisible()
 
     // Changing rail width also recalculates the available space.
     await page.setViewportSize({ width: 1280, height: 420 })

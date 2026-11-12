@@ -80,6 +80,28 @@ describe("team room routes and work chat integration", () => {
   afterEach(async () => { await app.close(); opened.sqlite.close(); });
   const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
 
+  it("paginates messages in insertion order and limits historical deliveries", async () => {
+    const insertMessage = opened.sqlite.prepare("INSERT INTO team_room_messages (id, room_id, client_key, data) VALUES (?, ?, ?, ?)");
+    const insertDelivery = opened.sqlite.prepare("INSERT INTO team_room_deliveries (id, room_id, message_id, agent_id, session_id, status) VALUES (?, ?, ?, ?, ?, ?)");
+    for (let i = 0; i < 23; i++) {
+      const id = `message-${i}`;
+      insertMessage.run(id, roomId, id, JSON.stringify({ id, roomId, content: id }));
+      insertDelivery.run(`delivery-${i}`, roomId, id, "Developer", `session-${i}`, i === 0 ? "running" : "completed");
+    }
+    const getPage = async (query: string) => (await app.inject({ method: "GET", url: `/api/team-rooms/${roomId}?${query}`, headers })).json();
+    const latest = await getPage("limit=10");
+    expect(latest.messages.map((m: { id: string }) => m.id)).toEqual(Array.from({ length: 10 }, (_, i) => `message-${i + 13}`));
+    expect(latest.hasMore).toBe(true);
+    expect(latest.deliveries).toHaveLength(11);
+    const middle = await getPage("limit=10&before=message-13");
+    expect(middle.messages.map((m: { id: string }) => m.id)).toEqual(Array.from({ length: 10 }, (_, i) => `message-${i + 3}`));
+    expect(middle.hasMore).toBe(true);
+    const oldest = await getPage("limit=10&before=message-3");
+    expect(oldest.messages.map((m: { id: string }) => m.id)).toEqual(["message-0", "message-1", "message-2"]);
+    expect(oldest.hasMore).toBe(false);
+    expect((await snapshot()).messages).toHaveLength(23);
+  });
+
   it("creates named chats, validates owned members, and returns only selected agents", async () => {
     const create = (name: string, memberIds: string[]) => app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { name, memberIds } });
     const first = await create("Implementation", ["Developer", "QA"]);

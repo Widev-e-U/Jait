@@ -23,7 +23,6 @@ function Harness() {
       currentView={currentView}
       onNavigate={view => { setCurrentView(view); setLastAction(view) }}
       onOpenSettings={() => setLastAction('settings')}
-      onToggleScreenShare={() => setLastAction('Screen Share')}
       items={[
         { id: 'projects', label: 'Projects & Chats', icon: Folders, onSelect: () => setLastAction('Projects & Chats') },
         { id: 'files', label: 'Files', icon: FolderOpen, onSelect: () => setLastAction('Files') },

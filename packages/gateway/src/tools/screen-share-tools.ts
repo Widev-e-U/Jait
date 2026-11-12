@@ -3,11 +3,24 @@ import type { WsControlPlane } from "../ws.js";
 import type { ScreenShareControlCoordinator } from "../services/screen-share-control.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
+type ScreenControlAction = "observe" | "move" | "click" | "type" | "key" | "scroll";
+const SCREEN_CONTROL_ACTIONS: readonly string[] = ["observe", "move", "click", "type", "key", "scroll"];
+
 interface ScreenShareInput {
-  action: "connect" | "disconnect" | "list-devices" | "start";
+  action: "connect" | "disconnect" | "list-devices" | "start" | ScreenControlAction;
   targetDeviceId?: string;
   hostDeviceId?: string;
   viewerDeviceIds?: string[];
+  x?: number;
+  y?: number;
+  button?: "left" | "right" | "middle";
+  clicks?: number;
+  text?: string;
+  combo?: string;
+  direction?: "up" | "down" | "left" | "right";
+  amount?: number;
+  includeScreenshot?: boolean;
+  waitAfterMs?: number;
 }
 
 interface OsToolInput {
@@ -27,11 +40,57 @@ interface OsToolInput {
   };
 }
 
-export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsControlPlane, control?: ScreenShareControlCoordinator): ToolDefinition<ScreenShareInput> {
+export function createScreenShareTool(
+  screenShare: ScreenShareService,
+  ws?: WsControlPlane,
+  control?: ScreenShareControlCoordinator,
+  computerTools: ToolDefinition[] = [],
+): ToolDefinition<ScreenShareInput> {
+  const computer = (name: string) => computerTools.find((tool) => tool.name === name);
+
+  /** Runs a control action on the chat's connected device through the computer.* tools. */
+  const runControl = async (input: ScreenShareInput, ctx?: ToolContext): Promise<ToolResult> => {
+    const chatId = ctx?.sessionId;
+    if (!chatId?.trim()) return { ok: false, message: "An authenticated chat is required to control a screen." };
+    const share = screenShare.getSessionForChat(chatId);
+    if (!share?.nodeId) {
+      return { ok: false, message: "No screen is connected in this chat. Use 'connect' with a targetDeviceId first." };
+    }
+    if (share.pendingApproval) {
+      return { ok: false, message: "Waiting for the device to approve the screen share. Try again once it is approved." };
+    }
+    const session = computer("computer.session");
+    const observe = computer("computer.observe");
+    const act = computer("computer.act");
+    if (!session || !observe || !act) {
+      return { ok: false, message: "Screen control is unavailable on this gateway (no desktop control plane)." };
+    }
+    const context = ctx as ToolContext;
+
+    // Reuse this chat's control lease on the device, or request one (the device asks its user).
+    const statusResult = await session.execute({ action: "status" }, context);
+    const leases = ((statusResult.data as { sessions?: Array<{ id: string; nodeId: string }> } | undefined)?.sessions ?? [])
+      .filter((lease) => lease.nodeId === share.nodeId);
+    let controlId = leases[0]?.id;
+    if (!controlId) {
+      const started = await session.execute({ action: "start", nodeId: share.nodeId }, context);
+      if (!started.ok) return started;
+      controlId = (started.data as { session?: { id?: string } } | undefined)?.session?.id;
+      if (!controlId) return { ok: false, message: "The device did not return a control session." };
+    }
+
+    if (input.action === "observe") return observe.execute({ sessionId: controlId }, context);
+    const { action, x, y, button, clicks, text, combo, direction, amount, includeScreenshot, waitAfterMs } = input;
+    return act.execute({ sessionId: controlId, action, x, y, button, clicks, text, combo, direction, amount, includeScreenshot, waitAfterMs }, context);
+  };
+
   return {
     name: "screen.share",
     description:
-      "Connect to a remote device and view its screen, or manage remote screen viewing sessions. " +
+      "Connect to a remote device, view its screen, and control it with mouse and keyboard. " +
+      "Use 'observe' to get a screenshot of the connected device, and 'move', 'click', 'type', 'key' or 'scroll' " +
+      "to act on it (coordinates are pixels of the observed desktop; actions return a fresh screenshot by default). " +
+      "Control needs the device's approval and is currently supported on Windows desktop nodes only. " +
       "Use 'list-devices' to discover connected devices. The response distinguishes the user's local device " +
       "(the browser they are chatting from — platform 'web') from remote devices (Desktop desktop, mobile, etc.). " +
       "Only remote devices are valid targets for 'connect'. " +
@@ -45,17 +104,29 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
       properties: {
         action: {
           type: "string",
-          enum: ["connect", "disconnect", "list-devices", "start"],
-          description: "Action to perform. Use 'list-devices' to discover devices, 'connect'/'start' to view a remote screen, 'disconnect' to stop.",
+          enum: ["connect", "disconnect", "list-devices", "start", "observe", "move", "click", "type", "key", "scroll"],
+          description: "Action to perform. Use 'list-devices' to discover devices, 'connect'/'start' to view a remote screen, 'observe' for a screenshot, 'move'/'click'/'type'/'key'/'scroll' to control it, 'disconnect' to stop.",
         },
         targetDeviceId: {
           type: "string",
           description: "Device ID to connect to and view its screen. Required for 'connect'.",
         },
+        x: { type: "number", description: "Desktop X coordinate for move/click." },
+        y: { type: "number", description: "Desktop Y coordinate for move/click." },
+        button: { type: "string", enum: ["left", "right", "middle"] },
+        clicks: { type: "number", description: "Click count from 1 to 3." },
+        text: { type: "string", description: "Literal text for 'type'." },
+        combo: { type: "string", description: "Key combination for 'key', such as win+r, ctrl+l or enter." },
+        direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Scroll direction." },
+        amount: { type: "number", description: "Scroll amount in wheel detents." },
+        includeScreenshot: { type: "boolean", description: "Return a screenshot after the action. Defaults to true." },
+        waitAfterMs: { type: "number", description: "Wait up to 10 seconds before capturing the result." },
       },
       required: ["action"],
     },
     async execute(input, ctx?: ToolContext): Promise<ToolResult> {
+      if (SCREEN_CONTROL_ACTIONS.includes(input.action)) return runControl(input, ctx);
+
       if (input.action === "list-devices") {
         const state = screenShare.getState();
         const webDevices = state.devices.filter((d) => d.platform === "web");

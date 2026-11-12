@@ -56,3 +56,42 @@ test('todos sort by creation date and remember the selection without replacing m
   await expect.poll(order).toEqual(['middle', 'old', 'new'])
   await expect(page.getByLabel('Drag to reorder', { exact: true })).toHaveCount(3)
 })
+
+test('todo pagination keeps selection on its page and resets when filtering on mobile', async ({ page, request }) => {
+  const registration = await registerTestUser(request, API_URL, {
+    data: { username: `todo-pages-${Date.now()}`, password: 'todo-pages-test-password' },
+  })
+  expect(registration.ok()).toBeTruthy()
+  const { access_token: token } = await registration.json()
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(({ token, api }) => {
+    localStorage.setItem('jait-auth-token', token)
+    sessionStorage.setItem('jait-auth-token', token)
+    localStorage.setItem('token', token)
+    localStorage.setItem('jait-gateway-url', api)
+  }, { token, api: API_URL })
+  await page.route('**/api/repos', (route) => route.fulfill({ json: { repos: [
+    { id: 'pages-repo', name: 'Pagination test', localPath: '/tmp/pages-repo', defaultBranch: 'main' },
+  ] } }))
+  await page.route('**/api/repos/pages-repo/todos', (route) => route.fulfill({ json: { todos: Array.from({ length: 23 }, (_, index) => ({
+    id: `item-${index}`, repoId: 'pages-repo', message: `Task ${index}`, priority: 'normal', status: 'open', dueDate: null,
+    tags: '[]', completionHistory: '[]', completedAt: null, sourceThreadId: null, sourceThreadTitle: null,
+    createdAt: '2026-10-01T12:00:00Z', updatedAt: '2026-10-01T12:00:00Z', userId: null,
+  })) } }))
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Skip for now', exact: true }).click()
+  await page.getByRole('button', { name: 'Todo', exact: true }).click()
+  await page.setViewportSize({ width: 375, height: 812 })
+  const rows = page.locator('[data-todo-id]')
+  await expect(rows).toHaveCount(20)
+  await page.getByText('Select page', { exact: true }).click()
+  await expect(page.getByText('20 selected in view')).toBeVisible()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(rows).toHaveCount(3)
+  await expect(page.getByText('Page 2 of 2')).toBeVisible()
+  await expect(page.getByText('Select page', { exact: true })).toBeVisible()
+  await page.getByPlaceholder('Search todos by text, tag, status, date...').fill('Task 22')
+  await expect(rows).toHaveCount(1)
+  await expect(page.getByText('Page 1 of 1')).toBeVisible()
+  await expect(rows.first()).toHaveAttribute('data-todo-id', 'item-22')
+})

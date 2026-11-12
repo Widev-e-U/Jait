@@ -80,6 +80,8 @@ export interface MessengerMessage {
   pending: boolean
   failed: boolean
   edited?: boolean
+  /** The message this one answers, when it is loaded. */
+  replyTo?: { id: string; sender: string; body: string }
   reactions?: { key: string; count: number; own: boolean; senders: string[] }[]
   readBy?: MessengerReadReceipt[]
   attachment?: {

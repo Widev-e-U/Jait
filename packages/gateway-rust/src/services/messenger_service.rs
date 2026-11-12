@@ -420,6 +420,15 @@ pub struct MessageAttachment {
     pub file: Option<Value>,
 }
 
+/// The message a reply answers, resolved from `m.in_reply_to` when the target is loaded.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageReply {
+    pub id: String,
+    pub sender: String,
+    pub body: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessengerMessage {
@@ -437,6 +446,18 @@ pub struct MessengerMessage {
     pub read_by: Vec<ReadBy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment: Option<MessageAttachment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<MessageReply>,
+}
+
+/// Drops the legacy `> <@user> quoted` fallback block that older clients prepend to reply bodies.
+fn strip_reply_fallback(body: &str) -> &str {
+    if body.starts_with("> ")
+        && let Some((_, rest)) = body.split_once("\n\n")
+    {
+        return rest;
+    }
+    body
 }
 
 struct FurthestRead {
@@ -742,10 +763,42 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                 .and_then(|unsigned| unsigned.get("jaitEncrypted"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            let reply_target = path(&event.content, &["m.relates_to", "m.in_reply_to", "event_id"])
+                .and_then(Value::as_str);
+            let is_reply = reply_target.is_some();
+            let reply_to = reply_target.and_then(|target| {
+                    let original = originals.get(target)?;
+                    let target_sender = original.sender.clone().unwrap_or_default();
+                    let name = room
+                        .and_then(|room| room.member(&target_sender))
+                        .and_then(|member| text_at(&member.content, &["displayname"]))
+                        .unwrap_or(target_sender);
+                    let quoted = if original.kind == "m.room.encrypted" {
+                        UNABLE_TO_DECRYPT.to_string()
+                    } else {
+                        let source = edits
+                            .get(target)
+                            .and_then(|edit| path(&edit.content, &["m.new_content"]))
+                            .unwrap_or(&original.content);
+                        strip_reply_fallback(&text_at(source, &["body"]).unwrap_or_default())
+                            .chars()
+                            .take(300)
+                            .collect()
+                    };
+                    Some(MessageReply {
+                        id: target.to_string(),
+                        sender: truncate_name(&name),
+                        body: quoted,
+                    })
+                });
             MessengerMessage {
                 id: event_id,
                 sender: truncate_name(&sender_name),
-                body,
+                body: if failed || !is_reply {
+                    body
+                } else {
+                    strip_reply_fallback(&body).to_string()
+                },
                 timestamp,
                 own: event.sender.as_deref() == session_user,
                 encrypted: failed || jait_encrypted,
@@ -756,6 +809,7 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                 reactions: event_reactions,
                 read_by,
                 attachment,
+                reply_to,
             }
         })
         .collect()
@@ -1125,6 +1179,16 @@ impl<C> Connection<C> {
         {
             return Err(ERR_JOIN_FIRST.to_string());
         }
+        if action == "send"
+            && let Some(reply_to) = body.get("replyToEventId").and_then(|v| v.as_str())
+            && !room.is_some_and(|room| {
+                room.events
+                    .iter()
+                    .any(|e| e.event_id.as_deref() == Some(reply_to))
+            })
+        {
+            return Err(ERR_MESSAGE_UNAVAILABLE.to_string());
+        }
         if action == "edit" || action == "react" {
             let event_id = body.get("eventId").and_then(|v| v.as_str()).unwrap_or("");
             let original = room.and_then(|room| {
@@ -1339,7 +1403,18 @@ impl<C> Connection<C> {
         match action {
             "send" => {
                 let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                let event_id = self.send_text(&room_id, text, ctx).await?;
+                let reply_to = body.get("replyToEventId").and_then(|v| v.as_str());
+                let event_id = match reply_to {
+                    Some(reply_to) => {
+                        let content = json!({
+                            "msgtype": "m.text",
+                            "body": text,
+                            "m.relates_to": {"m.in_reply_to": {"event_id": reply_to}},
+                        });
+                        self.send_message(&room_id, content, ctx).await?
+                    }
+                    None => self.send_text(&room_id, text, ctx).await?,
+                };
                 Ok(json!({"eventId": event_id}))
             }
             "edit" => {
@@ -5103,10 +5178,14 @@ pub mod route_validation {
                 Ok(Value::Object(map.clone()))
             }
             "send" => {
-                let parsed = with_room_id(&["action", "roomId", "text"], &[])?;
+                let parsed = with_room_id(&["action", "roomId", "text"], &["replyToEventId"])?;
                 let mut map = parsed.as_object().cloned().unwrap();
                 let text = trimmed(&map, "text", 10_000).ok_or(INVALID_ACTION)?;
                 map.insert("text".into(), Value::String(text));
+                if map.contains_key("replyToEventId") {
+                    let reply_to = bounded(&map, "replyToEventId", 512).ok_or(INVALID_ACTION)?;
+                    map.insert("replyToEventId".into(), Value::String(reply_to));
+                }
                 Ok(Value::Object(map))
             }
             "open" => {

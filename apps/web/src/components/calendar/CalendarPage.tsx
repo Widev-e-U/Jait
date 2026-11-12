@@ -53,7 +53,7 @@ export function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [view, setView] = useState<ViewMode>('list')
+  const [view, setView] = useState<ViewMode>('month')
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()))
   const isAndroid = isDeviceCalendarAvailable()
@@ -198,7 +198,7 @@ export function CalendarPage() {
                     <span className={cn("flex h-6 w-6 items-center justify-center text-xs", isToday && "rounded-full bg-primary text-primary-foreground")}>{day.getDate()}</span>
                     {dayEvents.length > 0 && <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />}
                   </button>
-                  <span className={cn('text-xs font-medium', isToday ? 'flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground' : 'text-muted-foreground', 'hidden sm:block')}>
+                  <span className={cn('text-xs font-medium', isToday ? 'h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground sm:flex' : 'text-muted-foreground sm:block', 'hidden')}>
                     {day.getDate()}
                   </span>
                   <div className="hidden flex-col gap-0.5 overflow-hidden sm:flex">

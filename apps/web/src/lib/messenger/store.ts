@@ -213,7 +213,13 @@ export class MessengerStore {
     if (!id) return null
     const attachment = content.file?.url ?? content.url
     const mime = typeof content.info?.mimetype === 'string' ? content.info.mimetype : 'application/octet-stream'
+    const replyId = content['m.relates_to']?.['m.in_reply_to']?.event_id
+    const replied = typeof replyId === 'string' ? room.findEventById(replyId) : undefined
     return {
+      ...(replied && typeof replyId === 'string' ? { replyTo: {
+        id: replyId, sender: room.getMember(replied.getSender() ?? '')?.name ?? replied.getSender() ?? 'Unknown',
+        body: String(replied.getContent().body ?? '').slice(0, 300),
+      } } : {}),
       id, sender: room.getMember(event.getSender() ?? '')?.name ?? event.getSender() ?? 'Unknown',
       ...(event.getSender() ? { senderId: event.getSender()! } : {}),
       body: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted' ? 'Unable to decrypt this message. Verify this device or import room keys.' : String(content.body ?? ''),
@@ -470,9 +476,13 @@ export class MessengerStore {
     }
   }
 
-  async send(roomId: string, body: string) {
+  async send(roomId: string, body: string, replyTo?: NonNullable<MessengerMessage['replyTo']>) {
     const { client } = this.connected()
     if (!body.trim()) return
+    if (replyTo) {
+      await client.sendMessage(roomId, { msgtype: 'm.text', body, 'm.relates_to': { 'm.in_reply_to': { event_id: replyTo.id } } } as never)
+      return
+    }
     await client.sendTextMessage(roomId, body)
   }
 

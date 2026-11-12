@@ -1,5 +1,5 @@
 import { MessageText } from '@/components/ui/message-text'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { TeamRoomMessage } from '@jait/shared'
 import { ArrowDown, ArrowLeft, ExternalLink, MoreHorizontal } from 'lucide-react'
@@ -28,6 +28,20 @@ export function TeamMessageBody({ content, members }: { content: string; members
         <AgentAvatar avatar={segment.member.avatar || 'Nova'} className="h-4 w-4 shrink-0" />
         <span className="font-medium text-primary">{segment.text}</span>
       </span>)}</p>
+}
+
+const TEAM_PAGE_SIZE = 10
+
+/** Fold the polled newest page into already-loaded history, keeping older pages the user scrolled to. */
+function mergeLatestPage(prev: TeamRoomSnapshot | null, next: TeamRoomSnapshot): TeamRoomSnapshot {
+  if (!prev || prev.room.id !== next.room.id || !next.messages.length) return next
+  const overlap = prev.messages.findIndex(message => message.id === next.messages[0]!.id)
+  // No overlap means more than a page arrived between polls (or first load): restart from the newest page.
+  if (overlap < 0) return next
+  const older = prev.messages.slice(0, overlap)
+  const olderIds = new Set(older.map(message => message.id))
+  return { ...next, messages: [...older, ...next.messages], hasMore: prev.hasMore,
+    deliveries: [...prev.deliveries.filter(delivery => olderIds.has(delivery.messageId)), ...next.deliveries] }
 }
 
 const expandedRoomGoals = new Map<string, boolean>()
@@ -106,9 +120,9 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = async () => {
       try {
-        const next = await teamChatApi.get(roomId)
+        const next = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE })
         if (!active) return
-        setSnapshot(next); setListError(null)
+        setSnapshot(prev => mergeLatestPage(prev, next)); setListError(null)
         // Deliveries are persisted history; confirm execution before animating.
         const sources = new Map<string, { kind: 'sessions' | 'threads'; id: string; agentId: string }>()
         const addSource = (kind: 'sessions' | 'threads', id: string, agentId: string) => {
@@ -133,6 +147,27 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
     void refresh()
     return () => { active = false; clearTimeout(timer) }
   }, [roomId])
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const loadingOlderRef = useRef(false)
+  const loadOlder = async () => {
+    const first = snapshot?.messages[0]
+    if (!first || !snapshot.hasMore || loadingOlderRef.current) return
+    loadingOlderRef.current = true; setLoadingOlder(true)
+    try {
+      const page = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE, before: first.id })
+      setSnapshot(prev => {
+        if (!prev || prev.room.id !== roomId || prev.messages[0]?.id !== first.id) return prev
+        return { ...prev, messages: [...page.messages, ...prev.messages], hasMore: page.hasMore, deliveries: [...page.deliveries.filter(delivery => page.messages.some(message => message.id === delivery.messageId)), ...prev.deliveries] }
+      })
+      // Keep the previously-first message in view after prepending.
+      requestAnimationFrame(() => virtualizer.scrollToIndex(page.messages.length, { align: 'start' }))
+    } catch (error) { setListError(error instanceof Error ? error.message : 'Could not load older messages') }
+    finally { loadingOlderRef.current = false; setLoadingOlder(false) }
+  }
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    onScroll(event)
+    if (event.currentTarget.scrollTop < 120) void loadOlder()
+  }
   const loadedRoomId = snapshot?.room.id
   useLayoutEffect(() => {
     if (loadedRoomId) scrollToBottom('auto')
@@ -148,7 +183,8 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
     try {
       await teamChatApi.post(roomId, { content, attachments, clientKey: key })
       retryKey.current = null; changeInput('')
-      setSnapshot(await teamChatApi.get(roomId))
+      const next = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE })
+      setSnapshot(prev => mergeLatestPage(prev, next))
     } catch (error) { changeInput(content); attachments.forEach(attachment => composer.current?.addAttachment(attachment)); setError(error instanceof Error ? error.message : 'Could not send message') }
     finally { setSending(false) }
   }
@@ -167,8 +203,11 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
     </header>}
     {snapshot?.room.goal && <TeamGoalPanel key={roomId} roomId={roomId} goal={snapshot.room.goal} />}
     <div className="relative min-h-0 flex-1">
-    <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain p-4" aria-label="Team conversation" role="log" aria-live="polite">
+    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-contain p-4" aria-label="Team conversation" role="log" aria-live="polite">
       <div ref={contentRef} className="min-h-full">
+      {snapshot?.hasMore && <div className="mx-auto mb-3 max-w-3xl text-center">
+        <Button variant="ghost" size="sm" disabled={loadingOlder} onClick={() => { void loadOlder() }}>{loadingOlder ? 'Loading older messages…' : 'Load older messages'}</Button>
+      </div>}
       {listError && <p role="alert" className="text-sm text-destructive">{listError}</p>}
       {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The team will route your message to the right agent.</p>}
       <div className="relative mx-auto max-w-3xl" style={{ height: virtualizer.getTotalSize() }}>{snapshot && virtualizer.getVirtualItems().map(row => {
