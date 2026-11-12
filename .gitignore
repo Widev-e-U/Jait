@@ -57,6 +57,9 @@ logs/
 /jait.db
 /todo.json
 
+# Generated local artifacts
+/artifacts/
+
 # Testing
 .coverage
 htmlcov/
