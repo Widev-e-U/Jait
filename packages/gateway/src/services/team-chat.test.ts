@@ -611,6 +611,35 @@ describe("persistent team coordination", () => {
     if (status === "completed") expect(service.deliveries(owner, room.id)).toHaveLength(1);
   });
 
+  // Room history, delivery settlement and goal verification all order messages by id, so a
+  // burst of messages created inside one millisecond must still be read back in post order.
+  it("reads back room history in post order for messages created in the same millisecond", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2024-06-15T12:34:56.789Z").getTime());
+    const posted = Array.from({ length: 40 }, (_, index) => post("Burst " + index, "burst-" + index));
+    const history = service.history(owner, room.id).filter(item => item.content.startsWith("Burst "));
+    expect(history.map(item => item.id)).toEqual(posted.map(item => item.id));
+  });
+
+  // Same-turn blocker + verification is the delivery-status contract: settlement must follow
+  // creation order, not the random tail of the ids, however often the turn is repeated.
+  it("settles a same-turn blocker resolved by verification as completed on repeated turns", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2024-06-15T12:34:56.789Z").getTime());
+    service.setDispatcher(async (delivery, agent) => {
+      for (const kind of ["blocked", "verification"] as const) service.post(owner, room.id, {
+        sender: { ...sender(agent.id), sourceSessionId: delivery.sessionId }, content: kind,
+        kind, recipientIds: [], clientKey: delivery.id + ":" + kind, parentMessageId: delivery.messageId,
+      });
+      return { content: "Verified." };
+    });
+    for (let round = 0; round < 25; round += 1) {
+      const message = post("Verify " + round, "resolved-blocker-" + round, ["QA"]);
+      await vi.waitFor(() => {
+        const delivery = service.deliveries(owner, room.id).find(item => item.messageId === message.id);
+        expect({ round, status: delivery?.status, error: delivery?.error }).toEqual({ round, status: "completed", error: null });
+      }, { timeout: 2_000, interval: 10 });
+    }
+  });
+
   it("bounds handoff loops and makes paused-recipient failures visible", () => {
     let parent = post("Start", "start", []);
     for (let depth = 1; depth <= 33; depth++) parent = service.post(owner, room.id, { content: "Round " + depth, clientKey: String(depth), sender: sender("Developer"), recipientIds: [], parentMessageId: parent.id });
