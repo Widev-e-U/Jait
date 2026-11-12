@@ -211,7 +211,10 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/cancel", post(cancel_path))
             .route("/api/sessions/{id}/messages", get(messages))
             .route("/api/sessions/{id}/runtime", get(runtime))
-            .route("/api/sessions/{id}/loop", get(session_loop))
+            .route(
+                "/api/sessions/{id}/loop",
+                get(session_loop).post(session_loop_control),
+            )
             .route("/api/sessions/{id}/fork", post(session_fork))
             .route(
                 "/api/sessions/{id}/messages/{index}/context-flow",
@@ -1452,6 +1455,57 @@ async fn session_loop(
     match found {
         Ok((false, _)) => response(404, json!({"error":"NOT_FOUND"})),
         Ok((true, current)) => response(200, json!({"loop": current})),
+        Err(_) => auth::internal_error(),
+    }
+}
+/// Pause or resume the chat's loop goal. The new state is persisted; the
+/// `chat.updated` broadcast and the wake that starts the next turn on resume
+/// are not wired natively yet.
+async fn session_loop_control(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    request: Request,
+) -> Response {
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if !valid_session(&session) {
+        return response(400, json!({"error":"INVALID_SESSION"}));
+    }
+    let body = match body(&state, request).await {
+        Ok(body) => body,
+        Err(error) => return *error,
+    };
+    let action = match body.get("action").and_then(Value::as_str) {
+        Some(action @ ("pause" | "resume")) => Some(action.to_owned()),
+        _ => None,
+    };
+    let owner = user.id.clone();
+    // Ownership is answered before validation, as in Node.
+    let controlled =
+        state
+            .auth
+            .with_database(move |db| {
+                if SessionService::new(db)
+                    .get(&session, Some(&owner))?
+                    .is_none()
+                {
+                    return Ok(None);
+                }
+                Ok(Some(action.map(|action| {
+                    crate::services::chat_loops::ChatLoopService::new(db, Default::default())
+                        .control(&session, &action, Some(&owner))
+                })))
+            })
+            .await;
+    match controlled {
+        Ok(None) => response(404, json!({"error":"NOT_FOUND"})),
+        Ok(Some(None)) => response(400, json!({"error":"VALIDATION_ERROR"})),
+        Ok(Some(Some(Ok(current)))) => response(200, json!({"loop": current})),
+        Ok(Some(Some(Err(details)))) => {
+            response(409, json!({"error":"LOOP_CONFLICT","details":details}))
+        }
         Err(_) => auth::internal_error(),
     }
 }

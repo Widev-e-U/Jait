@@ -42,9 +42,23 @@ for (const f of walk(nodeSrc, ['.ts'])) {
   }
 }
 
+// Modules whose routers the production composition root (runtime/application.rs, Gateway
+// mount_* helpers) actually serves. Everything else is a library router no binary serves yet.
+const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/terminals.rs', 'routes/projects.rs', 'routes/project.rs', 'routes/chat.rs', 'routes/store.rs', 'routes/threads.rs', 'routes/reminders.rs', 'routes/filesystem.rs', 'routes/secrets.rs', 'routes/git.rs', 'routes/plans.rs', 'routes/repo_proposals.rs', 'routes/repositories.rs', 'routes/assistant_profiles.rs', 'routes/architecture.rs', 'routes/user_questions.rs', 'routes/code_graph.rs', 'routes/update.rs', 'routes/environment.rs', 'routes/calendar.rs', 'routes/voice.rs', 'routes/skills.rs', 'routes/consent.rs', 'routes/providers.rs', 'routes/pull_requests.rs', 'routes/jobs.rs', 'routes/maintenance.rs', 'routes/trust.rs', 'routes/network.rs', 'routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs', 'routes/mobile.rs', 'routes/security_assessments.rs', 'routes/security_workbench.rs', 'routes/mcp_server.rs', 'routes/browser_devtools.rs', 'routes/node_credentials.rs', 'routes/preview_file.rs', 'routes/browser_screenshot.rs', 'routes/preview_proxy.rs', 'runtime/tools_mount.rs', 'runtime/application.rs', 'runtime/team_chat_mount.rs']);
+// Mounted, but the production host behind them refuses the effect (no connector, loader, device or backend
+// yet). They are served and tested black-box as fail-closed, and are NOT counted native.
+// preview_proxy.rs: production passes empty port registries, so every proxied request is refused.
+const FAIL_CLOSED = new Set(['routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs', 'routes/security_workbench.rs', 'routes/mcp_server.rs', 'routes/browser_devtools.rs', 'routes/preview_proxy.rs']);
+// Individual routes inside an otherwise native file whose effect the production authority refuses.
+const FAIL_CLOSED_ROUTES = new Set(['POST /api/git/fetch', 'POST /api/git/pull', 'POST /api/git/create-worktree', 'POST /api/git/remove-worktree']);
+
 // --- Rust routes (axum) ---
 const rustRoutes = new Set();
 const rustFile = new Map();
+// When several Rust files register the same route, attribute it to the one production mounts.
+const setRustFile = (key, file) => {
+  if (!rustFile.has(key) || (!MOUNTED.has(rustFile.get(key)) && MOUNTED.has(file))) rustFile.set(key, file);
+};
 for (const f of walk(rustSrc, ['.rs'])) {
   const text = readFileSync(f, 'utf8');
   const re = /\.route\(\s*(?:"([^"]+)"|([A-Za-z_][\w:]*))\s*,/g;
@@ -63,7 +77,7 @@ for (const f of walk(rustSrc, ['.rs'])) {
     for (const mm of body.matchAll(/\b(get|post|put|patch|delete)\s*\(/g)) {
       const key = `${mm[1].toUpperCase()} ${norm(path)}`;
       rustRoutes.add(key);
-      rustFile.set(key, relative(rustSrc, f));
+      setRustFile(key, relative(rustSrc, f));
     }
   }
 }
@@ -108,6 +122,12 @@ for (const rel of ['routes/projects.rs']) {
   }
 }
 
+// --- GET / is the built web UI, served by the composition root's static fallback service.
+if (/web_ui::service\(/.test(readFileSync(join(rustSrc, 'runtime/application.rs'), 'utf8'))) {
+  rustRoutes.add('GET /');
+  setRustFile('GET /', 'runtime/application.rs');
+}
+
 // --- "tested" heuristic: path literal appears in a Rust test file or contract test ---
 let testText = '';
 for (const root of [rustTests, contractTests]) {
@@ -122,6 +142,8 @@ for (const f of walk(rustSrc, ['.rs'])) {
 }
 const testedCache = new Map();
 function isTested(path) {
+  // The root has no distinctive literal; count a request built as `format!("{base}/")`.
+  if (path === '/') return /\{base\}\/"\)/.test(testText);
   const staticPrefix = path.split(/[:{*]/)[0].replace(/\/$/, '');
   if (!testedCache.has(staticPrefix)) testedCache.set(staticPrefix, staticPrefix.length > 1 && new RegExp(staticPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_-])').test(testText));
   return testedCache.get(staticPrefix);
@@ -138,14 +160,6 @@ for (const f of walk(rustSrc, ['.rs'])) {
   for (const m of t.matchAll(/"type"\s*:\s*"([a-z][\w.:-]*)"|"([a-z][\w.:-]*)"\s*=>/g)) rustWs.add(m[1] ?? m[2]);
 }
 
-// Modules whose routers the production composition root (runtime/application.rs, Gateway
-// mount_* helpers) actually serves. Everything else is a library router no binary serves yet.
-const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/terminals.rs', 'routes/projects.rs', 'routes/project.rs', 'routes/chat.rs', 'routes/store.rs', 'routes/threads.rs', 'routes/reminders.rs', 'routes/filesystem.rs', 'routes/secrets.rs', 'routes/git.rs', 'routes/plans.rs', 'routes/repo_proposals.rs', 'routes/repositories.rs', 'routes/assistant_profiles.rs', 'routes/architecture.rs', 'routes/user_questions.rs', 'routes/code_graph.rs', 'routes/update.rs', 'routes/environment.rs', 'routes/calendar.rs', 'routes/voice.rs', 'routes/skills.rs', 'routes/consent.rs', 'routes/providers.rs', 'routes/pull_requests.rs', 'routes/jobs.rs', 'routes/maintenance.rs', 'routes/trust.rs', 'routes/network.rs', 'routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs', 'routes/mobile.rs', 'routes/security_assessments.rs', 'routes/security_workbench.rs', 'routes/mcp_server.rs', 'routes/browser_devtools.rs', 'runtime/tools_mount.rs', 'runtime/application.rs', 'runtime/team_chat_mount.rs']);
-// Mounted, but the production host behind them refuses the effect (no connector, loader, device or backend
-// yet). They are served and tested black-box as fail-closed, and are NOT counted native.
-const FAIL_CLOSED = new Set(['routes/channels.rs', 'routes/plugins.rs', 'routes/screen_share.rs', 'routes/hooks.rs', 'routes/email.rs', 'routes/agent_github_apps.rs', 'routes/agent_control.rs', 'routes/preview.rs', 'routes/security_workbench.rs', 'routes/mcp_server.rs', 'routes/browser_devtools.rs']);
-// Individual routes inside an otherwise native file whose effect the production authority refuses.
-const FAIL_CLOSED_ROUTES = new Set(['POST /api/git/fetch', 'POST /api/git/pull', 'POST /api/git/create-worktree', 'POST /api/git/remove-worktree']);
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
   return {

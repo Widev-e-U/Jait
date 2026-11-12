@@ -4178,6 +4178,13 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
     let root = dir.join("proj-undo");
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("a.txt"), "orig").unwrap();
+    let anon = client
+        .post(format!("{base}/api/project/undo"))
+        .json(&serde_json::json!({"path": "a.txt"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401, "undo needs login");
     let token = token(&client, &base).await;
     let created: serde_json::Value = client
         .post(format!("{base}/api/projects"))
@@ -4193,12 +4200,12 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
     let post = |route: &str, mut body: serde_json::Value| {
         body["projectId"] = serde_json::json!(id);
         client
-            .post(format!("{base}/api/project/{route}"))
+            .post(format!("{base}{route}"))
             .bearer_auth(&token)
             .json(&body)
     };
 
-    let none = post("undo", serde_json::json!({"path": "a.txt"}))
+    let none = post("/api/project/undo", serde_json::json!({"path": "a.txt"}))
         .send()
         .await
         .unwrap();
@@ -4206,7 +4213,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
 
     for content in ["first", "second"] {
         post(
-            "write",
+            "/api/project/write",
             serde_json::json!({"path": "a.txt", "content": content}),
         )
         .send()
@@ -4214,7 +4221,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
         .unwrap();
     }
     post(
-        "write",
+        "/api/project/write",
         serde_json::json!({"path": "new.txt", "content": "n"}),
     )
     .send()
@@ -4238,7 +4245,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
     assert_eq!(backup["currentContent"], "second");
 
     let undone: serde_json::Value = post(
-        "undo-all",
+        "/api/project/undo-all",
         serde_json::json!({"paths": ["a.txt", "new.txt", "../escape.txt"]}),
     )
     .send()
@@ -4257,7 +4264,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
     );
 
     let escape = post(
-        "apply-diff",
+        "/api/project/apply-diff",
         serde_json::json!({"path": "../escape.txt", "content": "x"}),
     )
     .send()
@@ -4267,7 +4274,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
     assert!(!dir.join("escape.txt").exists());
 
     let applied = post(
-        "apply-diff",
+        "/api/project/apply-diff",
         serde_json::json!({"path": "a.txt", "content": "merged"}),
     )
     .send()
@@ -4278,7 +4285,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
         std::fs::read_to_string(root.join("a.txt")).unwrap(),
         "merged"
     );
-    let after = post("undo", serde_json::json!({"path": "a.txt"}))
+    let after = post("/api/project/undo", serde_json::json!({"path": "a.txt"}))
         .send()
         .await
         .unwrap();
@@ -4293,7 +4300,7 @@ async fn project_undo_backup_and_apply_diff_restore_pre_write_state() {
 }
 
 #[tokio::test]
-async fn session_loop_is_null_for_owned_sessions_and_404_otherwise() {
+async fn session_loop_is_read_and_controlled_only_by_its_owner() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
@@ -4334,6 +4341,75 @@ async fn session_loop_is_null_for_owned_sessions_and_404_otherwise() {
         .await
         .unwrap();
     assert_eq!(missing.status(), 404);
+
+    let control = |session: &str, body: serde_json::Value| {
+        client
+            .post(format!("{base}/api/sessions/{session}/loop"))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+    };
+    let anon = client
+        .post(format!("{base}/api/sessions/{id}/loop"))
+        .json(&serde_json::json!({"action": "pause"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401);
+    let missing = control("nosuchsession", serde_json::json!({"action": "pause"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        missing.status(),
+        404,
+        "ownership is answered before validation"
+    );
+    let invalid = control(id, serde_json::json!({"action": "stop"}))
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), 400);
+    let no_goal = control(id, serde_json::json!({"action": "pause"}))
+        .await
+        .unwrap();
+    assert_eq!(no_goal.status(), 409, "no loop goal to pause");
+
+    {
+        let db = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+        jait_gateway::services::chat_loops::ChatLoopService::new(&db, Default::default())
+            .goal(
+                id,
+                Some(&serde_json::json!("ship it")),
+                Some(&serde_json::json!(["tests pass"])),
+                None,
+            )
+            .unwrap();
+    }
+    let paused: serde_json::Value = control(id, serde_json::json!({"action": "pause"}))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(paused["loop"]["status"], "paused");
+    let resumed: serde_json::Value = control(id, serde_json::json!({"action": "resume"}))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(resumed["loop"]["status"], "running");
+    assert_eq!(resumed["loop"]["stalledChecks"], 0.0);
+    let persisted: serde_json::Value = client
+        .get(format!("{base}/api/sessions/{id}/loop"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(persisted["loop"]["status"], "running");
+    assert_eq!(persisted["loop"]["goal"], "ship it");
     let _ = stop.send(());
     let _ = task.await;
     drop(dir);
