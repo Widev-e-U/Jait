@@ -818,6 +818,59 @@ data: "usage":{"prompt_tokens":4,"completion_tokens":2}}
         Arc::new(|_| Box::pin(async { Ok(()) }))
     }
     #[tokio::test]
+    async fn cancellation_closes_a_stalled_model_stream() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = [0; 4096];
+            let mut request = Vec::new();
+            while !request.windows(4).any(|v| v == b"\r\n\r\n") {
+                let n = socket.read(&mut buffer).await.unwrap();
+                assert_ne!(n, 0);
+                request.extend_from_slice(&buffer[..n]);
+            }
+            socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n").await.unwrap();
+            let _ = ready_tx.send(());
+            loop {
+                if socket.read(&mut buffer).await.unwrap() == 0 {
+                    break;
+                }
+            }
+        });
+        let cancel = ProcessCancellation::default();
+        let control = cancel.clone();
+        let stream = tokio::spawn(async move {
+            OpenAiHttp::configured(&format!("{base}/"), "fixture-secret", "s")
+                .unwrap()
+                .stream(json!({}), &cancel, sink())
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), ready_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        control.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(2), stream)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            result,
+            Err(StreamFailure::Cancelled)
+                | Ok(ParsedStream {
+                    interrupted: true,
+                    ..
+                })
+        ));
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
     async fn done_completes_without_waiting_for_socket_eof() {
         let (base,task)=server("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: [DONE]\n\n".into(),true).await;
         let result = tokio::time::timeout(

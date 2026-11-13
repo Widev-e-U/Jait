@@ -3456,6 +3456,46 @@ async fn git_generation_uses_saved_model_through_composed_application() {
             .unwrap()
             .contains("+composed-generation-fixture")
     );
+    // Unsupported provider selection must not silently use the saved model.
+    let unsupported = client
+        .post(format!("{base}/api/git/generate-commit-message"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"cwd":root,"provider":"claude"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unsupported.status(), 501);
+    assert_eq!(seen.lock().unwrap().len(), 1);
+
+    // Provider errors must not expose the upstream response or credentials.
+    let failing = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|| async {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "secret upstream detail",
+            )
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let failing_base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let failing_task = tokio::spawn(async move { axum::serve(listener, failing).await.unwrap() });
+    let settings = client.patch(format!("{base}/api/auth/settings")).bearer_auth(&token)
+        .json(&serde_json::json!({"api_keys":{"OPENAI_BASE_URL":failing_base,"OPENAI_API_KEY":"user-key"},"selected_model":"fixture-model"})).send().await.unwrap();
+    assert_eq!(settings.status(), 200);
+    let failure = client
+        .post(format!("{base}/api/git/generate-commit-message"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"cwd":root}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(failure.status(), 502);
+    assert_eq!(
+        failure.json::<serde_json::Value>().await.unwrap(),
+        serde_json::json!({"error":"Commit message generation failed"})
+    );
+    failing_task.abort();
     let _ = stop.send(());
     let _ = task.await;
 }
