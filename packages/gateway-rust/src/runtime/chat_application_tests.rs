@@ -132,6 +132,25 @@ async fn configured_http_chat_restarts_with_ui_rows_and_shutdown_preserves_live_
         .await
         .unwrap();
     let token = registration["access_token"].as_str().unwrap();
+    let invitation: Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&json!({"username":"other-user","password":"fixture password","invitation":invitation["invitation"]}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other_token = other["access_token"].as_str().unwrap();
     let session: Value = client
         .post(format!("{base}/api/sessions"))
         .bearer_auth(token)
@@ -217,6 +236,56 @@ async fn configured_http_chat_restarts_with_ui_rows_and_shutdown_preserves_live_
             &live.chunk().await.unwrap().unwrap(),
         ));
     }
+    let streaming: Value = client
+        .get(format!("{base}/api/sessions/streaming"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(streaming["sessionIds"], json!([id]));
+    assert_eq!(
+        client
+            .get(format!("{base}/api/sessions/streaming"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let other_streaming: Value = client
+        .get(format!("{base}/api/sessions/streaming"))
+        .bearer_auth(other_token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(other_streaming["sessionIds"], json!([]));
+    // Change status without ending the held turn, so the endpoint must filter
+    // a still-live turn against the persisted session status.
+    let db = rusqlite::Connection::open(work.join("application.sqlite")).unwrap();
+    db.execute(
+        "UPDATE sessions SET status = 'archived' WHERE id = ?1",
+        [id],
+    )
+    .unwrap();
+    let archived_streaming: Value = client
+        .get(format!("{base}/api/sessions/streaming"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(archived_streaming["sessionIds"], json!([]));
+    db.execute("UPDATE sessions SET status = 'active' WHERE id = ?1", [id])
+        .unwrap();
+    drop(db);
     stop.send(()).unwrap();
     let terminal = live.text().await.unwrap();
     assert!(terminal.contains("cancelled"));

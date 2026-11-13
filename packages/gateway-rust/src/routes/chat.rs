@@ -14,7 +14,7 @@ use crate::{
         consent_executor::{ExecutionOrigin, RuntimeMode, ToolExecutionContext},
         http_auth::AuthUser,
     },
-    services::sessions::{SessionRecord, SessionService},
+    services::sessions::{SessionFilter, SessionRecord, SessionService},
 };
 use axum::{
     Router,
@@ -221,6 +221,7 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/cancel", post(cancel_path))
             .route("/api/sessions/{id}/messages", get(messages))
             .route("/api/sessions/{id}/runtime", get(runtime))
+            .route("/api/sessions/streaming", get(streaming_sessions))
             .route(
                 "/api/sessions/{id}/loop",
                 get(session_loop).post(session_loop_control),
@@ -1407,6 +1408,48 @@ async fn cancel_request(
         .unwrap_or(false);
     response(200, json!({"ok":true,"cancelled":cancelled}))
 }
+/// List live turns only while their sessions remain active and owned by the caller.
+async fn streaming_sessions(
+    State(state): State<ChatRoutes>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if !state.auth.origin_allowed(&headers) {
+        return response(403, json!({"error":"ORIGIN_FORBIDDEN"}));
+    }
+    let Some(user) = state.auth.resolve_user(&headers) else {
+        return auth::denied();
+    };
+    let ids: Vec<String> = state
+        .active
+        .turns
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, turn)| turn.owner == user.id)
+        .map(|(id, _)| id.clone())
+        .collect();
+    let owner = user.id;
+    match state
+        .auth
+        .with_database(move |db| {
+            let sessions = SessionService::new(db).list(SessionFilter {
+                status: Some("active"),
+                user_id: Some(&owner),
+                ..Default::default()
+            })?;
+            Ok(sessions
+                .into_iter()
+                .filter(|session| ids.contains(&session.id))
+                .map(|session| session.id)
+                .collect::<Vec<_>>())
+        })
+        .await
+    {
+        Ok(ids) => response(200, json!({"sessionIds": ids})),
+        Err(_) => auth::internal_error(),
+    }
+}
+
 /// Lightweight overview polling: whether a native turn is active for an owned session.
 async fn runtime(
     State(state): State<ChatRoutes>,

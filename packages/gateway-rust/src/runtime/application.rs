@@ -554,7 +554,6 @@ impl Application {
             .merge(
                 Router::new()
                     .route("/api/voice-assistant/status", get(voice_assistant_status))
-                    .route("/api/sessions/streaming", get(sessions_streaming))
                     .with_state(auth.clone()),
             )
             .merge(
@@ -757,6 +756,12 @@ impl Application {
             );
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
+        } else {
+            router = router.merge(
+                Router::new()
+                    .route("/api/sessions/streaming", get(sessions_streaming))
+                    .with_state(auth.clone()),
+            );
         }
         if settings_chat {
             router = router.merge(
