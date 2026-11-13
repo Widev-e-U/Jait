@@ -1250,6 +1250,29 @@ mod ownership_tests {
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
         let body: serde_json::Value = response.json().await.unwrap();
         assert_eq!(body["error"], "NO_PROJECT");
+        // Exercise local filesystem browsing through the composed HTTP server.
+        let browse = format!("http://{address}/api/filesystem/browse");
+        assert_eq!(
+            client.get(&browse).send().await.unwrap().status(),
+            reqwest::StatusCode::UNAUTHORIZED
+        );
+        std::fs::write(root.join("visible.txt"), "fixture").unwrap();
+        std::fs::write(root.join(".hidden.txt"), "fixture").unwrap();
+        let mut browse_url = url::Url::parse(&browse).unwrap();
+        browse_url
+            .query_pairs_mut()
+            .append_pair("path", root.to_str().unwrap());
+        let response = client
+            .get(browse_url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        let body: serde_json::Value = response.json().await.unwrap();
+        let entries = body["entries"].as_array().unwrap();
+        assert!(entries.iter().any(|entry| entry["name"] == "visible.txt"));
+        assert!(!entries.iter().any(|entry| entry["name"] == ".hidden.txt"));
         // Unmapped subpaths still reach the project dispatcher rather than a bare 404,
         // so the merge covers the whole surface instead of one hand-picked path.
         let unknown = format!("http://{address}/api/project/surface-not-registered");
