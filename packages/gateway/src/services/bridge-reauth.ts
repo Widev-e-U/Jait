@@ -89,7 +89,9 @@ export class TeamsReauthService {
       run.state = {
         ...run.state,
         phase: 'waiting_login',
-        message: 'Melde dich im geöffneten Teams-Fenster an. Das Token wird danach automatisch übernommen.',
+        message: tenant
+          ? 'Melde dich mit deinem normalen Konto an und wähle die gewünschte Organisation in Teams aus.'
+          : 'Melde dich im geöffneten Teams-Fenster an. Das Token wird danach automatisch übernommen.',
         liveViewUrl: `/noVNC/vnc_lite.html?path=api/live-view/${live.websockifyPort}/websockify`,
       };
       run.timer = setInterval(() => void this.poll(userId), POLL_MS);
@@ -144,7 +146,7 @@ export class TeamsReauthService {
         limit: 50,
       });
       run.nextSeq = Math.max(run.nextSeq, log.nextSeq);
-      const token = pickRefreshToken(log.entries);
+      const token = pickRefreshToken(log.entries, run.tenant?.tenantId);
       if (!token) return;
 
       run.state = { ...run.state, phase: 'applying', message: 'Token erkannt – wird in die Bridge übernommen…' };
@@ -201,19 +203,46 @@ interface NetworkEntryLike {
 }
 
 /** Newest successful token response issued to the Teams web client that carries a refresh token. */
-export function pickRefreshToken(entries: NetworkEntryLike[]): string | null {
+export function pickRefreshToken(entries: NetworkEntryLike[], tenantId?: string): string | null {
   for (const entry of [...entries].reverse()) {
     if (entry.status !== 200 || !entry.url?.includes(TOKEN_ENDPOINT)) continue;
     const request = entry.requestBody?.text ?? '';
-    if (request && !request.includes(TEAMS_CLIENT_ID)) continue;
+    if (tenantId && new URLSearchParams(request).get('client_id') !== TEAMS_CLIENT_ID) continue;
+    if (!tenantId && request && !request.includes(TEAMS_CLIENT_ID)) continue;
     try {
-      const body = JSON.parse(entry.responseBody?.text ?? '') as { refresh_token?: unknown };
+      const body = JSON.parse(entry.responseBody?.text ?? '') as { refresh_token?: unknown; id_token?: unknown };
+      if (tenantId && !matchesTenant(entry.url, body.id_token, tenantId)) continue;
       if (typeof body.refresh_token === 'string' && body.refresh_token.length >= 100) return body.refresh_token;
     } catch {
       // body truncated or not JSON: ignore
     }
   }
   return null;
+}
+
+
+// Tenant evidence comes from the token response, not the browser's displayed URL.
+// The ID token is used only to correlate an HTTPS response from Microsoft; it is not
+// accepted as a signed identity assertion or used to grant access.
+function matchesTenant(rawUrl: string, idToken: unknown, tenantId: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:' || url.hostname !== 'login.microsoftonline.com' || url.port || url.username || url.password) return false;
+    const match = /^\/([^/]+)\/oauth2\/v2\.0\/token\/?$/.exec(url.pathname);
+    if (!match?.[1]) return false;
+    const authority = match[1].toLowerCase();
+    const expected = tenantId.toLowerCase();
+    if (authority !== expected && !['common', 'organizations'].includes(authority)) return false;
+    if (typeof idToken === 'string') {
+      const parts = idToken.split('.');
+      if (parts.length !== 3 || !parts[1]) return false;
+      const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { tid?: unknown };
+      return typeof claims.tid === 'string' && claims.tid.toLowerCase() === expected;
+    }
+    return authority === expected;
+  } catch {
+    return false;
+  }
 }
 
 export function applyCommand(env: NodeJS.ProcessEnv = process.env): string | undefined {

@@ -32,6 +32,7 @@ export default defineConfig({
     'team-scroll.spec.ts',
     'automation-refresh.spec.ts',
     'voice-controls.spec.ts',
+    'voice-meter.spec.ts',
     'agent-github-connection.spec.ts',
     'agents-graph-layout.spec.ts',
     'sidebar-overflow.spec.ts',

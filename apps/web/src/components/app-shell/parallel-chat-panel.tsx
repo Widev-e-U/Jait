@@ -311,18 +311,11 @@ function ParallelChatPanelImpl({
     if (!isLoading) return
     const content = draft.trim()
     const uploads = collectAttachments(attachments, displaySegments)
-    if (uploads.length) {
-      enqueueMessage({ content, attachments: uploads, displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads), referencedFiles })
-      setDraft('')
-      setInputVersion((version) => version + 1)
-      toast.info('Attachments queued for the next message')
-      return
-    }
-    if (!content) return
+    if (!content && uploads.length === 0) return
     const chipFiles = referencedFiles?.map(({ path, name }) => ({ path, name })) ?? []
-    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, attachments)
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, uploads)
     const displayContent = nextDisplaySegments ? undefined : content
-    recordSteeredMessage(content, displayContent)
+    recordSteeredMessage(content, displayContent, uploads)
     setDraft('')
     setInputVersion((version) => version + 1)
     void (async () => {
@@ -336,6 +329,7 @@ function ParallelChatPanelImpl({
           body: JSON.stringify({
             message: content,
             ...(chipFiles.length ? { referencedFiles: chipFiles } : {}),
+            ...(uploads.length ? { attachments: uploads } : {}),
             ...(nextDisplaySegments ? { displaySegments: nextDisplaySegments } : {}),
           }),
         })
@@ -344,7 +338,10 @@ function ParallelChatPanelImpl({
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to steer')
-        enqueueMessage({ content })
+        enqueueMessage({
+          content,
+          ...(uploads.length ? { attachments: uploads, displaySegments: nextDisplaySegments } : {}),
+        })
       }
     })()
   }, [draft, enqueueMessage, isLoading, recordSteeredMessage, session.id, token])

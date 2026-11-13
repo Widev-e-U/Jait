@@ -33,6 +33,18 @@ describe("provider steering delivery", () => {
     dispatcher.dispose();
   });
 
+  it("hands the pending message, including its attachments, to the delivery callback", async () => {
+    const queue = new SteeringController();
+    const deliver = vi.fn(async () => true);
+    const dispatcher = new ProviderSteeringDispatcher(queue, deliver, vi.fn(), vi.fn());
+    const attachments = [{ name: "shot.png", mimeType: "image/png", data: "AAAA" }];
+    dispatcher.start();
+    queue.steer("look at this", { attachments });
+    await flush();
+    expect(deliver).toHaveBeenCalledWith("[STEERING] look at this", expect.objectContaining({ attachments }));
+    dispatcher.dispose();
+  });
+
   it.each([false, new Error("unsupported")])("retains rejected messages for FIFO fallback (%s)", async result => {
     const queue = new SteeringController();
     const failed = vi.fn();

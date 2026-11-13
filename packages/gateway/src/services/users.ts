@@ -47,6 +47,7 @@ export interface UserSettingsRecord {
   reasoningEffort: ReasoningEffort | null;
   projectPickerPath: string | null;
   projectPickerNodeId: string | null;
+  navigationOrder?: string[];
   updatedAt: string;
 }
 
@@ -244,6 +245,7 @@ export class UserService {
       reasoningEffort: REASONING_EFFORT_VALUES.has((row as any).reasoningEffort) ? (row as any).reasoningEffort : null,
       projectPickerPath: typeof (row as any).projectPickerPath === "string" ? (row as any).projectPickerPath : null,
       projectPickerNodeId: typeof (row as any).projectPickerNodeId === "string" ? (row as any).projectPickerNodeId : null,
+      navigationOrder: parseStringArray((row as any).navigationOrder ?? null),
       updatedAt: row.updatedAt,
     };
   }
@@ -263,6 +265,7 @@ export class UserService {
       reasoningEffort?: ReasoningEffort | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
+      navigationOrder?: string[];
     },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
@@ -286,6 +289,7 @@ export class UserService {
     const projectPickerNodeId = patch.projectPickerNodeId !== undefined
       ? patch.projectPickerNodeId
       : existing.projectPickerNodeId;
+    const navigationOrder = patch.navigationOrder ?? existing.navigationOrder ?? [];
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -302,6 +306,7 @@ export class UserService {
         reasoningEffort,
         projectPickerPath,
         projectPickerNodeId,
+        navigationOrder: JSON.stringify(navigationOrder),
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))

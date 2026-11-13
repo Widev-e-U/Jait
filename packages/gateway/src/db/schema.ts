@@ -83,6 +83,7 @@ export const userSettings = sqliteTable("user_settings", {
   reasoningEffort: text("reasoning_effort"), // 'minimal' | 'low' | 'medium' | 'high' | null (only for reasoning-capable models)
   projectPickerPath: text("project_picker_path"),
   projectPickerNodeId: text("project_picker_node_id"),
+  navigationOrder: text("navigation_order"), // JSON string[] of page ids in the user's preferred sidebar order
   // Explicit "last selected" project/session, set only when the user picks
   // one in the UI. Distinct from sessions.lastActiveAt, which is bumped by
   // any activity (including background automation) and must not be used to

@@ -24,11 +24,13 @@ export const ChatLoopSchema = z.object({
   budgetStartIteration: z.number().int().nonnegative().optional(),
   stalledChecks: z.number().int().nonnegative().optional(),
   uncheckedTurns: z.number().int().nonnegative().optional(),
+  lastTurnDurationMs: z.number().nonnegative().optional(),
   monitor: z.object({
     status: z.enum(["accepted", "rejected", "unavailable", "disabled"]),
     model: z.string().max(200).optional(),
     reviewedRevision: z.number().int().nonnegative(),
     reviewedAt: z.string(),
+    durationMs: z.number().nonnegative().optional(),
     criteriaPassed: z.array(z.boolean()).max(20),
     progress: z.enum(["progress", "stalled", "unknown"]),
     reason: z.string().max(2000),

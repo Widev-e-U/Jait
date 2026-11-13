@@ -140,7 +140,7 @@ export interface CliProviderAdapter {
    * Deliver to the running turn. False leaves the message queued for a follow-up.
    * Native Jait callers may pin delivery to the id from turn.started.
    */
-  steerTurn?(sessionId: string, message: string, expectedTurnId?: string): Promise<boolean>;
+  steerTurn?(sessionId: string, message: string, expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean>;
 
   /**
    * Interrupt the current turn in a session.

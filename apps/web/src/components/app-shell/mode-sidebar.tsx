@@ -1,5 +1,5 @@
 import { BarChart3, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, Network, type LucideIcon } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -44,10 +44,26 @@ interface ModeSidebarProps {
   header?: (collapsed: boolean) => ReactNode
   account?: SidebarAccount
   onOpenSettings: () => void
+  /** When set, main navigation items can be dragged into a new order; receives the full new id order. */
+  onReorderNavigation?: (ids: string[]) => void
 }
 
-export function ModeSidebar({ items, navigationItems = [], bottomItems = [], header, account, onOpenSettings }: ModeSidebarProps) {
+export function ModeSidebar({ items, navigationItems = [], bottomItems = [], header, account, onOpenSettings, onReorderNavigation }: ModeSidebarProps) {
   const [usageModalOpen, setUsageModalOpen] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropId, setDropId] = useState<string | null>(null)
+  const reorderable = (id: string) => !!onReorderNavigation && navigationItems.some(item => item.id === id)
+  const finishDrag = () => {
+    if (dragId && dropId && dragId !== dropId) {
+      const ids = navigationItems.map(item => item.id).filter(id => id !== dragId)
+      const from = navigationItems.findIndex(item => item.id === dragId)
+      const to = navigationItems.findIndex(item => item.id === dropId)
+      ids.splice(from < to ? ids.indexOf(dropId) + 1 : ids.indexOf(dropId), 0, dragId)
+      onReorderNavigation?.(ids)
+    }
+    setDragId(null)
+    setDropId(null)
+  }
   const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('jait.navigationSidebarCollapsed') === 'true')
 
@@ -117,7 +133,14 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         key={item.id}
         variant={item.active ? 'secondary' : 'ghost'}
         size="sm"
-        className={`${!collapsed && item.description ? 'h-12' : 'h-9'} w-full shrink-0 ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} rounded-md`}
+        className={`${!collapsed && item.description ? 'h-12' : 'h-9'} w-full shrink-0 ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} rounded-md ${dragId === item.id ? 'opacity-40' : ''} ${dragId && dropId === item.id && dragId !== item.id ? 'ring-2 ring-primary/60' : ''}`}
+        {...(reorderable(item.id) ? {
+          draggable: true,
+          onDragStart: (event: DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); setDragId(item.id) },
+          onDragOver: (event: DragEvent) => { if (dragId) { event.preventDefault(); setDropId(item.id) } },
+          onDrop: (event: DragEvent) => { event.preventDefault(); finishDrag() },
+          onDragEnd: () => { setDragId(null); setDropId(null) },
+        } : {})}
         onClick={item.onSelect}
         disabled={item.disabled}
         aria-label={item.label}

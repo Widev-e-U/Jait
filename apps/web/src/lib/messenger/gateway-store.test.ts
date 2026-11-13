@@ -274,6 +274,16 @@ describe('gateway Messenger notifications', () => {
     expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Alice', body: 'Hello' }))
   })
 
+  it('uses the conversation name when a bridge supplies a GUID as the sender', async () => {
+    await start()
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1, name: 'Nehyba Thomas', preview: 'Hello', latestSender: '12345678-1234-1234-1234-123456789abc', peer: { userId: '@peer:test', name: '12345678-1234-1234-1234-123456789abc', presence: 'unknown' } }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Nehyba Thomas', body: 'Hello' }))
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 3_000, unread: 2, peer: undefined }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Nehyba Thomas', body: 'Hello' }))
+  })
+
   it('detects unread messages received while the gateway was reconnecting', async () => {
     const store = await start()
     await store.enableNotifications(true)

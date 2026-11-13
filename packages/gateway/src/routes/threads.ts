@@ -109,6 +109,7 @@ export interface ThreadRouteDeps {
   personaChatRuntime?: (userId: string, personaId: string, chatSessionId?: string) => { count: number; state: "running" | "waiting" | "idle" };
   /** When present, refuses new autonomous work while the user is halted. */
   agentControl?: AgentControlService;
+  cancelQueuedTeamDeliveries?: (threadId: string, reason: string) => void;
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
   userService?: UserService;
@@ -2059,6 +2060,7 @@ export function registerThreadRoutes(
     }
 
     threadService.markInterrupted(id);
+    deps.cancelQueuedTeamDeliveries?.(id, "Thread was stopped before this delivery started.");
     unregisterThreadResume(id);
     broadcastThreadStatus(id, "interrupted");
     return reply.status(200).send({ ok: true });
@@ -2094,7 +2096,10 @@ export function registerThreadRoutes(
       }
       throw error;
     }
-    if (wasRunning) broadcastThreadStatus(id, "interrupted");
+    if (wasRunning) {
+      deps.cancelQueuedTeamDeliveries?.(id, "Thread was stopped before this delivery started.");
+      broadcastThreadStatus(id, "interrupted");
+    }
     return reply.status(200).send({ ok: true });
   });
 

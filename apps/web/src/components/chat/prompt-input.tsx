@@ -25,6 +25,7 @@ import { SendTargetSelector, type SendTarget } from '@/components/chat/send-targ
 import { ChatNodeSelector } from '@/components/chat/chat-node-selector'
 import { usePersonalChatNode } from '@/hooks/usePersonalChatNode'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
+import { ProviderUsageBadge } from '@/components/chat/provider-usage-badge'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
@@ -273,7 +274,7 @@ function createChipNode(file: PromptChipReference | ({ type: 'image' } & UserIma
 
   // Name label
   const label = document.createElement('span')
-  label.className = 'truncate max-w-[180px]'
+  label.className = 'truncate max-w-[180px] -my-0.5 py-0.5'
   const lineRangeLabel = 'lineRange' in file ? formatLineRange(file.lineRange) : ''
   label.textContent = 'type' in file && file.type === 'skill'
     ? `/${file.name}`
@@ -823,27 +824,27 @@ const COMPACT_FOOTER_CONTROLS_WIDTH = 560
 
 export function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
-  const visibleBars = compact ? bars.slice(-16) : bars
+  const visibleBars = bars
   const meterHeight = compact ? 24 : 30
 
   return (
     <span
       className={cn(
-        'flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-3 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
-        compact ? 'h-8 max-w-[210px]' : 'h-10 max-w-[320px]',
+        'relative flex min-w-0 shrink items-center justify-end gap-0.5 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-3 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
+        compact ? 'h-8 w-[136px] max-w-full' : 'h-10 w-[200px] max-w-full',
       )}
     >
+      <span aria-hidden className="absolute left-3 right-3 top-1/2 h-px bg-black/30 dark:bg-white/30" />
       {visibleBars.map((level, index) => (
         <span
           key={index}
           className={cn(
-            'block shrink-0 rounded-full bg-black/75 transition-[height,opacity,transform] duration-300 ease-out dark:bg-white/80',
+            'relative block shrink-0 rounded-full bg-black/75 transition-[height,opacity] duration-200 ease-linear dark:bg-white/80',
             compact ? 'w-[2px]' : 'w-[3px]',
           )}
           style={{
-            height: `${6 + level * meterHeight}px`,
+            height: `${1 + Math.max(0, (level - 0.05) / 0.95) * meterHeight}px`,
             opacity: 0.18 + level * 0.82,
-            transform: `translateY(${(1 - level) * 1.5}px)`,
           }}
         />
       ))}
@@ -2154,6 +2155,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       e.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(segments))
       const structured = serializeUserMessageSegmentsForClipboard(segments)
       if (structured) e.clipboardData.setData(JAIT_REF_MIME, structured)
+      // Native cut would only put the chip DOM on the clipboard, so paste would drop it.
+      if (e.type === 'cut') document.execCommand('delete')
     }
   }, [])
 
@@ -2474,10 +2477,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     <>
       {voiceRecording && onVoiceStop && (
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
-            <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
-            {!isMobile && !isMessenger && 'Listening...'}
-          </span>
+          {!isMobile && !isMessenger && <span className="shrink-0 text-xs font-medium text-foreground/80">Listening...</span>}
           <VoiceLevelMeter levels={voiceLevels} compact={isMobile || isMessenger} />
           <Button
             type="button"
@@ -2629,6 +2629,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onCopy={handleCopy}
+            onCut={handleCopy}
             onDrop={(e) => { e.preventDefault() }}
             onDragStart={(e) => { e.preventDefault() }}
             onBeforeInput={(e) => {
@@ -2762,6 +2763,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <div className="min-w-0 flex-1">
               {hasFooterControls && (
                 <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 overflow-x-auto scrollbar-none">
                     <div className="flex min-w-max items-center gap-1 pr-1">
                       {footerLeadingContent}
@@ -2807,6 +2809,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                         <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
                       )}
                     </div>
+                  </div>
+                  {showProviderModelSelector && (
+                    <ProviderUsageBadge provider={provider!} className="hidden xl:flex" />
+                  )}
                   </div>
                   {shouldShowSendTargetSelector && (
                     <div className="mt-1.5">

@@ -1,3 +1,4 @@
+import { messengerNotificationPreview } from '@jait/shared';
 import type { MessengerStoreApi, MessengerLogin } from './store';
 import { getApiUrl } from '@/lib/gateway-url';
 import { getAuthToken } from '@/lib/auth-token';
@@ -6,8 +7,18 @@ import { messengerReadLink } from './notification-actions';
 import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
 import { cachedBlob, clearBlobCache } from './blob-cache';
 
+/** Bridge-generated IDs are not useful as notification sender names. */
+function notificationSenderName(value?: string): string | undefined {
+  const name = value?.trim();
+  if (!name || /^@[^:]+:[^:]+$/.test(name) || /^(?:@?[^:]*?)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?::[^\s]+)?$/i.test(name)) return undefined;
+  return name;
+}
+
 /** Id prefix for messages that only exist locally until the gateway confirms. */
 const LOCAL_ECHO_PREFIX = '~local:';
+
+/** How many of the newest chats are kept warm in the message cache. */
+const PREFETCH_ROOMS = 8;
 
 /** Thin authenticated view of a gateway-owned Matrix device. Disposing a view never logs Matrix out. */
 export class GatewayMessengerStore implements MessengerStoreApi {
@@ -20,11 +31,15 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     selectedRoomId: null,
     notifications: false,
     assistantAccess: false,
+    loaded: false,
   };
   private remoteListeners = new Set<() => void>();
   private stopped = false;
   private pollTimer?: ReturnType<typeof setTimeout>;
   private roomCache = new Map<string, MessengerMessage[]>();
+  /** Room activity timestamp each cached room was fetched at. */
+  private cachedAt = new Map<string, number>();
+  private prefetching = false;
   private requestGeneration = 0;
   private visible: string | null = null;
   private started = false;
@@ -176,6 +191,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     for (const [id, entry] of this.optimistic)
       if (entry.roomId === roomId) this.optimistic.delete(id);
     this.roomCache.delete(roomId);
+    this.cachedAt.delete(roomId);
   }
   private async request(path: string, method = 'GET', body?: unknown) {
     const token = getAuthToken();
@@ -222,9 +238,9 @@ export class GatewayMessengerStore implements MessengerStoreApi {
           void triggerSystemNotification({
             id: 'matrix-reaction:' + room.id + ':' + room.reactionsToMe,
             title: room.name,
-            body: room.latestReaction
+            body: messengerNotificationPreview(room.latestReaction
               ? room.latestReaction.emoji + ' Reacted to your message: ' + room.latestReaction.messageBody
-              : 'Reacted to your message',
+              : 'Reacted to your message'),
             independentOfAttention: true,
             link: '/messenger?roomId=' + encodeURIComponent(room.id),
             ...(room.latestReaction?.latestEventId && snapshot.session
@@ -248,10 +264,12 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         )
           continue;
         const message = snapshot.messages.at(-1);
+        const sender = notificationSenderName(room.latestSender);
+        const peerName = notificationSenderName(room.peer?.name);
         void triggerSystemNotification({
           id: 'matrix-room:' + room.id,
-          title: room.peer && room.latestSender ? room.latestSender : room.name,
-          body: !room.peer && room.latestSender ? `${room.latestSender}: ${room.preview || 'New message'}` : room.preview || 'New message',
+          title: room.peer ? sender ?? peerName ?? room.name : room.name,
+          body: messengerNotificationPreview(!room.peer && sender ? `${sender}: ${room.preview || 'New message'}` : room.preview || 'New message'),
           independentOfAttention: true,
           link: '/messenger?roomId=' + encodeURIComponent(room.id),
           ...(message && snapshot.selectedRoomId === room.id && snapshot.session
@@ -273,7 +291,12 @@ export class GatewayMessengerStore implements MessengerStoreApi {
       this.notificationRooms = new Map(snapshot.rooms.map(room => [room.id, room]));
     }
     this.notificationKey = key;
-    if (roomId) this.roomCache.set(roomId, snapshot.messages);
+    if (roomId) {
+      this.roomCache.set(roomId, snapshot.messages);
+      const room = snapshot.rooms.find((entry) => entry.id === roomId);
+      if (room) this.cachedAt.set(roomId, room.timestamp);
+    }
+    void this.prefetchRecent(snapshot).catch(() => {});
     this.publish({
       ...snapshot,
       messages: roomId
@@ -281,7 +304,38 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         : snapshot.messages,
       selectedRoomId: roomId,
       notifications,
+      loaded: true,
     });
+  }
+  /**
+   * Warm the message cache for the newest chats so opening one renders
+   * instantly. Fetches at most one room per poll and only when its latest
+   * activity changed since it was cached, so idle accounts cost nothing.
+   */
+  private async prefetchRecent(snapshot: MessengerSnapshot) {
+    if (this.prefetching || snapshot.status !== 'ready') return;
+    const next = snapshot.rooms
+      .filter(
+        (room) =>
+          !room.hidden &&
+          room.id !== snapshot.selectedRoomId &&
+          this.cachedAt.get(room.id) !== room.timestamp,
+      )
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, PREFETCH_ROOMS)[0];
+    if (!next) return;
+    this.prefetching = true;
+    try {
+      const result = await this.request(
+        '?roomId=' + encodeURIComponent(next.id),
+      );
+      // Selecting the room meanwhile means refreshRemote owns its cache.
+      if (this.stopped || this.remoteSnapshot.selectedRoomId === next.id) return;
+      this.roomCache.set(next.id, result.snapshot.messages);
+      this.cachedAt.set(next.id, next.timestamp);
+    } finally {
+      this.prefetching = false;
+    }
   }
   async resume() {
     if (this.started) return;
@@ -327,6 +381,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     if (id) this.pausedReads.delete(id);
     this.publish({
       selectedRoomId: id,
+      typing: [],
       messages: id ? this.withOptimistic(id, this.roomCache.get(id) ?? []) : [],
     });
     void this.refreshRemote().catch(() => {});
@@ -488,6 +543,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     await this.request('', 'DELETE');
     clearBlobCache();
     this.roomCache.clear();
+    this.cachedAt.clear();
     this.optimistic.clear();
     await this.refreshRemote();
   }

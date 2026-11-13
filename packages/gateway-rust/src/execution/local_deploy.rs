@@ -23,7 +23,13 @@ pub type Result<T> = std::result::Result<T, String>;
 /// Sequencing is unchanged: the controller awaits a prefetched stage at its own
 /// index, so the proof order and the reported failure stay exactly what a
 /// strictly sequential run produces.
-const PREFETCHED_STEPS: [&str; 3] = ["rust-migration", "web-e2e", "web-ui"];
+const PREFETCHED_STEPS: [&str; 5] = [
+    "typecheck",
+    "lint",
+    "rust-migration",
+    "web-e2e",
+    "web-ui",
+];
 /// Cheap preflight stages that run alone so they observe an idle workspace.
 const PREFLIGHT_STEPS: [&str; 2] = ["release-guard", "artifact-paths"];
 
@@ -1362,6 +1368,19 @@ mod parallel_tests {
                 .collect::<Vec<_>>(),
             steps.iter().collect::<Vec<_>>()
         );
+        validate_proof(&proof, &steps).unwrap();
+    }
+
+    #[tokio::test]
+    async fn typecheck_and_lint_overlap_after_preflight() {
+        let fixture = Fixture::new();
+        let steps = vec![
+            fixture.stage("release-guard", "if (exists('lint-started')) throw Error('early lint');"),
+            fixture.stage("artifact-paths", "write('preflight');"),
+            fixture.stage("typecheck", "await wait('preflight'); write('typecheck-started'); await wait('lint-started');"),
+            fixture.stage("lint", "await wait('typecheck-started'); write('lint-started');"),
+        ];
+        let proof = verify(&mut fixture.host(&steps), &steps).await.unwrap();
         validate_proof(&proof, &steps).unwrap();
     }
 

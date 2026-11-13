@@ -81,7 +81,7 @@ export type MessageSegment =
   | { type: "thinking"; content: string }
   | { type: "toolGroup"; callIds: string[] }
   | { type: "error"; content: string }
-  | { type: "steering"; content: string; displayContent?: string };
+  | { type: "steering"; content: string; displayContent?: string; attachments?: SteeringAttachment[] };
 
 /** OpenAI function-calling tool schema */
 export interface OpenAIToolSchema {
@@ -188,7 +188,7 @@ export type AgentLoopEvent =
   // `hidden` marks internal nudges (e.g. background-terminal notifications) that
   // the model must consume but the chat transcript must not show. They are still
   // emitted so the persisted trajectory log keeps them for debugging.
-  | { type: "steering"; message: string; displayContent?: string; queuedMessageId?: string; deferred?: boolean; hidden?: boolean }
+  | { type: "steering"; message: string; displayContent?: string; attachments?: SteeringAttachment[]; queuedMessageId?: string; deferred?: boolean; hidden?: boolean }
   | { type: "plan_action"; action: PlannedAction }
   | { type: "plan_complete"; planId: string; summary: string; actions: PlannedAction[] }
   | { type: "mode_notice"; mode: ChatMode; message: string }
@@ -504,6 +504,45 @@ export interface SteeringMessageMeta {
   displayContent?: string
   /** Client queue-entry id of the pending message that produced this steer. */
   queuedMessageId?: string
+  /** Uploaded files/images that travel with the steer (images become multimodal parts). */
+  attachments?: SteeringAttachment[]
+}
+
+/** An uploaded file carried by a steer; `data` is base64 or a data URL. */
+export interface SteeringAttachment {
+  name: string
+  mimeType: string
+  data: string
+}
+
+/**
+ * Build the user content for a steer. Plain text stays a string; attachments
+ * produce multimodal parts (images as image_url, other files decoded as text),
+ * mirroring how a normal turn with attachments is built.
+ */
+export function buildSteeringUserContent(message: string, attachments?: SteeringAttachment[]): string | unknown[] {
+  if (!attachments?.length) return message;
+  const parts: unknown[] = [];
+  if (message.trim()) parts.push({ type: "text", text: message });
+  for (const att of attachments) {
+    if (att.mimeType.startsWith("image/")) {
+      const url = att.data.startsWith("data:") ? att.data : `data:${att.mimeType};base64,${att.data}`;
+      parts.push({ type: "image_url", image_url: { url, detail: "auto" } });
+    } else {
+      const payload = att.data.startsWith("data:") ? att.data.split(",")[1] ?? "" : att.data;
+      parts.push({ type: "text", text: `[File: ${att.name}]\n${Buffer.from(payload, "base64").toString("utf-8")}` });
+    }
+  }
+  return parts;
+}
+
+/**
+ * Image attachments of a steer, shaped for the transcript. Non-image files are
+ * already inlined into the model text, so only images need a visible marker.
+ */
+export function steeringTranscriptAttachments(attachments?: SteeringAttachment[]): { attachments: SteeringAttachment[] } | Record<string, never> {
+  const images = attachments?.filter(att => att.mimeType.startsWith("image/")) ?? [];
+  return images.length ? { attachments: images } : {};
 }
 
 /** A steering message together with the metadata that identifies it. */
@@ -541,6 +580,7 @@ export class SteeringController {
       ...(meta?.hidden ? { hidden: true } : {}),
       ...(meta?.displayContent ? { displayContent: meta.displayContent } : {}),
       ...(meta?.queuedMessageId ? { queuedMessageId: meta.queuedMessageId } : {}),
+      ...(meta?.attachments?.length ? { attachments: meta.attachments } : {}),
     });
     for (const listener of this.pendingListeners) listener();
   }
@@ -3490,18 +3530,20 @@ export async function runAgentLoop(
         // User steering retains user authority; internal notices remain system guidance.
         history.push(pending.hidden
           ? { role: "system", content: `[STEERING] ${msg}` }
-          : { role: "user", content: msg });
+          : { role: "user", content: buildSteeringUserContent(msg, pending.attachments) as string });
         if (!pending.hidden) {
           segments.push({
             type: "steering",
             content: msg,
             ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            ...steeringTranscriptAttachments(pending.attachments),
           });
         }
         onEvent?.({
           type: "steering",
           message: msg,
           ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+          ...steeringTranscriptAttachments(pending.attachments),
           ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
           ...(pending.hidden ? { hidden: true } : {}),
           deferred: true,
@@ -5076,18 +5118,20 @@ export async function runAgentLoop(
         // User steering retains user authority; internal notices remain system guidance.
         history.push(pending.hidden
           ? { role: "system", content: `[STEERING] ${msg}` }
-          : { role: "user", content: msg });
+          : { role: "user", content: buildSteeringUserContent(msg, pending.attachments) as string });
         if (!pending.hidden) {
           segments.push({
             type: "steering",
             content: msg,
             ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            ...steeringTranscriptAttachments(pending.attachments),
           });
         }
         onEvent?.({
           type: "steering",
           message: msg,
           ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+          ...steeringTranscriptAttachments(pending.attachments),
           ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
           ...(pending.hidden ? { hidden: true } : {}),
           deferred: true,

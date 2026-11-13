@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AcpProvider } from "./acp-provider.js";
 
 // Exercise negotiation and turn ownership through the real SDK/JSON-RPC boundary.
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -19,7 +19,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -46,6 +50,26 @@ describe("ACP steering negotiation", () => {
         else expect(await steering).toBe(outcome !== "promptRequired");
         await turn;
         expect(await provider.steerTurn(session.id, "steer message")).toBe(false);
+      } finally { unsubscribe(); }
+    } finally { await provider.dispose(); }
+  });
+
+  it("sends image attachments as ACP image prompt parts and skips path-only attachments", async () => {
+    const provider = new AcpProvider({ id: "codex", name: "Codex", description: "Test", command: process.execPath, args: ["-e", agentScript(true, "injected", true)] });
+    try {
+      const session = await provider.startSession({ threadId: "steering-image", workingDirectory: process.cwd() });
+      let ready!: () => void;
+      const started = new Promise<void>(resolve => { ready = resolve; });
+      const unsubscribe = provider.onEvent(event => { if (event.type === "token") ready(); });
+      const turn = provider.sendTurn(session.id, "original message");
+      try {
+        await started;
+        const accepted = await provider.steerTurn(session.id, "steer message", undefined, [
+          { name: "shot.png", mimeType: "image/png", data: "AAAA" },
+          "/tmp/ignored-path.png",
+        ]);
+        expect(accepted).toBe(true);
+        await turn;
       } finally { unsubscribe(); }
     } finally { await provider.dispose(); }
   });

@@ -10,7 +10,7 @@ test(`team identity reflects membership and confirmed ${kind} execution, respect
   let unavailable = false
   const room = { id: 'fixture-room', name: 'Avatar team', rootAgentId: 'agent-0', goal: null }
   const deliveries = [{ id: 'delivery', roomId: room.id, messageId: 'message', agentId: 'agent-0', sessionId: 'work', threadId: kind === 'threads' ? 'work-thread' : undefined, status: 'running', error: null }]
-  await page.route('**/api/team-rooms/fixture-room', route => route.fulfill({ json: { room, members, messages: [], deliveries } }))
+  await page.route('**/api/team-rooms/fixture-room?*', route => route.fulfill({ json: { room, members, messages: [], deliveries } }))
   await page.route(`**/api/${kind}/${kind === 'threads' ? 'work-thread' : 'work'}/runtime`, route => route.fulfill(unavailable ? { status: 503, json: {} } : { json: { running, startedAt: null } }))
   await page.goto('/team-chat.html')
   const avatar = page.getByRole('img', { name: /^Team:/ })

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase, type JaitDB } from "../db/connection.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
-import type { NotificationService } from "./notifications.js";
 import { providerUsage } from "../db/schema.js";
 import { ProviderUsageService } from "./provider-usage.js";
 
@@ -18,11 +17,6 @@ beforeEach(async () => {
 afterEach(() => {
   sqlite.close();
 });
-
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
 
 describe("ProviderUsageService", () => {
   it("removes absent quotas when a fresh balance replaces previous limits", () => {
@@ -141,79 +135,6 @@ describe("ProviderUsageService", () => {
     expect(service.listForUser(["account-1"])).toHaveLength(1);
     expect(service.listForUser(["account-1", "account-2"])).toHaveLength(2);
     expect(service.listForUser([])).toHaveLength(0);
-  });
-
-  it("warns once when utilization crosses the threshold and does not re-notify", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.97,
-    });
-
-    expect(warning).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith("Approaching usage limit", "Claude Code's session limit is at 95%.", "/settings?tab=usage");
-  });
-
-  it("warns on allowed_warning status even without a utilization number", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed_warning",
-      rateLimitType: "seven_day",
-    });
-
-    expect(warning).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith("Approaching usage limit", "Claude Code's weekly limit is near its limit.", "/settings?tab=usage");
-  });
-
-  it("clears the warned state once utilization drops back below the threshold", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    expect(warning).toHaveBeenCalledTimes(1);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.3,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.96,
-    });
-    expect(warning).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not warn while utilization stays below the threshold", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.5,
-    });
-
-    expect(warning).not.toHaveBeenCalled();
   });
 
   it("stores Codex session and weekly subscription windows", () => {

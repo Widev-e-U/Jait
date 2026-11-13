@@ -1461,6 +1461,9 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
             style={{
               ...CONVERSATION_SCROLL_STYLE,
               visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
+              // Opening a messenger chat repositions the list while hidden; fade it in
+              // once settled instead of snapping from the skeleton.
+              ...(variant === 'messenger' ? { opacity: !hasContent || initialScrollReady ? 1 : 0, transition: 'opacity 180ms ease-out' } : {}),
             }}
           >
             {loading && (

@@ -99,7 +99,12 @@ describe("createWorktree without a local default branch", () => {
   });
 
   it("fetches the base branch when no local or remote-tracking ref exists", async () => {
-    const checkout = await prStyleCheckout("shallow-checkout", { keepTrackingRef: false });
+    await writeFile(join(origin, "file.txt"), "second commit");
+    git(origin, "add -A");
+    git(origin, "commit -m second");
+    const checkout = await prStyleCheckout("full-checkout", { keepTrackingRef: false });
+    expect(git(checkout, "rev-parse --is-shallow-repository")).toBe("false");
+    expect(git(checkout, "rev-list --count HEAD")).toBe("2");
     expect(() => git(checkout, "rev-parse --verify refs/remotes/origin/main")).toThrow();
     expect(() => git(checkout, "rev-parse --verify refs/heads/main")).toThrow();
 
@@ -113,6 +118,9 @@ describe("createWorktree without a local default branch", () => {
     expect(git(result.path, "rev-parse HEAD")).toBe(expectedTip());
     expect(git(result.path, "branch --show-current")).toBe("jait/cccc3333");
     expect(existsSync(join(result.path, "file.txt"))).toBe(true);
+    expect(git(checkout, "rev-parse --is-shallow-repository")).toBe("false");
+    expect(git(checkout, "rev-list --count HEAD")).toBe("2");
+    expect(() => git(checkout, "config --get branch.jait/cccc3333.remote")).toThrow();
   });
 
   it("still uses the local branch when it exists", async () => {

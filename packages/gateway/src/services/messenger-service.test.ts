@@ -42,6 +42,22 @@ describe('Messenger assistant access persistence', () => {
 });
 
 describe('Messenger message actions and history', () => {
+  it('tracks other people typing and clears stale or stopped indicators', async () => {
+    vi.useFakeTimers();
+    try {
+      const { c, room } = setup();
+      room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob' } }] as any;
+      const update = (user_ids: string[]) => c.sync({ rooms: { join: { '!room:test': { ephemeral: { events: [{ type: 'm.typing', content: { user_ids } }] }, timeline: { events: [] } } } } });
+      await update(['@alice:test', '@bob:test']);
+      expect(c.snapshot('!room:test').typing).toEqual(['Bob']);
+      await update([]);
+      expect(c.snapshot('!room:test').typing).toEqual([]);
+      await update(['@bob:test']);
+      vi.advanceTimersByTime(15001);
+      expect(c.snapshot('!room:test').typing).toEqual([]);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('uses sender names for direct alerts and prefixes group messages', async () => {
     vi.useFakeTimers();
     try {

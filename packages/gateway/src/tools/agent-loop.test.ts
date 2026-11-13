@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
   applyProviderPromptCaching,
+  buildSteeringUserContent,
   formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
@@ -60,6 +61,39 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
     },
   }).getReader();
 }
+describe("buildSteeringUserContent", () => {
+  it("returns plain text when there are no attachments", () => {
+    expect(buildSteeringUserContent("go left")).toBe("go left");
+    expect(buildSteeringUserContent("go left", [])).toBe("go left");
+  });
+
+  it("builds multimodal parts for images and inlines text files", () => {
+    const parts = buildSteeringUserContent("see this", [
+      { name: "a.png", mimeType: "image/png", data: "AAAA" },
+      { name: "b.png", mimeType: "image/png", data: "data:image/png;base64,BBBB" },
+      { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("hello").toString("base64") },
+    ]);
+    expect(parts).toEqual([
+      { type: "text", text: "see this" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,AAAA", detail: "auto" } },
+      { type: "image_url", image_url: { url: "data:image/png;base64,BBBB", detail: "auto" } },
+      { type: "text", text: "[File: notes.txt]\nhello" },
+    ]);
+  });
+
+  it("omits the text part for attachment-only steers", () => {
+    const parts = buildSteeringUserContent("  ", [{ name: "a.png", mimeType: "image/png", data: "AAAA" }]);
+    expect(parts).toHaveLength(1);
+  });
+
+  it("carries attachments through the SteeringController", () => {
+    const queue = new SteeringController();
+    const attachments = [{ name: "a.png", mimeType: "image/png", data: "AAAA" }];
+    queue.steer("x", { attachments });
+    expect(queue.drain()[0]?.attachments).toEqual(attachments);
+  });
+});
+
 describe("serializeMessages", () => {
   it("omits unsupported tool-result names while preserving call correlation", () => {
     expect(serializeMessages([

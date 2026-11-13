@@ -73,14 +73,39 @@ def status():
         rows = conn.execute('SELECT id, metadata FROM user_login WHERE user_mxid = ?', (MXID,)).fetchall()
     metadata = {row[0]: json.loads(row[1] or '{}') for row in rows}
     existing = {(str(m.get('tenant_id', '')).lower(), str(m.get('user_mri', '')).lower()) for m in metadata.values()}
+    discovered = {}
     for account in result.get('accounts', []):
         try:
             entries = tenants(metadata[account['id']])
+            discovered[account['id']] = entries
             account['tenants'] = [{'id': e['id'], 'name': e['name'],
                 'connected': (e['id'], '8:orgid:' + e['oid']) in existing} for e in entries]
         except Exception:
             account['tenantError'] = 'Could not load organizations. Refresh or sign in again.'
+    result['accounts'] = group_accounts(result.get('accounts', []), metadata, discovered)
+    count = len(result['accounts'])
+    connected = sum(account.get('state') == 'connected' for account in result['accounts'])
+    result['detail'] = f'{count} Teams-Konten, {connected} verbunden.'
     print(json.dumps(result))
+
+
+def group_accounts(accounts, metadata, discovered):
+    # A verified organization membership identifies its bridge login by both
+    # tenant and user MRI. Keep independent accounts if discovery fails.
+    by_id = {str(a.get('id', '')).lower(): a for a in accounts}
+    hidden = set()
+    ordered = sorted(accounts, key=lambda a: -len(discovered.get(a.get('id'), [])))
+    for parent in ordered:
+        parent_id = str(parent.get('id', '')).lower()
+        if parent_id in hidden:
+            continue
+        for entry in discovered.get(parent.get('id'), []):
+            child_id = '8:orgid:' + entry['oid']
+            child = by_id.get(child_id)
+            child_meta = metadata.get(child.get('id'), {}) if child else {}
+            if child and child_id != parent_id and str(child_meta.get('tenant_id', '')).lower() == entry['id']:
+                hidden.add(child_id)
+    return [account for account in accounts if str(account.get('id', '')).lower() not in hidden]
 
 
 def apply(payload):

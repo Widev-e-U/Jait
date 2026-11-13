@@ -64,6 +64,8 @@ import {
   type OpenAIToolCall,
   type RoundMetrics,
   type SteeringMessageMeta,
+  type SteeringAttachment,
+  steeringTranscriptAttachments,
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
@@ -1190,7 +1192,7 @@ interface StreamingAccumulator {
     | { type: "text"; content: string }
     | { type: "thinking"; content: string }
     | { type: "toolGroup"; callIds: string[] }
-    | { type: "steering"; content: string; displayContent?: string }
+    | { type: "steering"; content: string; displayContent?: string; attachments?: SteeringAttachment[] }
     | { type: "error"; content: string }
   >;
   thinking: string;
@@ -1448,12 +1450,13 @@ function accumulateThinking(sessionId: string, content: string): void {
 }
 
 /** Record user guidance at its live position so reload snapshots retain it. */
-function accumulateSteering(sessionId: string, content: string, displayContent?: string): void {
+function accumulateSteering(sessionId: string, content: string, displayContent?: string, attachments?: SteeringAttachment[]): void {
   const acc = getOrCreateAccumulator(sessionId);
   acc.segments.push({
     type: "steering",
     content,
     ...(displayContent ? { displayContent } : {}),
+    ...steeringTranscriptAttachments(attachments),
   });
   notifyStreamDirty(sessionId);
 }
@@ -4125,6 +4128,7 @@ export function registerChatRoutes(
       try { metadata = JSON.parse(sessionRecord.metadata ?? "{}"); } catch { /* malformed historical metadata */ }
       sessionService.update(sessionId, { metadata: { ...metadata, chatPersonaAgentId: requestedPersonaId } }, authUser.id);
     }
+    const loopTurnStartedAt = performance.now();
     const loopAtTurnStart = chatLoops?.get(sessionId, authUser.id) ?? null;
     const loopInstructions = chatLoopInstructions(loopAtTurnStart);
     const teamInstructions = personaProfile ? teamChat?.context(authUser.id, sessionId, personaProfile) : undefined;
@@ -4729,7 +4733,7 @@ export function registerChatRoutes(
           | { type: "text"; content: string }
           | { type: "toolGroup"; callIds: string[] }
           | { type: "error"; content: string }
-          | { type: "steering"; content: string }
+          | { type: "steering"; content: string; displayContent?: string; attachments?: SteeringAttachment[] }
         > = [];
         /** Error message from a session.error event — persisted instead of normal content. */
         let sessionError: string | null = null;
@@ -5027,6 +5031,7 @@ export function registerChatRoutes(
               type: "steering",
               content: pending.message,
               ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+              ...steeringTranscriptAttachments(pending.attachments),
             });
           }
           // Mirror the agent loop's consumption event so a client that had the
@@ -5035,6 +5040,7 @@ export function registerChatRoutes(
             type: "steering" as const,
             message: pending.message,
             ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            ...steeringTranscriptAttachments(pending.attachments),
             ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
             ...(pending.hidden ? { hidden: true } : {}),
             deferred: true,
@@ -5047,7 +5053,12 @@ export function registerChatRoutes(
         };
         cliSteering = new ProviderSteeringDispatcher(
           steering,
-          message => cliProvider!.steerTurn?.(providerSessionId, message) ?? Promise.resolve(false),
+          (message, pending) => cliProvider!.steerTurn?.(
+            providerSessionId,
+            appendUploadedAttachmentPromptBlock(message, pending.attachments ?? []),
+            undefined,
+            (pending.attachments ?? []).filter(item => item.mimeType.startsWith("image/")),
+          ) ?? Promise.resolve(false),
           recordSteering,
           error => app.log.warn({ err: error }, "Provider steering failed; keeping message queued for follow-up"),
         );
@@ -5214,7 +5225,10 @@ export function registerChatRoutes(
           if (steered.length === 0) break;
 
           for (const pending of steered) recordSteering(pending);
-          const steerContent = steered.map(m => `[STEERING] ${m.message}`).join("\n\n");
+          const steerContent = steered
+            .map(m => appendUploadedAttachmentPromptBlock(`[STEERING] ${m.message}`, m.attachments ?? []))
+            .join("\n\n");
+          const steerImages = steered.flatMap(m => (m.attachments ?? []).filter(item => item.mimeType.startsWith("image/")));
           app.log.info(`[chat/cli] Steering follow-up for session ${sessionId}: ${steerContent.slice(0, 100)}`);
 
           // Set up a new turn-completion listener
@@ -5243,7 +5257,7 @@ export function registerChatRoutes(
           try {
             await waitForCliProviderRequest(
               () => Promise.race([
-                cliProvider!.sendTurn(providerSessionId, steerContent),
+                cliProvider!.sendTurn(providerSessionId, steerContent, steerImages),
                 steerDonePromise,
               ]),
               streamAbort.signal,
@@ -5893,7 +5907,7 @@ export function registerChatRoutes(
         void mobilePush?.sendChatCompleted(authUser.id, notification).catch(() => { /* best effort */ });
       }
     }
-    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored) : null;
+    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored, performance.now() - loopTurnStartedAt) : null;
     if (loopAtEnd?.status === "error") notifyLoopAttention(sessionId, "Loop stopped", loopAtEnd.summary);
     if (loopAtEnd?.status === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question")) {
       notifyLoopAttention(sessionId, "Loop needs your answer", loopAtEnd.summary);
@@ -6813,11 +6827,12 @@ export function registerChatRoutes(
     // `steering` event emitted on loop consumption or provider acknowledgement.
     // The client supplies its own id (so it can render the pending entry
     // before the HTTP response lands); synthesize one for other callers.
+    const steerAttachments = parseChatAttachments(body["attachments"], parseUserDisplaySegments(body["displaySegments"]));
     const requestedSteerId = typeof body["queuedMessageId"] === "string" ? body["queuedMessageId"].trim() : "";
     const queuedMessageId = requestedSteerId || `steer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    if (!message.trim()) {
-      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
+    if (!message.trim() && steerAttachments.length === 0) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message or attachments are required" });
     }
 
     if (!activeStreams.has(sessionId) || sessionAbortControllers.get(sessionId)?.signal.aborted) {
@@ -6839,12 +6854,13 @@ export function registerChatRoutes(
 
     const meta: SteeringMessageMeta = {
       ...(displayContent ? { displayContent } : {}),
+      ...(steerAttachments.length ? { attachments: steerAttachments } : {}),
       queuedMessageId,
     };
     cliSessionIdle.recordUserMessage(sessionId);
     previewService?.setSharedWithAgent(sessionId, true);
     controller.steer(message, meta);
-    accumulateSteering(sessionId, message, displayContent);
+    accumulateSteering(sessionId, message, displayContent, steerAttachments);
     // `deferred` tells the client this is accepted-but-not-yet-injected: the
     // message must stay rendered as queued until the loop's `steering` event
     // arrives after loop consumption or provider acknowledgement.

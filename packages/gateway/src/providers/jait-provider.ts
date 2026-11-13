@@ -39,6 +39,7 @@ import type {
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
+  ProviderTurnAttachment,
   StartSessionOptions,
 } from "./contracts.js";
 import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
@@ -457,12 +458,13 @@ export class JaitProvider implements CliProviderAdapter {
     await turnPromise;
   }
 
-  async steerTurn(sessionId: string, message: string, expectedTurnId?: string): Promise<boolean> {
+  async steerTurn(sessionId: string, message: string, expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean> {
     const state = this.sessions.get(sessionId);
     const steering = state?.steering;
-    if (!steering || state?.currentTurnAbort?.signal.aborted || !message.trim()) return false;
+    const uploads = (attachments ?? []).filter((item): item is Exclude<ProviderTurnAttachment, string> => typeof item !== "string");
+    if (!steering || state?.currentTurnAbort?.signal.aborted || (!message.trim() && uploads.length === 0)) return false;
     if (expectedTurnId !== undefined && expectedTurnId !== steering.turnId) return false;
-    steering.steer(message);
+    steering.steer(message, uploads.length ? { attachments: uploads } : undefined);
     return true;
   }
 

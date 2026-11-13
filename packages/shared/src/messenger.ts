@@ -148,4 +148,14 @@ export interface MessengerSnapshot {
   historyLimited?: boolean
   notifications: boolean
   assistantAccess: boolean
+  /** False until the gateway has answered once; an empty session before then is unknown, not disconnected. */
+  loaded?: boolean
+  /** Names of other people currently typing in the selected room. */
+  typing?: string[]
+}
+
+/** Bound message previews across desktop and push notifications. */
+export function messengerNotificationPreview(text: string, limit = 200): string {
+  const chars = Array.from(text.replace(/\s+/g, ' ').trim())
+  return chars.length > limit ? chars.slice(0, Math.max(0, limit - 1)).join('') + '…' : chars.join('')
 }

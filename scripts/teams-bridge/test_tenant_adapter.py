@@ -21,6 +21,17 @@ class TenantApplyTest(unittest.TestCase):
         self.conn.execute('insert into user_login values (?, ?, ?, ?, ?)', ('bridge', a.MXID, self.account, 'parent', json.dumps({'refresh_token':'parent'})))
         self.payload = {'accountId': self.account, 'tenantId': self.tenant, 'token': 'x' * 120}
 
+    def test_groups_verified_tenant_login_without_hiding_unrelated_accounts(self):
+        child = '8:orgid:' + self.oid
+        other = '8:orgid:44444444-4444-4444-4444-444444444444'
+        accounts = [{'id': self.account}, {'id': child}, {'id': other}]
+        metadata = {child: {'tenant_id': self.tenant}, other: {'tenant_id': self.tenant}}
+        discovered = {self.account: [{'id': self.tenant, 'oid': self.oid, 'name': 'Example'}]}
+        self.assertEqual([x['id'] for x in a.group_accounts(accounts, metadata, discovered)], [self.account, other])
+        metadata[child]['tenant_id'] = 'wrong'
+        self.assertEqual(a.group_accounts(accounts, metadata, discovered), accounts)
+        self.assertEqual(a.group_accounts(accounts, metadata, {}), accounts)
+
     def test_wrong_account_never_writes(self):
         with patch.object(a.sqlite3, 'connect', return_value=self.conn), patch.object(a, 'tenants', return_value=[{'id': self.tenant, 'oid': self.oid}]), patch.object(a, 'exchange', return_value={'id_token': 'id'}), patch.object(a, 'claims', return_value={'tid': self.tenant, 'oid': '44444444-4444-4444-4444-444444444444'}):
             with self.assertRaisesRegex(ValueError, 'does not match'):

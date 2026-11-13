@@ -25,6 +25,18 @@ async function openAgents(page: Page, request: APIRequestContext) {
   return token as string
 }
 
+// These tests exercise provider selection and profile persistence, not the Pi CLI.
+// Keep the provider list deterministic without requiring host-installed agents.
+async function includePiProvider(page: Page) {
+  await page.route(/\/api\/providers(?:\?.*)?$/, route => route.fulfill({ json: {
+    providers: [
+      { id: 'jait', name: 'Jait', description: 'Test provider', installed: true, available: true, modes: ['full-access', 'supervised'] },
+      { id: 'pi', name: 'Pi', description: 'Test provider', installed: true, available: true, modes: ['full-access', 'supervised'] },
+    ],
+    remoteProviders: [],
+  } }))
+}
+
 async function createAgent(page: Page) {
   await page.getByRole('button', { name: 'New agent' }).click()
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Researcher')
@@ -104,7 +116,7 @@ test('agent overview uses creatures and play opens task selection independently'
   await page.getByRole('button', { name: 'All agents' }).click()
   await row.getByRole('button', { name: 'Open Researcher' }).click()
   await expect(page.getByRole('heading', { name: 'Current runs', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Chat', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Agent sections' }).getByRole('button', { name: 'Chat', exact: true }).click()
   await expect(page.getByTestId('chat-composer')).toBeVisible()
 })
 
@@ -202,6 +214,7 @@ test('stopped task resumes from its row and active tasks stop independently of l
 })
 
 test('agent list edits persist and graph shows real runtime and reporting links', async ({ page, request }) => {
+  await includePiProvider(page)
   await openAgents(page, request)
   await createAgent(page)
   await page.getByRole('button', { name: 'All agents' }).click()
@@ -244,6 +257,7 @@ test('agent list edits persist and graph shows real runtime and reporting links'
 })
 
 test('agent list shows save failure without claiming a persisted model', async ({ page, request }) => {
+  await includePiProvider(page)
   await openAgents(page, request)
   await createAgent(page)
   await page.getByRole('button', { name: 'All agents' }).click()
@@ -357,6 +371,8 @@ test.describe('Composite team SVG avatars', () => {
       const firstMember = clusters.nth(3).locator('[data-member-id="member-0"]')
       await expect(firstMember.locator('svg')).toHaveCount(1)
       await expect(firstMember.locator('path').first()).toHaveAttribute('fill', '#a78bfa')
+      await expect.poll(() => firstMember.locator('.agent-creature-body').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      await page.emulateMedia({ reducedMotion: 'reduce' })
       await expect.poll(() => firstMember.locator('.agent-creature-eyes').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
       await section.screenshot({ path: path.join(shotsDir, `team-avatars-${size}px-${testInfo.project.name}.png`) })
     })

@@ -163,6 +163,18 @@ describe('normalizeMessageSegments (crash regression: "X.filter is not a functio
     ])
   })
 
+  it('keeps well-formed steering attachments and drops malformed ones', () => {
+    const image = { name: 'a.png', mimeType: 'image/png', data: 'AAAA' }
+    const raw = [
+      { type: 'steering', content: 'see image', attachments: [image, { name: 'bad' }, null] },
+      { type: 'steering', content: 'none', attachments: [{ name: 1 }] },
+    ] as unknown
+    expect(normalizeMessageSegments(raw)).toEqual([
+      { type: 'steering', content: 'see image', attachments: [image] },
+      { type: 'steering', content: 'none' },
+    ])
+  })
+
   it('drops unknown segment types and coerces non-string content', () => {
     const raw = [
       { type: 'mystery', payload: 123 },

@@ -53,6 +53,14 @@ export function rankTeamRecipients(content: string, members: PersonaAgentProfile
   }).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
+/** Maximum simultaneous deliveries for one saved agent. Invalid values fall back to four. */
+function deliveryLimit(): number {
+  const raw = process.env.JAIT_TEAM_DELIVERY_CONCURRENCY;
+  if (!raw || !/^[1-9]\d*$/.test(raw)) return 4;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value <= 100 ? value : 4;
+}
+
 export class TeamChatService {
   private dispatch?: (delivery: TeamDelivery, agent: PersonaAgentProfile, prompt: string) => Promise<{ content: string; delivered?: boolean }>;
   private decisionKeys?: (userId: string) => Record<string, string> | undefined;
@@ -429,6 +437,11 @@ export class TeamChatService {
       }
       if (this.db.select().from(teamDeliveries).where(and(eq(teamDeliveries.status, "running"), eq(teamDeliveries.sessionId, delivery.sessionId))).get()) continue;
       if (this.running.has(delivery.id)) continue;
+      // Running rows include deliveries from every room. Keep excess work queued;
+      // the rowid-ordered scan starts the oldest eligible delivery when a slot frees.
+      const activeForAgent = this.db.select({ id: teamDeliveries.id }).from(teamDeliveries)
+        .where(and(eq(teamDeliveries.agentId, delivery.agentId), eq(teamDeliveries.status, "running"))).all().length;
+      if (activeForAgent >= deliveryLimit()) continue;
       // Re-read before claiming: a concurrent stop must not be overwritten by this claim.
       if (this.db.select().from(teamDeliveries).where(eq(teamDeliveries.id, delivery.id)).get()?.status !== "queued") continue;
       this.running.add(delivery.id);

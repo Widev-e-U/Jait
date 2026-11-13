@@ -15,6 +15,20 @@ describe('pickRefreshToken', () => {
   it('returns the refresh token of the Teams web client', () => {
     expect(pickRefreshToken([entry()])).toBe(token);
   });
+  it('waits for a response for the selected tenant instead of accepting the home tenant', () => {
+    const guest = '11111111-1111-1111-1111-111111111111';
+    const home = '22222222-2222-2222-2222-222222222222';
+    const idToken = (tid: string) => `header.${Buffer.from(JSON.stringify({ tid })).toString('base64url')}.signature`;
+    const response = (tid: string) => ({ text: JSON.stringify({ refresh_token: token, id_token: idToken(tid) }) });
+    expect(pickRefreshToken([entry({ responseBody: response(home) })], guest)).toBeNull();
+    expect(pickRefreshToken([entry({ responseBody: response(home) }), entry({ responseBody: response(guest) })], guest)).toBe(token);
+    expect(pickRefreshToken([entry({ url: `https://login.microsoftonline.com/${guest}/oauth2/v2.0/token` })], guest)).toBe(token);
+    expect(pickRefreshToken([entry({ url: `https://login.microsoftonline.com/${guest}/oauth2/v2.0/token`, responseBody: response(home) })], guest)).toBeNull();
+    expect(pickRefreshToken([entry()], guest)).toBeNull();
+    expect(pickRefreshToken([entry({ responseBody: response(guest), requestBody: null })], guest)).toBeNull();
+    expect(pickRefreshToken([entry({ url: `https://example.com/${guest}/oauth2/v2.0/token`, responseBody: response(guest) })], guest)).toBeNull();
+    expect(pickRefreshToken([entry({ responseBody: { text: JSON.stringify({ refresh_token: token, id_token: 'bad' }) } })], guest)).toBeNull();
+  });
   it('ignores other clients, failures and short tokens', () => {
     expect(pickRefreshToken([entry({ requestBody: { text: 'client_id=other' } })])).toBeNull();
     expect(pickRefreshToken([entry({ status: 400 })])).toBeNull();

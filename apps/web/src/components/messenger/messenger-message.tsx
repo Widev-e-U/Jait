@@ -79,7 +79,7 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef, actions }: 
     ref={barRef}
     data-reaction-bar
     style={{ left: Math.max(4, Math.min(position.x, window.innerWidth - 242)), top: Math.max(4, Math.min(position.y, window.innerHeight - 180)) }}
-    className="fixed z-50 rounded-xl border bg-popover p-1 shadow-md"
+    className="fixed z-50 select-none rounded-xl border bg-popover p-1 shadow-md [-webkit-touch-callout:none]"
   >
     <div role="toolbar" aria-label="Message reactions" className="flex items-center gap-0.5">
     {QUICK_REACTIONS.map(emoji => <button
@@ -130,6 +130,8 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   const replyingFromMenu = useRef(false)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const swipeFeedback = useRef(false)
+  const [swipeOffset, setSwipeOffset] = useState(0)
   const hoverTimer = useRef<number | null>(null)
   const root = useRef<HTMLElement>(null)
   const run = async (action: () => Promise<unknown>) => {
@@ -202,7 +204,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       onPointerEnter={event => {
         if (event.pointerType !== 'mouse' || unavailable || editing) return
         const bounds = event.currentTarget.getBoundingClientRect()
-        hoverTimer.current = window.setTimeout(() => { setPosition({ x: bounds.left, y: bounds.top }); hoverTimer.current = null }, 600)
+        hoverTimer.current = window.setTimeout(() => { setPosition({ x: bounds.left, y: bounds.bottom + 4 }); hoverTimer.current = null }, 600)
       }}
       onPointerLeave={() => { if (hoverTimer.current !== null) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null } }}
       onPointerDown={event => {
@@ -210,6 +212,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         held.current = false
         if (event.pointerType === 'mouse' || unavailable || editing || (event.target as HTMLElement).closest('button:not([aria-label^="Open image "]), a, textarea, input')) return
         swipeStart.current = { x: event.clientX, y: event.clientY }
+        swipeFeedback.current = false
         clearLongPress()
         const point = { x: event.clientX, y: event.clientY }
         touchStart.current = point
@@ -218,17 +221,30 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       onPointerMove={event => {
         const start = touchStart.current
         if (start && (Math.abs(event.clientX - start.x) > 8 || Math.abs(event.clientY - start.y) > 8)) clearLongPress()
+        const swipe = swipeStart.current
+        if (!swipe || !onReply || message.own || unavailable) return
+        const dx = event.clientX - swipe.x
+        const dy = Math.abs(event.clientY - swipe.y)
+        if (dy > 8 && dy >= Math.abs(dx)) { swipeStart.current = null; setSwipeOffset(0); return }
+        if (dx > 0 && dx > dy) {
+          setSwipeOffset(Math.min(dx * 0.55, 48))
+          if (dx >= 60 && !swipeFeedback.current) {
+            swipeFeedback.current = true
+            navigator.vibrate?.(10)
+          }
+        } else setSwipeOffset(0)
       }}
       onPointerUp={event => {
         const start = swipeStart.current
         swipeStart.current = null
+        setSwipeOffset(0)
         clearLongPress()
         if (start && onReply && !message.own && !unavailable && event.clientX - start.x >= 60 && Math.abs(event.clientY - start.y) < (event.clientX - start.x)) {
           held.current = true
           onReply(message)
         }
       }}
-      onPointerCancel={() => { swipeStart.current = null; clearLongPress() }}
+      onPointerCancel={() => { swipeStart.current = null; setSwipeOffset(0); clearLongPress() }}
       onClickCapture={event => { if (held.current) { event.preventDefault(); event.stopPropagation(); held.current = false } }}
       onContextMenu={event => {
         if (unavailable || !store.react || editing || (event.target as HTMLElement).closest('button:not([aria-label^="Open image "]), a, textarea, input')) return
@@ -236,6 +252,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         clearLongPress()
         setPosition({ x: event.clientX, y: event.clientY })
       }}
+      style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out' }}
       className={'relative min-w-0 [touch-action:pan-y] ' + (wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
@@ -243,7 +260,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         data-messenger-bubble
         data-message-style={variant}
         data-standalone={standaloneImage ? 'image' : emojiOnly ? 'emoji' : undefined}
-        className={'relative min-w-0 transition-colors ' +
+        className={'relative min-w-0 select-text transition-colors ' +
           (emojiOnly
             ? 'border-transparent bg-transparent px-1 py-1'
             : standaloneImage

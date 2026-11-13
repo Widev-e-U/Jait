@@ -110,6 +110,8 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
           <p className="break-words font-medium leading-relaxed">{loop.goal}</p>
           {loop.summary && <p role={failed ? 'alert' : undefined} className={`mt-2 break-words ${failed ? 'text-destructive' : 'line-clamp-4 text-muted-foreground'}`}>{loop.summary}</p>}
           {failed && <p className="mt-2 text-muted-foreground">Automatic continuation stopped. Resolve the error, then resume the goal.</p>}
+          {(loop.stalledChecks ?? 0) >= 2 && running && <p role="status" className="mt-2 text-amber-700 dark:text-amber-400">{loop.stalledChecks} consecutive checkpoints were flagged as stalled or unconfirmed. The loop is still running.</p>}
+          {loop.lastTurnDurationMs !== undefined && <p className="mt-2 text-muted-foreground">Last turn: {(loop.lastTurnDurationMs / 1000).toFixed(1)}s{loop.monitor?.durationMs !== undefined ? ` · latest checkpoint review: ${(loop.monitor.durationMs / 1000).toFixed(1)}s` : ''}</p>}
           <details className="mt-2 text-muted-foreground">
             <summary className="cursor-pointer">{loop.criteria.length} acceptance {loop.criteria.length === 1 ? 'criterion' : 'criteria'}</summary>
             <ol className="mt-2 list-decimal space-y-1 pl-4">

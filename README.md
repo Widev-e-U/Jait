@@ -253,8 +253,16 @@ bun run healthcheck  # release guard, typecheck, build, test, lint
 
 ```bash
 bun run test                        # unit & integration
-bun run test:e2e                    # Playwright E2E (requires running gateway)
+bun run test:e2e                    # Playwright E2E (starts an isolated dev stack)
 ```
+
+Install the E2E dependencies with `npm --prefix tests/e2e ci` first. The E2E
+runner installs the Playwright browser revision it needs under
+`.jait/artifacts/e2e-browsers` (or `PLAYWRIGHT_BROWSERS_PATH` if set). Browser
+system libraries still need to be installed on the host. For the test process
+only, absent `pi` and `muse` commands are replaced by version-probe stubs;
+set `JAIT_E2E_NO_STUB_PROVIDER_CLI=1` to use the host as-is. The stubs cannot
+run an agent. Set `PLAYWRIGHT_ALL_BROWSERS=1` for the full browser matrix.
 
 ---
 

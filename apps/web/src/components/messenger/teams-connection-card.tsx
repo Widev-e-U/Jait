@@ -303,7 +303,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
           <DialogHeader>
             <DialogTitle>{selectedTenant ? `Sign in to ${selectedTenant.name}` : 'Sign in to Microsoft Teams'}</DialogTitle>
             <DialogDescription>
-              Sign in with the Teams account you want to add or renew in the window below. Jait picks up the new session automatically; no passwords or tokens pass through this page.
+              {selectedTenant ? `Sign in with your usual account, then select ${selectedTenant.name} in Teams if needed. Guest accounts normally use their original email address. Jait will connect once it receives a session for that organization.` : 'Sign in with the Teams account you want to add or renew in the window below. Jait picks up the new session automatically.'}
             </DialogDescription>
           </DialogHeader>
           {reauth?.liveViewUrl && reauth.phase === 'waiting_login' ? (

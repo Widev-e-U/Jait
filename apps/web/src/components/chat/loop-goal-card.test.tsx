@@ -36,3 +36,16 @@ describe('stopped goal visibility', () => {
     expect(html).not.toContain('Stopped · error')
   })
 })
+
+
+describe('goal progress diagnostics', () => {
+  it('shows repeated checkpoint warnings and measured timings', () => {
+    const html = render(false, { ...loop, status: 'running', stalledChecks: 2, lastTurnDurationMs: 12500, monitor: { status: 'accepted', reviewedRevision: 12, reviewedAt: loop.updatedAt, durationMs: 750, criteriaPassed: [], progress: 'stalled', reason: '' } })
+    expect(html).toContain('2 consecutive checkpoints were flagged')
+    expect(html).toContain('Last turn: 12.5s')
+    expect(html).toContain('latest checkpoint review: 0.8s')
+  })
+  it('does not warn on a single flagged checkpoint', () => {
+    expect(render(false, { ...loop, status: 'running', stalledChecks: 1 })).not.toContain('consecutive checkpoints')
+  })
+})

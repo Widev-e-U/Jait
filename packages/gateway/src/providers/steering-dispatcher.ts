@@ -10,7 +10,7 @@ export class ProviderSteeringDispatcher {
 
   constructor(
     private readonly queue: SteeringController,
-    private readonly deliver: (message: string) => Promise<boolean>,
+    private readonly deliver: (message: string, pending: SteeringMessage) => Promise<boolean>,
     private readonly consumed: (message: SteeringMessage) => void,
     private readonly failed: (error: unknown) => void,
   ) {
@@ -45,7 +45,7 @@ export class ProviderSteeringDispatcher {
         if (!message) break;
         let accepted = false;
         try {
-          accepted = await this.deliver(`[STEERING] ${message.message}`);
+          accepted = await this.deliver(`[STEERING] ${message.message}`, message);
         } catch (error) {
           this.failed(error);
         }

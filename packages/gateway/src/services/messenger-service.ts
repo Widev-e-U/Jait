@@ -27,6 +27,7 @@ import {
 import {
   messengerCommandSchema,
   isStatusRoom,
+  messengerNotificationPreview,
   type MessengerSession,
   type MessengerSnapshot,
   type MessengerRoom,
@@ -81,6 +82,7 @@ type Room = {
   states: Event[];
   previous?: string | null;
   receipts: Record<string, Record<string, { ts?: number }>>;
+  typing?: { users: string[]; expires: number };
   /** Counterpart of a direct conversation, resolved from `m.direct`/member state. */
   peer?: { userId: string; name: string; avatarUrl?: string };
 };
@@ -341,7 +343,7 @@ class Connection {
       roomId: room.summary.id,
       eventId,
       title: String(direct && sender ? sender : room.summary.name).slice(0, 120),
-      body: (direct ? body : `${String(sender).slice(0, 60)}: ${body}`).slice(0, 200),
+      body: messengerNotificationPreview(direct ? body : `${String(sender).slice(0, 60)}: ${body}`),
       timestamp,
       service: room.summary.service,
     };
@@ -565,7 +567,16 @@ class Connection {
       historyLimited: !!roomId && !!this.rooms.get(roomId)?.previous && (this.rooms.get(roomId)?.events.length ?? 0) >= MAX_EVENTS,
       notifications: false,
       assistantAccess: this.assistantAccess,
+      typing: roomId ? this.typingNames(roomId) : [],
     };
+  }
+  private typingNames(roomId: string): string[] {
+    const room = this.rooms.get(roomId);
+    if (!room?.typing || room.typing.expires <= Date.now()) return [];
+    return room.typing.users.filter(id => id !== this.session?.userId).slice(0, 5).map(id => {
+      const member = room.states.find(e => e.type === 'm.room.member' && e.state_key === id);
+      return String(member?.content?.displayname || id).slice(0, 120);
+    });
   }
   messages(roomId: string): MessengerMessage[] {
     const room = this.rooms.get(roomId);
@@ -990,7 +1001,9 @@ class Connection {
           else if (e.type === 'net.jait.hidden')
             room.summary.hidden = !!e.content?.hidden;
         for (const e of data.ephemeral?.events ?? [])
-          if (e.type === 'm.receipt')
+          if (e.type === 'm.typing' && Array.isArray(e.content?.user_ids))
+            room.typing = { users: e.content.user_ids.filter((id: unknown): id is string => typeof id === 'string').slice(0, 100), expires: Date.now() + 15000 };
+          else if (e.type === 'm.receipt')
             for (const [eventId, types] of Object.entries(
               e.content as Record<string, any>,
             ))

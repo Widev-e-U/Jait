@@ -1,7 +1,8 @@
+import { messageAvatarUrl } from '@/lib/messenger/room-avatar'
 import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
-import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type CSSProperties, type FormEvent } from 'react'
 import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Reply, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +29,25 @@ import { TooltipHint } from '@/components/ui/tooltip'
 import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { MessengerFilterBar, MessengerHeaderBar, type ChatFilter } from './messenger-services-bar'
 import { hasServiceLogo, ServiceLogo } from './service-logo'
+
+type MessengerComposerHandle = { reset: () => void; setDraft: (value: string) => void; focus: () => void }
+
+/** Keep keystrokes local to the editor instead of rerendering the timeline. */
+const MessengerComposer = forwardRef<MessengerComposerHandle, Omit<ComponentProps<typeof PromptInput>, 'value' | 'onChange'> & { initialDraft: string; onDraftChange: (value: string) => void }>(function MessengerComposer({ initialDraft, onDraftChange, ...props }, ref) {
+  const [value, setValue] = useState(initialDraft)
+  const input = useRef<PromptInputHandle>(null)
+  useImperativeHandle(ref, () => ({
+    reset: () => { input.current?.reset(); setValue('') },
+    setDraft: setValue,
+    focus: () => input.current?.focus(),
+  }), [])
+  return <PromptInput {...props} ref={input} value={value} onChange={next => { setValue(next); onDraftChange(next) }} />
+})
+
+/** Provider name for a chat row; a tenant-based provider names its tenant, e.g. "Teams (EVN Tenant)". */
+function providerTooltip(room: MessengerRoom) {
+  return room.service.toLowerCase() === 'teams' && room.network ? `${room.service} (${room.network})` : room.service
+}
 
 const LIST_MIN = 240
 const LIST_MAX = 520
@@ -83,6 +103,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const { excluded, setExcluded } = useMessengerBadge()
   const confirm = useConfirmDialog()
   const historyBusy = useRef(false)
+  const initialHistoryPrepared = useRef(false)
   const historyErrorToast = useRef<string | number | undefined>(undefined)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyFailedRoom, setHistoryFailedRoom] = useState<string | null>(null)
@@ -108,19 +129,18 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const [serviceValue, setService] = useUrlSearchState('messenger', 'service')
   const service = serviceValue || 'All'
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all')
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const drafts = useRef<Record<string, string>>({})
   const [replies, setReplies] = useState<Record<string, NonNullable<MessengerMessage['replyTo']>>>({})
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (snapshot.error) toast.error(snapshot.error, { id: 'messenger-connection-error' })
     else toast.dismiss('messenger-connection-error')
   }, [snapshot.error])
-  const composerRef = useRef<PromptInputHandle>(null)
+  const composerRef = useRef<MessengerComposerHandle>(null)
   const mobile = useIsMobile()
   const roomId = snapshot.selectedRoomId
   const room = snapshot.rooms.find(room => room.id === roomId)
   const statusRoom = !!room && (room.status || room.kind === 'status' || isStatusRoom(room))
-  const draft = roomId ? drafts[roomId] ?? '' : ''
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const { voiceRecording, voiceTranscribing, voiceLevels, handleVoiceInput, stopRecordingAndTranscribe } = useVoiceRecording({
@@ -137,7 +157,8 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     const session = snapshot.session
     void handleVoiceInput({ onTranscript: text => {
       if (!mounted.current || store.getSnapshot().session !== session) return
-      setDrafts(current => ({ ...current, [target]: appendTranscript(current[target] ?? '', text) }))
+      drafts.current[target] = appendTranscript(drafts.current[target] ?? '', text)
+      if (store.getSnapshot().selectedRoomId === target) composerRef.current?.setDraft(drafts.current[target]!)
     } })
   }
   const ready = snapshot.status === 'ready'
@@ -171,12 +192,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const chatRooms = rooms.filter(room => room.kind !== 'channel' && room.kind !== 'team')
   const roomRow = (item: MessengerRoom, channel = false) => (
     <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className={'group/room flex min-w-0 items-center border-b border-border/50 ' + (item.id === roomId ? 'bg-secondary' : 'hover:bg-muted/60 [&:has([data-state=open])]:bg-muted/60')}>
-      <button onClick={() => { selectRoom(item.id); if (item.membership === 'invite' && item.service.toLowerCase() === 'teams') void act(() => store.join(item.id)) }} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left">
-        <MessengerPeerAvatar size="md" showPresence={false} {...chatListAvatarProps(item, channel)} />
+      <button onClick={() => { selectRoom(item.id); if (item.membership === 'invite' && item.service.toLowerCase() === 'teams') void act(() => store.join(item.id)) }} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left">
+        <MessengerPeerAvatar size="list" showPresence={false} {...chatListAvatarProps(item, channel)} />
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
-            <TooltipHint content={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
+            <TooltipHint content={[providerTooltip(item), item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
               <span className="inline-flex shrink-0 items-center text-2xs leading-4 text-muted-foreground">
                 {hasServiceLogo(item.service)
                   ? <ServiceLogo service={item.service} className="size-4 shrink-0" />
@@ -186,7 +207,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
           </span>
           <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{item.preview}</span>
         </span>
-        {(item.unread > 0 || item.markedUnread) && <span aria-label={item.unread > 0 ? `${item.unread} unread messages` : 'Unread'} className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-center text-[10px] font-semibold text-primary-foreground tabular-nums"><CenteredBadgeText text={item.unread > 99 ? '99+' : item.unread || '•'} /></span>}
+        {(item.unread > 0 || item.markedUnread) && <span aria-label={item.unread > 0 ? `${item.unread} unread messages` : 'Unread'} className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-none text-primary-foreground">{item.unread > 99 ? '99+' : item.unread || '•'}</span>}
       </button>
       {roomMenu(item, 'Options for ' + item.name, true)}
     </div>
@@ -199,6 +220,14 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
       const id = params.get('roomId')
       store.selectRoom(id)
     }
+    const initialUrl = new URL(window.location.href)
+    if (!initialHistoryPrepared.current && initialUrl.searchParams.has('roomId') && initialUrl.searchParams.get('action') !== 'mark-read') {
+      const roomUrl = initialUrl.pathname + initialUrl.search + initialUrl.hash
+      initialUrl.searchParams.delete('roomId')
+      window.history.replaceState(window.history.state, '', initialUrl.pathname + initialUrl.search + initialUrl.hash)
+      window.history.pushState(window.history.state, '', roomUrl)
+    }
+    initialHistoryPrepared.current = true
     selectFromUrl()
     window.addEventListener('popstate', selectFromUrl)
     return () => window.removeEventListener('popstate', selectFromUrl)
@@ -224,7 +253,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   }, [store, roomId, room?.id, snapshot.messages.at(-1)?.id, ready, statusRoom])
 
   useEffect(() => {
-    if (!snapshot.session) { setDrafts({}); setReplies({}) }
+    if (!snapshot.session) { drafts.current = {}; setReplies({}) }
   }, [snapshot.session])
   const act = async (action: () => Promise<unknown>, errorText?: string) => {
     setBusy(true)
@@ -237,25 +266,32 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     setHistoryFailedRoom(null)
     if (historyErrorToast.current !== undefined) toast.dismiss(historyErrorToast.current)
     const url = new URL(window.location.href)
+    const hadRoom = url.searchParams.has('roomId')
     if (id) url.searchParams.set('roomId', id)
     else url.searchParams.delete('roomId')
-    window.history.replaceState(null, '', url.pathname + url.search)
+    const target = url.pathname + url.search + url.hash
+    if (id && !hadRoom) window.history.pushState(window.history.state, '', target)
+    else window.history.replaceState(window.history.state, '', target)
   }
   const send = () => {
-    if (!roomId || !draft.trim() || busy || !ready) return
+    if (!roomId || busy || !ready) return
     const target = roomId
-    const text = draft
+    const text = drafts.current[target] ?? ''
+    if (!text.trim()) return
     const composer = composerRef.current
     // Clear the composer right away: the pending message is rendered from the
     // store's local echo, so waiting for the gateway would only look laggy.
     const replyTo = replies[target]
     const sending = replyTo ? store.send(target, text, replyTo) : store.send(target, text)
     composer?.reset()
-    setDrafts(current => ({ ...current, [target]: current[target] === text ? '' : current[target] }))
+    if (drafts.current[target] === text) drafts.current[target] = ''
     setReplies(current => { const { [target]: _sent, ...rest } = current; return rest })
     void sending.catch(error => {
       toast.error(messengerError(error))
-      setDrafts(current => ({ ...current, [target]: current[target] || text }))
+      if (!drafts.current[target]) {
+        drafts.current[target] = text
+        if (store.getSnapshot().selectedRoomId === target) composerRef.current?.setDraft(text)
+      }
       if (replyTo) setReplies(current => ({ ...current, [target]: current[target] ?? replyTo }))
     })
   }
@@ -301,7 +337,8 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     {/* No page title chrome: the conversation list toolbar is the only header the page needs.
         Status stays in the tree so screen readers still get the connection state. */}
     <span role="status" className="sr-only">{snapshot.status === 'ready' ? 'Connected' : snapshot.status === 'disconnected' ? 'Matrix' : snapshot.status}</span>
-    {!connected ? <div className="flex min-h-0 flex-1 overflow-y-auto"><ConnectionForm /></div>
+    {!connected && snapshot.loaded === false ? <div className="flex min-h-0 flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading Matrix" /></div>
+      : !connected ? <div className="flex min-h-0 flex-1 overflow-y-auto"><ConnectionForm /></div>
       : optionsOpen ? <MessengerOptions onBack={() => setPane('')} onOpenConversation={id => { selectRoom(id); setPane('') }} />
       : <>
       <div className="flex min-h-0 flex-1">
@@ -378,12 +415,13 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                       composerRef.current?.focus()
                       requestAnimationFrame(() => composerRef.current?.focus())
                     }}
-                    avatar={{ name: message.sender, ...(room.peer && room.peer.userId === message.senderId ? { presence: room.peer.presence } : {}), ...((message.senderAvatarUrl || (room.peer && room.peer.userId === message.senderId ? room.peer.avatarUrl : undefined)) ? { mxcUrl: message.senderAvatarUrl || room.peer?.avatarUrl } : {}) }}
+                    avatar={{ name: message.sender, ...(room.peer && room.peer.userId === message.senderId ? { presence: room.peer.presence } : {}), ...(messageAvatarUrl(room, message.senderId, message.senderAvatarUrl) ? { mxcUrl: messageAvatarUrl(room, message.senderId, message.senderAvatarUrl) } : {}) }}
                   />
                 </div>)}
               </Conversation>
               {loadingHistory && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">Loading earlier messages…</p>}
               {snapshot.historyLimited && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">10,000 events loaded. Open WhatsApp for older history.</p>}
+              {!!snapshot.typing?.length && <p role="status" className="px-4 pb-1 text-xs text-muted-foreground">{snapshot.typing.join(', ')} {snapshot.typing.length === 1 ? 'is' : 'are'} typing…</p>}
               <ChatComposerSurface className="shrink-0 px-3 pb-3">
                 <div data-messenger-composer className="mx-auto max-w-4xl">
                   {replies[room.id] && <div data-reply-preview className="mb-1.5 flex items-center gap-2 rounded-lg border-l-2 border-primary bg-muted px-3 py-1.5">
@@ -394,12 +432,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                     </div>
                     <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" aria-label="Cancel reply" onClick={() => setReplies(current => { const { [room.id]: _cancelled, ...rest } = current; return rest })}><X className="h-3.5 w-3.5" /></Button>
                   </div>}
-                  <PromptInput
+                  <MessengerComposer
                     key={room.id}
                     ref={composerRef}
                     variant="messenger"
-                    value={draft}
-                    onChange={value => setDrafts(current => ({ ...current, [room.id]: value }))}
+                    initialDraft={drafts.current[room.id] ?? ''}
+                    onDraftChange={value => { drafts.current[room.id] = value }}
                     onSubmit={send}
                     clearOnSubmit={false}
                     disabled={!ready || busy}

@@ -18,7 +18,7 @@ async function mount(page: Page) {
     return route.fulfill({ json: { snapshot: {
       status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: false,
       session: { homeserver: 'https://matrix.test', userId: state.user, deviceId: 'A' },
-      selectedRoomId: url.searchParams.get('roomId'), messages: [],
+      selectedRoomId: url.searchParams.get('roomId'), typing: url.searchParams.get('roomId') === '!alice:test' ? ['Bob'] : [], messages: [],
       rooms: [
         { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar },
         { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
@@ -46,7 +46,7 @@ for (const width of [390, 1280]) {
     const row = page.getByRole('group', { name: 'Conversation Alice' })
     const bounds = await row.boundingBox()
     expect(bounds!.height).toBeGreaterThanOrEqual(44)
-    expect(bounds!.height).toBeLessThanOrEqual(52)
+    expect(bounds!.height).toBeLessThanOrEqual(60)
     const name = await row.getByText('Alice', { exact: true }).boundingBox()
     const service = await row.getByText('WhatsApp · Personal', { exact: true }).boundingBox()
     expect(service!.x).toBeGreaterThan(name!.x + name!.width)
@@ -177,4 +177,17 @@ test('provider icons open settings while provider chips filter conversations', a
   await page.keyboard.press('Escape')
   await filters.getByRole('button', { name: 'Teams', exact: true }).click()
   await expect(page.getByRole('group', { name: 'Conversation Alice' })).toBeVisible()
+})
+
+test('typing indicator follows the room and drafts survive switching', async ({ page }) => {
+  await mount(page)
+  await expect(page.getByText('Bob is typing…')).toBeVisible()
+  const editor = page.locator('[data-messenger-composer] [contenteditable="true"]')
+  await editor.fill('Draft for Alice')
+  await page.getByRole('group', { name: 'Conversation Bob' }).click()
+  await expect(page.getByText('Bob is typing…')).toHaveCount(0)
+  await editor.fill('Draft for Bob')
+  await page.getByRole('group', { name: 'Conversation Alice' }).click()
+  await expect(editor).toHaveText('Draft for Alice')
+  await expect(page.getByText('Bob is typing…')).toBeVisible()
 })

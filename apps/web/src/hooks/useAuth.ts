@@ -31,6 +31,7 @@ interface UserSettings {
   reasoning_effort: ReasoningEffort | null
   project_picker_path: string | null
   project_picker_node_id: string | null
+  navigation_order?: string[]
   updated_at: string
 }
 
@@ -202,6 +203,7 @@ function useAuthState() {
     reasoning_effort?: ReasoningEffort | null
     project_picker_path?: string | null
     project_picker_node_id?: string | null
+    navigation_order?: string[]
   }) => {
     if (!state.token) throw new Error('Not authenticated')
     const response = await fetch(`${API_URL}/api/auth/settings`, {

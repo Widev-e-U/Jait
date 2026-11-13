@@ -220,7 +220,7 @@ function ProjectPathLink({
     <a
       href={href}
       className={cn(
-        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-normal text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       )}
       onClick={(event) => {
         event.preventDefault()
@@ -228,7 +228,7 @@ function ProjectPathLink({
       }}
     >
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[220px] truncate">{fileName}</span>
+      <span className="-my-0.5 max-w-[220px] truncate py-0.5">{fileName}</span>
       {location ? (
         <span className="shrink-0 rounded bg-background/80 px-1 py-0.5 text-2xs text-muted-foreground">
           {location}
@@ -267,7 +267,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
       }
 
       const codeClassName = cn(
-        'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
+        'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-normal text-foreground',
         'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
       )
       const pathTarget = onOpenPath ? parseInlinePathCandidate(String(children ?? '')) : null
@@ -284,7 +284,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
               }}
             >
               <FileIcon filename={getFileLinkLabel(pathTarget.path)} className="h-3 w-3 shrink-0 self-center" />
-              <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
+              <span className="-my-0.5 max-w-[32rem] truncate py-0.5 sm:max-w-[40rem]">{children}</span>
             </button>
           </TooltipHint>
         )
@@ -292,7 +292,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
 
       return (
         <code className={codeClassName} {...props}>
-          <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
+          <span className="-my-0.5 max-w-[32rem] truncate py-0.5 sm:max-w-[40rem]">{children}</span>
         </code>
       )
     },

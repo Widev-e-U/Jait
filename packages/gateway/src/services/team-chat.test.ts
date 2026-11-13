@@ -76,6 +76,32 @@ describe("persistent team coordination", () => {
     }
   });
 
+  it("bounds each agent's independent deliveries and dispatches queued work in FIFO order", async () => {
+    vi.stubEnv("JAIT_TEAM_DELIVERY_CONCURRENCY", "2");
+    const releases: Array<() => void> = [];
+    const dispatch = vi.fn((_delivery: unknown, _agent: unknown, _prompt: string) => new Promise<{ content: string }>(resolve => {
+      releases.push(() => resolve({ content: "Done" }));
+    }));
+    service.setDispatcher(dispatch);
+    try {
+      for (let i = 0; i < 4; i++) post(`Task ${i}`, `cap-${i}`, ["Developer"]);
+      expect(dispatch).toHaveBeenCalledTimes(2);
+      expect(service.deliveries(owner, room.id).filter(d => d.status === "running")).toHaveLength(2);
+      expect(service.deliveries(owner, room.id).filter(d => d.status === "queued")).toHaveLength(2);
+      releases[0]!();
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(3));
+      expect(dispatch.mock.calls[2]?.[2]).toBe("Task 2");
+      releases[1]!();
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(4));
+      expect(dispatch.mock.calls[3]?.[2]).toBe("Task 3");
+    } finally {
+      service.close();
+      for (const release of releases) release();
+      await Promise.resolve();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("parks infrastructure blockers without sending the same broken environment to a manager", async () => {
     const dispatch = vi.fn(async () => { throw new Error("Execution blocked: Required executable unavailable persisted after two retries."); });
     service.setDispatcher(dispatch);

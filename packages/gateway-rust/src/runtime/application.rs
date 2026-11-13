@@ -1294,6 +1294,15 @@ mod ownership_tests {
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
         let body: serde_json::Value = response.json().await.unwrap();
         assert_eq!(body["error"], "NO_PROJECT");
+        // Discovery and remote browsing require authentication independently of local browse.
+        for endpoint in ["nodes", "roots?nodeId=missing", "browse?nodeId=missing"] {
+            let response = client
+                .get(format!("http://{address}/api/filesystem/{endpoint}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+        }
         // The gateway is discoverable and unavailable remote nodes never fall back to local I/O.
         let nodes = client
             .get(format!("http://{address}/api/filesystem/nodes"))

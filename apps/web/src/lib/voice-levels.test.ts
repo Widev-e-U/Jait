@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   VOICE_LEVEL_BAR_COUNT,
   VOICE_LEVEL_FLOOR,
+  appendVoiceLevel,
   createSilentVoiceLevels,
   measureVoiceLevel,
   summarizeForVoice,
@@ -15,6 +16,18 @@ describe('createSilentVoiceLevels', () => {
   it('starts every bar at the silent floor', () => {
     const levels = createSilentVoiceLevels()
     expect(levels.every((level) => level === VOICE_LEVEL_FLOOR)).toBe(true)
+  })
+})
+
+describe('voice level history', () => {
+  it('moves loud intervals left and returns to silence after sound stops', () => {
+    const loud = appendVoiceLevel(createSilentVoiceLevels(), 1)
+    const quiet = appendVoiceLevel(loud, VOICE_LEVEL_FLOOR)
+    expect(quiet).toHaveLength(VOICE_LEVEL_BAR_COUNT)
+    expect(quiet.slice(-2)).toEqual([1, VOICE_LEVEL_FLOOR])
+    let history = quiet
+    for (let i = 0; i < VOICE_LEVEL_BAR_COUNT; i++) history = appendVoiceLevel(history, VOICE_LEVEL_FLOOR)
+    expect(history.every((level) => level === VOICE_LEVEL_FLOOR)).toBe(true)
   })
 })
 

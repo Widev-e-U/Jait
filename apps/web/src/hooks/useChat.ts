@@ -359,6 +359,8 @@ export type MessageSegment =
       type: 'steering'
       content: string
       displayContent?: string
+      /** Images sent with the steer, so the marker still shows them after a reload. */
+      attachments?: Array<{ name: string; mimeType: string; data: string }>
       /** Id of the queued steer this marker consumed (absent on replays). */
       queuedMessageId?: string
       /** True when the gateway accepted the steer before injecting it. */
@@ -1282,9 +1284,10 @@ export function useChat(
         // Internal steers (e.g. a background terminal completing) reach the
         // model and the trajectory log, but must stay out of the transcript.
         const steerHidden = data.hidden === true
+        const steerAttachments = Array.isArray(data.attachments) ? data.attachments as ChatAttachment[] : undefined
         if (isReplay || !steerId) {
           if (!steerHidden) {
-            recordSteeredMessage(steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined)
+            recordSteeredMessage(steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined, steerAttachments)
           }
         } else {
           resolveSteeredMessage(
@@ -1292,6 +1295,7 @@ export function useChat(
             steerContent,
             typeof data.displayContent === 'string' ? data.displayContent : undefined,
             steerHidden,
+            steerAttachments,
           )
         }
       } else if (data.type === 'content_rollback') {
@@ -2056,10 +2060,12 @@ export function useChat(
    * than always being appended after the whole conversation (which made it look
    * permanently stuck at the bottom while the assistant kept streaming above it).
    */
-  const recordSteeredMessage = useCallback((content: string, displayContent?: string) => {
+  const recordSteeredMessage = useCallback((content: string, displayContent?: string, attachments?: ChatAttachment[]) => {
+    const images = attachments?.filter(item => item.mimeType.startsWith('image/'))
+      .map(({ name, mimeType, data }) => ({ name, mimeType, data }))
     const active = activeStreamRef.current
     if (active?.isCurrent() && active.getAssistantId()) {
-      active.getWriter().pushSteering(content, displayContent)
+      active.getWriter().pushSteering(content, displayContent, undefined, undefined, images)
       active.flush()
       return
     }
@@ -2068,6 +2074,7 @@ export function useChat(
       role: 'user',
       content,
       displayContent: displayContent ?? content,
+      ...(attachments?.length ? { attachments } : {}),
       steered: true,
     }
     setState(prev => ({ ...prev, messages: [...prev.messages, steeredMessage] }))
@@ -2099,15 +2106,16 @@ export function useChat(
    * splice the marker into the transcript at its real position. Falls back to
    * the pending entry's own content when the event omits it.
    */
-  const resolveSteeredMessage = useCallback((steerId: string, content?: string, displayContent?: string, hidden?: boolean) => {
+  const resolveSteeredMessage = useCallback((steerId: string, content?: string, displayContent?: string, hidden?: boolean, attachments?: ChatAttachment[]) => {
     const pending = messageQueueRef.current.find(entry => entry.steerQueuedMessageId === steerId)
     updateQueue(prev => prev.filter(entry => entry.steerQueuedMessageId !== steerId))
     // An internal (hidden) steer must still clear its queue entry, but it never
     // becomes a visible transcript marker.
     if (hidden) return
     const body = content ?? pending?.content
-    if (!body) return
-    recordSteeredMessage(body, displayContent ?? pending?.displayContent)
+    const steerAttachments = attachments?.length ? attachments : pending?.attachments
+    if (!body && !steerAttachments?.length) return
+    recordSteeredMessage(body ?? '', displayContent ?? pending?.displayContent, steerAttachments)
   }, [recordSteeredMessage, updateQueue])
 
   /**

@@ -39,6 +39,12 @@ describe("persistent chat goal loops", () => {
     expect(result.status).toBe("running");
   });
 
+  it("persists the measured turn duration", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    loops.finishTurn(sessionId, undefined, false, 1250.4);
+    expect(new ChatLoopService(sessions).get(sessionId)?.lastTurnDurationMs).toBe(1250);
+  });
+
   it("rejects waiting without a real blocking Q&A in the same chat", async () => {
     const goal = loops.goal(sessionId, "Fix", ["Pass"]);
     const input = { revision: goal.revision, outcome: "waiting" as const, summary: "Can I stop?" };

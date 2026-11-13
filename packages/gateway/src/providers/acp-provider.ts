@@ -1270,14 +1270,21 @@ export class AcpProvider implements CliProviderAdapter {
     }
   }
 
-  async steerTurn(sessionId: string, message: string): Promise<boolean> {
+  async steerTurn(sessionId: string, message: string, _expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean> {
     const state = this.getSession(sessionId);
     // Steering is a negotiated extension, advertised beside agentCapabilities.
     const capability = state.initialized._meta?.["steering"] as { supported?: boolean } | undefined;
     if (capability?.supported !== true || !state.promptInFlight) return false;
     const result = await state.connection.extMethod("_session/steering", {
       sessionId: state.acpSessionId,
-      prompt: [{ type: "text", text: message }],
+      prompt: [
+        { type: "text", text: message },
+        ...(attachments ?? []).flatMap((attachment) => typeof attachment === "string" ? [] : [{
+          type: "image" as const,
+          mimeType: attachment.mimeType,
+          data: attachment.data.startsWith("data:") ? attachment.data.split(",")[1] ?? "" : attachment.data,
+        }]),
+      ],
       // Keep ownership of idle fallback: never launch an untracked detached turn.
       _meta: { steering: { idleBehavior: "promptRequired" } },
     });

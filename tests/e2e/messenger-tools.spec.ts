@@ -75,3 +75,26 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/messenger-tools-' + width + '.png') })
   })
 }
+
+
+test('browser back returns from a conversation to the chat list', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/src/e2e-fixtures/messenger-tools.html?q=Homelab', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('group', { name: 'Conversation Homelab' }).getByRole('button').first().click()
+  await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('complementary', { name: 'Conversations', exact: true })).toBeVisible()
+  await expect(page).not.toHaveURL(/roomId=/)
+  await expect(page.getByLabel('Search conversations and messages')).toHaveValue('Homelab')
+  await page.goForward()
+  await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible()
+})
+
+test('browser back returns direct conversation links to the chat list', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/src/e2e-fixtures/messenger-tools.html?roomId=%21lab%3Atest', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByRole('complementary', { name: 'Conversations', exact: true })).toBeVisible()
+  await expect(page).not.toHaveURL(/roomId=/)
+})

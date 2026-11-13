@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MessengerRoom } from './model'
-import { chatListAvatarProps } from './room-avatar'
+import { chatListAvatarProps, messageAvatarUrl } from './room-avatar'
 
 function room(overrides: Partial<MessengerRoom> = {}): MessengerRoom {
   return {
@@ -61,5 +61,14 @@ describe('chatListAvatarProps', () => {
     const props = chatListAvatarProps(room({ name: 'Erin' }))
     expect(props.rounded).toBeUndefined()
     expect(props.fallback).toBeUndefined()
+  })
+})
+
+describe('messageAvatarUrl', () => {
+  it('uses the direct room picture for its verified peer', () => {
+    const direct = room({ avatarUrl: 'mxc://matrix/photo', peer: { userId: '@bob:matrix', name: 'Bob', presence: 'unknown' } })
+    expect(messageAvatarUrl(direct, '@bob:matrix')).toBe('mxc://matrix/photo')
+    expect(messageAvatarUrl(direct, '@other:matrix')).toBeUndefined()
+    expect(messageAvatarUrl(direct, '@bob:matrix', 'mxc://matrix/sender')).toBe('mxc://matrix/sender')
   })
 })

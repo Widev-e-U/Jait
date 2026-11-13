@@ -15,3 +15,6 @@
 .team-avatar-empty { display: flex; width: 100%; align-items: center; justify-content: center; border-radius: 50%; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); font-size: calc(var(--team-avatar-size) / 4); }
 .team-avatar-stack .team-avatar-empty { width: var(--team-avatar-size); height: var(--team-avatar-size); }
 .team-avatar-cluster.team-avatar-single .team-avatar-member { width: 100%; height: 100%; }
+/* Team activity reflects confirmed running members; idle members stay still. */
+.team-avatar .agent-creature:not(.agent-creature-working) .agent-creature-body,
+.team-avatar .agent-creature:not(.agent-creature-working) .agent-creature-eyes { animation: none; }

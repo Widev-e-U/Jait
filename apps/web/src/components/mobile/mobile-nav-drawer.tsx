@@ -10,6 +10,7 @@ import {
   UsersRound,
   Brain,
   Wifi,
+  Workflow,
   X,
 } from 'lucide-react'
 
@@ -27,7 +28,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { view: 'chat', label: 'Chat', icon: MessageSquare },
   { view: 'agents', label: 'Agents', icon: UsersRound },
   { view: 'messenger', label: 'Messenger', icon: MessagesSquare },
-  { view: 'threads', label: 'Threads', icon: MessagesSquare },
+  { view: 'threads', label: 'Threads', icon: Workflow },
   { view: 'pulls', label: 'PRs', icon: GitPullRequest },
   { view: 'todo', label: 'Todo', icon: Boxes },
   { view: 'email', label: 'Email', icon: Mail },

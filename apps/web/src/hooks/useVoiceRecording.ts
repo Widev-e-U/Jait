@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SttProvider } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import {
-  VOICE_LEVEL_BAR_COUNT,
-  VOICE_LEVEL_FLOOR,
+  VOICE_LEVEL_SAMPLE_INTERVAL_MS,
+  appendVoiceLevel,
   createSilentVoiceLevels,
   measureVoiceLevel,
 } from '@/lib/voice-levels'
@@ -122,7 +122,10 @@ export function useVoiceRecording({
         void audioContext.resume().catch(() => {})
       }
 
-      const tick = () => {
+      let windowStart = performance.now()
+      let levelSum = 0
+      let sampleCount = 0
+      const tick = (now: number) => {
         const analyserNode = voiceAnalyserRef.current
         const samples = voiceLevelDataRef.current
         if (!analyserNode || !samples) return
@@ -131,20 +134,20 @@ export function useVoiceRecording({
         // rather than interpreting the buffer's initial zeroes as a loud signal.
         samples.fill(128)
         if (audioContext.state === 'running') analyserNode.getByteTimeDomainData(samples)
-        const targetLevel = measureVoiceLevel(samples)
-        const previousTail = voiceLevelsRef.current[voiceLevelsRef.current.length - 1] ?? VOICE_LEVEL_FLOOR
-        const nextLevel = previousTail * 0.2 + targetLevel * 0.8
-        const timeline = [
-          ...voiceLevelsRef.current.slice(-(VOICE_LEVEL_BAR_COUNT - 1)),
-          nextLevel,
-        ]
-
-        voiceLevelsRef.current = timeline
-        setVoiceLevels(timeline)
+        levelSum += measureVoiceLevel(samples)
+        sampleCount += 1
+        if (now - windowStart >= VOICE_LEVEL_SAMPLE_INTERVAL_MS) {
+          const timeline = appendVoiceLevel(voiceLevelsRef.current, levelSum / sampleCount)
+          voiceLevelsRef.current = timeline
+          setVoiceLevels(timeline)
+          levelSum = 0
+          sampleCount = 0
+          windowStart = now
+        }
         voiceLevelFrameRef.current = requestAnimationFrame(tick)
       }
 
-      tick()
+      voiceLevelFrameRef.current = requestAnimationFrame(tick)
     } catch (error) {
       console.warn('Voice visualizer unavailable:', error)
       resetVoiceLevels()

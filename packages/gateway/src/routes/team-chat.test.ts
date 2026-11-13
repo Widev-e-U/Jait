@@ -10,6 +10,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { UserService } from "../services/users.js";
 import { SessionService } from "../services/sessions.js";
 import { ThreadService } from "../services/threads.js";
+import { TeamChatService } from "../services/team-chat.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -256,10 +257,18 @@ describe("team room routes and work chat integration", () => {
       item.agentId === "Developer" && item.sessionId !== active.sessionId && item.status === "running");
     expect(independent).toBeDefined();
     expect(provider.sendTurn).toHaveBeenCalledTimes(4);
+    // A hung running delivery must not prevent queued cancellation. Suppress
+    // the pump to prove the stop route itself finalizes the queued row.
+    const pump = vi.spyOn(TeamChatService.prototype, "pump").mockResolvedValue(undefined);
     const result = await app.inject({ method: "POST", url: `/api/threads/${active.sessionId}/interrupt`, headers });
     expect(result.statusCode).toBe(200);
     await vi.waitFor(async () => expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === queued.id)?.status).toBe("cancelled"));
-    expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === independent.id)?.status).toBe("running");
+    const stopped = await snapshot();
+    expect(stopped.deliveries.find((item: { id: string }) => item.id === independent.id)?.status).toBe("running");
+    expect(stopped.deliveries).toHaveLength(initial.deliveries.length);
+    expect(stopped.messages.some((message: { id: string }) => message.id === queued.messageId)).toBe(true);
+    expect(stopped.messages.some((message: { kind: string; parentMessageId?: string }) => message.kind === "result" && message.parentMessageId === queued.messageId)).toBe(false);
+    pump.mockRestore();
   });
 
   it("reports the latest answer after opening progress and fails empty completions", async () => {

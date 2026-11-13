@@ -513,6 +513,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.threadService && deps.providerRegistry) {
     registerThreadRoutes(app, config, {
       personaChatRuntime: getPersonaChatRuntime,
+      cancelQueuedTeamDeliveries: teamChat ? (threadId, reason) => teamChat.cancelQueuedDeliveries(threadId, reason) : undefined,
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,

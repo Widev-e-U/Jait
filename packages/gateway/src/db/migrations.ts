@@ -1757,4 +1757,10 @@ export const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_github_intake_history ON github_intake_decisions(user_id, agent_id, created_at)");
     },
   },
+  {
+    id: 78, name: "user_settings_navigation_order",
+    run(db) {
+      try { db.exec("ALTER TABLE user_settings ADD COLUMN navigation_order TEXT"); } catch { /* exists */ }
+    },
+  },
 ];

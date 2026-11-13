@@ -1970,7 +1970,7 @@ export class GitService {
    * `fatal: not a valid object name: 'main'` (older git).
    *
    * Resolution order: local branch -> remote-tracking ref of the preferred
-   * (or any) remote -> `git fetch --depth 1 <remote> <branch>` followed by
+   * (or any) remote -> `git fetch <remote> <branch>` followed by
    * FETCH_HEAD. Throws a named error listing the attempted refs when nothing
    * resolves, so a genuinely missing branch is diagnosable instead of looking
    * like a broken checkout.
@@ -1999,7 +1999,7 @@ export class GitService {
 
     for (const remote of ordered) {
       try {
-        await gitExec(cwd, `fetch --depth 1 "${remote}" "${name}"`, 120_000);
+        await gitExec(cwd, `fetch "${remote}" "${name}"`, 120_000);
       } catch {
         tried.push(`fetch ${remote} ${name} (failed)`);
         continue;

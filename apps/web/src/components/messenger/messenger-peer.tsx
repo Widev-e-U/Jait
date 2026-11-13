@@ -13,6 +13,18 @@ function initials(name: string) {
   return (words[0]![0]! + words[1]![0]!).toUpperCase()
 }
 
+/**
+ * Teams channels and group chats have no picture at the source, so the bridge
+ * never provides one. Tint the fallback with a stable hue per name so those
+ * rows stay distinguishable instead of all sharing one flat colour.
+ */
+function fallbackTint(name: string) {
+  let hash = 0
+  for (const char of name.trim().toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  const hue = hash % 360
+  return { backgroundColor: `hsl(${hue} 55% 50% / 0.18)`, color: `hsl(${hue} 55% 38%)` }
+}
+
 const DOT: Record<MessengerPresence, string> = {
   online: 'bg-emerald-500',
   unavailable: 'bg-amber-500',
@@ -24,6 +36,7 @@ const SIZE = {
   sm: 'h-8 w-8 text-[11px]',
   md: 'h-9 w-9 text-xs',
   lg: 'h-10 w-10 text-sm',
+  list: 'h-11 w-11 text-sm',
 } as const
 
 /**
@@ -116,10 +129,11 @@ export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size =
   return <span
     data-presence={presence}
     aria-hidden
+    style={url ? undefined : fallbackTint(name)}
     className={'relative flex shrink-0 select-none items-center justify-center bg-primary/10 font-semibold text-primary ' + SIZE[size] + ' ' + roundClass}
   >
     {url
-      ? <img src={url} alt="" className={'h-full w-full object-cover ' + roundClass} />
+      ? <img src={url} alt="" className={'h-full w-full animate-in fade-in duration-200 object-cover ' + roundClass} />
       : <span className="truncate px-1">{fallback ?? initials(name)}</span>}
     {withPresence && <TooltipHint content={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}><span
       data-presence-dot={presence}

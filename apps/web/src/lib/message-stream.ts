@@ -101,6 +101,7 @@ export type MessageStreamEvent =
       type: 'steering'
       content: string
       displayContent?: string
+      attachments?: Array<{ name: string; mimeType: string; data: string }>
       /** Correlates the marker with the parked queued steer it consumes. */
       queuedMessageId?: string
       /** The gateway accepted the steer earlier and injected it at a round boundary. */
@@ -122,7 +123,7 @@ export interface MessageStreamWriter {
   /** Convenience: append a thinking chunk. */
   pushThinking(text: string): void
   /** Convenience: insert a steered-message marker anchored at the current point in the stream. */
-  pushSteering(content: string, displayContent?: string, queuedMessageId?: string, deferred?: boolean): void
+  pushSteering(content: string, displayContent?: string, queuedMessageId?: string, deferred?: boolean, attachments?: Array<{ name: string; mimeType: string; data: string }>): void
   /** Convenience: push a tool_call_delta. */
   pushToolCallDelta(callId: string, nameDelta: string, argsDelta: string, parentCallId?: string, index?: number, provisional?: boolean): void
   /** Convenience: push a tool_start. */
@@ -364,6 +365,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
             type: 'steering',
             content: event.content,
             ...(event.displayContent != null ? { displayContent: event.displayContent } : {}),
+            ...(event.attachments?.length ? { attachments: event.attachments } : {}),
             ...(event.queuedMessageId != null ? { queuedMessageId: event.queuedMessageId } : {}),
             ...(event.deferred != null ? { deferred: event.deferred } : {}),
           },
@@ -534,8 +536,8 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
     push: pushEvent,
     pushText: (text: string) => pushEvent({ type: 'text', content: text }),
     pushThinking: (text: string) => pushEvent({ type: 'thinking', content: text }),
-    pushSteering: (content: string, displayContent?: string, queuedMessageId?: string, deferred?: boolean) =>
-      pushEvent({ type: 'steering', content, displayContent, queuedMessageId, deferred }),
+    pushSteering: (content, displayContent, queuedMessageId, deferred, attachments) =>
+      pushEvent({ type: 'steering', content, displayContent, queuedMessageId, deferred, attachments }),
     pushToolCallDelta: (callId, nameDelta, argsDelta, parentCallId, index, provisional) =>
       pushEvent({ type: 'tool_call_delta', callId, nameDelta, argsDelta, parentCallId, index, provisional }),
     pushToolStart: (callId, tool, args, parentCallId) =>

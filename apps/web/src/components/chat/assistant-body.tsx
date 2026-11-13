@@ -184,7 +184,19 @@ export function AssistantBody({
                 Steered into running turn
               </span>
               <div className="min-w-0 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
-                {seg.displayContent ?? seg.content}
+                {(seg.displayContent ?? seg.content) || null}
+                {seg.attachments?.length ? (
+                  <div className="mt-2 flex flex-wrap justify-end gap-2 first:mt-0">
+                    {seg.attachments.filter(item => item.mimeType.startsWith('image/')).map((item, index) => (
+                      <img
+                        key={`${item.name}-${index}`}
+                        src={item.data.startsWith('data:') ? item.data : `data:${item.mimeType};base64,${item.data}`}
+                        alt={item.name}
+                        className="max-h-48 max-w-full rounded-md border border-border/60 object-contain"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           )

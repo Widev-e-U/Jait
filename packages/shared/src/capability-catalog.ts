@@ -35,6 +35,14 @@ export const JAIT_PAGES = {
       { id: "workspace", description: "Read, edit, search, execute, and preview work in the active project.", toolRefs: ["read", "edit", "search", "jait.terminal", "browser.open"] }],
     toolPrefixes: ["loop.", "chat.", "session.", "file.", "terminal.", "preview.", "browser.", "web.", "project.", "surface.", "screen.", "voice.", "architecture."],
   },
+  messenger: {
+    queryParameters: { q: "Filter conversations by name or network.", messageQ: "Search loaded decrypted message text; bounded to 50 joined rooms, not complete history.", service: "Filter conversations by exact service label, e.g. WhatsApp.", roomId: "Select a Matrix conversation.", homeserver: "Prefill existing Matrix homeserver sign-in; no credentials.", username: "Optional Matrix username to prefill." },
+    title: "Messenger", path: "/messenger",
+    description: "Read and reply to personal conversations through a Matrix homeserver and installed bridges. This inbox is independent of AI chat and assistant channels.",
+    examples: ["Open my messenger", "Connect a Matrix account", "Read bridged conversations"],
+    features: [{ id: "inbox", description: "Gateway-owned Matrix connection shared across signed-in Jait devices, with encrypted messages, attachments, invitations, search, and bridge setup conversations. Login, sync, and encryption keys persist on the gateway. Assistant access explicitly shares requested messages with the configured model. Bridge coverage depends on the installed adapter; Teams tenant support is not guaranteed.", toolRefs: ["messenger.connect", "messenger.status", "messenger.rooms", "messenger.messages", "messenger.search", "messenger.send", "messenger.open"] }],
+    toolPrefixes: ["messenger."],
+  },
   agents: {
     queryParameters: {
       panel: "Use team-chats to open the team chats panel.",
@@ -48,14 +56,6 @@ export const JAIT_PAGES = {
       { id: "team_chat", description: "Named team chats with selected agent membership, a room list and avatar grid on the Agents page, existing hierarchy rooms, addressed handoffs, user participation, and neutral source-chat relays.", toolRefs: ["team.chat"] },
       { id: "work", description: "Run work using a saved personaAgentId; use cron tools for executable schedules. Profile schedules and tasks describe preferences; saving a profile alone does not launch work.", toolRefs: ["thread.control", "cron.add", "cron.update"] }],
     toolPrefixes: ["agent.profiles", "team."],
-  },
-  messenger: {
-    queryParameters: { q: "Filter conversations by name or network.", messageQ: "Search loaded decrypted message text; bounded to 50 joined rooms, not complete history.", service: "Filter conversations by exact service label, e.g. WhatsApp.", roomId: "Select a Matrix conversation.", homeserver: "Prefill existing Matrix homeserver sign-in; no credentials.", username: "Optional Matrix username to prefill." },
-    title: "Messenger", path: "/messenger",
-    description: "Read and reply to personal conversations through a Matrix homeserver and installed bridges. This inbox is independent of AI chat and assistant channels.",
-    examples: ["Open my messenger", "Connect a Matrix account", "Read bridged conversations"],
-    features: [{ id: "inbox", description: "Gateway-owned Matrix connection shared across signed-in Jait devices, with encrypted messages, attachments, invitations, search, and bridge setup conversations. Login, sync, and encryption keys persist on the gateway. Assistant access explicitly shares requested messages with the configured model. Bridge coverage depends on the installed adapter; Teams tenant support is not guaranteed.", toolRefs: ["messenger.connect", "messenger.status", "messenger.rooms", "messenger.messages", "messenger.search", "messenger.send", "messenger.open"] }],
-    toolPrefixes: ["messenger."],
   },
   threads: {
     title: "Threads", path: "/threads",

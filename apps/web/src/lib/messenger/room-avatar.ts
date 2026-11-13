@@ -27,3 +27,10 @@ export function chatListAvatarProps(room: MessengerRoom, channel = false): RoomA
   if (mxcUrl) props.mxcUrl = mxcUrl
   return props
 }
+
+/** Only use a direct room picture for the verified counterpart, never another sender. */
+export function messageAvatarUrl(room: MessengerRoom, senderId: string | undefined, senderAvatarUrl?: string): string | undefined {
+  if (senderAvatarUrl) return senderAvatarUrl
+  if (!senderId || room.peer?.userId !== senderId) return undefined
+  return room.peer.avatarUrl || room.avatarUrl || undefined
+}

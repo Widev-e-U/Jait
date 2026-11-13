@@ -1,8 +1,14 @@
 export const VOICE_LEVEL_BAR_COUNT = 28
 export const VOICE_LEVEL_FLOOR = 0.05
+export const VOICE_LEVEL_SAMPLE_INTERVAL_MS = 200
 
 export function createSilentVoiceLevels(): number[] {
   return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
+}
+
+/** Append the newest interval on the right, moving older intervals left. */
+export function appendVoiceLevel(levels: number[], level: number): number[] {
+  return [...levels.slice(-(VOICE_LEVEL_BAR_COUNT - 1)), level]
 }
 
 /** Convert unsigned PCM samples into a normalized microphone level. */

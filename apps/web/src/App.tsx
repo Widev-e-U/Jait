@@ -3930,11 +3930,6 @@ function App() {
         }
         setInputValue('')
         setInputSegments(undefined)
-        if (attachments?.length || nextDisplaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
-          queueAsFallback()
-          toast.info('Attachments queued for the next message')
-          return
-        }
         if (!isLoading || !activeSessionId) {
           queueAsFallback()
           return
@@ -3968,7 +3963,13 @@ function App() {
               'Content-Type': 'application/json',
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({ message: promptText, displayContent, queuedMessageId: steerId }),
+            body: JSON.stringify({
+              message: promptText,
+              displayContent,
+              ...(attachments?.length ? { attachments } : {}),
+              ...(nextDisplaySegments?.length ? { displaySegments: nextDisplaySegments } : {}),
+              queuedMessageId: steerId,
+            }),
           })
           if (!response.ok) {
             const err = (await response.json().catch(() => ({}))) as Record<string, unknown>
@@ -4264,10 +4265,6 @@ function App() {
       }
       const item = messageQueue.find((queued) => queued.id === id)
       if (!item || !activeSessionId) return
-      if (item.attachments?.length || item.displaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
-        toast.info('Attachments will be sent when this queued message runs')
-        return
-      }
       if (!isLoading) {
         toast.info('Steering is only available while the agent is running.')
         return
@@ -4288,6 +4285,8 @@ function App() {
           body: JSON.stringify({
             message: item.content,
             displayContent: item.displayContent,
+            ...(item.attachments?.length ? { attachments: item.attachments } : {}),
+            ...(item.displaySegments?.length ? { displaySegments: item.displaySegments } : {}),
             queuedMessageId: steerId,
           }),
         })
