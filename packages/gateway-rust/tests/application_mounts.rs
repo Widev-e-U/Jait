@@ -3496,6 +3496,64 @@ async fn git_generation_uses_saved_model_through_composed_application() {
         serde_json::json!({"error":"Commit message generation failed"})
     );
     failing_task.abort();
+
+    // A disconnected HTTP client should release its stalled model request.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let stalled_base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+    let stalled_task = tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buffer = [0; 4096];
+        let mut request = Vec::new();
+        while !request.windows(4).any(|v| v == b"\r\n\r\n") {
+            let n = socket.read(&mut buffer).await.unwrap();
+            assert_ne!(n, 0);
+            request.extend_from_slice(&buffer[..n]);
+        }
+        socket
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
+            )
+            .await
+            .unwrap();
+        let _ = ready_tx.send(());
+        while socket.read(&mut buffer).await.unwrap() != 0 {}
+    });
+    let settings = client.patch(format!("{base}/api/auth/settings")).bearer_auth(&token)
+        .json(&serde_json::json!({"api_keys":{"OPENAI_BASE_URL":stalled_base,"OPENAI_API_KEY":"user-key"},"selected_model":"fixture-model"})).send().await.unwrap();
+    assert_eq!(settings.status(), 200);
+    let request = tokio::spawn({
+        let client = client.clone();
+        let url = format!("{base}/api/git/generate-commit-message");
+        let token = token.clone();
+        let root = root.clone();
+        async move {
+            client
+                .post(url)
+                .bearer_auth(token)
+                .json(&serde_json::json!({"cwd":root}))
+                .send()
+                .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(5), ready_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !request.is_finished(),
+        "gateway request finished before cancellation"
+    );
+    assert!(
+        !stalled_task.is_finished(),
+        "model connection closed before cancellation"
+    );
+    request.abort();
+    tokio::time::timeout(Duration::from_secs(5), stalled_task)
+        .await
+        .expect("model connection remained open after client disconnect")
+        .unwrap();
     let _ = stop.send(());
     let _ = task.await;
 }
