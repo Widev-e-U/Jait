@@ -6,13 +6,13 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
 {
   "httpTotal": 428,
   "mounted-fail-closed": 100,
-  "native-untested": 307,
-  "missing": 21,
-  "nativeRouteReferencePct": 71.7,
+  "native-untested": 308,
+  "missing": 20,
+  "nativeRouteReferencePct": 72,
   "nativeTestedPct": null,
   "wsTotal": 35,
   "wsMissing": 27,
-  "rustOnlyRoutes": 12
+  "rustOnlyRoutes": 13
 }
 ```
 
@@ -283,7 +283,7 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
 | POST | `/api/git/forge-auth` | native-untested | routes/git.ts |
 | POST | `/api/git/forge-pr-checks` | native-untested | routes/git.ts |
 | POST | `/api/git/forge-status` | native-untested | routes/git.ts |
-| POST | `/api/git/generate-commit-message` | missing | routes/git.ts |
+| POST | `/api/git/generate-commit-message` | native-untested | routes/git.ts |
 | POST | `/api/git/gh-auth` | native-untested | routes/git.ts |
 | POST | `/api/git/gh-status` | native-untested | routes/git.ts |
 | POST | `/api/git/identity` | native-untested | routes/git.ts |

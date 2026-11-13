@@ -2,13 +2,13 @@
   "summary": {
     "httpTotal": 428,
     "mounted-fail-closed": 100,
-    "native-untested": 307,
-    "missing": 21,
-    "nativeRouteReferencePct": 71.7,
+    "native-untested": 308,
+    "missing": 20,
+    "nativeRouteReferencePct": 72,
     "nativeTestedPct": null,
     "wsTotal": 35,
     "wsMissing": 27,
-    "rustOnlyRoutes": 12
+    "rustOnlyRoutes": 13
   },
   "http": [
     {
@@ -2659,8 +2659,9 @@
       "nodeFiles": [
         "routes/git.ts"
       ],
-      "status": "missing",
-      "testPathReference": false
+      "status": "native-untested",
+      "testPathReference": true,
+      "rustFile": "routes/git.rs"
     },
     {
       "method": "POST",
@@ -4425,6 +4426,7 @@
     "POST /api/consent/pending/approve-all",
     "POST /api/consent/pending/reject",
     "POST /api/github/apps/webhook",
+    "POST /chat/completions",
     "POST /v1/chat/completions"
   ]
 }
