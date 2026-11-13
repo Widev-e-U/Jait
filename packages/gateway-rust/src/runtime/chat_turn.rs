@@ -221,14 +221,7 @@ impl TurnCoordinator<'_> {
         let tools = self.config.tools()?;
         let deadline = Instant::now() + self.config.timeout;
         check_cancelled(&context.cancellation)?;
-        if serde_json::to_vec(&history)
-            .map_err(|_| TurnError::HistoryLimit)?
-            .len()
-            > self.config.max_history_bytes
-        {
-            return Err(TurnError::HistoryLimit);
-        }
-        let mut ids = validate_history(&history)?;
+        let mut ids = validate_turn_history(&history, self.config.max_history_bytes)?;
         let user = TurnEvent::User {
             content: user_content,
         };
@@ -607,6 +600,20 @@ fn partial_sink(sink: EventSink, limit: usize) -> (EventSink, Arc<Mutex<PartialR
 
 /// A partial earlier tool batch is not safe to replay. Recovery is explicit;
 /// never infer a tool outcome or re-execute an old id after a restart.
+pub(crate) fn validate_turn_history(
+    history: &[Value],
+    max_history_bytes: usize,
+) -> Result<HashSet<String>, TurnError> {
+    if serde_json::to_vec(history)
+        .map_err(|_| TurnError::HistoryLimit)?
+        .len()
+        > max_history_bytes
+    {
+        return Err(TurnError::HistoryLimit);
+    }
+    validate_history(history)
+}
+
 fn validate_history(history: &[Value]) -> Result<HashSet<String>, TurnError> {
     let mut ids = HashSet::new();
     let mut pending = HashSet::new();

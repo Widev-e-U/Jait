@@ -12,13 +12,25 @@ fn prefix(session: &str) -> String {
     format!("rust-chat:{session}:")
 }
 
+pub(crate) const CLIENT_IDS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS rust_chat_client_ids (client_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, log_id INTEGER NOT NULL)";
+
+fn has_client_ids(db: &Connection) -> Result<bool, Error> {
+    Ok(db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='rust_chat_client_ids')",
+        [],
+        |row| row.get(0),
+    )?)
+}
+
 pub(crate) fn require_native_history(db: &Connection, session: &str) -> Result<(), Error> {
     let prefix = prefix(session);
-    let foreign: bool = db.query_row(
-        "SELECT EXISTS(SELECT 1 FROM messages WHERE session_id=? AND substr(id,1,length(?))<>?)",
-        params![session, prefix, prefix],
-        |row| row.get(0),
-    )?;
+    // Client-supplied user message IDs are native once recorded for this session.
+    let sql = if has_client_ids(db)? {
+        "SELECT EXISTS(SELECT 1 FROM messages WHERE session_id=?1 AND substr(id,1,length(?2))<>?2 AND id NOT IN (SELECT client_id FROM rust_chat_client_ids WHERE session_id=?1))"
+    } else {
+        "SELECT EXISTS(SELECT 1 FROM messages WHERE session_id=?1 AND substr(id,1,length(?2))<>?2)"
+    };
+    let foreign: bool = db.query_row(sql, params![session, prefix], |row| row.get(0))?;
     if foreign {
         return Err("Existing non-native model history requires an explicit importer".into());
     }
@@ -32,6 +44,7 @@ struct Projected {
     calls: Vec<Value>,
     segments: Vec<Value>,
     created_at: String,
+    client_id: Option<String>,
 }
 impl Projected {
     fn new(id: String, role: &'static str, created_at: String) -> Self {
@@ -43,6 +56,7 @@ impl Projected {
             thinking: String::new(),
             calls: vec![],
             segments: vec![],
+            client_id: None,
         }
     }
 }
@@ -239,6 +253,7 @@ fn next_stamp(now: i64, last: &mut Option<i64>) -> Result<String, Error> {
 /// Caller holds a transaction and has checked owner/active status. No independent commit.
 pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
     require_native_history(db, session)?;
+    let client_ids = has_client_ids(db)?;
     let mut projected: Vec<Projected> = vec![];
     let mut assistant: Option<usize> = None;
     let mut user_log: Option<i64> = None;
@@ -275,6 +290,15 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
                     next_stamp(now, &mut last_visible_stamp)?,
                 );
                 row.content = content;
+                if client_ids {
+                    row.client_id = db
+                        .query_row(
+                            "SELECT client_id FROM rust_chat_client_ids WHERE session_id=? AND log_id=?",
+                            params![session, log],
+                            |r| r.get(0),
+                        )
+                        .optional()?;
+                }
                 projected.push(row);
             }
             TurnEvent::Assistant {
@@ -458,8 +482,15 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
         "DELETE FROM messages WHERE session_id=? AND substr(id,1,length(?))=?",
         params![session, prefix, prefix],
     )?;
+    if client_ids {
+        db.execute(
+            "DELETE FROM messages WHERE session_id=?1 AND id IN (SELECT client_id FROM rust_chat_client_ids WHERE session_id=?1)",
+            params![session],
+        )?;
+    }
     for row in projected {
-        db.execute("INSERT INTO messages(id,session_id,role,content,tool_calls,segments,thinking,created_at) VALUES(?,?,?,?,?,?,?,?)",params![row.id,session,row.role,row.content,if row.calls.is_empty(){None}else{Some(serde_json::to_string(&row.calls)?)},if row.segments.is_empty(){None}else{Some(serde_json::to_string(&row.segments)?)},if row.thinking.is_empty(){None}else{Some(row.thinking)},row.created_at])?;
+        let id = row.client_id.clone().unwrap_or_else(|| row.id.clone());
+        db.execute("INSERT INTO messages(id,session_id,role,content,tool_calls,segments,thinking,created_at) VALUES(?,?,?,?,?,?,?,?)",params![id,session,row.role,row.content,if row.calls.is_empty(){None}else{Some(serde_json::to_string(&row.calls)?)},if row.segments.is_empty(){None}else{Some(serde_json::to_string(&row.segments)?)},if row.thinking.is_empty(){None}else{Some(row.thinking)},row.created_at])?;
     }
     Ok(())
 }
@@ -592,11 +623,13 @@ pub async fn project_messages(
             if page_bytes>MAX_BYTES{return Err("Message page exceeds output limits".into());}
         }
         drop(sizes);
-        let mut statement=tx.prepare("SELECT role,content,tool_calls,segments,thinking FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at,id LIMIT ? OFFSET ?")?;
+        let mut statement=tx.prepare("SELECT role,content,tool_calls,segments,thinking,id FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at,id LIMIT ? OFFSET ?")?;
         let messages=statement.query_map(params![session,(db_end-db_start) as i64,db_start as i64],|row|{
             let role:String=row.get(0)?;
             let mut value=json!({"role":role,"content":row.get::<_,String>(1)?});
             if role=="system"{value["systemNotice"]=json!(true);}
+            let persisted_id: String = row.get(5)?;
+            if role=="user" && persisted_id.starts_with("user-"){value["clientMessageId"]=json!(persisted_id);}
             for (index,key) in [(2,"toolCalls"),(3,"segments")] {
                 if let Some(raw)=row.get::<_,Option<String>>(index)? && let Ok(data)=serde_json::from_str::<Value>(&raw){value[key]=data;}
             }
@@ -760,12 +793,42 @@ mod tests {
         auth.shutdown().await.unwrap();
     }
     #[tokio::test]
+    async fn legacy_user_client_ids_survive_pagination_without_exposing_other_ids() {
+        let (auth, _) = setup();
+        auth.with_database(|db| {
+            for (id, role, stamp) in [
+                ("user-abc12345", "user", "2026-01-01"),
+                ("user-assistant", "assistant", "2026-01-02"),
+                ("ordinary", "user", "2026-01-03"),
+            ] {
+                db.execute("INSERT INTO messages(id,session_id,role,content,created_at) VALUES(?,'s',?,'text',?)", params![id, role, stamp])?;
+            }
+            Ok(())
+        }).await.unwrap();
+        let first = page(&auth, 1, Some("1")).await;
+        assert_eq!(first["messages"][0]["id"], "s-0");
+        assert_eq!(first["messages"][0]["clientMessageId"], "user-abc12345");
+        let latest = page(&auth, 2, None).await;
+        assert!(latest["messages"][0].get("clientMessageId").is_none());
+        assert!(latest["messages"][1].get("clientMessageId").is_none());
+        assert!(
+            project_messages(auth.clone(), "other".into(), "s".into(), None, None)
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
     async fn foreign_history_is_readable_but_never_silently_omitted_from_model_context() {
         let (auth, store) = setup();
-        auth.with_database(|db|{db.execute("INSERT INTO messages(id,session_id,role,content,created_at) VALUES('legacy','s','user','old context','2026-10-21T00:00:00Z')",[])?;Ok(())}).await.unwrap();
+        auth.with_database(|db|{db.execute("INSERT INTO messages(id,session_id,role,content,created_at) VALUES('user-abcdefgh','s','user','old context','2026-10-21T00:00:00Z')",[])?;Ok(())}).await.unwrap();
         assert_eq!(
             page(&auth, 10, None).await["messages"][0]["content"],
             "old context"
+        );
+        assert_eq!(
+            page(&auth, 10, None).await["messages"][0]["clientMessageId"],
+            "user-abcdefgh"
         );
         assert!(store.load().await.is_err());
         assert!(

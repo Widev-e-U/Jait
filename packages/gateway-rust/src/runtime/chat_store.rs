@@ -127,6 +127,7 @@ pub struct SqliteTurnStore {
     events: Arc<EventBus>,
     turn_id: Option<String>,
     database_owner: Option<Arc<std::fs::File>>,
+    client_message_id: Option<String>,
 }
 impl SqliteTurnStore {
     pub fn new(auth: AuthState, owner: String, session: String) -> Result<Self, String> {
@@ -140,7 +141,14 @@ impl SqliteTurnStore {
             events: EventBus::new(),
             turn_id: None,
             database_owner: None,
+            client_message_id: None,
         })
+    }
+
+    /// Persist this ID as the user message ID of the turn's request. Callers validate the format.
+    pub(crate) fn with_client_message_id(mut self, id: Option<String>) -> Self {
+        self.client_message_id = id;
+        self
     }
 
     /// Fan committed events out to a shared bus (the HTTP subscription layer).
@@ -333,6 +341,11 @@ impl SqliteTurnStore {
         let session = self.session.clone();
         let events = self.events.clone();
         let turn_id = self.turn_id.clone();
+        let client_id = if start.is_some() {
+            self.client_message_id.clone()
+        } else {
+            None
+        };
         self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
@@ -366,6 +379,12 @@ impl SqliteTurnStore {
                     return Err("Stored stream exceeds persistence limits".into());
                 }
                 tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next+1,STREAM_EVENT_TYPE,data,now.timestamp_millis()])?;
+            }
+            if let Some(client_id) = &client_id {
+                tx.execute_batch(super::chat_projection::CLIENT_IDS_SCHEMA)?;
+                let taken: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1) OR EXISTS(SELECT 1 FROM rust_chat_client_ids WHERE client_id=?1)", [client_id], |row| row.get(0))?;
+                if taken { return Err("Client message ID already exists".into()); }
+                tx.execute("INSERT INTO rust_chat_client_ids(client_id,session_id,log_id) VALUES(?,?,?)", params![client_id,session,next])?;
             }
             tx.execute("UPDATE sessions SET last_active_at=? WHERE id=? AND user_id=?", params![now.to_rfc3339_opts(chrono::SecondsFormat::Millis,true),session,owner])?;
             super::chat_projection::project_log(&tx,&session)?;

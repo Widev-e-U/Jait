@@ -359,6 +359,18 @@ struct ChatBody {
     session_id: String,
     #[serde(alias = "message")]
     content: String,
+    // Like the Node route, anything but a well-formed string is ignored.
+    #[serde(rename = "clientMessageId", default)]
+    client_message_id: Option<Value>,
+}
+fn client_message_id(input: &ChatBody) -> Option<String> {
+    let id = input.client_message_id.as_ref()?.as_str()?;
+    let suffix = id.strip_prefix("user-")?;
+    ((8..=100).contains(&suffix.len())
+        && suffix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    .then(|| id.to_owned())
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -469,6 +481,27 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     if !project_root.is_absolute() {
         return response(409, json!({"error":"SESSION_PROJECT_ROOT_INVALID"}));
     }
+    let client_id = client_message_id(&input);
+    if let Some(id) = client_id.clone() {
+        let taken = state
+            .auth
+            .with_database(move |db| {
+                // SQLite resolves table names at prepare time, so the table must exist.
+                db.execute_batch(crate::runtime::chat_projection::CLIENT_IDS_SCHEMA)?;
+                let known: bool = db.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1) OR EXISTS(SELECT 1 FROM rust_chat_client_ids WHERE client_id=?1)",
+                    [&id],
+                    |row| row.get(0),
+                )?;
+                Ok(known)
+            })
+            .await;
+        match taken {
+            Ok(false) => {}
+            Ok(true) => return response(409, json!({"error":"MESSAGE_ID_ALREADY_EXISTS"})),
+            Err(_) => return auth::internal_error(),
+        }
+    }
     let lease = match state.admit(&user.id, &input.session_id) {
         Ok(lease) => lease,
         Err(error) => return *error,
@@ -487,6 +520,7 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         store
             .with_events(state.events.clone())
             .with_database_owner(state.active.database_owner.clone())
+            .with_client_message_id(client_id)
             .with_turn()
     }) {
         Ok(store) => store,
@@ -495,8 +529,6 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     if store.check_stream_capacity().await.is_err() {
         return response(503, json!({"error":"CHAT_STREAM_CAPACITY_UNAVAILABLE"}));
     }
-    // Keep the previous failure visible if preparation or capacity checks fail.
-    state.events.clear_failure(&input.session_id);
     let context = ToolExecutionContext {
         user_id: user.id,
         session_id: input.session_id.clone(),
@@ -507,6 +539,26 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         cancellation: cancellation.clone(),
         on_output: None,
     };
+    let admitted = match state
+        .manager
+        .prepare(&prepared.config, &store, &context)
+        .await
+    {
+        Ok(admitted) => admitted,
+        Err(SessionTurnError::SessionBusy) => return response(409, json!({"error":"CHAT_BUSY"})),
+        Err(SessionTurnError::Turn(TurnError::Cancelled)) => {
+            return response(409, json!({"error":"CHAT_CANCELLED"}));
+        }
+        Err(_) => return response(503, json!({"error":"CHAT_ADMISSION_UNAVAILABLE"})),
+    };
+    if admitted
+        .validate_user_content(&input.content, prepared.config.max_history_bytes)
+        .is_err()
+    {
+        return response(503, json!({"error":"CHAT_ADMISSION_UNAVAILABLE"}));
+    }
+    // Keep the previous failure visible if preparation or capacity checks fail.
+    state.events.clear_failure(&input.session_id);
     let (sender, receiver) = mpsc::channel(state.limits.channel_capacity);
     // The terminal frame has its own bounded slot, so a full token channel
     // cannot discard completion/error after cancellation.
@@ -531,15 +583,18 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     tokio::spawn(async move {
         let _lease = lease;
         let result = manager
-            .run(SessionTurn {
-                config: prepared.config,
-                provider: &*prepared.provider,
-                tools: &*prepared.tools,
-                store: &store,
-                context: &context,
-                user_content: input.content,
-                sink,
-            })
+            .run_prepared(
+                SessionTurn {
+                    config: prepared.config,
+                    provider: &*prepared.provider,
+                    tools: &*prepared.tools,
+                    store: &store,
+                    context: &context,
+                    user_content: input.content,
+                    sink,
+                },
+                admitted,
+            )
             .await;
         let _serial = serial.lock().await;
         flags.closed.store(true, Ordering::Release);

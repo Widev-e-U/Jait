@@ -4,7 +4,7 @@ use super::{
     chat_store::SqliteTurnStore,
     chat_turn::{
         TurnConfig, TurnCoordinator, TurnError, TurnEvent, TurnOutcome, TurnPersistence,
-        TurnProvider, TurnTools,
+        TurnProvider, TurnTools, validate_turn_history,
     },
 };
 use crate::{
@@ -104,16 +104,20 @@ impl SessionTurnManager {
             notified.await;
         }
     }
-    /// The lease covers storage load, generation, tools and every durable write.
-    /// Dropping the caller retains admission until any dispatched store operation finishes.
-    /// It never retries model tool ids.
-    pub async fn run(&self, mut request: SessionTurn<'_>) -> Result<TurnOutcome, SessionTurnError> {
-        let handle = request.store.owned_handle();
+    /// Acquire the durable-history lease and load history before a caller starts
+    /// streaming. Dropped storage jobs retain the lease until they finish.
+    pub(crate) async fn prepare(
+        &self,
+        config: &TurnConfig,
+        source: &dyn SessionTurnStore,
+        context: &ToolExecutionContext,
+    ) -> Result<PreparedSessionTurn, SessionTurnError> {
+        let handle = source.owned_handle();
         let (owner, session) = handle.identity();
-        if owner != request.context.user_id || session != request.context.session_id {
+        if owner != context.user_id || session != context.session_id {
             return Err(SessionTurnError::ContextMismatch);
         }
-        request.config.validate().map_err(SessionTurnError::Turn)?;
+        config.validate().map_err(SessionTurnError::Turn)?;
         let lease = Arc::new(self.acquire_key(handle.admission_key())?);
         let store = LeasedStore {
             store: handle,
@@ -121,13 +125,49 @@ impl SessionTurnManager {
             serial: Arc::new(tokio::sync::Mutex::new(())),
             failed: Arc::new(AtomicBool::new(false)),
         };
-        let deadline = Instant::now() + request.config.timeout;
+        let deadline = Instant::now() + config.timeout;
+        let events = tokio::select! { biased;
+            _ = context.cancellation.wait_cancelled() => return Err(SessionTurnError::Turn(TurnError::Cancelled)),
+            _ = tokio::time::sleep_until(deadline) => return Err(SessionTurnError::Turn(TurnError::TimedOut)),
+            events = store.load() => events.map_err(SessionTurnError::Storage)?,
+        };
+        let history: Vec<_> = events.iter().map(TurnEvent::to_message).collect();
+        validate_turn_history(&history, config.max_history_bytes)
+            .map_err(SessionTurnError::Turn)?;
+        Ok(PreparedSessionTurn {
+            store,
+            events,
+            deadline,
+        })
+    }
+
+    /// The lease covers storage load, generation, tools and every durable write.
+    pub async fn run(&self, request: SessionTurn<'_>) -> Result<TurnOutcome, SessionTurnError> {
+        let prepared = self
+            .prepare(&request.config, request.store, request.context)
+            .await?;
+        self.run_prepared(request, prepared).await
+    }
+
+    pub(crate) async fn run_prepared(
+        &self,
+        mut request: SessionTurn<'_>,
+        prepared: PreparedSessionTurn,
+    ) -> Result<TurnOutcome, SessionTurnError> {
+        let PreparedSessionTurn {
+            store,
+            events,
+            deadline,
+        } = prepared;
+        let (owner, session) = store.store.identity();
+        if owner != request.context.user_id
+            || session != request.context.session_id
+            || store.store.admission_key() != request.store.admission_key()
+        {
+            return Err(SessionTurnError::ContextMismatch);
+        }
+        request.config.validate().map_err(SessionTurnError::Turn)?;
         let result = async {
-            let events = tokio::select! { biased;
-                _ = request.context.cancellation.wait_cancelled() => return Err(SessionTurnError::Turn(TurnError::Cancelled)),
-                _ = tokio::time::sleep_until(deadline) => return Err(SessionTurnError::Turn(TurnError::TimedOut)),
-                events = store.load() => events.map_err(SessionTurnError::Storage)?,
-            };
             request.config.timeout = deadline
                 .checked_duration_since(Instant::now())
                 .filter(|remaining| !remaining.is_zero())
@@ -146,7 +186,8 @@ impl SessionTurnManager {
             )
             .await
             .map_err(SessionTurnError::Turn)
-        }.await;
+        }
+        .await;
         // A cancelled coordinator can drop a storage future after its SQL was
         // dispatched. Wait for that task's definitive result before finalizing.
         let _drained = store.serial.lock().await;
@@ -181,6 +222,30 @@ impl SessionTurnManager {
         })
     }
 }
+pub(crate) struct PreparedSessionTurn {
+    store: LeasedStore,
+    events: Vec<TurnEvent>,
+    deadline: Instant,
+}
+
+impl PreparedSessionTurn {
+    /// Validate the exact history including the incoming message before response headers.
+    pub(crate) fn validate_user_content(
+        &self,
+        content: &str,
+        max_history_bytes: usize,
+    ) -> Result<(), TurnError> {
+        let mut history: Vec<_> = self.events.iter().map(TurnEvent::to_message).collect();
+        history.push(
+            TurnEvent::User {
+                content: content.to_owned(),
+            }
+            .to_message(),
+        );
+        validate_turn_history(&history, max_history_bytes).map(|_| ())
+    }
+}
+
 // Detached store tasks keep admission until the worker replies, even if the turn
 // times out or its caller is dropped. A stuck database consumes bounded capacity.
 struct LeasedStore {
@@ -365,6 +430,74 @@ mod tests {
             user_content: "hello".into(),
             sink: Arc::new(|_| Box::pin(async { Ok(()) })),
         }
+    }
+    #[tokio::test]
+    async fn prepared_turn_holds_admission_until_dropped_or_finished() {
+        let (auth, store, context) = fixture();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let provider = FinishProvider;
+        let turn = request(&store, &context, &provider);
+        let prepared = manager
+            .prepare(&turn.config, &store, &context)
+            .await
+            .unwrap();
+        assert!(matches!(
+            manager.prepare(&turn.config, &store, &context).await,
+            Err(SessionTurnError::SessionBusy)
+        ));
+        drop(prepared);
+        let prepared = manager
+            .prepare(&turn.config, &store, &context)
+            .await
+            .unwrap();
+        manager.run_prepared(turn, prepared).await.unwrap();
+        let prepared = manager
+            .prepare(
+                &request(&store, &context, &provider).config,
+                &store,
+                &context,
+            )
+            .await
+            .unwrap();
+        drop(prepared);
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn prepared_turn_rejects_oversized_history_and_releases_capacity() {
+        let (auth, store, context) = fixture();
+        store
+            .append(TurnEvent::User {
+                content: "x".repeat(2048),
+            })
+            .await
+            .unwrap();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let mut config = request(&store, &context, &FinishProvider).config;
+        config.max_history_bytes = 1024;
+        assert!(matches!(
+            manager.prepare(&config, &store, &context).await,
+            Err(SessionTurnError::Turn(TurnError::HistoryLimit))
+        ));
+        config.max_history_bytes = 4096;
+        let prepared = manager.prepare(&config, &store, &context).await.unwrap();
+        drop(prepared);
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn prepared_turn_checks_incoming_message_before_streaming() {
+        let (auth, store, context) = fixture();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let config = request(&store, &context, &FinishProvider).config;
+        let prepared = manager.prepare(&config, &store, &context).await.unwrap();
+        assert_eq!(
+            prepared.validate_user_content(&"x".repeat(2048), 1024),
+            Err(TurnError::HistoryLimit)
+        );
+        assert!(store.load().await.unwrap().is_empty());
+        assert!(prepared.validate_user_content("hello", 1024).is_ok());
+        drop(prepared);
+        assert!(manager.prepare(&config, &store, &context).await.is_ok());
+        auth.shutdown().await.unwrap();
     }
     #[tokio::test]
     async fn shared_manager_rejects_concurrent_same_session_and_releases_after_abort() {
