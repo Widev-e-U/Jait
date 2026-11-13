@@ -238,7 +238,46 @@ fn composed_terminal_routes(auth: AuthState, project_root: &std::path::Path) -> 
     routes
 }
 
-// Filesystem browsing is gateway-local; remote nodes register through the WS hub later.
+// Until the WebSocket node protocol is implemented, advertise the local gateway
+// and reject remote requests instead of silently browsing the gateway filesystem.
+#[derive(Default)]
+struct GatewayFilesystemNodes(std::sync::Mutex<Option<serde_json::Value>>);
+impl crate::routes::filesystem::FilesystemNodes for GatewayFilesystemNodes {
+    fn register_gateway(&self, node: serde_json::Value) {
+        *self.0.lock().expect("filesystem nodes") = Some(node);
+    }
+    fn nodes(&self) -> serde_json::Value {
+        serde_json::Value::Array(
+            self.0
+                .lock()
+                .expect("filesystem nodes")
+                .iter()
+                .cloned()
+                .collect(),
+        )
+    }
+    fn roots<'a>(
+        &'a self,
+        _node: serde_json::Value,
+    ) -> crate::routes::filesystem::BrowseFuture<'a> {
+        Box::pin(async {
+            Err(crate::routes::filesystem::BrowseError::Message(
+                "Remote filesystem node is unavailable".into(),
+            ))
+        })
+    }
+    fn browse<'a>(
+        &'a self,
+        _node: serde_json::Value,
+        _path: serde_json::Value,
+    ) -> crate::routes::filesystem::BrowseFuture<'a> {
+        Box::pin(async {
+            Err(crate::routes::filesystem::BrowseError::Message(
+                "Remote filesystem node is unavailable".into(),
+            ))
+        })
+    }
+}
 fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -> FilesystemRoutes {
     let mut buffer = [0u8; 256];
     // SAFETY: the buffer is valid for its length and gethostname NUL-terminates within it.
@@ -262,7 +301,12 @@ fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -
         .to_owned(),
         drives: Arc::new(|| Err("drive discovery is unavailable".to_owned())),
     };
-    FilesystemRoutes::new(auth, environment, None, String::new())
+    FilesystemRoutes::new(
+        auth,
+        environment,
+        Some(Arc::new(GatewayFilesystemNodes::default())),
+        chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+    )
 }
 
 pub struct Application {
@@ -1250,6 +1294,35 @@ mod ownership_tests {
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
         let body: serde_json::Value = response.json().await.unwrap();
         assert_eq!(body["error"], "NO_PROJECT");
+        // The gateway is discoverable and unavailable remote nodes never fall back to local I/O.
+        let nodes = client
+            .get(format!("http://{address}/api/filesystem/nodes"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        let nodes: serde_json::Value = nodes.json().await.unwrap();
+        assert_eq!(nodes["nodes"][0]["id"], "gateway");
+        assert_eq!(nodes["nodes"][0]["isGateway"], true);
+        assert!(
+            nodes["nodes"][0]["registeredAt"]
+                .as_str()
+                .unwrap()
+                .ends_with('Z')
+        );
+        for endpoint in ["roots", "browse"] {
+            let remote = client
+                .get(format!(
+                    "http://{address}/api/filesystem/{endpoint}?nodeId=missing"
+                ))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(remote.status(), reqwest::StatusCode::BAD_GATEWAY);
+            let body: serde_json::Value = remote.json().await.unwrap();
+            assert_eq!(body["error"], "NODE_BROWSE_FAILED");
+        }
         // Exercise local filesystem browsing through the composed HTTP server.
         let browse = format!("http://{address}/api/filesystem/browse");
         assert_eq!(
