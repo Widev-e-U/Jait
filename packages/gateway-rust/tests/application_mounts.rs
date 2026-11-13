@@ -1897,6 +1897,36 @@ async fn trust_levels_are_authenticated_and_listed() {
 }
 
 #[tokio::test]
+async fn architecture_router_requires_auth_and_validates_project_root() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::new();
+    let url = format!("{base}/api/architecture");
+    let anonymous = client.get(&url).send().await.unwrap();
+    assert_eq!(anonymous.status(), 401);
+
+    let token = token(&client, &base).await;
+    let missing = client.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(missing.status(), 400);
+    let body: serde_json::Value = missing.json().await.unwrap();
+    assert_eq!(body["error"], "projectRoot is required");
+
+    let missing_diagram = client
+        .put(&url)
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"projectRoot": dir.to_string_lossy()}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing_diagram.status(), 400);
+    let body: serde_json::Value = missing_diagram.json().await.unwrap();
+    assert_eq!(body["error"], "diagram is required");
+    assert!(!dir.join(".jait/architecture.mmd").exists());
+    drop(stop);
+    let _ = task.await;
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn read_routes_require_login_and_answer_for_the_caller() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
