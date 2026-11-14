@@ -6,8 +6,12 @@
     "missing": 20,
     "nativeRouteReferencePct": 72,
     "nativeTestedPct": null,
-    "wsTotal": 35,
-    "wsMissing": 27,
+    "wsTotal": 72,
+    "wsInbound": 37,
+    "wsOutboundCandidates": 35,
+    "wsWithoutDirectionalRustReference": 63,
+    "clientPathCandidates": 255,
+    "clientCandidatesWithoutServerPathReference": 31,
     "rustOnlyRoutes": 13
   },
   "http": [
@@ -1651,7 +1655,7 @@
       ],
       "status": "native-untested",
       "testPathReference": true,
-      "rustFile": "runtime/application.rs"
+      "rustFile": "routes/chat.rs"
     },
     {
       "method": "GET",
@@ -4274,144 +4278,2208 @@
   ],
   "ws": [
     {
-      "type": "agent.halted",
-      "status": "missing"
+      "type": "architecture.render-result",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "browser.updated",
-      "status": "missing"
+      "type": "authenticate",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "consent.pending-snapshot",
-      "status": "missing"
+      "type": "consent.approve",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "error",
-      "status": "native-untested"
+      "type": "consent.reject",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "fs.browse-request",
-      "status": "native-untested"
+      "type": "fs.browse-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "fs.node-disconnected",
-      "status": "missing"
+      "type": "fs.op-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "fs.node-registered",
-      "status": "missing"
+      "type": "fs.register-node",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "fs.op-request",
-      "status": "native-untested"
+      "type": "fs.roots-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "fs.roots-request",
-      "status": "native-untested"
+      "type": "messenger.register",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "messenger.request",
-      "status": "missing"
+      "type": "messenger.result",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "node.credential",
-      "status": "missing"
+      "type": "node.hello",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "node.disconnected",
-      "status": "missing"
+      "type": "nodes.forget",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "node.registry",
-      "status": "missing"
+      "type": "nodes.get",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "node.updated",
-      "status": "missing"
+      "type": "nodes.list",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "nodes.permissions",
-      "status": "missing"
+      "type": "nodes.update-permissions",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "notification",
-      "status": "native-untested"
+      "type": "notification.read",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "notification.cleared",
-      "status": "missing"
+      "type": "provider.event",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "notification.snapshot",
-      "status": "missing"
+      "type": "provider.op-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "provider.op-request",
-      "status": "missing"
+      "type": "resource.subscribe",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "screen-share:control-handoff",
-      "status": "missing"
+      "type": "resource.unsubscribe",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "screen-share:start-error",
-      "status": "missing"
+      "type": "screen-share:answer",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:ice-candidate",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:offer",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
       "type": "screen-share:start-request",
-      "status": "missing"
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "screen-share:state-update",
-      "status": "missing"
+      "type": "screen-share:stop-request",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "session-wait.snapshot",
-      "status": "missing"
+      "type": "subscribe",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "session.created",
-      "status": "missing"
+      "type": "terminal.exit",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
-      "type": "session.streaming-snapshot",
-      "status": "missing"
+      "type": "terminal.input",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
     },
     {
-      "type": "surface.connected",
-      "status": "missing"
-    },
-    {
-      "type": "surface.registry",
-      "status": "missing"
-    },
-    {
-      "type": "terminal.execution",
-      "status": "missing"
-    },
-    {
-      "type": "terminal.op-request",
-      "status": "native-untested"
+      "type": "terminal.op-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
     },
     {
       "type": "terminal.output",
-      "status": "native-untested"
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "terminal.resize",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
+    },
+    {
+      "type": "terminal.subscribe",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
+    },
+    {
+      "type": "terminal.unsubscribe",
+      "direction": "client-to-server-candidate",
+      "rustReference": true
+    },
+    {
+      "type": "tool.background-complete",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "tool.op-output",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "tool.op-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "ui.state",
+      "direction": "client-to-server-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "agent.halted",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "browser.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "consent.pending-snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "error",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "fs.browse-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "fs.node-disconnected",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "fs.node-registered",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "fs.op-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "fs.roots-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "messenger.request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "node.credential",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "node.disconnected",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "node.registry",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "node.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "nodes.permissions",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "notification",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "notification.cleared",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "notification.snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "provider.op-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:control-handoff",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:start-error",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:start-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "screen-share:state-update",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "session-wait.snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "session.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "session.streaming-snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "surface.connected",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "surface.registry",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "terminal.execution",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "terminal.op-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    },
+    {
+      "type": "terminal.output",
+      "direction": "server-to-client-candidate",
+      "rustReference": false
     },
     {
       "type": "thread.updated",
-      "status": "missing"
+      "direction": "server-to-client-candidate",
+      "rustReference": false
     },
     {
       "type": "tool.op-request",
-      "status": "native-untested"
+      "direction": "server-to-client-candidate",
+      "rustReference": false
     },
     {
       "type": "ui.command",
-      "status": "missing"
+      "direction": "server-to-client-candidate",
+      "rustReference": false
     },
     {
       "type": "user-question.pending-snapshot",
-      "status": "missing"
+      "direction": "server-to-client-candidate",
+      "rustReference": false
+    }
+  ],
+  "clientCandidates": [
+    {
+      "path": "/api/{}/{}/runtime",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/{}/{}/state",
+      "files": [
+        "apps/web/src/hooks/useBackendState.ts",
+        "apps/web/src/lib/state-batch.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/agent-control",
+      "files": [
+        "apps/web/src/lib/agent-control-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/agent-control/halt",
+      "files": [
+        "apps/web/src/lib/agent-control-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/agent-control/resume",
+      "files": [
+        "apps/web/src/lib/agent-control-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/agents/{}/github-app{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/architecture",
+      "files": [
+        "apps/web/src/App.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/invitations",
+      "files": [
+        "apps/web/src/components/settings/AccountInvitations.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/login",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/logout",
+      "files": [
+        "apps/web/src/lib/auth-token.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/me",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/refresh",
+      "files": [
+        "apps/web/src/lib/auth-token.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/register",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/session/bind",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/settings",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/settings/archive",
+      "files": [
+        "apps/web/src/hooks/useAuth.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/settings/env-status",
+      "files": [
+        "apps/web/src/components/settings/SettingsPage.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/auth/settings/tools",
+      "files": [
+        "apps/web/src/components/manager/agents-page.tsx",
+        "apps/web/src/components/settings/ToolSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/browser/screenshot",
+      "files": [
+        "apps/web/src/components/chat/tool-call-card.tsx",
+        "apps/web/src/hooks/useGatewayImage.ts",
+        "apps/web/src/lib/chat-image-url.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/accounts",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/accounts/{}",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/calendars",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/config",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/config/google",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/connect/google",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/device/sync",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/calendar/events",
+      "files": [
+        "apps/web/src/lib/calendar-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/config",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/pair",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/setup",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/start",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/status",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/channels/{}/stop",
+      "files": [
+        "apps/web/src/components/settings/ChannelSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/chat",
+      "files": [
+        "apps/web/src/hooks/useChat.ts",
+        "apps/web/src/lib/message-stream.ts",
+        "apps/web/src/repro/use-chat-resume-repro.tsx",
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/chat:",
+      "files": [
+        "apps/web/src/lib/chat-prewarm.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/chat.",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/chat/prewarm",
+      "files": [
+        "apps/web/src/lib/chat-prewarm.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/code-graph",
+      "files": [
+        "apps/web/src/components/project/code-graph-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/code-graph/graphrag/prepare",
+      "files": [
+        "apps/web/src/components/project/code-graph-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/code-graph/index",
+      "files": [
+        "apps/web/src/components/project/code-graph-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/code-graph/query",
+      "files": [
+        "apps/web/src/components/project/code-graph-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/code-graph/snapshot",
+      "files": [
+        "apps/web/src/components/project/code-graph-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/consent/{}/{}",
+      "files": [
+        "apps/web/src/components/consent/action-card.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/consent/pending",
+      "files": [
+        "apps/web/src/components/consent/action-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/consent/pending/{}",
+      "files": [
+        "apps/web/src/components/consent/action-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/consent/pending/{}/approve-all",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/consent/action-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/consent/policy",
+      "files": [
+        "apps/web/src/components/consent/action-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/dev-file",
+      "files": [
+        "apps/web/src/lib/version-watchdog.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/dev-file/{}",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/dev-proxy",
+      "files": [
+        "apps/web/src/lib/chat-image-url.ts",
+        "apps/web/src/lib/version-watchdog.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/dev-proxy/{}",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/dev-proxy/{}{}",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/email/accounts",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/accounts/{}",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/config",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/config/{}",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/connect/{}",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/discover",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/folders",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/images",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/messages",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/messages/{}",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/messages/{}/delete",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/messages/{}/tag",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/oauth/callback",
+      "files": [
+        "apps/web/src/components/settings/EmailSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/email/send",
+      "files": [
+        "apps/web/src/lib/email-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/filesystem/browse",
+      "files": [
+        "apps/web/src/components/project/folder-picker-dialog.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/filesystem/nodes",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/project/folder-picker-dialog.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/filesystem/roots",
+      "files": [
+        "apps/web/src/components/project/folder-picker-dialog.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/git",
+      "files": [
+        "apps/web/src/lib/git-transport.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/git/{}",
+      "files": [
+        "apps/web/src/lib/git-transport.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/github-apps",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jait-todos/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jobs",
+      "files": [
+        "apps/web/src/lib/jobs-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jobs/{}",
+      "files": [
+        "apps/web/src/lib/jobs-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jobs/{}/runs",
+      "files": [
+        "apps/web/src/lib/jobs-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jobs/{}/trigger",
+      "files": [
+        "apps/web/src/lib/jobs-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/jobs/providers/available",
+      "files": [
+        "apps/web/src/lib/jobs-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/messenger",
+      "files": [
+        "apps/web/src/lib/messenger/gateway-store.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/messenger/bridge-accounts/teams",
+      "files": [
+        "apps/web/src/components/messenger/teams-connection-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/messenger/bridge-reauth/teams",
+      "files": [
+        "apps/web/src/components/messenger/teams-connection-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/messenger/bridge-status",
+      "files": [
+        "apps/web/src/components/messenger/messenger-services-bar.tsx",
+        "apps/web/src/components/messenger/teams-connection-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/messenger/presence",
+      "files": [
+        "apps/web/src/components/messenger/messenger-services-bar.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/mobile-update/check",
+      "files": [
+        "apps/web/src/hooks/useUpdateChecker.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/mobile/devices/register",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/deploy",
+      "files": [
+        "apps/web/src/components/network/network-panel.tsx",
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/interfaces",
+      "files": [
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/nodes",
+      "files": [
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/scan",
+      "files": [
+        "apps/web/src/components/network/network-panel.tsx",
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/scan/latest",
+      "files": [
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/ssh/enable",
+      "files": [
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/ssh/test",
+      "files": [
+        "apps/web/src/hooks/useNetwork.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/network/topology",
+      "files": [
+        "apps/web/src/components/network/network-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/persona-agents",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/persona-agents/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plans/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plans/{}/generate",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plans/{}/start",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plans/{}/tasks/{}/start",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plugins",
+      "files": [
+        "apps/web/src/components/settings/ExtensionSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plugins/{}",
+      "files": [
+        "apps/web/src/components/settings/ExtensionSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/plugins/{}/{}",
+      "files": [
+        "apps/web/src/components/settings/ExtensionSettings.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/plugins/scan",
+      "files": [
+        "apps/web/src/components/settings/ExtensionSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/{}",
+      "files": [
+        "apps/web/src/components/chat/chat-browser-view.tsx",
+        "apps/web/src/components/remote/browser-address-bar.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/preview/access",
+      "files": [
+        "apps/web/src/hooks/use-preview-access.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/devtools",
+      "files": [
+        "apps/web/src/components/remote/browser-tools-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/devtools/{}",
+      "files": [
+        "apps/web/src/components/remote/browser-tools-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/history",
+      "files": [
+        "apps/web/src/components/remote/browser-address-bar.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/inspect/{}{}",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/preview/restart",
+      "files": [
+        "apps/web/src/components/chat/chat-browser-view.tsx",
+        "apps/web/src/components/chat/dev-preview-panel.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/screenshot/{}",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/session/{}",
+      "files": [
+        "apps/web/src/components/chat/chat-browser-view.tsx",
+        "apps/web/src/components/chat/dev-preview-panel.tsx",
+        "apps/web/src/components/project/project-panel.tsx",
+        "apps/web/src/components/remote/browser-address-bar.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/share",
+      "files": [
+        "apps/web/src/components/chat/chat-browser-view.tsx",
+        "apps/web/src/components/chat/dev-preview-panel.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/start",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/preview/stop",
+      "files": [
+        "apps/web/src/components/chat/dev-preview-panel.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/project/{}",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/project/apply-diff",
+      "files": [
+        "apps/web/src/hooks/useChat.ts",
+        "apps/web/src/hooks/useProjectFileActions.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/backup",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx",
+        "apps/web/src/hooks/useProjectFileActions.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/delete",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/download",
+      "files": [
+        "apps/web/src/components/ui/file-download-link.tsx",
+        "apps/web/src/e2e-fixtures/message-links.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/list",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/move",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/open",
+      "files": [
+        "apps/web/src/App.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/read",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx",
+        "apps/web/src/hooks/useProjectFileActions.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/rename",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/reveal",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/search",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx",
+        "apps/web/src/hooks/useProjectFileActions.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/stat",
+      "files": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/undo",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/undo-all",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/project/write",
+      "files": [
+        "apps/web/src/components/project/detached-tab-view.tsx",
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects",
+      "files": [
+        "apps/web/src/e2e-fixtures/project-selection-refresh.tsx",
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}/move",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}/repository",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}/restore",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}/sessions",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/{}/subtree",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/archived",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/last-active",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/search",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/projects/select",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-accounts",
+      "files": [
+        "apps/web/src/components/settings/UsageSettings.tsx",
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-accounts/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-accounts/{}/opencode-go",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-usage",
+      "files": [
+        "apps/web/src/components/settings/UsageSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-usage/ollama/api-key",
+      "files": [
+        "apps/web/src/components/app-shell/ollama-usage-setup.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-usage/ollama/session",
+      "files": [
+        "apps/web/src/components/app-shell/ollama-usage-setup.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/provider-usage/summary",
+      "files": [
+        "apps/web/src/lib/usage-summary-store.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers",
+      "files": [
+        "apps/web/src/hooks/useProviders.ts",
+        "apps/web/src/lib/provider-store.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/providers/{}/auth/login",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/{}/auth/login/input",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/{}/auth/logout",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/{}/auth/status",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/{}/models{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/providers/{}/update",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/backend/test",
+      "files": [
+        "apps/web/src/components/settings/SettingsPage.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/models/reset",
+      "files": [
+        "apps/web/src/components/settings/SettingsPage.tsx",
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/providers/omniroute/test",
+      "files": [
+        "apps/web/src/components/settings/SettingsPage.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/reminders",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/reminders{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/reminders/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/reminders/export.md{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/repos",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}/plans",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}/pull-requests{}",
+      "files": [
+        "apps/web/src/lib/pull-requests-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/repos/{}/strategy",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}/strategy/generate",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}/todos",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/repos/{}/todos/generate",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/{}",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/screen-share/approve",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/chat/{}",
+      "files": [
+        "apps/web/src/components/chat/chat-screen-share-view.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/control/{}",
+      "files": [
+        "apps/web/src/hooks/useScreenShareControl.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/devices/register",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/handoff",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/leave",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/start",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/state",
+      "files": [
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/screen-share/stop",
+      "files": [
+        "apps/web/src/components/chat/chat-screen-share-view.tsx",
+        "apps/web/src/hooks/useScreenShare.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/secrets",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/secrets{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/secrets/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/secrets/requests",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/secrets/requests/{}/cancel",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/secrets/requests/{}/submit",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/assessments",
+      "files": [
+        "apps/web/src/components/network/service-checks.tsx",
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/checks",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/comparisons",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/engines",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/findings",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/security/monitors",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/scopes",
+      "files": [
+        "apps/web/src/components/network/service-checks.tsx",
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/security/workbench",
+      "files": [
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions",
+      "files": [
+        "apps/web/src/components/manager/agents-page.tsx",
+        "apps/web/src/e2e-fixtures/project-selection-refresh.tsx",
+        "apps/web/src/hooks/useProjects.ts",
+        "apps/web/src/repro/use-chat-resume-repro.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/chat/prompt-input.tsx",
+        "apps/web/src/hooks/usePersonalChatNode.ts",
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/approve",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/archive",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/cancel",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/hooks/useChat.ts",
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/events",
+      "files": [
+        "apps/web/src/hooks/useChat.ts",
+        "apps/web/src/lib/session-event-subscription.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/fork",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/generate-title",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/loop",
+      "files": [
+        "apps/web/src/components/chat/loop-goal-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/messages",
+      "files": [
+        "apps/web/src/hooks/useChat.ts",
+        "packages/api-client/src/client.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/messages/{}/context-flow",
+      "files": [
+        "apps/web/src/lib/context-flow-cache.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/move",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/plan/execute",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/plan/reject",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/restart-from",
+      "files": [
+        "apps/web/src/hooks/useChat.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/runtime",
+      "files": [
+        "apps/web/src/lib/agent-activity-chip.ts",
+        "apps/web/src/lib/agent-activity-source.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/steer",
+      "files": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/app-shell/parallel-chat-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/sub-agents/{}",
+      "files": [
+        "apps/web/src/components/chat/tool-call-card.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/trajectory",
+      "files": [
+        "apps/web/src/components/debug/use-session-trajectory.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/{}/viewed",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/sessions/completion-repro/events",
+      "files": [
+        "apps/web/src/repro/chat-completion-repro.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/sessions/completion-repro/messages",
+      "files": [
+        "apps/web/src/repro/chat-completion-repro.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/sessions/latency-repro-session/events",
+      "files": [
+        "apps/web/src/repro/chat-stream-latency-repro.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/sessions/latency-repro-session/messages",
+      "files": [
+        "apps/web/src/repro/chat-stream-latency-repro.tsx"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/skills",
+      "files": [
+        "apps/web/src/components/automation/ThreadSkillPicker.tsx",
+        "apps/web/src/components/settings/SkillSettings.tsx",
+        "apps/web/src/hooks/useSkills.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/skills/{}",
+      "files": [
+        "apps/web/src/components/settings/SkillSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/skills/{}/install-tool",
+      "files": [
+        "apps/web/src/components/settings/SkillSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/store/packages",
+      "files": [
+        "apps/web/src/components/settings/ExtensionSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/store/skills",
+      "files": [
+        "apps/web/src/components/settings/SkillSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/store/skills/{}/install",
+      "files": [
+        "apps/web/src/components/settings/SkillSettings.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/team-rooms",
+      "files": [
+        "apps/web/src/lib/team-chat-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/terminals",
+      "files": [
+        "apps/web/src/components/chat/tool-call-card.tsx",
+        "apps/web/src/components/terminal/terminal-view.tsx",
+        "apps/web/src/lib/terminal-snapshot.ts",
+        "apps/web/src/lib/tool-terminal-live.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/terminals/{}",
+      "files": [
+        "apps/web/src/components/terminal/terminal-view.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/terminals/{}/resize",
+      "files": [
+        "apps/web/src/components/terminal/terminal-view.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/terminals/shells",
+      "files": [
+        "apps/web/src/components/terminal/terminal-view.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/threads/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/activities{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": false
+    },
+    {
+      "path": "/api/threads/{}/approve",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/create-pr",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/interrupt",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/resume",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/runtime",
+      "files": [
+        "apps/web/src/lib/agent-activity-chip.ts",
+        "apps/web/src/lib/agent-activity-source.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/send",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/start",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/steer",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/threads/{}/stop",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/tools",
+      "files": [
+        "apps/web/src/components/app-shell/catalogue-graph.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/update/apply",
+      "files": [
+        "apps/web/src/hooks/useUpdateChecker.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/update/changelog",
+      "files": [
+        "apps/web/src/hooks/useUpdateChecker.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/update/check",
+      "files": [
+        "apps/web/src/hooks/useUpdateChecker.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/user-questions/requests",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/user-questions/requests/{}/cancel",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/user-questions/requests/{}/submit",
+      "files": [
+        "apps/web/src/components/prompts/input-prompts.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/voice/transcribe-audio",
+      "files": [
+        "apps/web/src/hooks/useVoiceRecording.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/voice/wake-candidate",
+      "files": [
+        "apps/web/src/hooks/useWakeWord.ts"
+      ],
+      "serverPathReference": true
     }
   ],
   "rustOnly": [

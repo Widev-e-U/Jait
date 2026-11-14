@@ -16,4 +16,9 @@ test('inventory does not turn path references into tested parity claims', () => 
   assert.ok(inventory.http.every((route) => route.status !== 'native-tested'));
   assert.ok(inventory.http.some((route) => route.status === 'mounted-fail-closed'));
   assert.ok(inventory.http.some((route) => route.status === 'missing'));
+  const chatCandidate = inventory.clientCandidates.find((candidate) => candidate.path === '/api/chat');
+  assert.ok(chatCandidate?.serverPathReference);
+  assert.ok(chatCandidate.files.includes('packages/api-client/src/client.ts'));
+  assert.ok(inventory.clientCandidates.some((candidate) => !candidate.serverPathReference));
+  assert.ok(inventory.clientCandidates.every((candidate) => !('status' in candidate)));
 });

@@ -4,6 +4,8 @@
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { websocketCandidates } from './ws-inventory.mjs';
+import { clientPathCandidates, normalizeClientPath } from './client-inventory.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgs = join(here, '..', '..');
@@ -149,16 +151,12 @@ function isTested(path) {
   return testedCache.get(staticPrefix);
 }
 
-// --- WS message types ---
-const wsTypes = new Set();
-for (const f of walk(nodeSrc, ['.ts']).filter((x) => /(^|\/)ws[^/]*\.ts$|ws\//.test(x))) {
-  for (const m of readFileSync(f, 'utf8').matchAll(/type:\s*["'`]([a-z][\w.:-]*)["'`]/g)) wsTypes.add(m[1]);
-}
-const rustWs = new Set();
-for (const f of walk(rustSrc, ['.rs'])) {
-  const t = readFileSync(f, 'utf8');
-  for (const m of t.matchAll(/"type"\s*:\s*"([a-z][\w.:-]*)"|"([a-z][\w.:-]*)"\s*=>/g)) rustWs.add(m[1] ?? m[2]);
-}
+// --- WS message candidates in the gateway hubs. This lexical scan is incomplete;
+// in particular, events emitted outside ws.ts and dynamically named types are absent.
+const wsEntries = websocketCandidates(
+  readFileSync(join(nodeSrc, 'ws.ts'), 'utf8'),
+  readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
+);
 
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
@@ -177,19 +175,43 @@ const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b))
     rustFile: native ? rustFile.get(key) : undefined,
   };
 });
+// Client-side lexical references complement the server scan. They include comments and
+// partial expressions, do not identify HTTP methods, and require manual review.
+const repo = join(pkgs, '..');
+const clientPaths = new Map();
+for (const root of ['apps/web/src', 'apps/desktop/src', 'apps/desktop/src-tauri/src', 'packages/cli/src', 'packages/api-client/src']) {
+  const directory = join(repo, root);
+  if (!existsSync(directory)) continue;
+  for (const file of walk(directory, ['.ts', '.tsx', '.rs'])) {
+    if (/\.(test|spec)\.[^.]+$/.test(file)) continue;
+    for (const path of clientPathCandidates(readFileSync(file, 'utf8'))) {
+      const key = normalizeClientPath(path);
+      if (!clientPaths.has(key)) clientPaths.set(key, new Set());
+      clientPaths.get(key).add(relative(repo, file));
+    }
+  }
+}
+const serverPaths = new Set(entries.map((entry) => normalizeClientPath(entry.path)));
+const clientCandidates = [...clientPaths.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([path, files]) => ({
+  path, files: [...files].sort(), serverPathReference: serverPaths.has(path),
+}));
 const extraRust = [...rustRoutes].filter((k) => !nodeRoutes.has(k)).sort();
 const counts = entries.reduce((a, e) => ((a[e.status] = (a[e.status] ?? 0) + 1), a), {});
-const wsEntries = [...wsTypes].sort().map((t) => ({ type: t, status: rustWs.has(t) ? 'native-untested' : 'missing' }));
+
 const summary = {
   httpTotal: entries.length,
   ...counts,
   nativeRouteReferencePct: +(((counts['native-untested'] ?? 0) / entries.length) * 100).toFixed(1),
   nativeTestedPct: null,
   wsTotal: wsEntries.length,
-  wsMissing: wsEntries.filter((w) => w.status === 'missing').length,
+  wsInbound: wsEntries.filter((w) => w.direction === 'client-to-server-candidate').length,
+  wsOutboundCandidates: wsEntries.filter((w) => w.direction === 'server-to-client-candidate').length,
+  wsWithoutDirectionalRustReference: wsEntries.filter((w) => !w.rustReference).length,
+  clientPathCandidates: clientCandidates.length,
+  clientCandidatesWithoutServerPathReference: clientCandidates.filter((candidate) => !candidate.serverPathReference).length,
   rustOnlyRoutes: extraRust.length,
 };
-const result = { summary, http: entries, ws: wsEntries, rustOnly: extraRust };
+const result = { summary, http: entries, ws: wsEntries, clientCandidates, rustOnly: extraRust };
 console.log(JSON.stringify(summary, null, 2));
 
 if (process.argv.includes('--write')) {
@@ -209,9 +231,17 @@ if (process.argv.includes('--write')) {
     '|---|---|---|---|',
     ...entries.map((e) => `| ${e.method} | \`${e.path}\` | ${e.status} | ${e.nodeFiles.join(', ')} |`),
     '',
-    '## WS message types (heuristic)',
+    '## Client path candidates (heuristic)',
     '',
-    ...wsEntries.map((w) => `- \`${w.type}\`: ${w.status}`),
+    'Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. A matching server path does not identify a method or establish parity. Dynamic constructions may be omitted.',
+    '',
+    ...clientCandidates.map((candidate) => `- \`${candidate.path}\` — ${candidate.serverPathReference ? 'server path reference' : 'no server path reference'} — ${candidate.files.join(', ')}`),
+    '',
+    '## WS message candidates (heuristic)',
+    '',
+    'Client-to-server candidates come from all case arms in the Node hub; server-to-client candidates come from literal type properties there. Both can include unrelated switches or objects, and events emitted elsewhere or dynamic types are omitted. A directional Rust reference is only a lexical match in the Rust hub; it does not establish mounting, behavior, coverage, or parity.',
+    '',
+    ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.rustReference ? 'Rust reference' : 'no Rust reference'}`),
     '',
   ].join('\n');
   writeFileSync(join(out, 'api-inventory.md'), md);

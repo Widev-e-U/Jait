@@ -10,8 +10,12 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
   "missing": 20,
   "nativeRouteReferencePct": 72,
   "nativeTestedPct": null,
-  "wsTotal": 35,
-  "wsMissing": 27,
+  "wsTotal": 72,
+  "wsInbound": 37,
+  "wsOutboundCandidates": 35,
+  "wsWithoutDirectionalRustReference": 63,
+  "clientPathCandidates": 255,
+  "clientCandidatesWithoutServerPathReference": 31,
   "rustOnlyRoutes": 13
 }
 ```
@@ -447,40 +451,339 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
 | PUT | `/api/persona-agents/:id` | native-untested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-untested | routes/repositories.ts |
 
-## WS message types (heuristic)
+## Client path candidates (heuristic)
 
-- `agent.halted`: missing
-- `browser.updated`: missing
-- `consent.pending-snapshot`: missing
-- `error`: native-untested
-- `fs.browse-request`: native-untested
-- `fs.node-disconnected`: missing
-- `fs.node-registered`: missing
-- `fs.op-request`: native-untested
-- `fs.roots-request`: native-untested
-- `messenger.request`: missing
-- `node.credential`: missing
-- `node.disconnected`: missing
-- `node.registry`: missing
-- `node.updated`: missing
-- `nodes.permissions`: missing
-- `notification`: native-untested
-- `notification.cleared`: missing
-- `notification.snapshot`: missing
-- `provider.op-request`: missing
-- `screen-share:control-handoff`: missing
-- `screen-share:start-error`: missing
-- `screen-share:start-request`: missing
-- `screen-share:state-update`: missing
-- `session-wait.snapshot`: missing
-- `session.created`: missing
-- `session.streaming-snapshot`: missing
-- `surface.connected`: missing
-- `surface.registry`: missing
-- `terminal.execution`: missing
-- `terminal.op-request`: native-untested
-- `terminal.output`: native-untested
-- `thread.updated`: missing
-- `tool.op-request`: native-untested
-- `ui.command`: missing
-- `user-question.pending-snapshot`: missing
+Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. A matching server path does not identify a method or establish parity. Dynamic constructions may be omitted.
+
+- `/api/{}/{}/runtime` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/{}/{}/state` — no server path reference — apps/web/src/hooks/useBackendState.ts, apps/web/src/lib/state-batch.ts
+- `/api/agent-control` — server path reference — apps/web/src/lib/agent-control-api.ts
+- `/api/agent-control/halt` — server path reference — apps/web/src/lib/agent-control-api.ts
+- `/api/agent-control/resume` — server path reference — apps/web/src/lib/agent-control-api.ts
+- `/api/agents/{}/github-app{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/architecture` — server path reference — apps/web/src/App.tsx
+- `/api/auth/invitations` — server path reference — apps/web/src/components/settings/AccountInvitations.tsx
+- `/api/auth/login` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/logout` — server path reference — apps/web/src/lib/auth-token.ts
+- `/api/auth/me` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/refresh` — server path reference — apps/web/src/lib/auth-token.ts
+- `/api/auth/register` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/session/bind` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings/archive` — server path reference — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings/env-status` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/auth/settings/tools` — server path reference — apps/web/src/components/manager/agents-page.tsx, apps/web/src/components/settings/ToolSettings.tsx
+- `/api/browser/screenshot` — server path reference — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/hooks/useGatewayImage.ts, apps/web/src/lib/chat-image-url.ts
+- `/api/calendar/accounts` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/accounts/{}` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/calendars` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/config` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/config/google` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/connect/google` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/device/sync` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/events` — server path reference — apps/web/src/lib/calendar-api.ts
+- `/api/channels` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/config` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/pair` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/setup` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/start` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/status` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/stop` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/chat` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/lib/message-stream.ts, apps/web/src/repro/use-chat-resume-repro.tsx, packages/api-client/src/client.ts
+- `/api/chat:` — no server path reference — apps/web/src/lib/chat-prewarm.ts
+- `/api/chat.` — no server path reference — apps/web/src/hooks/useChat.ts
+- `/api/chat/prewarm` — server path reference — apps/web/src/lib/chat-prewarm.ts
+- `/api/code-graph` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/graphrag/prepare` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/index` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/query` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/snapshot` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/consent/{}/{}` — no server path reference — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending` — server path reference — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending/{}` — server path reference — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending/{}/approve-all` — server path reference — apps/web/src/App.tsx, apps/web/src/components/consent/action-card.tsx
+- `/api/consent/policy` — server path reference — apps/web/src/components/consent/action-card.tsx
+- `/api/dev-file` — no server path reference — apps/web/src/lib/version-watchdog.ts
+- `/api/dev-file/{}` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/dev-proxy` — no server path reference — apps/web/src/lib/chat-image-url.ts, apps/web/src/lib/version-watchdog.ts
+- `/api/dev-proxy/{}` — no server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/dev-proxy/{}{}` — no server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/email/accounts` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/accounts/{}` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/config` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/config/{}` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/connect/{}` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/discover` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/folders` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/images` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/messages` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}/delete` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}/tag` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/email/oauth/callback` — server path reference — apps/web/src/components/settings/EmailSettings.tsx
+- `/api/email/send` — server path reference — apps/web/src/lib/email-api.ts
+- `/api/filesystem/browse` — server path reference — apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/filesystem/nodes` — server path reference — apps/web/src/App.tsx, apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/filesystem/roots` — server path reference — apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/git` — no server path reference — apps/web/src/lib/git-transport.ts
+- `/api/git/{}` — no server path reference — apps/web/src/lib/git-transport.ts
+- `/api/github-apps` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/jait-todos/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/jobs` — server path reference — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}` — server path reference — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}/runs` — server path reference — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}/trigger` — server path reference — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/providers/available` — server path reference — apps/web/src/lib/jobs-api.ts
+- `/api/messenger` — server path reference — apps/web/src/lib/messenger/gateway-store.ts
+- `/api/messenger/bridge-accounts/teams` — server path reference — apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/bridge-reauth/teams` — server path reference — apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/bridge-status` — server path reference — apps/web/src/components/messenger/messenger-services-bar.tsx, apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/presence` — server path reference — apps/web/src/components/messenger/messenger-services-bar.tsx
+- `/api/mobile-update/check` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/mobile/devices/register` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/network/deploy` — server path reference — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
+- `/api/network/interfaces` — server path reference — apps/web/src/hooks/useNetwork.ts
+- `/api/network/nodes` — server path reference — apps/web/src/hooks/useNetwork.ts
+- `/api/network/scan` — server path reference — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
+- `/api/network/scan/latest` — server path reference — apps/web/src/hooks/useNetwork.ts
+- `/api/network/ssh/enable` — server path reference — apps/web/src/hooks/useNetwork.ts
+- `/api/network/ssh/test` — server path reference — apps/web/src/hooks/useNetwork.ts
+- `/api/network/topology` — server path reference — apps/web/src/components/network/network-panel.tsx
+- `/api/persona-agents` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/persona-agents/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/generate` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/tasks/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/plugins` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/{}` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/{}/{}` — no server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/scan` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/preview/{}` — no server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/access` — server path reference — apps/web/src/hooks/use-preview-access.ts
+- `/api/preview/devtools` — server path reference — apps/web/src/components/remote/browser-tools-panel.tsx
+- `/api/preview/devtools/{}` — server path reference — apps/web/src/components/remote/browser-tools-panel.tsx
+- `/api/preview/history` — server path reference — apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/inspect/{}{}` — no server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/preview/restart` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/screenshot/{}` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/preview/session/{}` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx, apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/share` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/start` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/stop` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/project` — no server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/{}` — no server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/apply-diff` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/backup` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/delete` — server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/download` — server path reference — apps/web/src/components/ui/file-download-link.tsx, apps/web/src/e2e-fixtures/message-links.tsx
+- `/api/project/list` — server path reference — apps/web/src/App.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/project/move` — server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/open` — server path reference — apps/web/src/App.tsx
+- `/api/project/read` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/rename` — server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/reveal` — server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/search` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/stat` — server path reference — apps/web/src/components/project/project-panel.tsx
+- `/api/project/undo` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/project/undo-all` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/project/write` — server path reference — apps/web/src/components/project/detached-tab-view.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/projects` — server path reference — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/move` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/repository` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/restore` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/sessions` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/subtree` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/archived` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/last-active` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/search` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/projects/select` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/provider-accounts` — server path reference — apps/web/src/components/settings/UsageSettings.tsx, apps/web/src/lib/agents-api.ts
+- `/api/provider-accounts/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/provider-accounts/{}/opencode-go` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/provider-usage` — server path reference — apps/web/src/components/settings/UsageSettings.tsx
+- `/api/provider-usage/ollama/api-key` — server path reference — apps/web/src/components/app-shell/ollama-usage-setup.tsx
+- `/api/provider-usage/ollama/session` — server path reference — apps/web/src/components/app-shell/ollama-usage-setup.tsx
+- `/api/provider-usage/summary` — server path reference — apps/web/src/lib/usage-summary-store.ts
+- `/api/providers` — server path reference — apps/web/src/hooks/useProviders.ts, apps/web/src/lib/provider-store.ts
+- `/api/providers{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/login` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/login/input` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/logout` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/status` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/models{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/update` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/providers/backend/test` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/providers/models/reset` — server path reference — apps/web/src/components/settings/SettingsPage.tsx, apps/web/src/lib/agents-api.ts
+- `/api/providers/omniroute/test` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/reminders` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/reminders{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/reminders/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/reminders/export.md{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/plans` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/pull-requests{}` — no server path reference — apps/web/src/lib/pull-requests-api.ts
+- `/api/repos/{}/strategy` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/strategy/generate` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/todos` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/todos/generate` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/screen-share/{}` — no server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/approve` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/chat/{}` — server path reference — apps/web/src/components/chat/chat-screen-share-view.tsx
+- `/api/screen-share/control/{}` — server path reference — apps/web/src/hooks/useScreenShareControl.ts
+- `/api/screen-share/devices/register` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/handoff` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/leave` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/start` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/state` — server path reference — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/stop` — server path reference — apps/web/src/components/chat/chat-screen-share-view.tsx, apps/web/src/hooks/useScreenShare.ts
+- `/api/secrets` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/secrets{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/secrets/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/secrets/requests` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/secrets/requests/{}/cancel` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/secrets/requests/{}/submit` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/security/assessments` — server path reference — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
+- `/api/security/checks` — server path reference — packages/api-client/src/client.ts
+- `/api/security/comparisons` — server path reference — packages/api-client/src/client.ts
+- `/api/security/engines` — server path reference — packages/api-client/src/client.ts
+- `/api/security/findings` — no server path reference — packages/api-client/src/client.ts
+- `/api/security/monitors` — server path reference — packages/api-client/src/client.ts
+- `/api/security/scopes` — server path reference — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
+- `/api/security/workbench` — server path reference — packages/api-client/src/client.ts
+- `/api/sessions` — server path reference — apps/web/src/components/manager/agents-page.tsx, apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts, apps/web/src/repro/use-chat-resume-repro.tsx
+- `/api/sessions/{}` — server path reference — apps/web/src/App.tsx, apps/web/src/components/chat/prompt-input.tsx, apps/web/src/hooks/usePersonalChatNode.ts, apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/approve` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/archive` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/cancel` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useChat.ts, apps/web/src/lib/agents-api.ts
+- `/api/sessions/{}/events` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/lib/session-event-subscription.ts
+- `/api/sessions/{}/fork` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/generate-title` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/loop` — server path reference — apps/web/src/components/chat/loop-goal-card.tsx
+- `/api/sessions/{}/messages` — server path reference — apps/web/src/hooks/useChat.ts, packages/api-client/src/client.ts
+- `/api/sessions/{}/messages/{}/context-flow` — server path reference — apps/web/src/lib/context-flow-cache.ts
+- `/api/sessions/{}/move` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/plan/execute` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/plan/reject` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/restart-from` — server path reference — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/runtime` — server path reference — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
+- `/api/sessions/{}/steer` — server path reference — apps/web/src/App.tsx, apps/web/src/components/app-shell/parallel-chat-panel.tsx
+- `/api/sessions/{}/sub-agents/{}` — server path reference — apps/web/src/components/chat/tool-call-card.tsx
+- `/api/sessions/{}/trajectory` — server path reference — apps/web/src/components/debug/use-session-trajectory.ts
+- `/api/sessions/{}/viewed` — server path reference — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/completion-repro/events` — no server path reference — apps/web/src/repro/chat-completion-repro.tsx
+- `/api/sessions/completion-repro/messages` — no server path reference — apps/web/src/repro/chat-completion-repro.tsx
+- `/api/sessions/latency-repro-session/events` — no server path reference — apps/web/src/repro/chat-stream-latency-repro.tsx
+- `/api/sessions/latency-repro-session/messages` — no server path reference — apps/web/src/repro/chat-stream-latency-repro.tsx
+- `/api/skills` — server path reference — apps/web/src/components/automation/ThreadSkillPicker.tsx, apps/web/src/components/settings/SkillSettings.tsx, apps/web/src/hooks/useSkills.ts
+- `/api/skills/{}` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/skills/{}/install-tool` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/store/packages` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/store/skills` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/store/skills/{}/install` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/team-rooms` — server path reference — apps/web/src/lib/team-chat-api.ts
+- `/api/terminals` — server path reference — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/components/terminal/terminal-view.tsx, apps/web/src/lib/terminal-snapshot.ts, apps/web/src/lib/tool-terminal-live.ts
+- `/api/terminals/{}` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/terminals/{}/resize` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/terminals/shells` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/threads` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/activities{}` — no server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/approve` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/create-pr` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/interrupt` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/resume` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/runtime` — server path reference — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
+- `/api/threads/{}/send` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/steer` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/stop` — server path reference — apps/web/src/lib/agents-api.ts
+- `/api/tools` — server path reference — apps/web/src/components/app-shell/catalogue-graph.tsx
+- `/api/update/apply` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/update/changelog` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/update/check` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/user-questions/requests` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/user-questions/requests/{}/cancel` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/user-questions/requests/{}/submit` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/voice/transcribe-audio` — server path reference — apps/web/src/hooks/useVoiceRecording.ts
+- `/api/voice/wake-candidate` — server path reference — apps/web/src/hooks/useWakeWord.ts
+
+## WS message candidates (heuristic)
+
+Client-to-server candidates come from all case arms in the Node hub; server-to-client candidates come from literal type properties there. Both can include unrelated switches or objects, and events emitted elsewhere or dynamic types are omitted. A directional Rust reference is only a lexical match in the Rust hub; it does not establish mounting, behavior, coverage, or parity.
+
+- client-to-server-candidate: `architecture.render-result` — no Rust reference
+- client-to-server-candidate: `authenticate` — no Rust reference
+- client-to-server-candidate: `consent.approve` — Rust reference
+- client-to-server-candidate: `consent.reject` — Rust reference
+- client-to-server-candidate: `fs.browse-response` — no Rust reference
+- client-to-server-candidate: `fs.op-response` — no Rust reference
+- client-to-server-candidate: `fs.register-node` — no Rust reference
+- client-to-server-candidate: `fs.roots-response` — no Rust reference
+- client-to-server-candidate: `messenger.register` — no Rust reference
+- client-to-server-candidate: `messenger.result` — no Rust reference
+- client-to-server-candidate: `node.hello` — no Rust reference
+- client-to-server-candidate: `nodes.forget` — no Rust reference
+- client-to-server-candidate: `nodes.get` — no Rust reference
+- client-to-server-candidate: `nodes.list` — no Rust reference
+- client-to-server-candidate: `nodes.update-permissions` — no Rust reference
+- client-to-server-candidate: `notification.read` — no Rust reference
+- client-to-server-candidate: `provider.event` — no Rust reference
+- client-to-server-candidate: `provider.op-response` — no Rust reference
+- client-to-server-candidate: `resource.subscribe` — Rust reference
+- client-to-server-candidate: `resource.unsubscribe` — Rust reference
+- client-to-server-candidate: `screen-share:answer` — no Rust reference
+- client-to-server-candidate: `screen-share:ice-candidate` — no Rust reference
+- client-to-server-candidate: `screen-share:offer` — no Rust reference
+- client-to-server-candidate: `screen-share:start-request` — no Rust reference
+- client-to-server-candidate: `screen-share:stop-request` — no Rust reference
+- client-to-server-candidate: `subscribe` — Rust reference
+- client-to-server-candidate: `terminal.exit` — no Rust reference
+- client-to-server-candidate: `terminal.input` — Rust reference
+- client-to-server-candidate: `terminal.op-response` — no Rust reference
+- client-to-server-candidate: `terminal.output` — no Rust reference
+- client-to-server-candidate: `terminal.resize` — Rust reference
+- client-to-server-candidate: `terminal.subscribe` — Rust reference
+- client-to-server-candidate: `terminal.unsubscribe` — Rust reference
+- client-to-server-candidate: `tool.background-complete` — no Rust reference
+- client-to-server-candidate: `tool.op-output` — no Rust reference
+- client-to-server-candidate: `tool.op-response` — no Rust reference
+- client-to-server-candidate: `ui.state` — no Rust reference
+- server-to-client-candidate: `agent.halted` — no Rust reference
+- server-to-client-candidate: `browser.updated` — no Rust reference
+- server-to-client-candidate: `consent.pending-snapshot` — no Rust reference
+- server-to-client-candidate: `error` — no Rust reference
+- server-to-client-candidate: `fs.browse-request` — no Rust reference
+- server-to-client-candidate: `fs.node-disconnected` — no Rust reference
+- server-to-client-candidate: `fs.node-registered` — no Rust reference
+- server-to-client-candidate: `fs.op-request` — no Rust reference
+- server-to-client-candidate: `fs.roots-request` — no Rust reference
+- server-to-client-candidate: `messenger.request` — no Rust reference
+- server-to-client-candidate: `node.credential` — no Rust reference
+- server-to-client-candidate: `node.disconnected` — no Rust reference
+- server-to-client-candidate: `node.registry` — no Rust reference
+- server-to-client-candidate: `node.updated` — no Rust reference
+- server-to-client-candidate: `nodes.permissions` — no Rust reference
+- server-to-client-candidate: `notification` — no Rust reference
+- server-to-client-candidate: `notification.cleared` — no Rust reference
+- server-to-client-candidate: `notification.snapshot` — no Rust reference
+- server-to-client-candidate: `provider.op-request` — no Rust reference
+- server-to-client-candidate: `screen-share:control-handoff` — no Rust reference
+- server-to-client-candidate: `screen-share:start-error` — no Rust reference
+- server-to-client-candidate: `screen-share:start-request` — no Rust reference
+- server-to-client-candidate: `screen-share:state-update` — no Rust reference
+- server-to-client-candidate: `session-wait.snapshot` — no Rust reference
+- server-to-client-candidate: `session.created` — no Rust reference
+- server-to-client-candidate: `session.streaming-snapshot` — no Rust reference
+- server-to-client-candidate: `surface.connected` — no Rust reference
+- server-to-client-candidate: `surface.registry` — no Rust reference
+- server-to-client-candidate: `terminal.execution` — no Rust reference
+- server-to-client-candidate: `terminal.op-request` — no Rust reference
+- server-to-client-candidate: `terminal.output` — no Rust reference
+- server-to-client-candidate: `thread.updated` — no Rust reference
+- server-to-client-candidate: `tool.op-request` — no Rust reference
+- server-to-client-candidate: `ui.command` — no Rust reference
+- server-to-client-candidate: `user-question.pending-snapshot` — no Rust reference
