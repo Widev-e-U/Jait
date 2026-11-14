@@ -12,7 +12,9 @@
     "wsWithoutDirectionalRustReference": 63,
     "clientPathCandidates": 255,
     "clientCandidatesWithoutServerPathReference": 31,
-    "rustOnlyRoutes": 13
+    "rustOnlyRoutes": 13,
+    "backgroundServices": 8,
+    "backgroundServicesMissing": 0
   },
   "http": [
     {
@@ -4636,6 +4638,48 @@
       "type": "user-question.pending-snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false
+    }
+  ],
+  "services": [
+    {
+      "name": "scheduler",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "threadReviewSync",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "databaseRetention",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "diskJanitor",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "primaryLink",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "terminalReaper",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "browserReaper",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
+    },
+    {
+      "name": "wsHub",
+      "nodeStart": true,
+      "rustStatus": "rust-reference-untested"
     }
   ],
   "clientCandidates": [

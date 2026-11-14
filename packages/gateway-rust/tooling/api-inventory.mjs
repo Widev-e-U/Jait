@@ -211,7 +211,28 @@ const summary = {
   clientCandidatesWithoutServerPathReference: clientCandidates.filter((candidate) => !candidate.serverPathReference).length,
   rustOnlyRoutes: extraRust.length,
 };
-const result = { summary, http: entries, ws: wsEntries, clientCandidates, rustOnly: extraRust };
+// Background services started from packages/gateway/src/index.ts. Rust status is a lexical
+// check for the Rust module/keyword; it never implies a tested or wired-in service.
+const SERVICE_SPECS = [
+  ['scheduler', /scheduler\.start\(/, /scheduler/i],
+  ['threadReviewSync', /threadReviewSync\.start\(/, /thread_review_sync|review_sync/i],
+  ['databaseRetention', /databaseRetention\.start\(/, /retention/i],
+  ['diskJanitor', /diskJanitor\.start\(/, /janitor/i],
+  ['primaryLink', /primaryLink\.start\(/, /primary_link/i],
+  ['terminalReaper', /terminalReaperInterval\s*=\s*setInterval/, /reaper|idle_reap/i],
+  ['browserReaper', /browserReaperInterval\s*=\s*setInterval/, /browser.*reap|reap.*browser/i],
+  ['wsHub', /ws\.start\(/, /ws_hub|WsHub/],
+];
+const indexSrc = readFileSync(join(nodeSrc, 'index.ts'), 'utf8');
+const rustAll = walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n');
+const services = SERVICE_SPECS.map(([name, nodeRe, rustRe]) => ({
+  name,
+  nodeStart: nodeRe.test(indexSrc),
+  rustStatus: rustRe.test(rustAll) ? 'rust-reference-untested' : 'missing',
+}));
+summary.backgroundServices = services.length;
+summary.backgroundServicesMissing = services.filter((s) => s.rustStatus === 'missing').length;
+const result = { summary, http: entries, ws: wsEntries, services, clientCandidates, rustOnly: extraRust };
 console.log(JSON.stringify(summary, null, 2));
 
 if (process.argv.includes('--write')) {
@@ -230,6 +251,12 @@ if (process.argv.includes('--write')) {
     '| Method | Path | Status | Node source |',
     '|---|---|---|---|',
     ...entries.map((e) => `| ${e.method} | \`${e.path}\` | ${e.status} | ${e.nodeFiles.join(', ')} |`),
+    '',
+    '## Background services (heuristic)',
+    '',
+    'Services started from the Node composition root. `rust-reference-untested` is only a lexical match in Rust source; it does not show the service is wired in or tested.',
+    '',
+    ...services.map((s) => `- \`${s.name}\` — ${s.rustStatus}${s.nodeStart ? '' : ' (Node start pattern not found)'}`),
     '',
     '## Client path candidates (heuristic)',
     '',

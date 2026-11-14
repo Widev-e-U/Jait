@@ -16,7 +16,9 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
   "wsWithoutDirectionalRustReference": 63,
   "clientPathCandidates": 255,
   "clientCandidatesWithoutServerPathReference": 31,
-  "rustOnlyRoutes": 13
+  "rustOnlyRoutes": 13,
+  "backgroundServices": 8,
+  "backgroundServicesMissing": 0
 }
 ```
 
@@ -450,6 +452,19 @@ This is a heuristic route inventory, not evidence of native behavior or tested p
 | PUT | `/api/mobile/routines/:kind` | native-untested | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-untested | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-untested | routes/repositories.ts |
+
+## Background services (heuristic)
+
+Services started from the Node composition root. `rust-reference-untested` is only a lexical match in Rust source; it does not show the service is wired in or tested.
+
+- `scheduler` — rust-reference-untested
+- `threadReviewSync` — rust-reference-untested
+- `databaseRetention` — rust-reference-untested
+- `diskJanitor` — rust-reference-untested
+- `primaryLink` — rust-reference-untested
+- `terminalReaper` — rust-reference-untested
+- `browserReaper` — rust-reference-untested
+- `wsHub` — rust-reference-untested
 
 ## Client path candidates (heuristic)
 
