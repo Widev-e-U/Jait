@@ -1585,6 +1585,137 @@ mod ownership_tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// Black-box WS through the composed binary: handshake, fail-closed control
+    /// before authentication, JWT authentication and an owned-session subscribe.
+    #[tokio::test]
+    async fn application_websocket_authenticates_and_subscribes_owned_session() {
+        use crate::ws::{OpCode, read_frame, write_client_frame};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        async fn next(stream: &mut tokio::net::TcpStream) -> serde_json::Value {
+            let frame = tokio::time::timeout(Duration::from_secs(5), read_frame(stream, 1 << 20))
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            serde_json::from_slice(&frame.payload).unwrap()
+        }
+        async fn send(stream: &mut tokio::net::TcpStream, text: &str) {
+            write_client_frame(stream, OpCode::Text, text.as_bytes(), [1, 2, 3, 4])
+                .await
+                .unwrap();
+        }
+
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let mut app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        app.mount_websocket(
+            crate::ws::WsHubConfig::default(),
+            std::num::NonZeroUsize::new(4).unwrap(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let base = format!("http://{address}");
+        let registration: serde_json::Value = client
+            .post(format!("{base}/api/auth/register"))
+            .json(&serde_json::json!({"username":"ws-user","password":"fixture password"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let token = registration["access_token"].as_str().unwrap().to_owned();
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({"name":"ws session"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let session_id = session["id"].as_str().unwrap().to_owned();
+
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        stream
+            .write_all(b"GET /ws HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+            .await
+            .unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(
+                tokio::time::timeout(Duration::from_secs(5), stream.read_u8())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        assert!(String::from_utf8(head).unwrap().starts_with("HTTP/1.1 101"));
+        assert_eq!(next(&mut stream).await["type"], "session.created");
+
+        send(
+            &mut stream,
+            &format!(r#"{{"type":"subscribe","sessionId":"{session_id}"}}"#),
+        )
+        .await;
+        let denied = next(&mut stream).await;
+        assert_eq!(denied["type"], "error");
+        assert_eq!(denied["payload"]["code"], "UNAUTHORIZED");
+
+        send(
+            &mut stream,
+            &serde_json::json!({"type":"authenticate","token":token}).to_string(),
+        )
+        .await;
+        let admitted = next(&mut stream).await;
+        assert_eq!(admitted["type"], "session.created");
+        assert_eq!(admitted["payload"]["authenticated"], true);
+
+        send(
+            &mut stream,
+            &format!(r#"{{"type":"subscribe","sessionId":"{session_id}"}}"#),
+        )
+        .await;
+        let subscribed = next(&mut stream).await;
+        assert_eq!(subscribed["type"], "session.created");
+        assert_eq!(subscribed["payload"]["subscribed"], true);
+
+        drop(stream);
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[tokio::test]
     async fn application_serves_owned_project_search_through_production_router() {
         use crate::{
