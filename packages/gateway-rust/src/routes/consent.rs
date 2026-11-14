@@ -372,6 +372,46 @@ impl ConsentRoutes {
         (self.audit)(event)
     }
 }
+impl crate::ws::WsConsentControl for ConsentRoutes {
+    fn decide(
+        &self,
+        user: &str,
+        request_id: &str,
+        approve: bool,
+        reason: Option<String>,
+    ) -> Result<bool, String> {
+        // Same gate as the HTTP preHandler: only a pending request in an owned session.
+        let Some(req) = self.manager.get_request(request_id).map(|r| r.snapshot()) else {
+            return Ok(false);
+        };
+        if req.status != ConsentStatus::Pending || !(self.owns_session)(&req.session_id, user)? {
+            return Ok(false);
+        }
+        let ok = if approve {
+            self.manager
+                .approve(request_id, Some(DecisionVia::Click), reason.clone())?
+        } else {
+            self.manager
+                .reject(request_id, Some(DecisionVia::Click), reason.clone())?
+        };
+        if ok {
+            let mut inputs = json!({"requestId":request_id});
+            if let Some(reason) = reason {
+                inputs["reason"] = json!(reason);
+            }
+            self.write_audit(
+                None,
+                if approve {
+                    "consent.approve"
+                } else {
+                    "consent.reject"
+                },
+                inputs,
+            )?;
+        }
+        Ok(ok)
+    }
+}
 fn not_found(details: Option<&str>) -> (u16, Value) {
     let mut body = json!({"error":"NOT_FOUND"});
     if let Some(details) = details {
@@ -624,6 +664,46 @@ mod owned_snapshot_tests {
         assert!(!authorized.load(Ordering::SeqCst));
         assert_eq!(status, 200);
         assert!(!manager.is_approve_all_enabled_for_session("alice"));
+    }
+
+    #[tokio::test]
+    async fn ws_decision_requires_ownership_and_records_audit() {
+        use crate::ws::WsConsentControl;
+        let manager = ConsentManager::default();
+        let mut approved = manager.request_consent(request("alice")).unwrap();
+        let mut rejected = manager.request_consent(request("alice")).unwrap();
+        let audits = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = audits.clone();
+        let routes = ConsentRoutes {
+            auth: AuthState::new(
+                rusqlite::Connection::open_in_memory().unwrap(),
+                "consent-ws-fixture".into(),
+            )
+            .unwrap(),
+            manager: manager.clone(),
+            owns_session: Arc::new(|session, user| Ok(session == user)),
+            audit: Arc::new(move |event| {
+                sink.lock().unwrap().push(event);
+                Ok(())
+            }),
+            lane: lane(),
+            active_profile_name: None,
+            permissions: vec![],
+        };
+        assert!(!routes.decide("mallory", &approved.id, true, None).unwrap());
+        assert!(!routes.decide("alice", "missing", true, None).unwrap());
+        assert!(audits.lock().unwrap().is_empty());
+        assert!(routes.decide("alice", &approved.id, true, None).unwrap());
+        assert!(
+            routes
+                .decide("alice", &rejected.id, false, Some("no".into()))
+                .unwrap()
+        );
+        assert!(!routes.decide("alice", &approved.id, false, None).unwrap());
+        let approved = approved.wait().await.unwrap();
+        let rejected = rejected.wait().await.unwrap();
+        assert!(approved.approved && !rejected.approved);
+        assert_eq!(audits.lock().unwrap().len(), 2);
     }
 
     #[tokio::test]

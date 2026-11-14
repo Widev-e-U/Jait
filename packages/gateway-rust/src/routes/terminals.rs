@@ -234,9 +234,13 @@ impl TerminalRoutes {
     }
 
     fn lookup(&self, user: &AuthUser, id: &str) -> Lookup {
+        self.lookup_for(&user.id, id)
+    }
+
+    fn lookup_for(&self, user_id: &str, id: &str) -> Lookup {
         match self.registry.surface_with_owner(id) {
             Some((surface, owner)) if surface.kind() == TERMINAL_KIND => {
-                if owner.as_deref() == Some(user.id.as_str()) {
+                if owner.as_deref() == Some(user_id) {
                     Lookup::Found(surface)
                 } else {
                     Lookup::Forbidden
@@ -273,6 +277,33 @@ impl TerminalRoutes {
                     })
             })
             .await;
+    }
+}
+
+/// WebSocket `terminal.input` / `terminal.resize` use the same owner gate as the HTTP routes:
+/// the terminal must exist, be a terminal, belong to the caller and have an attached handle.
+impl crate::ws::WsTerminalControl for TerminalRoutes {
+    fn write(&self, user_id: &str, terminal_id: &str, data: &str) -> Result<(), String> {
+        let Lookup::Found(surface) = self.lookup_for(user_id, terminal_id) else {
+            return Err("terminal not found".into());
+        };
+        let handle = self
+            .control
+            .handle_for_surface(&surface)
+            .ok_or_else(|| "Terminal runtime is not attached".to_string())?;
+        handle.write(data)
+    }
+
+    fn resize(&self, user_id: &str, terminal_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let Lookup::Found(surface) = self.lookup_for(user_id, terminal_id) else {
+            return Err("terminal not found".into());
+        };
+        let handle = self
+            .control
+            .handle_for_surface(&surface)
+            .ok_or_else(|| "Terminal runtime is not attached".to_string())?;
+        handle.resize(cols.max(1), rows.max(1));
+        Ok(())
     }
 }
 

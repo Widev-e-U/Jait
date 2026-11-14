@@ -909,6 +909,11 @@ impl Application {
         config.token_verifier = Arc::new(crate::security::ws_verifier::JwtTokenVerifier::new(
             self.auth.signing_secret(),
         ));
+        // The provisional controls spawn uncancellable blocking work and consent
+        // ownership is not leased through the decision. Do not let an embedder
+        // enable them on the composed runtime until those effects are supervised.
+        config.consent = None;
+        config.terminals = None;
         let transport = crate::runtime::ws_transport::WsTransport::new(
             Arc::new(crate::ws::WsHub::new(config)),
             max_connections,
@@ -1018,6 +1023,58 @@ mod ownership_tests {
             .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("gateway.sqlite")
+    }
+
+    #[tokio::test]
+    async fn websocket_mount_disables_unsupervised_effect_controls() {
+        struct Controls;
+        impl crate::ws::WsConsentControl for Controls {
+            fn decide(&self, _: &str, _: &str, _: bool, _: Option<String>) -> Result<bool, String> {
+                panic!("unsupervised consent callback must not be mounted")
+            }
+        }
+        impl crate::ws::WsTerminalControl for Controls {
+            fn write(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+                panic!("unsupervised terminal callback must not be mounted")
+            }
+            fn resize(&self, _: &str, _: &str, _: u16, _: u16) -> Result<(), String> {
+                panic!("unsupervised terminal callback must not be mounted")
+            }
+        }
+        let path = fixture();
+        let mut app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path.clone(),
+                project_root: path.parent().unwrap().to_path_buf(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let config = crate::ws::WsHubConfig {
+            consent: Some(Arc::new(Controls)),
+            terminals: Some(Arc::new(Controls)),
+            ..Default::default()
+        };
+        let transport = app
+            .mount_websocket(
+                config,
+                std::num::NonZeroUsize::new(4).unwrap(),
+                Duration::from_secs(1),
+            )
+            .unwrap();
+        assert!(transport.hub().config().consent.is_none());
+        assert!(transport.hub().config().terminals.is_none());
+        drop(transport);
+        drop(app);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[tokio::test]

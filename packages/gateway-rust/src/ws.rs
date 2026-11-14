@@ -916,6 +916,33 @@ pub struct WsHubConfig {
     pub user_authority: Option<Arc<dyn WsUserAuthorityCheck>>,
     pub questions: Option<crate::services::input_requests::UserQuestionService>,
     pub session_authority: Option<Arc<crate::ws_user_authority::WsUserAuthority>>,
+    /// Decides pending consent requests for `consent.approve` / `consent.reject`.
+    /// When unset the messages are ignored, like the reference without a callback.
+    pub consent: Option<Arc<dyn WsConsentControl>>,
+    /// Drives attached terminals for `terminal.input` / `terminal.resize`. When unset the
+    /// messages are ignored.
+    pub terminals: Option<Arc<dyn WsTerminalControl>>,
+}
+
+/// Terminal input over the socket. Implementations must refuse terminals the user does
+/// not own; a refusal is an `Err` and produces no wire response.
+pub trait WsTerminalControl: Send + Sync {
+    /// Blocking; call off the runtime.
+    fn write(&self, user_id: &str, terminal_id: &str, data: &str) -> Result<(), String>;
+    fn resize(&self, user_id: &str, terminal_id: &str, cols: u16, rows: u16) -> Result<(), String>;
+}
+
+/// Consent decisions made over the socket. Implementations must refuse requests the
+/// user does not own, mirroring the reference `canAccessConsent` gate.
+pub trait WsConsentControl: Send + Sync {
+    /// Returns whether a pending request was decided. Blocking; call off the runtime.
+    fn decide(
+        &self,
+        user: &str,
+        request_id: &str,
+        approve: bool,
+        reason: Option<String>,
+    ) -> Result<bool, String>;
 }
 
 impl std::fmt::Debug for WsHubConfig {
@@ -946,6 +973,8 @@ impl Default for WsHubConfig {
             user_authority: None,
             questions: None,
             session_authority: None,
+            consent: None,
+            terminals: None,
         }
     }
 }
@@ -2349,6 +2378,89 @@ async fn handle_message(
                 hub.unsubscribe_terminal(client_id, id);
             }
         }
+        "terminal.input" | "terminal.resize" => {
+            let terminal_id = parsed
+                .get("terminalId")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned);
+            let user = {
+                let inner = hub.inner.lock().expect("hub state");
+                inner
+                    .clients
+                    .get(client_id)
+                    .filter(|client| WsHub::credential_current(client))
+                    .and_then(|client| client.user_id.clone())
+            };
+            if let (Some(terminal_id), Some(user), Some(terminals)) =
+                (terminal_id, user, hub.config.terminals.clone())
+            {
+                let dimension = |name: &str| {
+                    parsed
+                        .get(name)
+                        .and_then(Value::as_u64)
+                        .filter(|value| *value > 0)
+                        .map(|value| value.min(u64::from(u16::MAX)) as u16)
+                };
+                let input = (kind == "terminal.input")
+                    .then(|| {
+                        parsed
+                            .get("data")
+                            .and_then(Value::as_str)
+                            .filter(|data| !data.is_empty())
+                            .map(str::to_owned)
+                    })
+                    .flatten();
+                let size = dimension("cols").zip(dimension("rows"));
+                let is_input = kind == "terminal.input";
+                if (is_input && input.is_some()) || (!is_input && size.is_some()) {
+                    let result = tokio::task::spawn_blocking(move || match (input, size) {
+                        (Some(data), _) => terminals.write(&user, &terminal_id, &data),
+                        (None, Some((cols, rows))) => {
+                            terminals.resize(&user, &terminal_id, cols, rows)
+                        }
+                        (None, None) => Ok(()),
+                    })
+                    .await;
+                    match result {
+                        Ok(Err(error)) => eprintln!("[ws] {kind} refused: {error}"),
+                        Err(error) => eprintln!("[ws] {kind} task failed: {error}"),
+                        Ok(Ok(())) => {}
+                    }
+                }
+            }
+        }
+        "consent.approve" | "consent.reject" => {
+            let approve = kind == "consent.approve";
+            let request_id = parsed
+                .get("requestId")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty());
+            let reason = parsed
+                .get("reason")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            let user = {
+                let inner = hub.inner.lock().expect("hub state");
+                inner
+                    .clients
+                    .get(client_id)
+                    .filter(|client| WsHub::credential_current(client))
+                    .and_then(|client| client.user_id.clone())
+            };
+            if let (Some(request_id), Some(user), Some(consent)) =
+                (request_id, user, hub.config.consent.clone())
+            {
+                let request_id = request_id.to_owned();
+                let decided = tokio::task::spawn_blocking(move || {
+                    consent.decide(&user, &request_id, approve, reason)
+                })
+                .await;
+                if let Ok(Err(error)) = decided {
+                    eprintln!("ws consent decision failed: {error}");
+                }
+            }
+        }
         "resource.unsubscribe" => {
             // Reference handling is bookkeeping only: it sends no acknowledgement.
             if let Some(key) = subscription_key(&payload) {
@@ -2501,6 +2613,168 @@ mod tests {
             },
         );
         assert!(!hub.may_deliver("alice-client", &event.scope));
+    }
+
+    #[tokio::test]
+    async fn consent_messages_decide_only_for_authenticated_clients() {
+        use std::sync::Mutex;
+        use std::sync::mpsc as std_mpsc;
+        struct Recorder(Mutex<std_mpsc::Sender<(String, String, bool, Option<String>)>>);
+        impl WsConsentControl for Recorder {
+            fn decide(
+                &self,
+                user: &str,
+                request_id: &str,
+                approve: bool,
+                reason: Option<String>,
+            ) -> Result<bool, String> {
+                let _ = self.0.lock().unwrap().send((
+                    user.to_string(),
+                    request_id.to_string(),
+                    approve,
+                    reason,
+                ));
+                Ok(true)
+            }
+        }
+        let (calls_tx, calls_rx) = std_mpsc::channel();
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            consent: Some(Arc::new(Recorder(Mutex::new(calls_tx)))),
+            ..Default::default()
+        }));
+        let (tx, _rx) = mpsc::channel(8);
+        let (anon_tx, _anon_rx) = mpsc::channel(8);
+        hub.register("alice-client", tx);
+        hub.register("anon-client", anon_tx);
+        hub.authenticate_client(
+            "alice-client",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        let wait = std::time::Duration::from_secs(5);
+        handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"consent.approve","requestId":"req-1"}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            calls_rx.recv_timeout(wait).unwrap(),
+            ("alice".into(), "req-1".into(), true, None)
+        );
+        handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"consent.reject","requestId":"req-2","reason":"no"}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            calls_rx.recv_timeout(wait).unwrap(),
+            ("alice".into(), "req-2".into(), false, Some("no".into()))
+        );
+        // Missing request id and unauthenticated clients decide nothing.
+        let _ = handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"consent.approve","payload":{}}"#,
+        )
+        .await;
+        let _ = handle_message(
+            &hub,
+            "anon-client",
+            r#"{"type":"consent.approve","requestId":"req-3"}"#,
+        )
+        .await;
+        assert!(
+            calls_rx
+                .recv_timeout(std::time::Duration::from_millis(200))
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn terminal_messages_forward_for_authenticated_clients_only() {
+        use std::sync::Mutex;
+        use std::sync::mpsc as std_mpsc;
+        struct Recorder(Mutex<std_mpsc::Sender<String>>);
+        impl WsTerminalControl for Recorder {
+            fn write(&self, user: &str, id: &str, data: &str) -> Result<(), String> {
+                let _ = self
+                    .0
+                    .lock()
+                    .unwrap()
+                    .send(format!("write {user} {id} {data}"));
+                Ok(())
+            }
+            fn resize(&self, user: &str, id: &str, cols: u16, rows: u16) -> Result<(), String> {
+                let _ = self
+                    .0
+                    .lock()
+                    .unwrap()
+                    .send(format!("resize {user} {id} {cols}x{rows}"));
+                Ok(())
+            }
+        }
+        let (calls_tx, calls_rx) = std_mpsc::channel();
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            terminals: Some(Arc::new(Recorder(Mutex::new(calls_tx)))),
+            ..Default::default()
+        }));
+        let (tx, _rx) = mpsc::channel(8);
+        let (anon_tx, _anon_rx) = mpsc::channel(8);
+        hub.register("alice-client", tx);
+        hub.register("anon-client", anon_tx);
+        hub.authenticate_client(
+            "alice-client",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        let wait = std::time::Duration::from_secs(5);
+        handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"terminal.input","terminalId":"t1","data":"ls\n"}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(calls_rx.recv_timeout(wait).unwrap(), "write alice t1 ls\n");
+        handle_message(
+            &hub,
+            "alice-client",
+            r#"{"type":"terminal.resize","terminalId":"t1","cols":100,"rows":30}"#,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            calls_rx.recv_timeout(wait).unwrap(),
+            "resize alice t1 100x30"
+        );
+        for message in [
+            r#"{"type":"terminal.input","terminalId":"t1"}"#,
+            r#"{"type":"terminal.resize","terminalId":"t1","cols":0,"rows":30}"#,
+            r#"{"type":"terminal.input","data":"x"}"#,
+        ] {
+            let _ = handle_message(&hub, "alice-client", message).await;
+        }
+        let _ = handle_message(
+            &hub,
+            "anon-client",
+            r#"{"type":"terminal.input","terminalId":"t1","data":"rm -rf"}"#,
+        )
+        .await;
+        assert!(
+            calls_rx
+                .recv_timeout(std::time::Duration::from_millis(200))
+                .is_err()
+        );
     }
 
     #[tokio::test]
