@@ -1539,6 +1539,52 @@ mod ownership_tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// Consent routes mount only with settings-backed chat; they must be present
+    /// there and must still fail closed without authority.
+    #[tokio::test]
+    async fn settings_chat_application_mounts_consent_routes_fail_closed() {
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let app = Application::bind_with_settings_chat(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let response = client
+            .get(format!("http://{address}/api/consent/count"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[tokio::test]
     async fn application_serves_owned_project_search_through_production_router() {
         use crate::{
