@@ -1441,6 +1441,104 @@ mod ownership_tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    /// One representative path per merged router. An unmerged path is answered by
+    /// axum's own fallback: a 404 with an empty body. Every mounted router instead
+    /// answers (usually 401 before authority is established) or returns its own envelope.
+    #[tokio::test]
+    async fn every_mounted_router_is_reachable_through_production_router() {
+        // Consent routes mount only with chat settings and the store only through
+        // `mount_store`, so both are conditional and covered by their own tests.
+        const ROUTES: &[&str] = &[
+            "/api/agent-control",
+            "/api/architecture",
+            "/api/assistants/profiles",
+            "/api/auth/me",
+            "/api/browser/screenshot",
+            "/api/calendar/accounts",
+            "/api/channels",
+            "/api/code-graph",
+            "/api/email/accounts",
+            "/api/environment/snapshot",
+            "/api/filesystem/browse",
+            "/api/github-apps",
+            "/api/jobs",
+            "/api/maintenance/runs",
+            "/api/mobile-update/check",
+            "/api/mobile/consent/pending",
+            "/api/network/devices",
+            "/api/persona-agents",
+            "/api/plugins",
+            "/api/project/backup",
+            "/api/projects",
+            "/api/provider-accounts",
+            "/api/reminders",
+            "/api/repos",
+            "/api/screen-share/devices",
+            "/api/secrets",
+            "/api/security/assessments",
+            "/api/security/engines",
+            "/api/sessions",
+            "/api/sessions/streaming",
+            "/api/skills",
+            "/api/surfaces",
+            "/api/team-rooms",
+            "/api/tools",
+            "/api/trust/levels",
+            "/api/user-questions/requests",
+        ];
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let mut unmounted = Vec::new();
+        for route in ROUTES {
+            let response = client
+                .get(format!("http://{address}{route}"))
+                .send()
+                .await
+                .unwrap();
+            let status = response.status();
+            let body = response.bytes().await.unwrap();
+            if status == reqwest::StatusCode::NOT_FOUND && body.is_empty() {
+                unmounted.push(*route);
+            }
+        }
+        assert!(
+            unmounted.is_empty(),
+            "routes answered by the bare fallback (router not merged): {unmounted:?}"
+        );
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[tokio::test]
     async fn application_serves_owned_project_search_through_production_router() {
         use crate::{
