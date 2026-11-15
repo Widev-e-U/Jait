@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 200,
-  "native-tested": 99,
+  "native-untested": 190,
+  "native-tested": 109,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 99,
+  "nativeTested": 109,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 19.6,
+  "nativeTestedPct": 21.58,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -47,7 +47,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/messenger/bridge-reauth/teams` | missing |  | routes/messenger.ts |
 | DELETE | `/api/mobile/push-devices/:deviceId` | mounted-fail-closed |  | routes/mobile.ts |
 | DELETE | `/api/nodes/:id/credential` | native-untested |  | server.ts |
-| DELETE | `/api/persona-agents/:id` | native-untested |  | routes/threads.ts |
+| DELETE | `/api/persona-agents/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | DELETE | `/api/plans/:id` | native-untested |  | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | mounted-fail-closed |  | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | mounted-fail-closed |  | routes/browser-devtools.ts |
@@ -62,7 +62,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | DELETE | `/api/store/skills/:slug` | native-untested |  | routes/store.ts |
 | DELETE | `/api/terminals/:id` | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
-| DELETE | `/api/threads/:id` | native-untested |  | routes/threads.ts |
+| DELETE | `/api/threads/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | DELETE | `/mcp` | mounted-fail-closed |  | routes/mcp-server.ts |
 | GET | `/` | native-untested |  | server.ts |
 | GET | `/api/agent-control` | mounted-fail-closed |  | routes/agent-control.ts |
@@ -133,7 +133,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/network/nodes` | native-untested |  | routes/network.ts |
 | GET | `/api/network/scan/latest` | native-untested |  | routes/network.ts |
 | GET | `/api/network/topology` | native-untested |  | routes/network.ts |
-| GET | `/api/persona-agents` | native-untested |  | routes/threads.ts |
+| GET | `/api/persona-agents` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/plans/:id` | native-untested |  | routes/plans.ts |
 | GET | `/api/plugins` | mounted-fail-closed |  | routes/plugins.ts |
 | GET | `/api/plugins/:id` | mounted-fail-closed |  | routes/plugins.ts |
@@ -209,10 +209,10 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/terminals` | native-untested |  | routes/terminals.ts |
 | GET | `/api/terminals/:id` | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
 | GET | `/api/terminals/shells` | native-untested |  | routes/terminals.ts |
-| GET | `/api/threads` | native-untested |  | routes/threads.ts |
-| GET | `/api/threads/:id` | native-untested |  | routes/threads.ts |
-| GET | `/api/threads/:id/activities` | native-untested |  | routes/threads.ts |
-| GET | `/api/threads/:id/runtime` | native-untested |  | routes/threads.ts |
+| GET | `/api/threads` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
+| GET | `/api/threads/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
+| GET | `/api/threads/:id/activities` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
+| GET | `/api/threads/:id/runtime` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/tools` | native-untested |  | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
@@ -250,7 +250,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-untested |  | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested |  | routes/skills.ts |
-| PATCH | `/api/threads/:id` | native-untested |  | routes/threads.ts |
+| PATCH | `/api/threads/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | PATCH | `/api/voice/state/:sessionId` | native-untested |  | routes/voice.ts |
 | POST | `/api/agent-control/halt` | mounted-fail-closed |  | routes/agent-control.ts |
 | POST | `/api/agent-control/resume` | mounted-fail-closed |  | routes/agent-control.ts |
@@ -434,7 +434,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/terminals/:id/execute` | native-untested |  | routes/terminals.ts |
 | POST | `/api/terminals/:id/resize` | native-untested |  | routes/terminals.ts |
 | POST | `/api/terminals/:id/write` | native-untested |  | routes/terminals.ts |
-| POST | `/api/threads` | native-untested |  | routes/threads.ts |
+| POST | `/api/threads` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/approve` | native-untested |  | routes/threads.ts |
 | POST | `/api/threads/:id/create-pr` | missing |  | routes/threads.ts |
 | POST | `/api/threads/:id/interrupt` | native-untested |  | routes/threads.ts |
@@ -461,7 +461,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PUT | `/api/architecture` | native-untested |  | routes/architecture.ts |
 | PUT | `/api/messenger/presence` | missing |  | routes/messenger.ts |
 | PUT | `/api/mobile/routines/:kind` | mounted-fail-closed |  | routes/mobile.ts |
-| PUT | `/api/persona-agents/:id` | native-untested |  | routes/threads.ts |
+| PUT | `/api/persona-agents/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 
 ## Background services (heuristic)

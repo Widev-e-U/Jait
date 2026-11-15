@@ -990,6 +990,106 @@
           "name": "mobile_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/runtime",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/activities",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/persona-agents",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/persona-agents/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/persona-agents/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []
