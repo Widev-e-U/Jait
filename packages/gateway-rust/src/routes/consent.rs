@@ -27,6 +27,10 @@ pub type ConsentOwnership = Arc<dyn Fn(&str, &str) -> Result<bool, String> + Sen
 /// `(user, request id, approve, reason)`; true when this call resolved the request.
 pub type ConsentClaim =
     Arc<dyn Fn(&str, &str, bool, Option<String>) -> Result<bool, String> + Send + Sync>;
+/// `(user, session, reason)`; approves every pending request of a session the user owns
+/// and returns the ids this call resolved.
+pub type ConsentBatchClaim =
+    Arc<dyn Fn(&str, &str, Option<String>) -> Result<Vec<String>, String> + Send + Sync>;
 pub type ConsentAudit = Arc<dyn Fn(Value) -> Result<(), String> + Send + Sync>;
 
 /// Capture an ownership-filtered snapshot and its change subscription together.
@@ -189,6 +193,8 @@ pub struct ConsentRoutes {
     /// the ownership check and the decision. Without it, decisions use the manager
     /// directly after the point-in-time `owns_session` check.
     pub claim: Option<ConsentClaim>,
+    /// Same lease for the approve-all paths; without it they approve one by one.
+    pub batch_claim: Option<ConsentBatchClaim>,
     pub lane: BlockingLane,
     pub active_profile_name: Option<String>,
     /// Preserve the host permission map's insertion order.
@@ -315,14 +321,17 @@ impl ConsentRoutes {
                         "Consent request not found or already resolved",
                     )));
                 };
-                let ids =
-                    self.approve_pending(&req.session_id, Some("notification.approve-all".into()))?;
+                let ids = self.approve_pending(
+                    &user,
+                    &req.session_id,
+                    Some("notification.approve-all".into()),
+                )?;
                 json!({"ok":true,"sessionId":req.session_id,"approvedCount":ids.len(),"requestIds":ids})
             }
             ["api", "consent", "pending", session, "approve-all"] => {
                 if method == Method::POST {
                     self.manager.enable_approve_all_for_session(session)?;
-                    let ids = self.approve_pending(session, reason)?;
+                    let ids = self.approve_pending(&user, session, reason)?;
                     json!({"ok":true,"sessionId":session,"approveAllEnabled":true,"approvedCount":ids.len(),"requestIds":ids})
                 } else if method == Method::DELETE {
                     self.manager.disable_approve_all_for_session(session)?;
@@ -358,23 +367,30 @@ impl ConsentRoutes {
     }
     fn approve_pending(
         &self,
+        user: &str,
         session: &str,
         reason: Option<String>,
     ) -> Result<Vec<String>, String> {
         let mut ids = vec![];
-        for entry in self.manager.list_pending(Some(session)) {
-            let id = entry.snapshot().id;
-            if self
-                .manager
-                .approve(&id, Some(DecisionVia::Click), reason.clone())?
-            {
-                ids.push(id.clone());
-                let mut inputs = json!({"requestId":id,"bulk":true});
-                if let Some(reason) = &reason {
-                    inputs["reason"] = json!(reason);
+        if let Some(batch) = &self.batch_claim {
+            ids = batch(user, session, reason.clone())?;
+        } else {
+            for entry in self.manager.list_pending(Some(session)) {
+                let id = entry.snapshot().id;
+                if self
+                    .manager
+                    .approve(&id, Some(DecisionVia::Click), reason.clone())?
+                {
+                    ids.push(id);
                 }
-                self.write_audit(Some(session), "consent.approve", inputs)?;
             }
+        }
+        for id in &ids {
+            let mut inputs = json!({"requestId":id,"bulk":true});
+            if let Some(reason) = &reason {
+                inputs["reason"] = json!(reason);
+            }
+            self.write_audit(Some(session), "consent.approve", inputs)?;
         }
         Ok(ids)
     }
@@ -567,6 +583,7 @@ mod owned_snapshot_tests {
                 Ok(())
             }),
             claim: None,
+            batch_claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
@@ -612,6 +629,7 @@ mod owned_snapshot_tests {
                 owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
                 audit: Arc::new(|_| Ok(())),
                 claim: None,
+                batch_claim: None,
                 lane: lane(),
                 active_profile_name: None,
                 permissions: vec![],
@@ -663,6 +681,7 @@ mod owned_snapshot_tests {
             owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
             audit: Arc::new(|_| Ok(())),
             claim: None,
+            batch_claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
@@ -703,6 +722,7 @@ mod owned_snapshot_tests {
                 Ok(())
             }),
             claim: None,
+            batch_claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
