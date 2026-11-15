@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 203,
-    "native-tested": 96,
+    "native-untested": 200,
+    "native-tested": 99,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 96,
+    "nativeTested": 99,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 19.01,
+    "nativeTestedPct": 19.6,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -1112,10 +1112,15 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1123,10 +1128,15 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -3592,10 +3602,15 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",

@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 203,
-  "native-tested": 96,
+  "native-untested": 200,
+  "native-tested": 99,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 96,
+  "nativeTested": 99,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 19.01,
+  "nativeTestedPct": 19.6,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -122,8 +122,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/messenger/presence` | missing |  | routes/messenger.ts |
 | GET | `/api/messenger/search` | missing |  | routes/messenger.ts |
 | GET | `/api/mobile-update/check` | native-untested |  | routes/update.ts |
-| GET | `/api/mobile/consent/pending` | native-untested |  | routes/mobile.ts |
-| GET | `/api/mobile/devices` | native-untested |  | routes/mobile.ts |
+| GET | `/api/mobile/consent/pending` | native-tested | `tests/binary_mobile_routes.rs::mobile_routes_through_the_binary` | routes/mobile.ts |
+| GET | `/api/mobile/devices` | native-tested | `tests/binary_mobile_routes.rs::mobile_routes_through_the_binary` | routes/mobile.ts |
 | GET | `/api/mobile/discovery` | native-tested | `tests/binary_mobile.rs::mobile_device_flow_runs_through_the_binary` | routes/mobile.ts |
 | GET | `/api/mobile/os-tool/sessions` | mounted-incomplete |  | routes/mobile.ts |
 | GET | `/api/mobile/push-devices` | mounted-incomplete |  | routes/mobile.ts |
@@ -325,7 +325,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/messenger/notification-image` | missing |  | routes/messenger.ts |
 | POST | `/api/mobile/consent/:id/approve` | native-untested |  | routes/mobile.ts |
 | POST | `/api/mobile/consent/:id/reject` | native-untested |  | routes/mobile.ts |
-| POST | `/api/mobile/devices/:deviceId/heartbeat` | native-untested |  | routes/mobile.ts |
+| POST | `/api/mobile/devices/:deviceId/heartbeat` | native-tested | `tests/binary_mobile_routes.rs::mobile_routes_through_the_binary` | routes/mobile.ts |
 | POST | `/api/mobile/devices/register` | mounted-incomplete |  | routes/mobile.ts |
 | POST | `/api/mobile/push-devices/test` | mounted-fail-closed |  | routes/mobile.ts |
 | POST | `/api/network/deploy` | missing |  | routes/network.ts |

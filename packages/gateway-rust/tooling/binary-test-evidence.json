@@ -960,6 +960,36 @@
           "name": "misc_routes_are_owned_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/devices",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/consent/pending",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/devices/:deviceId/heartbeat",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []
