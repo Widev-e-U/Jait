@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { websocketCandidates } from './api-inventory.mjs';
+import { applyBinaryEvidence } from './binary-test-evidence.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -11,9 +13,12 @@ test('inventory does not turn path references into tested parity claims', () => 
   const summary = JSON.parse(execFileSync(process.execPath, [join(here, 'api-inventory.mjs')], { encoding: 'utf8' }));
   const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
   assert.deepEqual(inventory.summary, summary, 'regenerate the checked-in inventory');
-  assert.equal(summary.nativeTestedPct, null);
+  assert.equal(summary.nativeTested, [...inventory.http, ...inventory.ws].filter((entry) => entry.status === 'native-tested').length);
+  assert.equal(summary.nativeTestedDenominator, inventory.http.length + inventory.ws.length);
+  assert.equal(summary.nativeTestedPct, +(100 * summary.nativeTested / summary.nativeTestedDenominator).toFixed(2));
+  assert.ok([...inventory.http, ...inventory.ws].every((entry) => Array.isArray(entry.binaryTests)));
   assert.ok(inventory.http.some((route) => route.status === 'native-untested' && route.testPathReference));
-  assert.ok(inventory.http.every((route) => route.status !== 'native-tested'));
+  assert.ok(inventory.http.filter((route) => route.status === 'native-tested').every((route) => route.binaryTests.length > 0));
   assert.ok(inventory.http.some((route) => route.status === 'mounted-fail-closed'));
   assert.ok(inventory.http.some((route) => route.status === 'missing'));
   const chatCandidate = inventory.clientCandidates.find((candidate) => candidate.path === '/api/chat');
@@ -21,4 +26,97 @@ test('inventory does not turn path references into tested parity claims', () => 
   assert.ok(chatCandidate.files.includes('packages/api-client/src/client.ts'));
   assert.ok(inventory.clientCandidates.some((candidate) => !candidate.serverPathReference));
   assert.ok(inventory.clientCandidates.every((candidate) => !('status' in candidate)));
+});
+
+// Fastify's `all` registrations accept multiple HTTP methods. They must remain
+// visible even if the heuristic cannot prove that Rust serves every method.
+test('inventory includes all-method proxy routes and typed registrations', () => {
+  const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
+  for (const path of [
+    '/api/dev-proxy/:port',
+    '/api/dev-proxy/:port/*',
+    '/preview/:previewToken/proxy/:port',
+    '/preview/:previewToken/proxy/:port/*',
+  ]) {
+    const route = inventory.http.find((entry) => entry.method === 'ALL' && entry.path === path);
+    assert.ok(route, `missing all-method route ${path}`);
+    assert.notEqual(route.status, 'native-tested');
+  }
+  for (const [method, path] of [
+    ['PATCH', '/api/plugins/:id/config'],
+    ['PATCH', '/api/channels/:id/config'],
+    ['POST', '/api/repos/:id/pull-requests/:number/resolve-conflicts'],
+  ]) {
+    assert.ok(inventory.http.some((entry) => entry.method === method && entry.path === path), `missing typed route ${method} ${path}`);
+  }
+});
+
+test('legacy inventory includes typed registrations and labels WS matches as heuristic', () => {
+  const inventory = readFileSync(join(here, '..', 'API-INVENTORY.md'), 'utf8');
+  for (const [method, path] of [
+    ['PATCH', '/api/plugins/:id/config'],
+    ['PATCH', '/api/channels/:id/config'],
+    ['POST', '/api/repos/:id/pull-requests/:number/resolve-conflicts'],
+  ]) {
+    assert.ok(inventory.includes(`| ${method} | \`${path}\` |`), `missing typed route ${method} ${path}`);
+  }
+  assert.match(inventory, /message-and-test-reference/);
+  assert.doesNotMatch(inventory, /native-and-tested/);
+});
+
+test('WebSocket scan records direction and references as lexical candidates', () => {
+  const node = `switch (msg.type) { case "subscribe": break; case 'cancel': break; }
+    const event = { type: "session.event" }; const dynamic = { type: name };`;
+  const rust = `match kind { "subscribe" | "other" => (), _ => () }
+    json!({"type": "session.event"});`;
+  assert.deepEqual(websocketCandidates(node, rust), [
+    { type: 'cancel', direction: 'client-to-server-candidate', rustReference: false },
+    { type: 'subscribe', direction: 'client-to-server-candidate', rustReference: true },
+    { type: 'session.event', direction: 'server-to-client-candidate', rustReference: true },
+  ]);
+});
+
+
+test('only explicit valid binary-test mappings contribute to the percentage', () => {
+  const http = [{ method: 'GET', path: '/one', status: 'native-untested' }, { method: 'POST', path: '/two', status: 'missing' }];
+  const ws = [{ direction: 'client-to-server-candidate', type: 'subscribe', rustReference: true }];
+  const manifest = { version: 1, http: [{ method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] }], ws: [] };
+  const result = applyBinaryEvidence(http, ws, manifest, () => '#[tokio::test]\nasync fn requests_one() {}');
+  assert.deepEqual(result, { tested: 1, total: 3, nativeTestedPct: 33.33 });
+  assert.equal(http[0].status, 'native-tested');
+  assert.deepEqual(ws[0].binaryTests, []);
+});
+
+test('manifest rejects unknown, duplicate, unmounted, and missing test references', () => {
+  const route = () => [{ method: 'GET', path: '/one', status: 'native-untested' }];
+  const mapping = { method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] };
+  const run = (http, mappings, source = '#[test]\nfn requests_one() {}') => applyBinaryEvidence(http, [], { version: 1, http: mappings, ws: [] }, () => source);
+  assert.throws(() => run(route(), [{ ...mapping, path: '/unknown' }]), /Unknown/);
+  assert.throws(() => run(route(), [mapping, mapping]), /duplicate/);
+  assert.throws(() => run([{ ...route()[0], status: 'mounted-fail-closed' }], [mapping]), /non-native/);
+  assert.throws(() => run(route(), [mapping], 'fn requests_one() {}'), /Missing or ignored test/);
+  assert.throws(() => run(route(), [{ ...mapping, tests: [{ file: '../other.rs', name: 'requests_one' }] }]), /Invalid test/);
+});
+
+test('directional WebSocket mappings are counted separately', () => {
+  const ws = [{ direction: 'client-to-server-candidate', type: 'event' }, { direction: 'server-to-client-candidate', type: 'event' }];
+  const manifest = { version: 1, http: [], ws: [{ direction: 'server-to-client-candidate', type: 'event', tests: [{ file: 'tests/ws.rs', name: 'receives_event' }] }] };
+  const result = applyBinaryEvidence([], ws, manifest, () => '#[test]\nfn receives_event() {}');
+  assert.equal(result.nativeTestedPct, 50);
+  assert.equal(ws[0].binaryTests.length, 0);
+  assert.equal(ws[1].status, 'native-tested');
+});
+
+
+test('commented, ignored and string-contained tests do not count as evidence', () => {
+  const mapping = { method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] };
+  const check = (source) => applyBinaryEvidence([{ method: 'GET', path: '/one', status: 'native-untested' }], [], { version: 1, http: [mapping], ws: [] }, () => source);
+  for (const source of [
+    '// #[test]\n// fn requests_one() {}',
+    '/* nested /* comment */\n#[test]\nfn requests_one() {} */',
+    '#[ignore]\n#[test]\nfn requests_one() {}',
+    '#[test]\n#[ignore = "reason"]\nfn requests_one() {}',
+    'const EXAMPLE: &str = r#"\n#[test]\nfn requests_one() {}\n"#;',
+  ]) assert.throws(() => check(source), /Missing or ignored test/);
+  assert.equal(check('#[test]\nfn requests_one() {}').tested, 1);
 });

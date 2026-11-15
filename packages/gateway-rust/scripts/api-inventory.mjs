@@ -33,7 +33,7 @@ const norm = (path) =>
 
 // ---- Node routes
 const nodeFiles = [join(nodeSrc, "server.ts"), ...walk(join(nodeSrc, "routes"), (p) => p.endsWith(".ts") && !p.endsWith(".test.ts"))];
-const routeRe = /\b(?:app|fastify|server)\.(get|post|put|patch|delete|all)\s*(?:<[^>(]*>)?\(\s*["'`]([^"'`]+)["'`]/g;
+const routeRe = /\b(?:app|fastify|server)\.(get|post|put|patch|delete|all)\s*(?:<[^()]*?>)?\(\s*["'`]([^"'`]+)["'`]/g;
 const nodeRoutes = [];
 for (const file of nodeFiles) {
   const text = readFileSync(file, "utf8");
@@ -121,7 +121,7 @@ const wsTestText = [wsRustText.slice(testStart), ...walk(join(crate, "tests"), (
 const wsRows = wsTypes.map((type) => {
   const native = wsNative.has(type);
   const tested = native && new RegExp(`\\\\?"type\\\\?"\\s*:\\s*\\\\?"${type.replace(/[.:]/g, "\\$&")}\\\\?"`).test(wsTestText);
-  return { type, status: !native ? "missing" : tested ? "native-and-tested" : "native-and-untested" };
+  return { type, status: !native ? "no-message-reference" : tested ? "message-and-test-reference" : "message-reference" };
 });
 
 const rows = nodeRoutes.map((r) => ({ ...r, status: status(r) }));
@@ -142,13 +142,13 @@ out.push(`| total Node HTTP routes | ${rows.length} | 100% |`, "");
 out.push("## Routes", "", "| Method | Path | Node file | Heuristic match |", "|---|---|---|---|");
 for (const r of rows) out.push(`| ${r.method} | \`${r.path}\` | ${r.file} | ${r.status} |`);
 out.push("");
-const wsCounts = { "native-and-tested": 0, "native-and-untested": 0, missing: 0 };
+const wsCounts = { "message-and-test-reference": 0, "message-reference": 0, "no-message-reference": 0 };
 for (const r of wsRows) wsCounts[r.status]++;
 out.push("## WebSocket client-to-server messages", "");
-out.push("Source: `case \"<type>\":` arms in `packages/gateway/src/ws.ts`. Rust status is by `handle_message` arm in `ws.rs`; `native-and-tested` means a test sends that message type. Server-to-client events and client-side message senders are not yet inventoried.", "");
+out.push("Source: `case \"<type>\":` arms in `packages/gateway/src/ws.ts`. A matching Rust handler arm and test string are heuristic references only; they do not establish mounting, behavior, a passing test, or parity. Server-to-client events and client-side message senders are not yet inventoried.", "");
 out.push("| Status | Messages |", "|---|---|");
 for (const [k, v] of Object.entries(wsCounts)) out.push(`| ${k} | ${v} |`);
-out.push(`| total | ${wsRows.length} |`, "", "| Message type | Rust status |", "|---|---|");
+out.push(`| total | ${wsRows.length} |`, "", "| Message type | Heuristic match |", "|---|---|");
 for (const r of wsRows) out.push(`| \`${r.type}\` | ${r.status} |`);
 out.push("");
 writeFileSync(join(crate, "API-INVENTORY.md"), out.join("\n"));

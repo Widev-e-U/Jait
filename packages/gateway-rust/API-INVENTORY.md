@@ -8,10 +8,10 @@ This scan covers literal Node HTTP registrations only; the WebSocket section bel
 
 | Heuristic match | Routes | Share |
 |---|---|---|
-| route-and-test-reference | 233 | 54.3% |
-| route-reference | 175 | 40.8% |
+| route-and-test-reference | 233 | 53.9% |
+| route-reference | 178 | 41.2% |
 | no-route-reference | 21 | 4.9% |
-| total Node HTTP routes | 429 | 100% |
+| total Node HTTP routes | 432 | 100% |
 
 ## Routes
 
@@ -64,6 +64,7 @@ This scan covers literal Node HTTP registrations only; the WebSocket section bel
 | GET | `/api/calendar/events` | routes/calendar.ts | route-and-test-reference |
 | GET | `/api/calendar/oauth/callback` | routes/calendar.ts | route-reference |
 | GET | `/api/channels` | routes/channels.ts | route-and-test-reference |
+| PATCH | `/api/channels/:id/config` | routes/channels.ts | route-reference |
 | POST | `/api/channels/:id/pair` | routes/channels.ts | route-reference |
 | GET | `/api/channels/:id/setup` | routes/channels.ts | route-reference |
 | POST | `/api/channels/:id/start` | routes/channels.ts | route-reference |
@@ -224,6 +225,7 @@ This scan covers literal Node HTTP registrations only; the WebSocket section bel
 | DELETE | `/api/plugins/:id` | routes/plugins.ts | route-reference |
 | GET | `/api/plugins/:id` | routes/plugins.ts | route-reference |
 | GET | `/api/plugins/:id/config` | routes/plugins.ts | route-reference |
+| PATCH | `/api/plugins/:id/config` | routes/plugins.ts | route-reference |
 | POST | `/api/plugins/:id/disable` | routes/plugins.ts | route-reference |
 | POST | `/api/plugins/:id/enable` | routes/plugins.ts | route-reference |
 | POST | `/api/plugins/scan` | routes/plugins.ts | route-reference |
@@ -300,6 +302,7 @@ This scan covers literal Node HTTP registrations only; the WebSocket section bel
 | POST | `/api/repos/:id/pull-requests/:number/comments` | routes/pull-requests.ts | route-reference |
 | GET | `/api/repos/:id/pull-requests/:number/diff` | routes/pull-requests.ts | route-reference |
 | POST | `/api/repos/:id/pull-requests/:number/merge` | routes/pull-requests.ts | route-reference |
+| POST | `/api/repos/:id/pull-requests/:number/resolve-conflicts` | routes/pull-requests.ts | route-reference |
 | POST | `/api/repos/:id/pull-requests/:number/reviews` | routes/pull-requests.ts | route-reference |
 | GET | `/api/reminders` | routes/reminders.ts | route-and-test-reference |
 | POST | `/api/reminders` | routes/reminders.ts | route-and-test-reference |
@@ -449,51 +452,51 @@ This scan covers literal Node HTTP registrations only; the WebSocket section bel
 
 ## WebSocket client-to-server messages
 
-Source: `case "<type>":` arms in `packages/gateway/src/ws.ts`. Rust status is by `handle_message` arm in `ws.rs`; `native-and-tested` means a test sends that message type. Server-to-client events and client-side message senders are not yet inventoried.
+Source: `case "<type>":` arms in `packages/gateway/src/ws.ts`. A matching Rust handler arm and test string are heuristic references only; they do not establish mounting, behavior, a passing test, or parity. Server-to-client events and client-side message senders are not yet inventoried.
 
 | Status | Messages |
 |---|---|
-| native-and-tested | 3 |
-| native-and-untested | 3 |
-| missing | 31 |
+| message-and-test-reference | 5 |
+| message-reference | 3 |
+| no-message-reference | 29 |
 | total | 37 |
 
-| Message type | Rust status |
+| Message type | Heuristic match |
 |---|---|
-| `authenticate` | native-and-tested |
-| `notification.read` | missing |
-| `subscribe` | native-and-tested |
-| `resource.subscribe` | native-and-tested |
-| `resource.unsubscribe` | native-and-untested |
-| `node.hello` | missing |
-| `nodes.list` | missing |
-| `nodes.get` | missing |
-| `nodes.update-permissions` | missing |
-| `nodes.forget` | missing |
-| `terminal.subscribe` | native-and-untested |
-| `terminal.unsubscribe` | native-and-untested |
-| `terminal.input` | missing |
-| `terminal.resize` | missing |
-| `consent.approve` | missing |
-| `consent.reject` | missing |
-| `screen-share:offer` | missing |
-| `screen-share:answer` | missing |
-| `screen-share:ice-candidate` | missing |
-| `screen-share:start-request` | missing |
-| `screen-share:stop-request` | missing |
-| `ui.state` | missing |
-| `messenger.register` | missing |
-| `messenger.result` | missing |
-| `architecture.render-result` | missing |
-| `fs.register-node` | missing |
-| `provider.op-response` | missing |
-| `provider.event` | missing |
-| `fs.browse-response` | missing |
-| `fs.roots-response` | missing |
-| `tool.op-response` | missing |
-| `tool.background-complete` | missing |
-| `tool.op-output` | missing |
-| `terminal.op-response` | missing |
-| `terminal.output` | missing |
-| `terminal.exit` | missing |
-| `fs.op-response` | missing |
+| `authenticate` | message-and-test-reference |
+| `notification.read` | no-message-reference |
+| `subscribe` | message-and-test-reference |
+| `resource.subscribe` | message-and-test-reference |
+| `resource.unsubscribe` | message-reference |
+| `node.hello` | no-message-reference |
+| `nodes.list` | no-message-reference |
+| `nodes.get` | no-message-reference |
+| `nodes.update-permissions` | no-message-reference |
+| `nodes.forget` | no-message-reference |
+| `terminal.subscribe` | message-reference |
+| `terminal.unsubscribe` | message-reference |
+| `terminal.input` | message-and-test-reference |
+| `terminal.resize` | no-message-reference |
+| `consent.approve` | message-and-test-reference |
+| `consent.reject` | no-message-reference |
+| `screen-share:offer` | no-message-reference |
+| `screen-share:answer` | no-message-reference |
+| `screen-share:ice-candidate` | no-message-reference |
+| `screen-share:start-request` | no-message-reference |
+| `screen-share:stop-request` | no-message-reference |
+| `ui.state` | no-message-reference |
+| `messenger.register` | no-message-reference |
+| `messenger.result` | no-message-reference |
+| `architecture.render-result` | no-message-reference |
+| `fs.register-node` | no-message-reference |
+| `provider.op-response` | no-message-reference |
+| `provider.event` | no-message-reference |
+| `fs.browse-response` | no-message-reference |
+| `fs.roots-response` | no-message-reference |
+| `tool.op-response` | no-message-reference |
+| `tool.background-complete` | no-message-reference |
+| `tool.op-output` | no-message-reference |
+| `terminal.op-response` | no-message-reference |
+| `terminal.output` | no-message-reference |
+| `terminal.exit` | no-message-reference |
+| `fs.op-response` | no-message-reference |
