@@ -1220,6 +1220,46 @@
           "name": "calendar_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/secrets/:id",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets/requests",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 177,
-    "native-tested": 122,
+    "native-untested": 173,
+    "native-tested": 126,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 122,
+    "nativeTested": 126,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 24.16,
+    "nativeTestedPct": 24.95,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -352,10 +352,15 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "DELETE",
@@ -1856,10 +1861,15 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1867,10 +1877,15 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -4609,10 +4624,15 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",

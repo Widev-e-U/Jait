@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 177,
-  "native-tested": 122,
+  "native-untested": 173,
+  "native-tested": 126,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 122,
+  "nativeTested": 126,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 24.16,
+  "nativeTestedPct": 24.95,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -57,7 +57,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/reminders/:id` | mounted-incomplete |  | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | native-untested |  | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
-| DELETE | `/api/secrets/:id` | native-untested |  | routes/secrets.ts |
+| DELETE | `/api/secrets/:id` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
 | DELETE | `/api/security/checks/:id` | mounted-fail-closed |  | routes/security-workbench.ts |
 | DELETE | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | DELETE | `/api/store/skills/:slug` | native-untested |  | routes/store.ts |
@@ -176,8 +176,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/screen-share/chat/:chatId` | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/screen-share/devices` | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/screen-share/state` | mounted-fail-closed |  | routes/screen-share.ts |
-| GET | `/api/secrets` | native-untested |  | routes/secrets.ts |
-| GET | `/api/secrets/requests` | native-untested |  | routes/secrets.ts |
+| GET | `/api/secrets` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
+| GET | `/api/secrets/requests` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
 | GET | `/api/security/assessments` | native-untested |  | routes/security-assessments.ts |
 | GET | `/api/security/assessments/:id` | native-untested |  | routes/security-assessments.ts |
 | GET | `/api/security/checks/:id` | mounted-fail-closed |  | routes/security-workbench.ts |
@@ -400,7 +400,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/screen-share/start` | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/stop` | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/transfer-control` | mounted-fail-closed |  | routes/screen-share.ts |
-| POST | `/api/secrets` | native-untested |  | routes/secrets.ts |
+| POST | `/api/secrets` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
 | POST | `/api/secrets/requests/:id/cancel` | native-untested |  | routes/secrets.ts |
 | POST | `/api/secrets/requests/:id/submit` | native-untested |  | routes/secrets.ts |
 | POST | `/api/security/assessments` | native-untested |  | routes/security-assessments.ts |
