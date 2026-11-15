@@ -890,6 +890,76 @@
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/nodes",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/roots",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/browse",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/user-questions/requests",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/skills",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jait-todos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jait-todos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

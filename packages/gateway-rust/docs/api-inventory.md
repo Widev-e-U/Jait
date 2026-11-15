@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 210,
-  "native-tested": 89,
+  "native-untested": 203,
+  "native-tested": 96,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 89,
+  "nativeTested": 96,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 17.62,
+  "nativeTestedPct": 19.01,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -40,7 +40,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/calendar/accounts/:id` | native-untested |  | routes/calendar.ts |
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | native-untested |  | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
-| DELETE | `/api/jait-todos/:id` | native-untested |  | routes/repo-proposals.ts |
+| DELETE | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | DELETE | `/api/jobs/:id` | native-untested |  | routes/jobs.ts |
 | DELETE | `/api/messenger` | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-accounts/teams` | missing |  | routes/messenger.ts |
@@ -104,9 +104,9 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/email/messages/:id` | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/email/oauth/callback` | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/environment/snapshot` | native-untested |  | routes/environment.ts |
-| GET | `/api/filesystem/browse` | native-untested |  | routes/filesystem.ts |
-| GET | `/api/filesystem/nodes` | native-untested |  | routes/filesystem.ts |
-| GET | `/api/filesystem/roots` | native-untested |  | routes/filesystem.ts |
+| GET | `/api/filesystem/browse` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
+| GET | `/api/filesystem/nodes` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
+| GET | `/api/filesystem/roots` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
 | GET | `/api/github-apps` | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | GET | `/api/github/apps/callback` | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | GET | `/api/jobs` | native-untested |  | routes/jobs.ts |
@@ -199,7 +199,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/sessions/:sessionId/trajectory` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/last-active` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/streaming` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/skills` | native-untested |  | routes/skills.ts |
+| GET | `/api/skills` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/skills.ts |
 | GET | `/api/store/packages` | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills` | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-untested |  | routes/store.ts |
@@ -221,7 +221,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/trust/levels/:actionType` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | GET | `/api/update/changelog` | native-untested |  | routes/update.ts |
 | GET | `/api/update/check` | native-untested |  | routes/update.ts |
-| GET | `/api/user-questions/requests` | native-untested |  | routes/user-questions.ts |
+| GET | `/api/user-questions/requests` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/user-questions.ts |
 | GET | `/api/voice-assistant/status` | native-untested |  | server.ts |
 | GET | `/api/voice/state/:sessionId` | native-untested |  | routes/voice.ts |
 | GET | `/health` | native-untested |  | routes/health.ts |
@@ -236,7 +236,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/auth/settings/tools` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | PATCH | `/api/channels/:id/config` | mounted-fail-closed |  | routes/channels.ts |
 | PATCH | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
-| PATCH | `/api/jait-todos/:id` | native-untested |  | routes/repo-proposals.ts |
+| PATCH | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | PATCH | `/api/jobs/:id` | native-untested |  | routes/jobs.ts |
 | PATCH | `/api/plans/:id` | native-untested |  | routes/plans.ts |
 | PATCH | `/api/plugins/:id/config` | mounted-fail-closed |  | routes/plugins.ts |

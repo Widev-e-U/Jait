@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 210,
-    "native-tested": 89,
+    "native-untested": 203,
+    "native-tested": 96,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 89,
+    "nativeTested": 96,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 17.62,
+    "nativeTestedPct": 19.01,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -138,10 +138,15 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "DELETE",
@@ -899,10 +904,15 @@
       "nodeFiles": [
         "routes/filesystem.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/filesystem.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -910,10 +920,15 @@
       "nodeFiles": [
         "routes/filesystem.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/filesystem.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -921,10 +936,15 @@
       "nodeFiles": [
         "routes/filesystem.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/filesystem.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2079,10 +2099,15 @@
       "nodeFiles": [
         "routes/skills.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/skills.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2351,10 +2376,15 @@
       "nodeFiles": [
         "routes/user-questions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/user_questions.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2526,10 +2556,15 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "PATCH",
