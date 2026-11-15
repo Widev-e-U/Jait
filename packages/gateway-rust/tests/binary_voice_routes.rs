@@ -95,6 +95,14 @@ async fn voice_routes_through_the_binary() {
         }
     };
     let owner = register("owner", None).await;
+    let forbidden = client
+        .get(url("/api/voice/state/s1"))
+        .header(reqwest::header::ORIGIN, "https://untrusted.example")
+        .header(reqwest::header::COOKIE, format!("jait_token={owner}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(forbidden.status(), 403);
     let invite = client
         .post(url("/api/auth/invitations"))
         .bearer_auth(&owner)
@@ -125,30 +133,113 @@ async fn voice_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
-    // Authenticated owner paths. (Node serves state/speak/transcribe without a
-    // session, so no 401 is asserted for them; wake-candidate does require one.)
-    let (st, _) = call(M::POST, "/api/voice/wake-candidate".into(), String::new(), Some(json!({"transcript":"hey"}))).await;
+    // Authenticated owner paths; the Node server authenticates these globally.
+    let (st, _) = call(
+        M::POST,
+        "/api/voice/wake-candidate".into(),
+        String::new(),
+        Some(json!({"transcript":"hey"})),
+    )
+    .await;
     assert_eq!(st, 401);
-    let (st, b) = call(M::POST, "/api/voice/wake-candidate".into(), owner.clone(), Some(json!({"transcript":"hey jait"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/voice/wake-candidate".into(),
+        owner.clone(),
+        Some(json!({"transcript":"hey jait"})),
+    )
+    .await;
     assert!(st == 200 && b["activate"] == false, "{b}");
-    let (st, b) = call(M::POST, "/api/voice/wake-candidate".into(), owner.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/voice/wake-candidate".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 200 && b["activate"] == false, "{b}");
 
     let (st, b) = call(M::GET, "/api/voice/state/s1".into(), owner.clone(), None).await;
-    assert!(st == 200 && b["state"]["sessionId"] == "s1" && b["state"]["wakeWordEnabled"] == true, "{b}");
-    let (st, b) = call(M::PATCH, "/api/voice/state/s1".into(), owner.clone(), Some(json!({"wakeWordEnabled":false,"talkModeEnabled":true,"listening":"nope"}))).await;
-    assert!(st == 200 && b["state"]["wakeWordEnabled"] == false && b["state"]["talkModeEnabled"] == true && b["state"]["listening"] == false, "{b}");
+    assert!(
+        st == 200 && b["state"]["sessionId"] == "s1" && b["state"]["wakeWordEnabled"] == true,
+        "{b}"
+    );
+    let (st, b) = call(
+        M::PATCH,
+        "/api/voice/state/s1".into(),
+        owner.clone(),
+        Some(json!({"wakeWordEnabled":false,"talkModeEnabled":true,"listening":"nope"})),
+    )
+    .await;
+    assert!(
+        st == 200
+            && b["state"]["wakeWordEnabled"] == false
+            && b["state"]["talkModeEnabled"] == true
+            && b["state"]["listening"] == false,
+        "{b}"
+    );
     let (_, b) = call(M::GET, "/api/voice/state/s1".into(), owner.clone(), None).await;
     assert_eq!(b["state"]["wakeWordEnabled"], false, "{b}");
 
-    let (st, b) = call(M::POST, "/api/voice/speak".into(), owner.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/voice/speak".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 400 && b["error"] == "VALIDATION_ERROR", "{b}");
-    let (st, b) = call(M::POST, "/api/voice/transcribe".into(), owner.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/voice/transcribe".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 400 && b["error"] == "VALIDATION_ERROR", "{b}");
-    let (st, b) = call(M::POST, "/api/voice/transcribe-audio".into(), owner.clone(), Some(json!({"audioBase64":"AAAA"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/voice/transcribe-audio".into(),
+        owner.clone(),
+        Some(json!({"audioBase64":"AAAA"})),
+    )
+    .await;
     assert!(st == 501 && b["error"] == "NOT_CONFIGURED", "{b}");
-    let (st, b) = call(M::GET, "/api/voice-assistant/status".into(), owner.clone(), None).await;
-    assert!(st == 200 && b["available"] == false && b["voice"] == "alloy", "{b}");
+    let (st, b) = call(
+        M::GET,
+        "/api/voice-assistant/status".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert!(
+        st == 200 && b["available"] == false && b["voice"] == "alloy",
+        "{b}"
+    );
     let _ = &other;
+}
+
+#[tokio::test]
+async fn voice_endpoints_require_authentication_through_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    for (method, path) in [
+        (reqwest::Method::GET, "/api/voice/state/example"),
+        (reqwest::Method::PATCH, "/api/voice/state/example"),
+        (reqwest::Method::POST, "/api/voice/speak"),
+        (reqwest::Method::POST, "/api/voice/transcribe"),
+        (reqwest::Method::POST, "/api/voice/transcribe-audio"),
+        (reqwest::Method::POST, "/api/voice/wake-candidate"),
+    ] {
+        let response = client
+            .request(method.clone(), format!("{}{path}", gateway.base))
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 401, "{method} {path}");
+    }
 }

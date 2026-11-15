@@ -4,17 +4,15 @@
 //!
 //! | method | path                              | auth | notes                                  |
 //! |--------|-----------------------------------|------|----------------------------------------|
-//! | POST   | `/api/voice/transcribe`           | no   | transcript/audio -> text + consent     |
-//! | POST   | `/api/voice/speak`                | no   | text -> base64 audio                   |
-//! | GET    | `/api/voice/state/{sessionId}`    | no   | `{ state }`                            |
-//! | PATCH  | `/api/voice/state/{sessionId}`    | no   | boolean-only patch, `{ state }`        |
+//! | POST   | `/api/voice/transcribe`           | yes  | transcript/audio -> text + consent     |
+//! | POST   | `/api/voice/speak`                | yes  | text -> base64 audio                   |
+//! | GET    | `/api/voice/state/{sessionId}`    | yes  | `{ state }`                            |
+//! | PATCH  | `/api/voice/state/{sessionId}`    | yes  | boolean-only patch, `{ state }`        |
 //! | POST   | `/api/voice/transcribe-audio`     | yes  | provider STT, `{ text }`               |
 //!
 //! Security notes:
-//! * `transcribe-audio` keeps the TS ordering: the "not configured" 501 probe is
-//!   answered before authentication (it reveals only static configuration
-//!   state, never user data), then `require_user` runs — including the origin
-//!   check and the "user still exists" check.
+//! * The router applies the same authentication and origin boundary as the
+//!   Node server before dispatching any voice handler.
 //! * Audio bytes never reach logs; failures surface as fixed strings.
 //! * Every size bound comes from `crate::voice` (`MAX_AUDIO`, `MAX_TEXT`) or the
 //!   shared body limit in `routes::auth::parse_body`.
@@ -37,6 +35,17 @@ use crate::voice::{
     VoiceFuture, VoiceService, VoiceState, resolve_consent, transcribe_remote,
     transcription_request,
 };
+
+async fn voice_auth(
+    State(auth): State<AuthState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    if let Err(response) = auth::require_user(&auth, request.headers()).await {
+        return *response;
+    }
+    next.run(request).await
+}
 
 /// Adapter that lets an object-safe `dyn ScopedTranscriptionHttp` be handed to
 /// `transcribe_remote`, which takes `&impl ScopedTranscriptionHttp` (and is
@@ -391,6 +400,7 @@ impl VoiceRoutes {
 
     /// Mount the voice surface on a fresh router.
     pub fn router(self) -> Router {
+        let auth = self.auth.clone();
         Router::new()
             .route("/api/voice/transcribe", post(transcribe_handler))
             .route("/api/voice/speak", post(speak_handler))
@@ -404,6 +414,7 @@ impl VoiceRoutes {
                 post(transcribe_audio_handler),
             )
             .with_state(self)
+            .layer(axum::middleware::from_fn_with_state(auth, voice_auth))
     }
 
     fn lock_voice(&self) -> MutexGuard<'_, VoiceService> {
@@ -559,7 +570,7 @@ impl VoiceRoutes {
 
     // ── POST /api/voice/transcribe-audio ───────────────────────────
     pub async fn post_transcribe_audio(&self, headers: HeaderMap, body: Body) -> Response {
-        // TS parity: the 501 probe happens before `requireAuth`.
+        // The router authenticates before this configuration probe, as Node's server does.
         let (Some(stt), Some(settings_source)) = (self.stt.clone(), self.settings.clone()) else {
             return not_configured();
         };
