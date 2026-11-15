@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 162,
-  "native-tested": 137,
+  "native-untested": 156,
+  "native-tested": 143,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 137,
+  "nativeTested": 143,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 27.13,
+  "nativeTestedPct": 28.32,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -203,12 +203,12 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/store/packages` | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills` | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-untested |  | routes/store.ts |
-| GET | `/api/surfaces` | native-untested |  | routes/terminals.ts |
+| GET | `/api/surfaces` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | GET | `/api/team-rooms` | native-untested |  | routes/team-chat.ts |
 | GET | `/api/team-rooms/:id` | native-untested |  | routes/team-chat.ts |
-| GET | `/api/terminals` | native-untested |  | routes/terminals.ts |
+| GET | `/api/terminals` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | GET | `/api/terminals/:id` | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
-| GET | `/api/terminals/shells` | native-untested |  | routes/terminals.ts |
+| GET | `/api/terminals/shells` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | GET | `/api/threads` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/threads/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/threads/:id/activities` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -431,9 +431,9 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/team-rooms` | native-untested |  | routes/team-chat.ts |
 | POST | `/api/team-rooms/:id/messages` | native-untested |  | routes/team-chat.ts |
 | POST | `/api/terminals` | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
-| POST | `/api/terminals/:id/execute` | native-untested |  | routes/terminals.ts |
-| POST | `/api/terminals/:id/resize` | native-untested |  | routes/terminals.ts |
-| POST | `/api/terminals/:id/write` | native-untested |  | routes/terminals.ts |
+| POST | `/api/terminals/:id/execute` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
+| POST | `/api/terminals/:id/resize` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
+| POST | `/api/terminals/:id/write` | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | POST | `/api/threads` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/approve` | native-untested |  | routes/threads.ts |
 | POST | `/api/threads/:id/create-pr` | missing |  | routes/threads.ts |

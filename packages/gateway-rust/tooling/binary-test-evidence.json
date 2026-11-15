@@ -1370,6 +1370,66 @@
           "name": "provider_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals/shells",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/surfaces",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/write",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/resize",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/execute",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []
