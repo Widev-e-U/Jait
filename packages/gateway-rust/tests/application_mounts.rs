@@ -4328,8 +4328,16 @@ async fn voice_assistant_status_and_streaming_sessions_are_served() {
         .timeout(Duration::from_secs(10))
         .build()
         .unwrap();
+    let anonymous_status = client
+        .get(format!("{base}/api/voice-assistant/status"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anonymous_status.status(), 401);
+    let token = token(&client, &base).await;
     let status = client
         .get(format!("{base}/api/voice-assistant/status"))
+        .bearer_auth(&token)
         .send()
         .await
         .unwrap();
@@ -4343,7 +4351,6 @@ async fn voice_assistant_status_and_streaming_sessions_are_served() {
         .await
         .unwrap();
     assert_eq!(anon.status(), 401);
-    let token = token(&client, &base).await;
     let streaming: serde_json::Value = client
         .get(format!("{base}/api/sessions/streaming"))
         .bearer_auth(&token)
