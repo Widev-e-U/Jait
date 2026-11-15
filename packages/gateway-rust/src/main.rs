@@ -24,6 +24,42 @@ async fn main() -> ExitCode {
         }
     }
 }
+/// Serve `/api/store/*` on a private skills root. No host consent path exists in
+/// this binary yet, so every request's authority denies: the routes authenticate
+/// and answer, but registry reads, downloads and installs fail closed.
+fn mount_store(
+    application: &mut Application,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use jait_gateway::integrations::{
+        clawhub::{ClawHubClient, store_adapter::RequestAuthority},
+        skills::{SkillRegistry, install::SkillStore},
+    };
+    let home = std::env::var_os("HOME").ok_or("HOME is required for the skill store")?;
+    let root = std::path::PathBuf::from(home).join(".jait").join("skills");
+    std::fs::create_dir_all(&root)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let authority: RequestAuthority = std::sync::Arc::new(|_, _| {
+        Box::pin(async { Err("Skill store requests require host consent".into()) })
+    });
+    application.with_store(
+        ClawHubClient::new(None)?,
+        SkillRegistry::default(),
+        SkillStore::open(root)?,
+        std::num::NonZeroU16::new(2).ok_or("store parallelism")?,
+        authority,
+        std::sync::Arc::new(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs())
+        }),
+    )?;
+    Ok(())
+}
+
 async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = GatewayConfig::from_lookup(|key| std::env::var(key).ok())?;
     // Install signals before announcing readiness.
@@ -51,6 +87,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             None => Application::bind_with_settings_chat(config, application).await?,
         };
+        mount_store(&mut application)?;
         // The hub is mounted here, not by embedders, so `/ws` identity admission is
         // always the database-backed authority bound to this runtime's signing secret.
         let max_connections =
