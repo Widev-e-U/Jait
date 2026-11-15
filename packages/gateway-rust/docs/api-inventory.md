@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 254,
-  "native-tested": 45,
+  "native-untested": 249,
+  "native-tested": 50,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 45,
+  "nativeTested": 50,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 8.91,
+  "nativeTestedPct": 9.9,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -56,7 +56,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/provider-accounts/:id` | native-untested |  | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | mounted-incomplete |  | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | native-untested |  | routes/repo-proposals.ts |
-| DELETE | `/api/repos/:id` | native-untested |  | routes/repositories.ts |
+| DELETE | `/api/repos/:id` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | DELETE | `/api/secrets/:id` | native-untested |  | routes/secrets.ts |
 | DELETE | `/api/security/checks/:id` | mounted-fail-closed |  | routes/security-workbench.ts |
 | DELETE | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
@@ -171,7 +171,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/repos/:id/pull-requests` | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/pull-requests/:number` | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/pull-requests/:number/diff` | native-untested |  | routes/pull-requests.ts |
-| GET | `/api/repos/:id/strategy` | native-untested |  | routes/repositories.ts |
+| GET | `/api/repos/:id/strategy` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | GET | `/api/repos/:repoId/todos` | native-untested |  | routes/repo-proposals.ts |
 | GET | `/api/screen-share/chat/:chatId` | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/screen-share/devices` | mounted-fail-closed |  | routes/screen-share.ts |
@@ -245,7 +245,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/provider-accounts/:id` | native-untested |  | routes/providers.ts |
 | PATCH | `/api/reminders/:id` | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | PATCH | `/api/repo-proposals/:id` | native-untested |  | routes/repo-proposals.ts |
-| PATCH | `/api/repos/:id` | native-untested |  | routes/repositories.ts |
+| PATCH | `/api/repos/:id` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-untested |  | routes/sessions.ts |
@@ -379,7 +379,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/providers/models/reset` | native-untested |  | routes/providers.ts |
 | POST | `/api/providers/omniroute/test` | native-untested |  | routes/providers.ts |
 | POST | `/api/reminders` | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
-| POST | `/api/repos` | native-untested |  | routes/repositories.ts |
+| POST | `/api/repos` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | POST | `/api/repos/:repoId/plans` | native-untested |  | routes/plans.ts |
 | POST | `/api/repos/:repoId/proposals` | native-untested |  | routes/repo-proposals.ts |
 | POST | `/api/repos/:id/pull-requests/:number/comments` | native-untested |  | routes/pull-requests.ts |
@@ -462,7 +462,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PUT | `/api/messenger/presence` | missing |  | routes/messenger.ts |
 | PUT | `/api/mobile/routines/:kind` | mounted-fail-closed |  | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-untested |  | routes/threads.ts |
-| PUT | `/api/repos/:id/strategy` | native-untested |  | routes/repositories.ts |
+| PUT | `/api/repos/:id/strategy` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 
 ## Background services (heuristic)
 

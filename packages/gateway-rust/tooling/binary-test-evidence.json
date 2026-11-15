@@ -45,7 +45,12 @@
     { "method": "GET", "path": "/api/projects/:id/state", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
     { "method": "GET", "path": "/api/projects/:id/sessions", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
     { "method": "POST", "path": "/api/projects/:id/sessions", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
-    { "method": "GET", "path": "/api/repos", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]}
+    { "method": "GET", "path": "/api/repos", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "POST", "path": "/api/repos", "tests": [{"file": "tests/binary_repos.rs", "name": "repository_crud_and_strategy_are_owned_through_the_binary"}]},
+    { "method": "PATCH", "path": "/api/repos/:id", "tests": [{"file": "tests/binary_repos.rs", "name": "repository_crud_and_strategy_are_owned_through_the_binary"}]},
+    { "method": "DELETE", "path": "/api/repos/:id", "tests": [{"file": "tests/binary_repos.rs", "name": "repository_crud_and_strategy_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/repos/:id/strategy", "tests": [{"file": "tests/binary_repos.rs", "name": "repository_crud_and_strategy_are_owned_through_the_binary"}]},
+    { "method": "PUT", "path": "/api/repos/:id/strategy", "tests": [{"file": "tests/binary_repos.rs", "name": "repository_crud_and_strategy_are_owned_through_the_binary"}]}
   ],
   "ws": []
 }
