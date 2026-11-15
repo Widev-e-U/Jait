@@ -251,3 +251,55 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
         "{list}"
     );
 }
+
+#[tokio::test]
+async fn project_list_limit_uses_node_query_semantics_through_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let register = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(register.status(), 200);
+    let token = register.json::<Value>().await.unwrap()["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for index in 0..101 {
+        let response = client
+            .post(url("/api/projects"))
+            .bearer_auth(&token)
+            .json(&json!({"title": format!("Project {index}")}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 201);
+    }
+    for (query, expected_count, has_more) in [
+        ("?limit=2.9", 2, true),
+        ("?limit=3extra", 3, true),
+        ("?limit=2&limit=3", 101, false),
+        ("?limit=1000", 100, true),
+    ] {
+        let response = client
+            .get(url(&format!("/api/projects{query}")))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body = response.json::<Value>().await.unwrap();
+        assert_eq!(
+            body["projects"].as_array().unwrap().len(),
+            expected_count,
+            "{query}"
+        );
+        assert_eq!(body["hasMore"], has_more, "{query}");
+    }
+}

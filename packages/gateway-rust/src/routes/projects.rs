@@ -88,10 +88,28 @@ fn params(uri: &Uri) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-fn query_limit(map: &HashMap<String, String>) -> Option<f64> {
-    map.get("limit")
-        .and_then(|v| v.parse::<f64>().ok())
-        .filter(|v| v.is_finite() && *v >= 1.0)
+fn query_limit(uri: &Uri) -> Option<f64> {
+    // Fastify represents repeated parameters as an array, which the Node
+    // route rejects because parseListLimit accepts only strings.
+    let mut limits =
+        url::form_urlencoded::parse(uri.query()?.as_bytes()).filter(|(key, _)| key == "limit");
+    let value = limits.next()?.1;
+    if limits.next().is_some() {
+        return None;
+    }
+    // Number.parseInt(value, 10) consumes a signed decimal prefix after JS
+    // whitespace, then the route clamps positive results to 100.
+    let value = crate::text::js_trim(&value);
+    let value = value.strip_prefix('+').unwrap_or(value);
+    if value.starts_with('-') {
+        return None;
+    }
+    let count = value.bytes().take_while(u8::is_ascii_digit).count();
+    if count == 0 {
+        return None;
+    }
+    let parsed = value[..count].parse::<f64>().ok()?;
+    (parsed.is_finite() && parsed >= 1.0).then_some(parsed.min(100.0))
 }
 
 /// Port of `assignRepositoryToProject` (services/project-repositories.ts) and
@@ -389,7 +407,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 .get("status")
                 .cloned()
                 .unwrap_or_else(|| "active".to_string());
-            let limit = query_limit(&query);
+            let limit = query_limit(&uri);
             let user_id = uid.clone();
             return run(&state.auth, move |db| {
                 let service = ProjectService::new(db);
@@ -980,5 +998,31 @@ mod repository_id_tests {
             Some("\u{85}repo\u{85}".into())
         );
         assert_eq!(requested_repository_id(&json!({"repoId": 42})), None);
+    }
+}
+
+#[cfg(test)]
+mod list_limit_tests {
+    use super::*;
+
+    #[test]
+    fn list_limit_matches_node_decimal_prefix_and_bounds() {
+        for (query, expected) in [
+            ("", None),
+            ("?limit=2.9", Some(2.0)),
+            ("?limit=12abc", Some(12.0)),
+            ("?limit=%EF%BB%BF%2B7", Some(7.0)),
+            ("?limit=0x10", None),
+            ("?limit=-1", None),
+            ("?limit=101", Some(100.0)),
+            (
+                "?limit=999999999999999999999999999999999999999",
+                Some(100.0),
+            ),
+            ("?limit=2&limit=3", None),
+        ] {
+            let uri: Uri = format!("/api/projects{query}").parse().unwrap();
+            assert_eq!(query_limit(&uri), expected, "{query}");
+        }
     }
 }
