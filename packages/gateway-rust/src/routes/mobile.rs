@@ -67,8 +67,9 @@ pub trait SessionList: Send + Sync {
 
 pub trait ConsentStore: Send + Sync {
     fn list_pending(&self) -> Vec<Value>;
-    fn approve(&self, id: &str, method: &str, actor: &str) -> bool;
-    fn reject(&self, id: &str, method: &str, actor: &str) -> bool;
+    /// Atomically verify that `user_id` owns the request's session and record
+    /// the decision. Ownership must be held across the claim, not checked first.
+    fn decide(&self, id: &str, user_id: &str, approve: bool) -> bool;
 }
 
 /// Port of `ControlAccess.session` / `ControlAccess.consentRequest`.
@@ -435,16 +436,22 @@ async fn body_of(request: Request) -> Result<Value, Box<Response>> {
     Ok(if body.is_null() { json!({}) } else { body })
 }
 
-async fn discovery(State(_state): State<MobileRoutes>, request: Request) -> Response {
+async fn discovery(State(state): State<MobileRoutes>, request: Request) -> Response {
+    if !state.auth.origin_allowed(request.headers()) {
+        return auth::response(403, json!({"error":"ORIGIN_FORBIDDEN"}));
+    }
     let host = hostname(request.headers(), &request);
     let protocol = protocol(&request);
     auth::response(200, discovery_payload(&host, protocol, &iso_now()))
 }
 
 async fn register(State(state): State<MobileRoutes>, request: Request) -> Response {
-    // Fastify parses the body before the handler runs, so a malformed JSON
-    // body yields 400 ahead of the conditional push-token auth check.
-    let headers = request.headers().clone();
+    // The Node composition root authenticates every non-public API route
+    // before parsing the body or mutating the device registry.
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(response) => return *response,
+    };
     let body = match body_of(request).await {
         Ok(body) => body,
         Err(response) => return *response,
@@ -455,14 +462,10 @@ async fn register(State(state): State<MobileRoutes>, request: Request) -> Respon
     };
     let push_token = field(&body, "pushToken");
     let device = state.devices.register(registration.clone());
-    if !push_token.is_empty() {
-        let user = match auth::require_user(&state.auth, &headers).await {
-            Ok(user) => user,
-            Err(response) => return *response,
-        };
-        if let Some(push) = &state.push {
-            push.register(&registration.id, &user.id, &push_token);
-        }
+    if !push_token.is_empty()
+        && let Some(push) = &state.push
+    {
+        push.register(&registration.id, &user.id, &push_token);
     }
     auth::response(200, json!({ "ok": true, "device": device }))
 }
@@ -680,12 +683,9 @@ async fn consent_approve(
         Err(response) => return *response,
     };
     let user_id = user.id.clone();
-    let decided = tokio::task::spawn_blocking(move || {
-        state.access.consent_request(&id, &user_id)
-            && state.consent.approve(&id, "click", "mobile.approve")
-    })
-    .await
-    .unwrap_or(false);
+    let decided = tokio::task::spawn_blocking(move || state.consent.decide(&id, &user_id, true))
+        .await
+        .unwrap_or(false);
     if !decided {
         return error(404, CONSENT_NOT_FOUND);
     }
@@ -702,12 +702,9 @@ async fn consent_reject(
         Err(response) => return *response,
     };
     let user_id = user.id.clone();
-    let decided = tokio::task::spawn_blocking(move || {
-        state.access.consent_request(&id, &user_id)
-            && state.consent.reject(&id, "click", "mobile.reject")
-    })
-    .await
-    .unwrap_or(false);
+    let decided = tokio::task::spawn_blocking(move || state.consent.decide(&id, &user_id, false))
+        .await
+        .unwrap_or(false);
     if !decided {
         return error(404, CONSENT_NOT_FOUND);
     }
