@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 183,
-  "native-tested": 116,
+  "native-untested": 177,
+  "native-tested": 122,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 116,
+  "nativeTested": 122,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 22.97,
+  "nativeTestedPct": 24.16,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -37,7 +37,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/agents/:agentId/github-app` | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | DELETE | `/api/assistants/profiles/:id` | native-untested |  | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
-| DELETE | `/api/calendar/accounts/:id` | native-untested |  | routes/calendar.ts |
+| DELETE | `/api/calendar/accounts/:id` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | native-untested |  | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
@@ -76,12 +76,12 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/auth/settings/env-status` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/auth/settings/tools` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/browser/screenshot` | native-untested |  | server.ts |
-| GET | `/api/calendar/accounts` | native-untested |  | routes/calendar.ts |
+| GET | `/api/calendar/accounts` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/calendars` | native-untested |  | routes/calendar.ts |
-| GET | `/api/calendar/config` | native-untested |  | routes/calendar.ts |
+| GET | `/api/calendar/config` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/connect/google` | native-untested |  | routes/calendar.ts |
 | GET | `/api/calendar/events` | native-untested |  | routes/calendar.ts |
-| GET | `/api/calendar/oauth/callback` | native-untested |  | routes/calendar.ts |
+| GET | `/api/calendar/oauth/callback` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/channels` | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/setup` | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/status` | mounted-fail-closed |  | routes/channels.ts |
@@ -266,8 +266,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/auth/refresh` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | POST | `/api/auth/register` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | POST | `/api/auth/session/bind` | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
-| POST | `/api/calendar/config/google` | native-untested |  | routes/calendar.ts |
-| POST | `/api/calendar/device/sync` | native-untested |  | routes/calendar.ts |
+| POST | `/api/calendar/config/google` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
+| POST | `/api/calendar/device/sync` | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | POST | `/api/channels/:id/pair` | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/channels/:id/start` | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/channels/:id/stop` | mounted-fail-closed |  | routes/channels.ts |
