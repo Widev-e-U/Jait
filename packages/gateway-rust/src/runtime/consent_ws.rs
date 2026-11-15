@@ -23,6 +23,7 @@ pub fn spawn(consent: ConsentManager, hub: Arc<WsHub>) -> Result<(), &'static st
     }
     let (initial, mut events) = consent.try_subscribe_pending_changes()?;
     tokio::spawn(async move {
+        let initial_order = hub.consent_order.lock().await;
         for identity in initial {
             if let Some(pending) = consent.get_request(&identity.id) {
                 let request = pending.snapshot();
@@ -35,14 +36,21 @@ pub fn spawn(consent: ConsentManager, hub: Arc<WsHub>) -> Result<(), &'static st
                 }
             }
         }
+        drop(initial_order);
         loop {
             loop {
                 let event = tokio::select! {
                     _ = shutdown.recv() => return,
                     event = events.recv() => event,
                 };
+                let _order = hub.consent_order.lock().await;
                 match event {
                     Ok(ConsentQueueEvent::Required(request)) => {
+                        // A queued older request must not resurrect a request
+                        // already resolved before a newer snapshot was sent.
+                        if consent.get_request(&request.id).is_none() {
+                            continue;
+                        }
                         hub.broadcast_to_session(
                             &request.session_id,
                             "consent.required",
@@ -161,6 +169,78 @@ mod tests {
             spawn(ConsentManager::default(), hub),
             Err("websocket hub stopped")
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn queued_resolved_request_cannot_reappear_after_snapshot() {
+        let consent = ConsentManager::default();
+        let verifier = StaticTokenVerifier::new().with_token(
+            "fixture",
+            WsIdentity {
+                user_id: "owner".into(),
+                session_id: Some("session".into()),
+                expires_at: u64::MAX,
+            },
+        );
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            token_verifier: Arc::new(verifier),
+            authorizer: Some(Arc::new(SessionAuthority)),
+            pending_consents: Some(consent.clone()),
+            ..Default::default()
+        }));
+        let (server, mut client) = tokio::io::duplex(1 << 16);
+        let task_hub = hub.clone();
+        let connection = tokio::spawn(async move {
+            task_hub
+                .serve_upgraded(server, Some("fixture".into()))
+                .await
+        });
+        assert_eq!(next(&mut client).await["type"], "session.created");
+        write_client_frame(
+            &mut client,
+            OpCode::Text,
+            br#"{"type":"subscribe","sessionId":"session"}"#,
+            [1, 2, 3, 4],
+        )
+        .await
+        .unwrap();
+        assert_eq!(next(&mut client).await["payload"]["subscribed"], true);
+        spawn(consent.clone(), hub.clone()).unwrap();
+        // This runtime cannot poll the bridge between request and resolution.
+        let request = consent.request_consent(request("queued")).unwrap();
+        assert!(consent.approve(&request.id, None, None).unwrap());
+        write_client_frame(
+            &mut client,
+            OpCode::Text,
+            br#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+            [1, 2, 3, 4],
+        )
+        .await
+        .unwrap();
+        let first = next(&mut client).await;
+        let second = next(&mut client).await;
+        let kinds = [
+            first["type"].as_str().unwrap(),
+            second["type"].as_str().unwrap(),
+        ];
+        assert!(kinds.contains(&"consent.resolved"));
+        assert!(kinds.contains(&"consent.pending-snapshot"));
+        let snapshot = if first["type"] == "consent.pending-snapshot" {
+            first
+        } else {
+            second
+        };
+        assert!(
+            snapshot["payload"]["requests"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        hub.stop();
+        client.shutdown().await.unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(3), connection)
+            .await
+            .unwrap();
     }
 
     #[tokio::test(flavor = "current_thread")]

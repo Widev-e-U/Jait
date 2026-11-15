@@ -915,6 +915,8 @@ pub struct WsHubConfig {
     /// existing wording. When unset the hub stays in-memory only.
     pub user_authority: Option<Arc<dyn WsUserAuthorityCheck>>,
     pub questions: Option<crate::services::input_requests::UserQuestionService>,
+    /// Pending consent snapshots; decisions remain separately controlled.
+    pub pending_consents: Option<crate::security::consent_manager::ConsentManager>,
     pub session_authority: Option<Arc<crate::ws_user_authority::WsUserAuthority>>,
     /// Decides pending consent requests for `consent.approve` / `consent.reject`.
     /// When unset the messages are ignored, like the reference without a callback.
@@ -972,6 +974,7 @@ impl Default for WsHubConfig {
             authorizer: None,
             user_authority: None,
             questions: None,
+            pending_consents: None,
             session_authority: None,
             consent: None,
             terminals: None,
@@ -1017,6 +1020,7 @@ pub struct WsHub {
     config: WsHubConfig,
     inner: Mutex<HubInner>,
     shutdown: broadcast::Sender<String>,
+    pub(crate) consent_order: tokio::sync::Mutex<()>,
     next_client_id: AtomicU64,
 }
 
@@ -1036,6 +1040,7 @@ impl WsHub {
             config,
             inner: Mutex::new(HubInner::default()),
             shutdown,
+            consent_order: tokio::sync::Mutex::new(()),
             next_client_id: AtomicU64::new(1),
         }
     }
@@ -2281,13 +2286,119 @@ async fn handle_message(
             }
         }
         "resource.subscribe" => {
-            // Pending questions use the application's shared service. Other root
-            // registry snapshots are not yet wired.
+            // Pending questions and consents use the application's shared services.
+            // Other root registry snapshots are not yet wired.
             let resource = payload
                 .get("resource")
                 .and_then(Value::as_str)
                 .unwrap_or("undefined");
-            if resource == "root:/pending-questions"
+            if resource == "root:/pending-consents"
+                && let Some(consent) = &hub.config.pending_consents
+            {
+                // Serialize the snapshot with bridge delivery. A bounded timeout
+                // prevents slow ownership checks from stalling event delivery.
+                let snapshot = tokio::time::timeout(Duration::from_secs(2), async {
+                    let _order = hub.consent_order.lock().await;
+                    let identity = {
+                        let inner = hub.inner.lock().expect("hub state");
+                        inner.clients.get(client_id).and_then(|client| {
+                            if WsHub::credential_current(client) {
+                                client.user_id.clone().map(|user| (user, client.generation))
+                            } else {
+                                None
+                            }
+                        })
+                    };
+                    let Some((user, generation)) = identity else {
+                        return Ok::<(), ()>(());
+                    };
+                    let identities = consent.pending_snapshot().map_err(|_| ())?;
+                    let mut requests = Vec::new();
+                    let mut session_ids = Vec::new();
+                    struct Budget(usize);
+                    impl std::io::Write for Budget {
+                        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+                            self.0 = self
+                                .0
+                                .checked_sub(data.len())
+                                .ok_or_else(|| std::io::Error::other("snapshot too large"))?;
+                            Ok(data.len())
+                        }
+                        fn flush(&mut self) -> std::io::Result<()> {
+                            Ok(())
+                        }
+                    }
+                    let mut budget = Budget(1024 * 1024);
+                    let mut checked = std::collections::HashMap::new();
+                    for identity in identities {
+                        let scope = DeliveryScope::OwnerSessions {
+                            user_id: user.clone(),
+                            session_ids: vec![identity.session_id.clone()],
+                            generation,
+                        };
+                        let permitted = if let Some(permitted) = checked.get(&identity.session_id) {
+                            *permitted
+                        } else {
+                            let mut permitted = (hub.config.authorizer.is_some()
+                                || hub.config.session_authority.is_some())
+                                && hub.authorized(&scope);
+                            if permitted && let Some(authority) = &hub.config.session_authority {
+                                permitted =
+                                    authority.session_owned(&user, &identity.session_id).await;
+                            }
+                            checked.insert(identity.session_id.clone(), permitted);
+                            if permitted {
+                                session_ids.push(identity.session_id.clone());
+                            }
+                            permitted
+                        };
+                        if !permitted {
+                            continue;
+                        }
+                        if let Some(request) = consent.get_request(&identity.id) {
+                            let request = request.snapshot();
+                            if request.status
+                                != crate::security::consent_manager::ConsentStatus::Pending
+                            {
+                                continue;
+                            }
+                            serde_json::to_writer(&mut budget, &request).map_err(|_| ())?;
+                            requests.push(request);
+                        }
+                    }
+                    let mut inner = hub.inner.lock().expect("hub state");
+                    if let Some(client) = inner.clients.get_mut(client_id)
+                        && client.generation == generation
+                        && WsHub::credential_current(client)
+                        && client.user_id.as_deref() == Some(&user)
+                    {
+                        let result = client.outbound.try_send(OutboundMessage {
+                            value: envelope(
+                                "consent.pending-snapshot",
+                                Some(""),
+                                json!({"requests": requests}),
+                            ),
+                            scope: DeliveryScope::OwnerSessions {
+                                user_id: user,
+                                session_ids,
+                                generation,
+                            },
+                        });
+                        if result.is_err() {
+                            inner.clients.remove(client_id);
+                        }
+                    }
+                    Ok(())
+                })
+                .await;
+                if !matches!(snapshot, Ok(Ok(()))) {
+                    hub.inner
+                        .lock()
+                        .expect("hub state")
+                        .clients
+                        .remove(client_id);
+                }
+            } else if resource == "root:/pending-questions"
                 && let Some(questions) = &hub.config.questions
             {
                 // Bind the snapshot to the exact authenticated connection generation.
@@ -2534,6 +2645,97 @@ impl WsControlPlane for WsHub {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn consent_snapshot_filters_sessions_and_revalidates_identity() {
+        use crate::security::{
+            consent_manager::{ConsentManager, ConsentRequestPolicy, RequestConsent},
+            contracts::Risk,
+            tool_permissions::{ConsentLevel, PolicySource},
+        };
+        struct Authority;
+        impl WsAuthorizer for Authority {
+            fn can_access_session(&self, user: &str, session: &str) -> Result<bool, String> {
+                Ok((user == "alice" && session == "alice-session")
+                    || (user == "bob" && session == "bob-session"))
+            }
+            fn can_access_resource(&self, _: &str, _: &str) -> Result<bool, String> {
+                Ok(false)
+            }
+        }
+        let consent = ConsentManager::default();
+        let request = |session: &str| RequestConsent {
+            action_id: session.into(),
+            tool_name: "terminal.run".into(),
+            summary: "test".into(),
+            preview: Default::default(),
+            risk: Risk::High,
+            policy: ConsentRequestPolicy {
+                consent_level: ConsentLevel::Always,
+                description: "test".into(),
+                known_tool: true,
+                source: PolicySource::Profile,
+            },
+            session_id: session.into(),
+            timeout_ms: None,
+        };
+        let alice = consent.request_consent(request("alice-session")).unwrap();
+        let bob = consent.request_consent(request("bob-session")).unwrap();
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            pending_consents: Some(consent),
+            authorizer: Some(Arc::new(Authority)),
+            ..Default::default()
+        }));
+        let (tx, mut rx) = mpsc::channel(8);
+        hub.register("client", tx);
+        hub.authenticate_client(
+            "client",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        handle_message(
+            &hub,
+            "client",
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+        )
+        .await
+        .unwrap();
+        let snapshot = rx.try_recv().unwrap();
+        assert_eq!(snapshot.value["type"], "consent.pending-snapshot");
+        let requests = snapshot.value["payload"]["requests"].as_array().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["id"], alice.id);
+        assert_ne!(requests[0]["id"], bob.id);
+        assert!(hub.may_deliver("client", &snapshot.scope));
+        hub.authenticate_client(
+            "client",
+            WsIdentity {
+                user_id: "bob".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        assert!(!hub.may_deliver("client", &snapshot.scope));
+        handle_message(
+            &hub,
+            "client",
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+        )
+        .await
+        .unwrap();
+        let snapshot = rx.try_recv().unwrap();
+        assert_eq!(
+            snapshot.value["payload"]["requests"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(snapshot.value["payload"]["requests"][0]["id"], bob.id);
+    }
 
     #[tokio::test]
     async fn question_snapshot_and_events_are_owner_scoped() {

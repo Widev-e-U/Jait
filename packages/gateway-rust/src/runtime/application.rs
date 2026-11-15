@@ -896,6 +896,7 @@ impl Application {
             return Err("websocket hub already mounted".into());
         }
         config.questions = Some(self.questions.clone());
+        config.pending_consents = self.consent.clone();
         config.session_authority = Some(Arc::new(crate::ws_user_authority::WsUserAuthority::new(
             self.auth.worker(),
             authority_timeout,
@@ -1896,10 +1897,30 @@ mod ownership_tests {
         assert_eq!(required["type"], "consent.required");
         let request_id = required["payload"]["id"].as_str().unwrap().to_owned();
         assert_eq!(required["payload"]["toolName"], "terminal.run");
+        send(
+            &mut stream,
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+        )
+        .await;
+        let snapshot = next(&mut stream).await;
+        assert_eq!(snapshot["type"], "consent.pending-snapshot");
+        assert_eq!(snapshot["payload"]["requests"][0]["id"], request_id);
+        assert_eq!(
+            snapshot["payload"]["requests"][0]["toolName"],
+            "terminal.run"
+        );
 
         assert!(consent.approve(&request_id, None, None).unwrap());
         let resolved = next(&mut stream).await;
         assert_eq!(resolved["type"], "consent.resolved");
+        send(
+            &mut stream,
+            r#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+        )
+        .await;
+        let snapshot = next(&mut stream).await;
+        assert_eq!(snapshot["type"], "consent.pending-snapshot");
+        assert_eq!(snapshot["payload"]["requests"].as_array().unwrap().len(), 0);
         drop(handle);
 
         drop(stream);
