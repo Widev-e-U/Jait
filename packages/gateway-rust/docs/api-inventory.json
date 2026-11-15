@@ -2,12 +2,14 @@
   "summary": {
     "httpTotal": 433,
     "missing": 25,
-    "mounted-fail-closed": 100,
-    "native-untested": 308,
-    "nativeRouteReferencePct": 71.1,
-    "nativeTested": 0,
+    "mounted-fail-closed": 103,
+    "native-untested": 276,
+    "native-tested": 23,
+    "mounted-incomplete": 6,
+    "nativeRouteReferencePct": 69.1,
+    "nativeTested": 23,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 0,
+    "nativeTestedPct": 4.55,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -87,10 +89,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "DELETE",
@@ -183,7 +190,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -282,7 +289,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
       "binaryTests": []
@@ -359,10 +366,15 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/terminals.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
     },
     {
       "method": "DELETE",
@@ -469,10 +481,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -480,10 +497,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -491,10 +513,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -502,10 +529,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1047,10 +1079,15 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_mobile.rs",
+          "name": "mobile_device_flow_runs_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1058,7 +1095,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -1069,7 +1106,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -1080,7 +1117,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -1476,7 +1513,7 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
       "binaryTests": []
@@ -1487,10 +1524,15 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1960,10 +2002,15 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/terminals.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2235,10 +2282,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "PATCH",
@@ -2246,10 +2298,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "PATCH",
@@ -2356,10 +2413,15 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
     },
     {
       "method": "PATCH",
@@ -2543,10 +2605,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2554,10 +2621,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2565,10 +2637,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2576,10 +2653,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2587,10 +2669,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2598,10 +2685,15 @@
       "nodeFiles": [
         "routes/auth.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/auth.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3261,7 +3353,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -3272,7 +3364,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []
@@ -3644,10 +3736,15 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminder_projects_use_owned_live_project_data"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3831,10 +3928,15 @@
       "nodeFiles": [
         "routes/reminders.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -4204,10 +4306,15 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "direct_execution_tracks_live_disabled_tool_settings"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -4402,10 +4509,15 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/terminals.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -4544,10 +4656,15 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "runtime/tools_mount.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "direct_execution_tracks_live_disabled_tool_settings"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -4730,7 +4847,7 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
       "binaryTests": []

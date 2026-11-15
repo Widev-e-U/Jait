@@ -94,6 +94,7 @@ test('manifest rejects unknown, duplicate, unmounted, and missing test reference
   assert.throws(() => run(route(), [{ ...mapping, path: '/unknown' }]), /Unknown/);
   assert.throws(() => run(route(), [mapping, mapping]), /duplicate/);
   assert.throws(() => run([{ ...route()[0], status: 'mounted-fail-closed' }], [mapping]), /non-native/);
+  assert.throws(() => run([{ ...route()[0], status: 'mounted-incomplete' }], [mapping]), /non-native/);
   assert.throws(() => run(route(), [mapping], 'fn requests_one() {}'), /Missing or ignored test/);
   assert.throws(() => run(route(), [{ ...mapping, tests: [{ file: '../other.rs', name: 'requests_one' }] }]), /Invalid test/);
 });
@@ -119,4 +120,27 @@ test('commented, ignored and string-contained tests do not count as evidence', (
     'const EXAMPLE: &str = r#"\n#[test]\nfn requests_one() {}\n"#;',
   ]) assert.throws(() => check(source), /Missing or ignored test/);
   assert.equal(check('#[test]\nfn requests_one() {}').tested, 1);
+});
+
+test('mobile and reminder routes expose missing composed collaborators', () => {
+  const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
+  const status = (method, path) => inventory.http.find((entry) => entry.method === method && entry.path === path)?.status;
+  for (const [method, path] of [
+    ['POST', '/api/mobile/devices/register'],
+    ['GET', '/api/mobile/push-devices'],
+    ['GET', '/api/mobile/routines'],
+    ['GET', '/api/mobile/os-tool/sessions'],
+    ['GET', '/api/reminders'],
+    ['DELETE', '/api/reminders/:id'],
+  ]) assert.equal(status(method, path), 'mounted-incomplete', `${method} ${path}`);
+  for (const [method, path] of [
+    ['DELETE', '/api/mobile/push-devices/:deviceId'],
+    ['POST', '/api/mobile/push-devices/test'],
+    ['PUT', '/api/mobile/routines/:kind'],
+  ]) assert.equal(status(method, path), 'mounted-fail-closed', `${method} ${path}`);
+  // Complete routes are native; binary evidence promotes them to native-tested.
+  for (const [method, path] of [
+    ['POST', '/api/reminders'],
+    ['GET', '/api/mobile/discovery'],
+  ]) assert.match(status(method, path), /^native-(?:un)?tested$/, `${method} ${path}`);
 });

@@ -1,5 +1,29 @@
 {
   "version": 1,
-  "http": [],
+  "http": [
+    { "method": "DELETE", "path": "/api/auth/settings/archive", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "GET", "path": "/api/auth/me", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "GET", "path": "/api/auth/settings", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "GET", "path": "/api/auth/settings/env-status", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "GET", "path": "/api/auth/settings/tools", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "PATCH", "path": "/api/auth/settings", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "PATCH", "path": "/api/auth/settings/tools", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/invitations", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/login", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/logout", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/refresh", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/register", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/auth/session/bind", "tests": [{ "file": "tests/binary_auth.rs", "name": "binary_authentication_and_invitation_enforce_ownership" }] },
+    { "method": "POST", "path": "/api/terminals", "tests": [{ "file": "tests/binary_terminal.rs", "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied" }] },
+    { "method": "GET", "path": "/api/terminals/:id", "tests": [{ "file": "tests/binary_terminal.rs", "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied" }] },
+    { "method": "DELETE", "path": "/api/terminals/:id", "tests": [{ "file": "tests/binary_terminal.rs", "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied" }] },
+    { "method": "POST", "path": "/api/tools/execute", "tests": [{ "file": "tests/binary_tool_policy.rs", "name": "direct_execution_tracks_live_disabled_tool_settings" }] },
+    { "method": "POST", "path": "/api/sessions", "tests": [{ "file": "tests/binary_tool_policy.rs", "name": "direct_execution_tracks_live_disabled_tool_settings" }] },
+    { "method": "POST", "path": "/api/projects", "tests": [{ "file": "tests/binary_reminders.rs", "name": "reminder_projects_use_owned_live_project_data" }] },
+    { "method": "GET", "path": "/api/mobile/discovery", "tests": [{ "file": "tests/binary_mobile.rs", "name": "mobile_device_flow_runs_through_the_binary" }] },
+    { "method": "POST", "path": "/api/reminders", "tests": [{ "file": "tests/binary_reminders.rs", "name": "reminders_are_isolated_by_owner_through_the_binary" }] },
+    { "method": "PATCH", "path": "/api/reminders/:id", "tests": [{ "file": "tests/binary_reminders.rs", "name": "reminders_are_isolated_by_owner_through_the_binary" }] },
+    { "method": "GET", "path": "/api/reminders/export.md", "tests": [{ "file": "tests/binary_reminders.rs", "name": "reminders_are_isolated_by_owner_through_the_binary" }] }
+  ],
   "ws": []
 }
