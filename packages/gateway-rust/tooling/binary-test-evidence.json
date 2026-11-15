@@ -540,6 +540,186 @@
           "name": "session_move_trust_and_project_search_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/info",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/open",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/list",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/stat",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/read",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/download",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/search",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/write",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/backup",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo-all",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/apply-diff",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-file",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-directory",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/rename",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/move",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/delete",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/reveal",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

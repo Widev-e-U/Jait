@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 245,
-  "native-tested": 54,
+  "native-untested": 227,
+  "native-tested": 72,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 54,
+  "nativeTested": 72,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 10.69,
+  "nativeTestedPct": 14.26,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -142,13 +142,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/preview/logs/:sessionId` | mounted-fail-closed |  | routes/preview.ts |
 | GET | `/api/preview/screenshot/:sessionId` | mounted-fail-closed |  | routes/preview.ts |
 | GET | `/api/preview/session/:sessionId` | mounted-fail-closed |  | routes/preview.ts |
-| GET | `/api/project/backup` | native-untested |  | routes/project.ts |
-| GET | `/api/project/download` | native-untested |  | routes/project.ts |
-| GET | `/api/project/info` | native-untested |  | routes/project.ts |
-| GET | `/api/project/list` | native-untested |  | routes/project.ts |
-| GET | `/api/project/read` | native-untested |  | routes/project.ts |
-| GET | `/api/project/search` | native-untested |  | routes/project.ts |
-| GET | `/api/project/stat` | native-untested |  | routes/project.ts |
+| GET | `/api/project/backup` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/download` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/info` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/list` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/read` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/search` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| GET | `/api/project/stat` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | GET | `/api/projects` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/sessions` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
@@ -350,17 +350,17 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/preview/share` | mounted-fail-closed |  | routes/preview.ts |
 | POST | `/api/preview/start` | mounted-fail-closed |  | routes/preview.ts |
 | POST | `/api/preview/stop` | mounted-fail-closed |  | routes/preview.ts |
-| POST | `/api/project/apply-diff` | native-untested |  | routes/project.ts |
-| POST | `/api/project/create-directory` | native-untested |  | routes/project.ts |
-| POST | `/api/project/create-file` | native-untested |  | routes/project.ts |
-| POST | `/api/project/delete` | native-untested |  | routes/project.ts |
-| POST | `/api/project/move` | native-untested |  | routes/project.ts |
-| POST | `/api/project/open` | native-untested |  | routes/project.ts |
-| POST | `/api/project/rename` | native-untested |  | routes/project.ts |
-| POST | `/api/project/reveal` | native-untested |  | routes/project.ts |
-| POST | `/api/project/undo` | native-untested |  | routes/project.ts |
-| POST | `/api/project/undo-all` | native-untested |  | routes/project.ts |
-| POST | `/api/project/write` | native-untested |  | routes/project.ts |
+| POST | `/api/project/apply-diff` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/create-directory` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/create-file` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/delete` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/move` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/open` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/rename` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/reveal` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/undo` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/undo-all` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
+| POST | `/api/project/write` | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/projects` | native-tested | `tests/binary_reminders.rs::reminder_projects_use_owned_live_project_data` | routes/projects.ts |
 | POST | `/api/projects/:id/move` | native-untested |  | routes/projects.ts |
 | POST | `/api/projects/:id/repository` | native-untested |  | routes/projects.ts |

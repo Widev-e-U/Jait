@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 245,
-    "native-tested": 54,
+    "native-untested": 227,
+    "native-tested": 72,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 54,
+    "nativeTested": 72,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 10.69,
+    "nativeTestedPct": 14.26,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -1317,10 +1317,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1328,10 +1333,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1339,10 +1349,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1350,10 +1365,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1361,10 +1381,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1372,10 +1397,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1383,10 +1413,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -3740,10 +3775,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3751,10 +3791,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3762,10 +3807,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3773,10 +3823,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3784,10 +3839,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3795,10 +3855,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3806,10 +3871,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3817,10 +3887,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3828,10 +3903,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3839,10 +3919,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3850,10 +3935,15 @@
       "nodeFiles": [
         "routes/project.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/project.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
