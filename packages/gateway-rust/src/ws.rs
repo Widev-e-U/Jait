@@ -2619,7 +2619,8 @@ mod tests {
     async fn consent_messages_decide_only_for_authenticated_clients() {
         use std::sync::Mutex;
         use std::sync::mpsc as std_mpsc;
-        struct Recorder(Mutex<std_mpsc::Sender<(String, String, bool, Option<String>)>>);
+        type DecisionCall = (String, String, bool, Option<String>);
+        struct Recorder(Mutex<std_mpsc::Sender<DecisionCall>>);
         impl WsConsentControl for Recorder {
             fn decide(
                 &self,

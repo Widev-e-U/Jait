@@ -919,7 +919,7 @@ impl Application {
             max_connections,
         );
         if let Some(consent) = &self.consent {
-            crate::runtime::consent_ws::spawn(consent.clone(), transport.hub());
+            crate::runtime::consent_ws::spawn(consent.clone(), transport.hub())?;
         }
         *self
             .repository_hub
@@ -1023,6 +1023,52 @@ mod ownership_tests {
             .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("gateway.sqlite")
+    }
+
+    #[tokio::test]
+    async fn websocket_mount_fails_closed_if_consent_bridge_cannot_subscribe() {
+        let path = fixture();
+        let mut app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path.clone(),
+                project_root: path.parent().unwrap().to_path_buf(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let consent = crate::security::consent_manager::ConsentManager::default();
+        app.consent = Some(consent.clone());
+        let receivers: Vec<_> = (0..128)
+            .map(|_| consent.try_subscribe_pending_changes().unwrap().1)
+            .collect();
+        let result = app.mount_websocket(
+            crate::ws::WsHubConfig::default(),
+            std::num::NonZeroUsize::new(4).unwrap(),
+            Duration::from_secs(1),
+        );
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "consent subscriber limit reached"
+        );
+        drop(receivers);
+        let transport = app
+            .mount_websocket(
+                crate::ws::WsHubConfig::default(),
+                std::num::NonZeroUsize::new(4).unwrap(),
+                Duration::from_secs(1),
+            )
+            .unwrap();
+        drop(transport);
+        drop(app);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[tokio::test]
@@ -1705,6 +1751,156 @@ mod ownership_tests {
         let subscribed = next(&mut stream).await;
         assert_eq!(subscribed["type"], "session.created");
         assert_eq!(subscribed["payload"]["subscribed"], true);
+
+        drop(stream);
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Consent queue transitions reach only the owning, authenticated, subscribed
+    /// socket through the composed settings-chat application.
+    #[tokio::test]
+    async fn application_websocket_delivers_consent_transitions_to_owner() {
+        use crate::{
+            security::{
+                consent_manager::{ConsentRequestPolicy, RequestConsent},
+                contracts::Risk,
+                tool_permissions::{ConsentLevel, PolicySource},
+            },
+            ws::{OpCode, read_frame, write_client_frame},
+        };
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        async fn next(stream: &mut tokio::net::TcpStream) -> serde_json::Value {
+            let frame = tokio::time::timeout(Duration::from_secs(5), read_frame(stream, 1 << 20))
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            serde_json::from_slice(&frame.payload).unwrap()
+        }
+        async fn send(stream: &mut tokio::net::TcpStream, text: &str) {
+            write_client_frame(stream, OpCode::Text, text.as_bytes(), [1, 2, 3, 4])
+                .await
+                .unwrap();
+        }
+
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let mut app = Application::bind_with_settings_chat(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let consent = app.consent.clone().expect("settings chat mounts consent");
+        app.mount_websocket(
+            crate::ws::WsHubConfig::default(),
+            std::num::NonZeroUsize::new(4).unwrap(),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let base = format!("http://{address}");
+        let registration: serde_json::Value = client
+            .post(format!("{base}/api/auth/register"))
+            .json(&serde_json::json!({"username":"consent-user","password":"fixture password"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let token = registration["access_token"].as_str().unwrap().to_owned();
+        let session: serde_json::Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({"name":"consent session"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let session_id = session["id"].as_str().unwrap().to_owned();
+
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        stream
+            .write_all(b"GET /ws HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+            .await
+            .unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(
+                tokio::time::timeout(Duration::from_secs(5), stream.read_u8())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        assert_eq!(next(&mut stream).await["type"], "session.created");
+        send(
+            &mut stream,
+            &serde_json::json!({"type":"authenticate","token":token}).to_string(),
+        )
+        .await;
+        assert_eq!(next(&mut stream).await["payload"]["authenticated"], true);
+        send(
+            &mut stream,
+            &format!(r#"{{"type":"subscribe","sessionId":"{session_id}"}}"#),
+        )
+        .await;
+        assert_eq!(next(&mut stream).await["payload"]["subscribed"], true);
+
+        let handle = consent
+            .request_consent(RequestConsent {
+                action_id: "action".into(),
+                tool_name: "terminal.run".into(),
+                summary: "run a command".into(),
+                preview: serde_json::Map::new(),
+                risk: Risk::High,
+                policy: ConsentRequestPolicy {
+                    consent_level: ConsentLevel::Always,
+                    description: "test".into(),
+                    known_tool: true,
+                    source: PolicySource::Profile,
+                },
+                session_id: session_id.clone(),
+                timeout_ms: None,
+            })
+            .unwrap();
+        let required = next(&mut stream).await;
+        assert_eq!(required["type"], "consent.required");
+        let request_id = required["payload"]["id"].as_str().unwrap().to_owned();
+        assert_eq!(required["payload"]["toolName"], "terminal.run");
+
+        assert!(consent.approve(&request_id, None, None).unwrap());
+        let resolved = next(&mut stream).await;
+        assert_eq!(resolved["type"], "consent.resolved");
+        drop(handle);
 
         drop(stream);
         stop.send(()).unwrap();
