@@ -247,7 +247,7 @@ fn dispatch(
     if path == "/api/tools/sessions.list" {
         return Ok(response(
             200,
-            json!({"sessions":sessions.list(SessionFilter{status:Some("active"),..Default::default()})?}),
+            json!({"sessions":sessions.list(SessionFilter{status:Some("active"),user_id:owner,..Default::default()})?}),
         ));
     }
     if path == "/api/tools/sessions.status" {
@@ -257,7 +257,7 @@ fn dispatch(
                 json!({"error":"VALIDATION_ERROR","details":"sessionId query param required"}),
             ));
         };
-        return Ok(match sessions.get(id, None)? {
+        return Ok(match sessions.get(id, owner)? {
             Some(s) => response(200, json!(s)),
             None => missing("Session"),
         });

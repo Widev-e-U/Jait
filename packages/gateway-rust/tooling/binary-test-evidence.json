@@ -720,6 +720,176 @@
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/last-active",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/streaming",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.list",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.status",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/viewed",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/messages",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/runtime",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/plan",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/loop",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/loop",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/cancel",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/steer",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/fork",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/approve",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/stream",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/events",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/trajectory",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 227,
-  "native-tested": 72,
+  "native-untested": 210,
+  "native-tested": 89,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 72,
+  "nativeTested": 89,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 14.26,
+  "nativeTestedPct": 17.62,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -187,18 +187,18 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/security/workbench` | mounted-fail-closed |  | routes/security-workbench.ts |
 | GET | `/api/sessions` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
-| GET | `/api/sessions/:sessionId/events` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/loop` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/messages` | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/events` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/loop` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/messages` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/plan` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/runtime` | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/plan` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/runtime` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:id/state` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
-| GET | `/api/sessions/:sessionId/stream` | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/stream` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/trajectory` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/last-active` | native-untested |  | routes/sessions.ts |
-| GET | `/api/sessions/streaming` | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/trajectory` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/last-active` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
+| GET | `/api/sessions/streaming` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/skills` | native-untested |  | routes/skills.ts |
 | GET | `/api/store/packages` | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills` | native-untested |  | routes/store.ts |
@@ -214,8 +214,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/threads/:id/activities` | native-untested |  | routes/threads.ts |
 | GET | `/api/threads/:id/runtime` | native-untested |  | routes/threads.ts |
 | GET | `/api/tools` | native-untested |  | routes/terminals.ts |
-| GET | `/api/tools/sessions.list` | native-untested |  | routes/sessions.ts |
-| GET | `/api/tools/sessions.status` | native-untested |  | routes/sessions.ts |
+| GET | `/api/tools/sessions.list` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
+| GET | `/api/tools/sessions.status` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/trust` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/trust/levels` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/trust.ts |
 | GET | `/api/trust/levels/:actionType` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
@@ -413,19 +413,19 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/security/monitors` | mounted-fail-closed |  | routes/security-workbench.ts |
 | POST | `/api/security/scopes` | native-untested |  | routes/security-assessments.ts |
 | POST | `/api/sessions` | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/sessions.ts |
-| POST | `/api/sessions/:sessionId/approve` | native-untested |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/approve` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/archive` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
-| POST | `/api/sessions/:sessionId/cancel` | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:sessionId/fork` | native-untested |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/cancel` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/fork` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/generate-title` | native-untested |  | routes/sessions.ts |
-| POST | `/api/sessions/:sessionId/loop` | native-untested |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/loop` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/move` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/plan/execute` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/plan/reject` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/restart-from` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/retry-tool` | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:sessionId/steer` | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:id/viewed` | native-untested |  | routes/sessions.ts |
+| POST | `/api/sessions/:sessionId/steer` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| POST | `/api/sessions/:id/viewed` | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | POST | `/api/skills/:id/install-tool` | native-untested |  | routes/skills.ts |
 | POST | `/api/store/skills/:slug/install` | native-untested |  | routes/store.ts |
 | POST | `/api/team-rooms` | native-untested |  | routes/team-chat.ts |
