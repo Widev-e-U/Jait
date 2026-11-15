@@ -202,6 +202,45 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     .await;
     assert_eq!(status, 201, "{project}");
     let pid = project["id"].as_str().unwrap().to_owned();
+    // Environment snapshots use the same owner-scoped project store through
+    // the production composition. Node connectivity is still unimplemented.
+    let anonymous = client
+        .get(url("/api/environment/snapshot"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), 401);
+    let (status, snapshot) = call(
+        M::GET,
+        "/api/environment/snapshot".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{snapshot}");
+    let projects = snapshot["snapshot"]["projects"].as_array().unwrap();
+    assert!(
+        projects
+            .iter()
+            .any(|p| p["id"] == pid && p["title"] == "Alpha"),
+        "{snapshot}"
+    );
+    let (status, foreign_snapshot) = call(
+        M::GET,
+        "/api/environment/snapshot".into(),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{foreign_snapshot}");
+    assert!(
+        !foreign_snapshot["snapshot"]["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == pid),
+        "{foreign_snapshot}"
+    );
     let (status, list) = call(M::GET, "/api/projects".into(), owner.clone(), None).await;
     assert_eq!(status, 200, "{list}");
     assert!(list.to_string().contains(&pid), "{list}");

@@ -9,10 +9,10 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 141,
+  "native-untested": 140,
   "native-tested": 158,
-  "mounted-incomplete": 6,
-  "nativeRouteReferencePct": 69.1,
+  "mounted-incomplete": 7,
+  "nativeRouteReferencePct": 68.8,
   "nativeTested": 158,
   "nativeTestedDenominator": 505,
   "nativeTestedPct": 31.29,
@@ -103,7 +103,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/email/messages` | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/email/messages/:id` | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/email/oauth/callback` | mounted-fail-closed |  | routes/email.ts |
-| GET | `/api/environment/snapshot` | native-untested |  | routes/environment.ts |
+| GET | `/api/environment/snapshot` | mounted-incomplete |  | routes/environment.ts |
 | GET | `/api/filesystem/browse` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
 | GET | `/api/filesystem/nodes` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
 | GET | `/api/filesystem/roots` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |

@@ -79,6 +79,8 @@ const INCOMPLETE_ROUTES = new Set([
   // Push registration is silently omitted; these list endpoints have no backing adapter.
   'POST /api/mobile/devices/register', 'GET /api/mobile/push-devices',
   'GET /api/mobile/routines', 'GET /api/mobile/os-tool/sessions',
+  // The environment mount has no node control plane for nodes and repositories.
+  'GET /api/environment/snapshot',
   // The composed reminder router lacks memory and thread integrations.
   'GET /api/reminders', 'DELETE /api/reminders/{}',
 ]);

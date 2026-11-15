@@ -3,10 +3,10 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 141,
+    "native-untested": 140,
     "native-tested": 158,
-    "mounted-incomplete": 6,
-    "nativeRouteReferencePct": 69.1,
+    "mounted-incomplete": 7,
+    "nativeRouteReferencePct": 68.8,
     "nativeTested": 158,
     "nativeTestedDenominator": 505,
     "nativeTestedPct": 31.29,
@@ -938,7 +938,7 @@
       "nodeFiles": [
         "routes/environment.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/environment.rs",
       "binaryTests": []
