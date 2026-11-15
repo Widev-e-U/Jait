@@ -1090,6 +1090,76 @@
           "name": "thread_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/jobs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id/runs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/providers/available",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

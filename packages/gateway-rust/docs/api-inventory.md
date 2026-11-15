@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 190,
-  "native-tested": 109,
+  "native-untested": 183,
+  "native-tested": 116,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 109,
+  "nativeTested": 116,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 21.58,
+  "nativeTestedPct": 22.97,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -41,7 +41,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/consent/pending/:sessionId/approve-all` | native-untested |  | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
-| DELETE | `/api/jobs/:id` | native-untested |  | routes/jobs.ts |
+| DELETE | `/api/jobs/:id` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | DELETE | `/api/messenger` | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-accounts/teams` | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-reauth/teams` | missing |  | routes/messenger.ts |
@@ -109,10 +109,10 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/filesystem/roots` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/filesystem.ts |
 | GET | `/api/github-apps` | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | GET | `/api/github/apps/callback` | mounted-fail-closed |  | routes/agent-github-apps.ts |
-| GET | `/api/jobs` | native-untested |  | routes/jobs.ts |
-| GET | `/api/jobs/:id` | native-untested |  | routes/jobs.ts |
-| GET | `/api/jobs/:id/runs` | native-untested |  | routes/jobs.ts |
-| GET | `/api/jobs/providers/available` | native-untested |  | routes/jobs.ts |
+| GET | `/api/jobs` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
+| GET | `/api/jobs/:id` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
+| GET | `/api/jobs/:id/runs` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
+| GET | `/api/jobs/providers/available` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | GET | `/api/live-view/:port/focus` | mounted-fail-closed |  | server.ts |
 | GET | `/api/maintenance/runs` | native-untested |  | routes/maintenance.ts |
 | GET | `/api/maintenance/runs/:id` | native-untested |  | routes/maintenance.ts |
@@ -237,7 +237,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/channels/:id/config` | mounted-fail-closed |  | routes/channels.ts |
 | PATCH | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
 | PATCH | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
-| PATCH | `/api/jobs/:id` | native-untested |  | routes/jobs.ts |
+| PATCH | `/api/jobs/:id` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | PATCH | `/api/plans/:id` | native-untested |  | routes/plans.ts |
 | PATCH | `/api/plugins/:id/config` | mounted-fail-closed |  | routes/plugins.ts |
 | PATCH | `/api/projects/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
@@ -313,7 +313,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/git/status` | native-untested |  | routes/git.ts |
 | POST | `/api/git/sync` | native-untested |  | routes/git.ts |
 | POST | `/api/git/unstage` | native-untested |  | routes/git.ts |
-| POST | `/api/jobs` | native-untested |  | routes/jobs.ts |
+| POST | `/api/jobs` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/jobs/:id/trigger` | native-untested |  | routes/jobs.ts |
 | POST | `/api/maintenance/run` | native-untested |  | routes/maintenance.ts |
 | POST | `/api/messenger` | missing |  | routes/messenger.ts |
