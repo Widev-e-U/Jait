@@ -193,6 +193,69 @@ async fn assistant_profiles_are_persistent_and_owner_scoped() {
     let updated = updated.json::<Value>().await.unwrap();
     assert_eq!(updated["profile"]["description"], "Updated");
     assert_eq!(updated["profile"]["runtimeMode"], "supervised");
+    // A new default displaces the old one, and deleting it restores a default.
+    let second = client
+        .post(&collection)
+        .bearer_auth(owner)
+        .json(&json!({"name":"Second", "isDefault":true}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second.status(), 201);
+    let second = second.json::<Value>().await.unwrap();
+    assert_eq!(second["profile"]["isDefault"], true);
+    let second_id = second["profile"]["id"].as_str().unwrap();
+    let second_item = format!("{collection}/{second_id}");
+    let first = client
+        .get(&item)
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(first["profile"]["isDefault"], false);
+    assert_eq!(
+        client
+            .delete(&second_item)
+            .bearer_auth(other)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let second = client
+        .get(&second_item)
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(second["profile"]["isDefault"], true);
+    assert_eq!(
+        client
+            .delete(&second_item)
+            .bearer_auth(owner)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    let first = client
+        .get(&item)
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(first["profile"]["isDefault"], true);
     gateway.restart();
     let collection = url(&gateway.base, "/api/assistants/profiles");
     let item = format!("{collection}/{id}");
