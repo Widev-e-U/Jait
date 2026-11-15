@@ -95,14 +95,16 @@ async fn voice_routes_through_the_binary() {
         }
     };
     let owner = register("owner", None).await;
-    let forbidden = client
-        .get(url("/api/voice/state/s1"))
-        .header(reqwest::header::ORIGIN, "https://untrusted.example")
-        .header(reqwest::header::COOKIE, format!("jait_token={owner}"))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(forbidden.status(), 403);
+    for path in ["/api/voice/state/s1", "/api/voice-assistant/status"] {
+        let forbidden = client
+            .get(url(path))
+            .header(reqwest::header::ORIGIN, "https://untrusted.example")
+            .header(reqwest::header::COOKIE, format!("jait_token={owner}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(forbidden.status(), 403, "{path}");
+    }
     let invite = client
         .post(url("/api/auth/invitations"))
         .bearer_auth(&owner)
@@ -227,6 +229,7 @@ async fn voice_endpoints_require_authentication_through_binary() {
         .build()
         .unwrap();
     for (method, path) in [
+        (reqwest::Method::GET, "/api/voice-assistant/status"),
         (reqwest::Method::GET, "/api/voice/state/example"),
         (reqwest::Method::PATCH, "/api/voice/state/example"),
         (reqwest::Method::POST, "/api/voice/speak"),

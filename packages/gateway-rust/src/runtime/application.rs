@@ -2331,8 +2331,14 @@ mod ownership_tests {
     }
 }
 
-/// Reports whether the realtime voice assistant has an OpenAI key; open like the Node route.
-async fn voice_assistant_status() -> axum::response::Response {
+/// Reports whether the realtime voice assistant has an OpenAI key to an authenticated user.
+async fn voice_assistant_status(
+    State(auth): State<AuthState>,
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    if let Err(response) = crate::routes::auth::require_user(&auth, &headers).await {
+        return *response;
+    }
     let env = |name: &str, default: &str| {
         std::env::var(name)
             .ok()
