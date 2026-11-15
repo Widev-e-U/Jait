@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 249,
-  "native-tested": 50,
+  "native-untested": 245,
+  "native-tested": 54,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 50,
+  "nativeTested": 54,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 9.9,
+  "nativeTestedPct": 10.69,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -156,7 +156,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/projects/:id/subtree` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/archived` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/last-active` | native-untested |  | routes/projects.ts |
-| GET | `/api/projects/search` | native-untested |  | routes/projects.ts |
+| GET | `/api/projects/search` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/projects.ts |
 | GET | `/api/provider-accounts` | native-untested |  | routes/providers.ts |
 | GET | `/api/provider-usage` | native-untested |  | routes/providers.ts |
 | GET | `/api/provider-usage/summary` | native-untested |  | routes/providers.ts |
@@ -218,7 +218,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/tools/sessions.status` | native-untested |  | routes/sessions.ts |
 | GET | `/api/trust` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/trust/levels` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/trust.ts |
-| GET | `/api/trust/levels/:actionType` | native-untested |  | routes/trust.ts |
+| GET | `/api/trust/levels/:actionType` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | GET | `/api/update/changelog` | native-untested |  | routes/update.ts |
 | GET | `/api/update/check` | native-untested |  | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-untested |  | routes/user-questions.ts |
@@ -419,7 +419,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/sessions/:sessionId/fork` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:id/generate-title` | native-untested |  | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/loop` | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:id/move` | native-untested |  | routes/sessions.ts |
+| POST | `/api/sessions/:id/move` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/plan/execute` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/plan/reject` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/restart-from` | native-untested |  | routes/chat.ts |
@@ -444,7 +444,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/threads/:id/steer` | native-untested |  | routes/threads.ts |
 | POST | `/api/threads/:id/stop` | native-untested |  | routes/threads.ts |
 | POST | `/api/tools/execute` | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/terminals.ts |
-| POST | `/api/trust/levels/:actionType/reset` | native-untested |  | routes/trust.ts |
+| POST | `/api/trust/levels/:actionType/reset` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | POST | `/api/update/apply` | native-untested |  | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-untested |  | routes/user-questions.ts |
 | POST | `/api/user-questions/requests/:id/submit` | native-untested |  | routes/user-questions.ts |
