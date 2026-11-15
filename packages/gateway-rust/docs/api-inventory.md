@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 268,
-  "native-tested": 31,
+  "native-untested": 254,
+  "native-tested": 45,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 31,
+  "nativeTested": 45,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 6.14,
+  "nativeTestedPct": 8.91,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -87,12 +87,12 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/channels/:id/status` | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/code-graph` | native-untested |  | routes/code-graph.ts |
 | GET | `/api/code-graph/snapshot` | native-untested |  | routes/code-graph.ts |
-| GET | `/api/consent/:id` | native-untested |  | routes/consent.ts |
-| GET | `/api/consent/count` | native-untested |  | routes/consent.ts |
-| GET | `/api/consent/pending` | native-untested |  | routes/consent.ts |
+| GET | `/api/consent/:id` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
+| GET | `/api/consent/count` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
+| GET | `/api/consent/pending` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/pending/:sessionId` | native-untested |  | routes/consent.ts |
 | GET | `/api/consent/pending/:sessionId/approve-all` | native-untested |  | routes/consent.ts |
-| GET | `/api/consent/policy` | native-untested |  | routes/consent.ts |
+| GET | `/api/consent/policy` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/dev-file/:encodedPath` | native-untested |  | server.ts |
 | GET | `/api/dev-file/:encodedPath/*` | native-untested |  | server.ts |
 | GET | `/api/email/accounts` | mounted-fail-closed |  | routes/email.ts |
@@ -151,8 +151,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/project/stat` | native-untested |  | routes/project.ts |
 | GET | `/api/projects` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| GET | `/api/projects/:id/sessions` | native-untested |  | routes/projects.ts |
-| GET | `/api/projects/:id/state` | native-untested |  | routes/projects.ts |
+| GET | `/api/projects/:id/sessions` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
+| GET | `/api/projects/:id/state` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/subtree` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/archived` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/last-active` | native-untested |  | routes/projects.ts |
@@ -165,7 +165,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/providers/:id/models` | native-untested |  | routes/providers.ts |
 | GET | `/api/reminders` | mounted-incomplete |  | routes/reminders.ts |
 | GET | `/api/reminders/export.md` | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
-| GET | `/api/repos` | native-untested |  | routes/repositories.ts |
+| GET | `/api/repos` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/repositories.ts |
 | GET | `/api/repos/:repoId/plans` | native-untested |  | routes/plans.ts |
 | GET | `/api/repos/:repoId/proposals` | native-untested |  | routes/repo-proposals.ts |
 | GET | `/api/repos/:id/pull-requests` | native-untested |  | routes/pull-requests.ts |
@@ -193,7 +193,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/plan` | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/runtime` | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:id/state` | native-untested |  | routes/sessions.ts |
+| GET | `/api/sessions/:id/state` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/stream` | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/trajectory` | native-untested |  | routes/chat.ts |
@@ -216,8 +216,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/tools` | native-untested |  | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-untested |  | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-untested |  | routes/sessions.ts |
-| GET | `/api/trust` | native-untested |  | routes/consent.ts |
-| GET | `/api/trust/levels` | native-untested |  | routes/trust.ts |
+| GET | `/api/trust` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
+| GET | `/api/trust/levels` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/trust.ts |
 | GET | `/api/trust/levels/:actionType` | native-untested |  | routes/trust.ts |
 | GET | `/api/update/changelog` | native-untested |  | routes/update.ts |
 | GET | `/api/update/check` | native-untested |  | routes/update.ts |
@@ -277,9 +277,9 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/code-graph/index` | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/path` | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/query` | native-untested |  | routes/code-graph.ts |
-| POST | `/api/consent/:id/approve` | native-untested |  | routes/consent.ts |
+| POST | `/api/consent/:id/approve` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/:id/approve-all` | native-untested |  | routes/consent.ts |
-| POST | `/api/consent/:id/reject` | native-untested |  | routes/consent.ts |
+| POST | `/api/consent/:id/reject` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/pending/:sessionId/approve-all` | native-untested |  | routes/consent.ts |
 | POST | `/api/email/accounts` | mounted-fail-closed |  | routes/email.ts |
 | POST | `/api/email/config/:provider` | mounted-fail-closed |  | routes/email.ts |
@@ -365,7 +365,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/projects/:id/move` | native-untested |  | routes/projects.ts |
 | POST | `/api/projects/:id/repository` | native-untested |  | routes/projects.ts |
 | POST | `/api/projects/:id/restore` | native-untested |  | routes/projects.ts |
-| POST | `/api/projects/:id/sessions` | native-untested |  | routes/projects.ts |
+| POST | `/api/projects/:id/sessions` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | POST | `/api/projects/select` | native-untested |  | routes/projects.ts |
 | POST | `/api/provider-accounts` | native-untested |  | routes/providers.ts |
 | POST | `/api/provider-accounts/:id/opencode-go` | native-untested |  | routes/providers.ts |
@@ -414,7 +414,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/security/scopes` | native-untested |  | routes/security-assessments.ts |
 | POST | `/api/sessions` | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/approve` | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:id/archive` | native-untested |  | routes/sessions.ts |
+| POST | `/api/sessions/:id/archive` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/cancel` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/fork` | native-untested |  | routes/chat.ts |
 | POST | `/api/sessions/:id/generate-title` | native-untested |  | routes/sessions.ts |

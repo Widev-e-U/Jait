@@ -31,7 +31,21 @@
     { "method": "GET", "path": "/api/projects", "tests": [{"file": "tests/binary_sessions_projects.rs", "name": "sessions_and_projects_are_owned_through_the_binary"}]},
     { "method": "GET", "path": "/api/projects/:id", "tests": [{"file": "tests/binary_sessions_projects.rs", "name": "sessions_and_projects_are_owned_through_the_binary"}]},
     { "method": "PATCH", "path": "/api/projects/:id", "tests": [{"file": "tests/binary_sessions_projects.rs", "name": "sessions_and_projects_are_owned_through_the_binary"}]},
-    { "method": "DELETE", "path": "/api/projects/:id", "tests": [{"file": "tests/binary_sessions_projects.rs", "name": "sessions_and_projects_are_owned_through_the_binary"}]}
+    { "method": "DELETE", "path": "/api/projects/:id", "tests": [{"file": "tests/binary_sessions_projects.rs", "name": "sessions_and_projects_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/consent/pending", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/consent/count", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/consent/policy", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/consent/:id", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "POST", "path": "/api/consent/:id/approve", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "POST", "path": "/api/consent/:id/reject", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/trust", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/trust/levels", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/sessions/:id/state", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "POST", "path": "/api/sessions/:id/archive", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/projects/:id/state", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/projects/:id/sessions", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "POST", "path": "/api/projects/:id/sessions", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]},
+    { "method": "GET", "path": "/api/repos", "tests": [{"file": "tests/binary_state_consent.rs", "name": "state_trust_and_consent_routes_are_owned_through_the_binary"}]}
   ],
   "ws": []
 }

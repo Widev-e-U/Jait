@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 268,
-    "native-tested": 31,
+    "native-untested": 254,
+    "native-tested": 45,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 31,
+    "nativeTested": 45,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 6.14,
+    "nativeTestedPct": 8.91,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -687,10 +687,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -698,10 +703,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -709,10 +719,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -742,10 +757,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1401,10 +1421,15 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1412,10 +1437,15 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1560,10 +1590,15 @@
       "nodeFiles": [
         "routes/repositories.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repositories.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -1878,10 +1913,15 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2136,10 +2176,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2147,10 +2192,15 @@
       "nodeFiles": [
         "routes/trust.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/trust.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2862,10 +2912,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -2884,10 +2939,15 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -3825,10 +3885,15 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -4373,10 +4438,15 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",

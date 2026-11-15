@@ -579,11 +579,29 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
     if let Some(id) = mid(&path, "/api/projects/", "/sessions") {
         if method == axum::http::Method::GET {
             let user_id = uid.clone();
+            let status = request
+                .uri()
+                .query()
+                .and_then(|query| {
+                    query.split('&').find_map(|pair| {
+                        pair.strip_prefix("status=").map(|value| {
+                            percent_encoding::percent_decode_str(value)
+                                .decode_utf8_lossy()
+                                .into_owned()
+                        })
+                    })
+                })
+                .unwrap_or_else(|| "active".to_owned());
             return run(&state.auth, move |db| {
+                match ProjectService::new(db).get(&id, Some(&user_id)) {
+                    Ok(Some(_)) => {}
+                    Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
+                    Err(error) => return Err(db_err(error)),
+                }
                 let sessions = crate::services::sessions::SessionService::new(db);
                 let rows = sessions
                     .list(crate::services::sessions::SessionFilter {
-                        status: Some("active"),
+                        status: Some(&status),
                         user_id: Some(&user_id),
                         project_id: Some(&id),
                         personal_only: false,
@@ -601,13 +619,19 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 Err(response) => return *response,
             };
             let name = js_text(body.get("name")).filter(|value| !value.is_empty());
-            let project_path = js_text(body.get("projectPath"));
             let metadata = match body.get("metadata") {
                 Some(Value::Object(map)) => Some(map.clone()),
                 _ => None,
             };
             let user_id = uid.clone();
             return run(&state.auth, move |db| {
+                // The session inherits the owned project's root, never a client path.
+                let projects = ProjectService::new(db);
+                let project_path = match projects.get(&id, Some(&user_id)) {
+                    Ok(Some(project)) => project.root_path,
+                    Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
+                    Err(error) => return Err(db_err(error)),
+                };
                 let sessions = crate::services::sessions::SessionService::new(db);
                 let record = sessions
                     .create(crate::services::sessions::CreateSession {
@@ -618,6 +642,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                         metadata,
                     })
                     .map_err(db_err)?;
+                projects.touch(&id).map_err(db_err)?;
                 Res::Ok(response(201, json!(record)))
             })
             .await
