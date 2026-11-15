@@ -44,7 +44,10 @@ use tokio::{
     sync::{Notify, mpsc, oneshot, watch},
 };
 
-use crate::{providers::codex_event_mapper::ProviderEvent, text::js_trim};
+use crate::{
+    execution::process_runner::ProcessCancellation, providers::codex_event_mapper::ProviderEvent,
+    text::js_trim,
+};
 
 // ---------------------------------------------------------------------------
 // Protocol constants
@@ -1829,6 +1832,9 @@ impl AcpTransport {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        // Own process group, so shutdown can reach descendants the agent spawned.
+        #[cfg(unix)]
+        command.process_group(0);
 
         let mut child = command
             .spawn()
@@ -2137,6 +2143,15 @@ impl AcpTransport {
     /// Terminate the child; bounded so a wedged agent cannot hang shutdown.
     pub async fn shutdown(&mut self) {
         self.cancel.cancel();
+        // `id()` is `None` once the child is reaped, so the group id cannot have been
+        // reused: an unreaped child (even a zombie) keeps its pid, and with it the pgid.
+        #[cfg(unix)]
+        if let Some(pid) = self.child.id() {
+            // SAFETY: plain signal syscall on the group this transport created.
+            unsafe {
+                libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+            }
+        }
         let _ = tokio::time::timeout(Duration::from_millis(ACP_PROBE_CLOSE_TIMEOUT_MS), async {
             let _ = self.child.kill().await;
             let _ = self.child.wait().await;
@@ -2220,12 +2235,33 @@ impl AcpSessionOwner {
     /// Start one prompt on an initialized transport and established ACP session.
     /// Event consumers must keep up; overflow terminates the turn and child.
     pub fn start(
+        transport: AcpTransport,
+        transport_events: mpsc::Receiver<AcpEvent>,
+        gateway_session_id: String,
+        acp_session_id: String,
+        turn_id: String,
+        prompt: Value,
+    ) -> Result<(Self, mpsc::Receiver<AcpOwnedEvent>), &'static str> {
+        Self::start_cancellable(
+            transport,
+            transport_events,
+            gateway_session_id,
+            acp_session_id,
+            turn_id,
+            prompt,
+            ProcessCancellation::default(),
+        )
+    }
+
+    /// Bind the turn's cancellation signal to callback dispatch as well as the caller.
+    pub fn start_cancellable(
         mut transport: AcpTransport,
         mut transport_events: mpsc::Receiver<AcpEvent>,
         gateway_session_id: String,
         acp_session_id: String,
         turn_id: String,
         prompt: Value,
+        cancellation: ProcessCancellation,
     ) -> Result<(Self, mpsc::Receiver<AcpOwnedEvent>), &'static str> {
         if turn_id.is_empty() {
             return Err("Turn identity must be nonempty");
@@ -2252,6 +2288,7 @@ impl AcpSessionOwner {
                 tokio::pin!(prompt_request);
                 loop {
                     tokio::select! {
+                        _ = cancellation.wait_cancelled() => break Err("ACP turn cancelled".to_string()),
                         _ = task_stop.cancelled() => break Err("ACP owner stopped".to_string()),
                         event = transport_events.recv() => {
                             let Some(event) = event else { break Err("ACP event stream closed".into()); };
@@ -2296,9 +2333,14 @@ impl AcpSessionOwner {
                                     if failed { break Err("ACP interrupt failed".into()); }
                                 }
                                 OwnerControl::Approval { session_id, request_id, approved, reply } => {
-                                    let result = tokio::time::timeout(Duration::from_secs(1), approvals.resolve(&session_id, &request_id, approved)).await
-                                        .map_err(|_| "ACP approval reply timed out".to_string())
-                                        .and_then(|result| result.map_err(|error| error.to_string()));
+                                    let result = tokio::select! {
+                                        biased;
+                                        _ = cancellation.wait_cancelled() => Err("ACP turn cancelled".to_string()),
+                                        _ = task_stop.cancelled() => Err("ACP owner stopped".to_string()),
+                                        result = tokio::time::timeout(Duration::from_secs(1), approvals.resolve(&session_id, &request_id, approved)) => result
+                                            .map_err(|_| "ACP approval reply timed out".to_string())
+                                            .and_then(|result| result.map_err(|error| error.to_string())),
+                                    };
                                     let failed = result.is_err();
                                     let _ = reply.send(result);
                                     if failed { break Err("ACP approval reply failed".into()); }
@@ -2443,6 +2485,186 @@ impl AcpProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn owner_with_pending_approval() -> (
+        AcpSessionOwner,
+        AcpControlHandle,
+        ProcessCancellation,
+        String,
+    ) {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r prompt; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{"title":"Run"},"options":[{"optionId":"yes","kind":"allow_once"}]}}'; IFS= read -r reply; sleep 5"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (transport, events, _) = AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let control = transport.control_handle();
+        let cancellation = ProcessCancellation::default();
+        let (owner, mut events) = AcpSessionOwner::start_cancellable(
+            transport,
+            events,
+            "gateway".into(),
+            "agent".into(),
+            "turn".into(),
+            json!([]),
+            cancellation.clone(),
+        )
+        .unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(3), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let AcpOwnerEvent::Approval(
+            crate::providers::contracts::ProviderEvent::ToolApprovalRequired { request_id, .. },
+        ) = event.event
+        else {
+            panic!("expected approval");
+        };
+        (owner, control, cancellation, request_id)
+    }
+
+    #[tokio::test]
+    async fn cancelled_turn_rejects_ready_approval() {
+        let (owner, _control, cancellation, request_id) = owner_with_pending_approval().await;
+        cancellation.cancel();
+        assert!(
+            owner
+                .resolve_approval("gateway".into(), request_id, true)
+                .await
+                .is_err()
+        );
+        let settled = tokio::time::timeout(Duration::from_secs(3), owner.settle())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(settled.result.is_err());
+    }
+
+    #[tokio::test]
+    async fn cancellation_interrupts_approval_waiting_for_writer() {
+        let (owner, control, cancellation, request_id) = owner_with_pending_approval().await;
+        let writer = control.writer.stdin.lock().await;
+        {
+            let approval = owner.resolve_approval("gateway".into(), request_id, true);
+            tokio::pin!(approval);
+            tokio::select! {
+                result = &mut approval => panic!("approval unexpectedly completed: {result:?}"),
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+            }
+            cancellation.cancel();
+            assert!(
+                tokio::time::timeout(Duration::from_secs(2), &mut approval)
+                    .await
+                    .unwrap()
+                    .is_err()
+            );
+        }
+        drop(writer);
+        let settled = tokio::time::timeout(Duration::from_secs(3), owner.settle())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(settled.result.is_err());
+    }
+
+    // A separate recorder (own session, so shutdown's process-group kill does not
+    // reach it) survives the provider shell long enough to observe its stdin
+    // through EOF, including a cancellation response emitted during teardown.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn cancelled_turn_sends_no_allow_frame_to_provider() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/acp-frame-tests")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&dir).unwrap();
+        let frames = dir.join("frames");
+        let ready = dir.join("ready");
+        let done = dir.join("done");
+        let script = r#"IFS= read -r prompt; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{"title":"Run"},"options":[{"optionId":"yes","kind":"allow_once"}]}}'; exec 3<&0; setsid /bin/sh -c 'printf ready > "$2"; while IFS= read -r line; do printf "%s\n" "$line" >> "$1"; done; printf done > "$3"' sh "$1" "$2" "$3" <&3 & wait"#;
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec![
+                "-c".into(),
+                script.into(),
+                "test".into(),
+                frames.to_string_lossy().into_owned(),
+                ready.to_string_lossy().into_owned(),
+                done.to_string_lossy().into_owned(),
+            ],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (transport, events, _) = AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let cancellation = ProcessCancellation::default();
+        let (owner, mut events) = AcpSessionOwner::start_cancellable(
+            transport,
+            events,
+            "gateway".into(),
+            "agent".into(),
+            "turn".into(),
+            json!([]),
+            cancellation.clone(),
+        )
+        .unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(3), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let AcpOwnerEvent::Approval(
+            crate::providers::contracts::ProviderEvent::ToolApprovalRequired { request_id, .. },
+        ) = event.event
+        else {
+            panic!("expected approval");
+        };
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !ready.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        cancellation.cancel();
+        assert!(
+            owner
+                .resolve_approval("gateway".into(), request_id, true)
+                .await
+                .is_err()
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(3), owner.settle())
+                .await
+                .unwrap()
+                .unwrap()
+                .result
+                .is_err()
+        );
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !done.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let captured = std::fs::read_to_string(&frames).unwrap();
+        let responses: Vec<Value> = captured
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(
+            responses
+                .iter()
+                .any(|frame| frame["result"]["outcome"]["outcome"] == "cancelled"),
+            "{captured}"
+        );
+        assert!(
+            !responses
+                .iter()
+                .any(|frame| frame["result"]["outcome"]["optionId"] == "yes"),
+            "{captured}"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[tokio::test]
     async fn supervised_owner_routes_approval_and_interrupt_during_prompt() {
@@ -2831,6 +3053,51 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_kills_descendants_of_the_agent() {
+        let pid_file = std::env::temp_dir().join(format!("jait-acp-desc-{}", std::process::id()));
+        let _ = std::fs::remove_file(&pid_file);
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec![
+                "-c".into(),
+                format!("sleep 300 & echo $! > {}; wait", pid_file.display()),
+            ],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let descendant: libc::pid_t = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Ok(text) = std::fs::read_to_string(&pid_file)
+                    && let Ok(pid) = text.trim().parse()
+                {
+                    return pid;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("descendant pid not written");
+        transport.shutdown().await;
+        let gone = tokio::time::timeout(Duration::from_secs(5), async {
+            // SAFETY: signal 0 only probes for existence.
+            while unsafe { libc::kill(descendant, 0) } == 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await;
+        let _ = std::fs::remove_file(&pid_file);
+        if gone.is_err() {
+            // SAFETY: clean up the leaked test process.
+            unsafe { libc::kill(descendant, libc::SIGKILL) };
+        }
+        assert!(gone.is_ok(), "descendant survived shutdown");
     }
 
     #[test]
