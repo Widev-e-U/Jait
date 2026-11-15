@@ -125,7 +125,6 @@ async fn calendar_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     let o = owner.clone();
     let x = other.clone();
     let (st, _) = call(M::GET, "/api/calendar/config".into(), String::new(), None).await;
@@ -133,9 +132,21 @@ async fn calendar_routes_through_the_binary() {
 
     let (st, b) = call(M::GET, "/api/calendar/config".into(), o.clone(), None).await;
     assert!(st == 200 && b["providers"]["google"] == false, "{b}");
-    let (st, _) = call(M::POST, "/api/calendar/config/google".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/calendar/config/google".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::POST, "/api/calendar/config/google".into(), o.clone(), Some(json!({"clientId":"id","clientSecret":"secret"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/calendar/config/google".into(),
+        o.clone(),
+        Some(json!({"clientId":"id","clientSecret":"secret"})),
+    )
+    .await;
     assert!(st == 200 && b["ok"] == true, "{b}");
     let (_, b) = call(M::GET, "/api/calendar/config".into(), o.clone(), None).await;
     assert_eq!(b["providers"]["google"], true, "{b}");
@@ -144,7 +155,13 @@ async fn calendar_routes_through_the_binary() {
 
     let (st, b) = call(M::GET, "/api/calendar/accounts".into(), o.clone(), None).await;
     assert!(st == 200 && b["accounts"] == json!([]), "{b}");
-    let (st, _) = call(M::POST, "/api/calendar/device/sync".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/calendar/device/sync".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
     let (st, b) = call(
         M::POST,
@@ -162,19 +179,59 @@ async fn calendar_routes_through_the_binary() {
 
     let (st, _) = call(M::GET, "/api/calendar/calendars".into(), o.clone(), None).await;
     assert!(st == 200 || st == 400);
-    let (st, _) = call(M::GET, "/api/calendar/events?limit=5".into(), o.clone(), None).await;
+    let (st, _) = call(
+        M::GET,
+        "/api/calendar/events?limit=5".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 || st == 400);
-    let (st, _) = call(M::GET, "/api/calendar/connect/google".into(), o.clone(), None).await;
+    let (st, _) = call(
+        M::GET,
+        "/api/calendar/connect/google".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 || st == 400);
 
-    let response = client.get(url("/api/calendar/oauth/callback")).send().await.unwrap();
+    let response = client
+        .get(url("/api/calendar/oauth/callback"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), 200);
-    assert!(response.text().await.unwrap().contains("Missing authorization code"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Missing authorization code")
+    );
 
-    let (st, _) = call(M::DELETE, format!("/api/calendar/accounts/{account_id}"), x.clone(), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        format!("/api/calendar/accounts/{account_id}"),
+        x.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, b) = call(M::DELETE, format!("/api/calendar/accounts/{account_id}"), o.clone(), None).await;
+    let (st, b) = call(
+        M::DELETE,
+        format!("/api/calendar/accounts/{account_id}"),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["ok"] == true, "{b}");
-    let (st, _) = call(M::DELETE, format!("/api/calendar/accounts/{account_id}"), o.clone(), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        format!("/api/calendar/accounts/{account_id}"),
+        o.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 404);
 }

@@ -125,33 +125,88 @@ async fn mobile_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     let (st, b) = call(M::GET, "/api/mobile/devices".into(), owner.clone(), None).await;
     assert!(st == 200 && b["devices"] == json!([]), "{b}");
     let r = client.get(url("/api/mobile/devices")).send().await.unwrap();
     assert_eq!(r.status(), 401);
-    let (st, _) = call(M::POST, "/api/mobile/devices/register".into(), owner.clone(), Some(json!({"id":"d1"}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/mobile/devices/register".into(),
+        owner.clone(),
+        Some(json!({"id":"d1"})),
+    )
+    .await;
     assert_eq!(st, 400);
     let reg = json!({"id":"d1","name":"Phone","platform":"mobile","capabilities":["push"]});
-    let (st, b) = call(M::POST, "/api/mobile/devices/register".into(), owner.clone(), Some(reg)).await;
-    assert!(st == 200 && b["ok"] == true && b["device"]["id"] == "d1", "{b}");
+    let (st, b) = call(
+        M::POST,
+        "/api/mobile/devices/register".into(),
+        owner.clone(),
+        Some(reg),
+    )
+    .await;
+    assert!(
+        st == 200 && b["ok"] == true && b["device"]["id"] == "d1",
+        "{b}"
+    );
     let (st, b) = call(M::GET, "/api/mobile/devices".into(), owner.clone(), None).await;
-    assert!(st == 200 && b["devices"].as_array().unwrap().len() == 1, "{b}");
-    let (st, b) = call(M::POST, "/api/mobile/devices/d1/heartbeat".into(), owner.clone(), Some(json!({}))).await;
+    assert!(
+        st == 200 && b["devices"].as_array().unwrap().len() == 1,
+        "{b}"
+    );
+    let (st, b) = call(
+        M::POST,
+        "/api/mobile/devices/d1/heartbeat".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 200 && b["device"]["id"] == "d1", "{b}");
-    let (st, _) = call(M::POST, "/api/mobile/devices/nope/heartbeat".into(), owner.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/mobile/devices/nope/heartbeat".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let r = client.post(url("/api/mobile/devices/d1/heartbeat")).send().await.unwrap();
+    let r = client
+        .post(url("/api/mobile/devices/d1/heartbeat"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 401);
 
-    let (st, b) = call(M::GET, "/api/mobile/consent/pending".into(), owner.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        "/api/mobile/consent/pending".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["requests"] == json!([]), "{b}");
-    let r = client.get(url("/api/mobile/consent/pending")).send().await.unwrap();
+    let r = client
+        .get(url("/api/mobile/consent/pending"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 401);
     for action in ["approve", "reject"] {
-        let (st, _) = call(M::POST, format!("/api/mobile/consent/nope/{action}"), owner.clone(), Some(json!({}))).await;
+        let (st, _) = call(
+            M::POST,
+            format!("/api/mobile/consent/nope/{action}"),
+            owner.clone(),
+            Some(json!({})),
+        )
+        .await;
         assert_eq!(st, 404, "{action}");
-        let (st, _) = call(M::POST, format!("/api/mobile/consent/nope/{action}"), other.clone(), Some(json!({}))).await;
+        let (st, _) = call(
+            M::POST,
+            format!("/api/mobile/consent/nope/{action}"),
+            other.clone(),
+            Some(json!({})),
+        )
+        .await;
         assert_eq!(st, 404, "{action}");
     }
 }

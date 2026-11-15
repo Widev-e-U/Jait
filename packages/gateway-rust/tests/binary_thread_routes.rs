@@ -125,87 +125,223 @@ async fn thread_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     let (st, provs) = call(M::GET, "/api/providers".into(), owner.clone(), None).await;
     assert_eq!(st, 200, "{provs}");
-    let list = provs["providers"].as_array().or(provs.as_array()).cloned().unwrap_or_default();
-    let pid = list.first().and_then(|p| p["id"].as_str()).unwrap_or_else(|| panic!("no registered provider: {provs}")).to_owned();
+    let list = provs["providers"]
+        .as_array()
+        .or(provs.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let pid = list
+        .first()
+        .and_then(|p| p["id"].as_str())
+        .unwrap_or_else(|| panic!("no registered provider: {provs}"))
+        .to_owned();
     let r = client.get(url("/api/threads")).send().await.unwrap();
     assert_eq!(r.status(), 401);
     let (st, b) = call(M::GET, "/api/threads".into(), owner.clone(), None).await;
-    assert!(st == 200 && b["threads"] == json!([]) && b["hasMore"] == false, "{b}");
+    assert!(
+        st == 200 && b["threads"] == json!([]) && b["hasMore"] == false,
+        "{b}"
+    );
 
     // No provider is guessed for the user.
-    let (st, b) = call(M::POST, "/api/threads".into(), owner.clone(), Some(json!({"title":"x"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/threads".into(),
+        owner.clone(),
+        Some(json!({"title":"x"})),
+    )
+    .await;
     assert_eq!(st, 400, "{b}");
     // A thread cannot attach to someone else's session.
-    let (_, s) = call(M::POST, "/api/sessions".into(), owner.clone(), Some(json!({}))).await;
+    let (_, s) = call(
+        M::POST,
+        "/api/sessions".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     let sid = s["id"].as_str().unwrap().to_owned();
-    let (st, _) = call(M::POST, "/api/threads".into(), other.clone(), Some(json!({"sessionId":sid,"providerId":pid}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/threads".into(),
+        other.clone(),
+        Some(json!({"sessionId":sid,"providerId":pid})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, b) = call(M::POST, "/api/threads".into(), owner.clone(), Some(json!({"title":"T1","providerId":pid.as_str(),"sessionId":sid}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/threads".into(),
+        owner.clone(),
+        Some(json!({"title":"T1","providerId":pid.as_str(),"sessionId":sid})),
+    )
+    .await;
     assert_eq!(st, 201, "{b}");
     let tid = b["id"].as_str().unwrap().to_owned();
-    assert!(b["status"] == "idle" && b["providerId"] == pid.as_str() && b["userId"] == s["userId"], "{b}");
+    assert!(
+        b["status"] == "idle" && b["providerId"] == pid.as_str() && b["userId"] == s["userId"],
+        "{b}"
+    );
 
     let (st, b) = call(M::GET, "/api/threads".into(), owner.clone(), None).await;
-    assert!(st == 200 && b["threads"].as_array().unwrap().len() == 1, "{b}");
+    assert!(
+        st == 200 && b["threads"].as_array().unwrap().len() == 1,
+        "{b}"
+    );
     let (_, b) = call(M::GET, "/api/threads".into(), other.clone(), None).await;
     assert_eq!(b["threads"], json!([]));
-    let (_, b) = call(M::GET, format!("/api/threads?sessionId={sid}"), other.clone(), None).await;
+    let (_, b) = call(
+        M::GET,
+        format!("/api/threads?sessionId={sid}"),
+        other.clone(),
+        None,
+    )
+    .await;
     assert_eq!(b["threads"], json!([]), "{b}");
     let (st, b) = call(M::GET, format!("/api/threads/{tid}"), owner.clone(), None).await;
     assert!(st == 200 && b["title"] == "T1", "{b}");
-    let (st, b) = call(M::GET, format!("/api/threads/{tid}/runtime"), owner.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        format!("/api/threads/{tid}/runtime"),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["startedAt"].is_null(), "{b}");
-    let (st, b) = call(M::GET, format!("/api/threads/{tid}/activities"), owner.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        format!("/api/threads/{tid}/activities"),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["activities"] == json!([]), "{b}");
 
     // Patch, including the PR-state activity.
-    let (st, b) = call(M::PATCH, format!("/api/threads/{tid}"), owner.clone(), Some(json!({"title":"T2","prState":"open"}))).await;
-    assert!(st == 200 && b["title"] == "T2" && b["prState"] == "open", "{b}");
-    let (_, b) = call(M::GET, format!("/api/threads/{tid}/activities"), owner.clone(), None).await;
+    let (st, b) = call(
+        M::PATCH,
+        format!("/api/threads/{tid}"),
+        owner.clone(),
+        Some(json!({"title":"T2","prState":"open"})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["title"] == "T2" && b["prState"] == "open",
+        "{b}"
+    );
+    let (_, b) = call(
+        M::GET,
+        format!("/api/threads/{tid}/activities"),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(b["activities"][0]["kind"], "pr_state", "{b}");
-    let (st, _) = call(M::PATCH, format!("/api/threads/{tid}"), owner.clone(), Some(json!({"providerId":""}))).await;
+    let (st, _) = call(
+        M::PATCH,
+        format!("/api/threads/{tid}"),
+        owner.clone(),
+        Some(json!({"providerId":""})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::PATCH, format!("/api/threads/{tid}"), owner.clone(), Some(json!({"personaAgentId":"nope"}))).await;
+    let (st, _) = call(
+        M::PATCH,
+        format!("/api/threads/{tid}"),
+        owner.clone(),
+        Some(json!({"personaAgentId":"nope"})),
+    )
+    .await;
     assert_eq!(st, 400);
 
     // Everything is invisible to another user.
     for (m, p, body) in [
         (M::GET, format!("/api/threads/{tid}"), None),
-        (M::PATCH, format!("/api/threads/{tid}"), Some(json!({"title":"hijack"}))),
+        (
+            M::PATCH,
+            format!("/api/threads/{tid}"),
+            Some(json!({"title":"hijack"})),
+        ),
         (M::GET, format!("/api/threads/{tid}/runtime"), None),
         (M::GET, format!("/api/threads/{tid}/activities"), None),
         (M::POST, format!("/api/threads/{tid}/stop"), Some(json!({}))),
-        (M::POST, format!("/api/threads/{tid}/interrupt"), Some(json!({}))),
+        (
+            M::POST,
+            format!("/api/threads/{tid}/interrupt"),
+            Some(json!({})),
+        ),
         (M::DELETE, format!("/api/threads/{tid}"), None),
     ] {
         let (st, b) = call(m.clone(), p.clone(), other.clone(), body).await;
         assert_eq!(st, 404, "{m} {p} {b}");
     }
-    let (st, b) = call(M::POST, format!("/api/threads/{tid}/interrupt"), owner.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/threads/{tid}/interrupt"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 409, "{b}");
 
     // Persona agents are per user.
-    let (st, b) = call(M::PUT, "/api/persona-agents/pa1".into(), owner.clone(), Some(json!({"name":"Helper"}))).await;
-    assert!(st == 200 && b["name"] == "Helper" && b["id"] == "pa1", "{b}");
+    let (st, b) = call(
+        M::PUT,
+        "/api/persona-agents/pa1".into(),
+        owner.clone(),
+        Some(json!({"name":"Helper"})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["name"] == "Helper" && b["id"] == "pa1",
+        "{b}"
+    );
     let (_, b) = call(M::GET, "/api/persona-agents".into(), owner.clone(), None).await;
     assert_eq!(b["agents"].as_array().unwrap().len(), 1, "{b}");
     let (_, b) = call(M::GET, "/api/persona-agents".into(), other.clone(), None).await;
     assert_eq!(b["agents"], json!([]), "{b}");
-    let (st, b) = call(M::POST, "/api/threads".into(), owner.clone(), Some(json!({"providerId":pid.as_str(),"personaAgentId":"pa1"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/threads".into(),
+        owner.clone(),
+        Some(json!({"providerId":pid.as_str(),"personaAgentId":"pa1"})),
+    )
+    .await;
     assert!(st == 201 && b["personaAgentId"] == "pa1", "{b}");
-    let (_, _) = call(M::DELETE, "/api/persona-agents/pa1".into(), other.clone(), None).await;
+    let (_, _) = call(
+        M::DELETE,
+        "/api/persona-agents/pa1".into(),
+        other.clone(),
+        None,
+    )
+    .await;
     let (_, b) = call(M::GET, "/api/persona-agents".into(), owner.clone(), None).await;
-    assert_eq!(b["agents"].as_array().unwrap().len(), 1, "other user must not delete: {b}");
-    let (st, _) = call(M::DELETE, "/api/persona-agents/pa1".into(), owner.clone(), None).await;
+    assert_eq!(
+        b["agents"].as_array().unwrap().len(),
+        1,
+        "other user must not delete: {b}"
+    );
+    let (st, _) = call(
+        M::DELETE,
+        "/api/persona-agents/pa1".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 200);
     let (_, b) = call(M::GET, "/api/persona-agents".into(), owner.clone(), None).await;
     assert_eq!(b["agents"], json!([]), "{b}");
 
     // Delete.
-    let (st, _) = call(M::DELETE, format!("/api/threads/{tid}"), owner.clone(), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        format!("/api/threads/{tid}"),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 204);
     let (st, _) = call(M::GET, format!("/api/threads/{tid}"), owner.clone(), None).await;
     assert_eq!(st, 404);

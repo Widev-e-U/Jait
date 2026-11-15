@@ -159,32 +159,95 @@ async fn network_security_codegraph_through_the_binary() {
     let (st, b) = call(M::GET, "/api/network/devices".into(), o.clone(), None).await;
     assert!(st == 200 && b["devices"] == json!([]), "{b}");
     let (st, b) = call(M::GET, "/api/network/topology".into(), o.clone(), None).await;
-    assert!(st == 200 && b["hosts"] == json!([]) && b["gateway"].is_null(), "{b}");
-    let (st, b) = call(M::POST, "/api/network/nodes/register".into(), o.clone(), Some(json!({}))).await;
+    assert!(
+        st == 200 && b["hosts"] == json!([]) && b["gateway"].is_null(),
+        "{b}"
+    );
+    let (st, b) = call(
+        M::POST,
+        "/api/network/nodes/register".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 400 && b["error"] == "id and ip are required", "{b}");
-    let (st, b) = call(M::POST, "/api/network/ssh/enable".into(), o.clone(), Some(json!({}))).await;
-    assert!(st == 200 && b["command"].is_string() && b["steps"].is_array(), "{b}");
+    let (st, b) = call(
+        M::POST,
+        "/api/network/ssh/enable".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["command"].is_string() && b["steps"].is_array(),
+        "{b}"
+    );
 
     // Security assessments start empty; scopes require explicit authorization.
     let (st, b) = call(M::GET, "/api/security/assessments".into(), o.clone(), None).await;
-    assert!(st == 200 && b["scopes"] == json!([]) && b["runs"] == json!([]), "{b}");
-    let (st, b) = call(M::GET, "/api/security/assessments/nope".into(), o.clone(), None).await;
+    assert!(
+        st == 200 && b["scopes"] == json!([]) && b["runs"] == json!([]),
+        "{b}"
+    );
+    let (st, b) = call(
+        M::GET,
+        "/api/security/assessments/nope".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 404 && b["error"] == "Assessment not found", "{b}");
-    let (st, b) = call(M::POST, "/api/security/assessments".into(), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/security/assessments".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 400 && b["error"] == "scopeId required", "{b}");
-    let (st, b) = call(M::POST, "/api/security/assessments/nope/cancel".into(), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/security/assessments/nope/cancel".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404, "{b}");
-    let (st, b) = call(M::POST, "/api/security/scopes".into(), o.clone(), Some(json!({}))).await;
-    assert!(st == 400 && b["error"] == "Explicit target authorization is required", "{b}");
+    let (st, b) = call(
+        M::POST,
+        "/api/security/scopes".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert!(
+        st == 400 && b["error"] == "Explicit target authorization is required",
+        "{b}"
+    );
 
     // Code graph requires a project root; unknown repos are 404 for repo-scoped routes.
-    for (m, p) in [(M::GET, "/api/code-graph"), (M::GET, "/api/code-graph/snapshot")] {
+    for (m, p) in [
+        (M::GET, "/api/code-graph"),
+        (M::GET, "/api/code-graph/snapshot"),
+    ] {
         let (st, b) = call(m.clone(), p.into(), o.clone(), None).await;
-        assert!(st == 400 && b["error"] == "projectRoot is required", "{m} {p} {b}");
+        assert!(
+            st == 400 && b["error"] == "projectRoot is required",
+            "{m} {p} {b}"
+        );
     }
     for p in ["index", "query", "path", "graphrag/prepare"] {
-        let (st, b) = call(M::POST, format!("/api/code-graph/{p}"), o.clone(), Some(json!({}))).await;
-        assert!(st == 400 && b["error"] == "projectRoot is required", "{p} {b}");
+        let (st, b) = call(
+            M::POST,
+            format!("/api/code-graph/{p}"),
+            o.clone(),
+            Some(json!({})),
+        )
+        .await;
+        assert!(
+            st == 400 && b["error"] == "projectRoot is required",
+            "{p} {b}"
+        );
     }
     for (m, p, body) in [
         (M::GET, "/api/repos/nope/pull-requests", None),
@@ -195,10 +258,19 @@ async fn network_security_codegraph_through_the_binary() {
         (M::POST, "/api/repos/nope/proposals", Some(json!({}))),
     ] {
         let (st, b) = call(m.clone(), p.into(), o.clone(), body).await;
-        assert!(st == 404 && b["error"] == "Repository not found", "{m} {p} {b}");
+        assert!(
+            st == 404 && b["error"] == "Repository not found",
+            "{m} {p} {b}"
+        );
     }
     for m in [M::PATCH, M::DELETE] {
-        let (st, b) = call(m.clone(), "/api/repo-proposals/nope".into(), o.clone(), Some(json!({}))).await;
+        let (st, b) = call(
+            m.clone(),
+            "/api/repo-proposals/nope".into(),
+            o.clone(),
+            Some(json!({})),
+        )
+        .await;
         assert!(st == 404 && b["error"] == "Todo not found", "{m} {b}");
     }
     let _ = x;

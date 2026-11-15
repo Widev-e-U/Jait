@@ -125,67 +125,193 @@ async fn misc_routes_are_owned_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     // Filesystem browsing.
     let dir = gateway.directory.to_string_lossy().into_owned();
     let (st, b) = call(M::GET, "/api/filesystem/nodes".into(), o_(&owner), None).await;
     assert!(st == 200 && b["nodes"].is_array(), "{b}");
     let (st, b) = call(M::GET, "/api/filesystem/roots".into(), o_(&owner), None).await;
-    assert!(st == 200 && b["roots"].is_array() && !b["roots"].as_array().unwrap().is_empty(), "{b}");
-    let (st, b) = call(M::GET, format!("/api/filesystem/browse?path={dir}"), o_(&owner), None).await;
+    assert!(
+        st == 200 && b["roots"].is_array() && !b["roots"].as_array().unwrap().is_empty(),
+        "{b}"
+    );
+    let (st, b) = call(
+        M::GET,
+        format!("/api/filesystem/browse?path={dir}"),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert_eq!(st, 200, "{b}");
-    assert!(b["entries"].as_array().unwrap().iter().any(|e| e["name"] == "notes.txt" && e["type"] == "file"), "{b}");
-    let (st, b) = call(M::GET, format!("/api/filesystem/browse?path={dir}/missing"), o_(&owner), None).await;
+    assert!(
+        b["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["name"] == "notes.txt" && e["type"] == "file"),
+        "{b}"
+    );
+    let (st, b) = call(
+        M::GET,
+        format!("/api/filesystem/browse?path={dir}/missing"),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert_eq!((st, &b["error"]), (400, &json!("BROWSE_FAILED")), "{b}");
-    let (st, b) = call(M::GET, format!("/api/filesystem/browse?path={dir}/notes.txt"), o_(&owner), None).await;
+    let (st, b) = call(
+        M::GET,
+        format!("/api/filesystem/browse?path={dir}/notes.txt"),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert_eq!((st, &b["error"]), (400, &json!("NOT_A_DIRECTORY")), "{b}");
     for p in ["nodes", "roots", "browse"] {
-        let r = client.get(url(&format!("/api/filesystem/{p}"))).send().await.unwrap();
+        let r = client
+            .get(url(&format!("/api/filesystem/{p}")))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(r.status(), 401, "{p}");
     }
 
     // User questions: nothing pending, validation, unknown ids.
-    let (st, b) = call(M::GET, "/api/user-questions/requests".into(), o_(&owner), None).await;
+    let (st, b) = call(
+        M::GET,
+        "/api/user-questions/requests".into(),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["requests"] == json!([]), "{b}");
-    let (st, _) = call(M::POST, "/api/user-questions/requests/nope/submit".into(), o_(&owner), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/user-questions/requests/nope/submit".into(),
+        o_(&owner),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, "/api/user-questions/requests/nope/submit".into(), o_(&owner), Some(json!({"answers":{}}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/user-questions/requests/nope/submit".into(),
+        o_(&owner),
+        Some(json!({"answers":{}})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, "/api/user-questions/requests/nope/cancel".into(), o_(&owner), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/user-questions/requests/nope/cancel".into(),
+        o_(&owner),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let r = client.get(url("/api/user-questions/requests")).send().await.unwrap();
+    let r = client
+        .get(url("/api/user-questions/requests"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 401);
 
     // Skills.
     let (st, b) = call(M::GET, "/api/skills".into(), o_(&owner), None).await;
     assert!(st == 200 && b.is_array(), "{b}");
-    let (st, _) = call(M::PATCH, "/api/skills/nope".into(), o_(&owner), Some(json!({"enabled":true}))).await;
+    let (st, _) = call(
+        M::PATCH,
+        "/api/skills/nope".into(),
+        o_(&owner),
+        Some(json!({"enabled":true})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, "/api/skills/nope/install-tool".into(), o_(&owner), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/skills/nope/install-tool".into(),
+        o_(&owner),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
     let r = client.get(url("/api/skills")).send().await.unwrap();
     assert_eq!(r.status(), 401);
 
     // Repository todos: PATCH and DELETE through /api/jait-todos, owner only.
     std::fs::create_dir_all(gateway.directory.join("todo-repo")).unwrap();
-    let local = gateway.directory.join("todo-repo").to_string_lossy().into_owned();
-    let (st, b) = call(M::POST, "/api/repos".into(), o_(&owner), Some(json!({"name":"T","localPath":local}))).await;
+    let local = gateway
+        .directory
+        .join("todo-repo")
+        .to_string_lossy()
+        .into_owned();
+    let (st, b) = call(
+        M::POST,
+        "/api/repos".into(),
+        o_(&owner),
+        Some(json!({"name":"T","localPath":local})),
+    )
+    .await;
     assert_eq!(st, 200, "{b}");
     let repo = b["repo"]["id"].as_str().unwrap().to_owned();
-    let (st, b) = call(M::POST, format!("/api/repos/{repo}/todos"), o_(&owner), Some(json!({"message":"ship it"}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/repos/{repo}/todos"),
+        o_(&owner),
+        Some(json!({"message":"ship it"})),
+    )
+    .await;
     assert_eq!(st, 201, "{b}");
     let todo = b["todo"]["id"].as_str().unwrap().to_owned();
-    let (st, b) = call(M::PATCH, format!("/api/jait-todos/{todo}"), o_(&other), Some(json!({"status":"done"}))).await;
+    let (st, b) = call(
+        M::PATCH,
+        format!("/api/jait-todos/{todo}"),
+        o_(&other),
+        Some(json!({"status":"done"})),
+    )
+    .await;
     assert_eq!(st, 404, "{b}");
-    let (st, _) = call(M::DELETE, format!("/api/jait-todos/{todo}"), o_(&other), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        format!("/api/jait-todos/{todo}"),
+        o_(&other),
+        None,
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::PATCH, format!("/api/jait-todos/{todo}"), o_(&owner), Some(json!({"status":"bogus"}))).await;
+    let (st, _) = call(
+        M::PATCH,
+        format!("/api/jait-todos/{todo}"),
+        o_(&owner),
+        Some(json!({"status":"bogus"})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::PATCH, format!("/api/jait-todos/{todo}"), o_(&owner), Some(json!({"status":"done","priority":"high"}))).await;
-    assert!(st == 200 && b["todo"]["status"] == "done" && b["todo"]["priority"] == "high", "{b}");
-    let (st, b) = call(M::DELETE, format!("/api/jait-todos/{todo}"), o_(&owner), None).await;
+    let (st, b) = call(
+        M::PATCH,
+        format!("/api/jait-todos/{todo}"),
+        o_(&owner),
+        Some(json!({"status":"done","priority":"high"})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["todo"]["status"] == "done" && b["todo"]["priority"] == "high",
+        "{b}"
+    );
+    let (st, b) = call(
+        M::DELETE,
+        format!("/api/jait-todos/{todo}"),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["ok"] == true, "{b}");
-    let (st, _) = call(M::DELETE, format!("/api/jait-todos/{todo}"), o_(&owner), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        format!("/api/jait-todos/{todo}"),
+        o_(&owner),
+        None,
+    )
+    .await;
     assert_eq!(st, 404);
     let _ = &other;
 }

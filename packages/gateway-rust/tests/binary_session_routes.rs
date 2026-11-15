@@ -125,14 +125,24 @@ async fn session_sub_routes_are_owned_through_the_binary() {
     };
     use reqwest::Method as M;
 
-    let (_, s) = call(M::POST, "/api/sessions".into(), owner.clone(), Some(json!({}))).await;
+    let (_, s) = call(
+        M::POST,
+        "/api/sessions".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     let id = s["id"].as_str().unwrap().to_owned();
     let o = owner.clone();
     let x = other.clone();
 
     // Owner-scoped lookups.
     let (st, b) = call(M::GET, "/api/sessions/last-active".into(), o.clone(), None).await;
-    assert_eq!((st, b["session"]["id"].as_str()), (200, Some(id.as_str())), "{b}");
+    assert_eq!(
+        (st, b["session"]["id"].as_str()),
+        (200, Some(id.as_str())),
+        "{b}"
+    );
     let (_, b) = call(M::GET, "/api/sessions/last-active".into(), x.clone(), None).await;
     assert!(b["session"].is_null(), "{b}");
     let (st, b) = call(M::GET, "/api/sessions/streaming".into(), o.clone(), None).await;
@@ -151,33 +161,102 @@ async fn session_sub_routes_are_owned_through_the_binary() {
     assert_eq!(st, 400);
 
     // Viewed and title generation.
-    let (st, b) = call(M::POST, format!("/api/sessions/{id}/viewed"), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/sessions/{id}/viewed"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 200 && b["ok"] == true, "{b}");
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/viewed"), x.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/viewed"),
+        x.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/viewed"), o.clone(), Some(json!({"lastActiveAt":"nope"}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/viewed"),
+        o.clone(),
+        Some(json!({"lastActiveAt":"nope"})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/generate-title"), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/generate-title"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
 
     // Messages, runtime, plan, loop, cancel, steer, fork, approve.
-    let (st, b) = call(M::GET, format!("/api/sessions/{id}/messages"), o.clone(), None).await;
-    assert!(st == 200 && b["total"] == 0 && b["streaming"] == false, "{b}");
-    let (st, b) = call(M::GET, format!("/api/sessions/{id}/runtime"), o.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        format!("/api/sessions/{id}/messages"),
+        o.clone(),
+        None,
+    )
+    .await;
+    assert!(
+        st == 200 && b["total"] == 0 && b["streaming"] == false,
+        "{b}"
+    );
+    let (st, b) = call(
+        M::GET,
+        format!("/api/sessions/{id}/runtime"),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["running"] == false, "{b}");
     let (st, b) = call(M::GET, format!("/api/sessions/{id}/plan"), o.clone(), None).await;
     assert_eq!(st, 404, "{b}");
     let (st, b) = call(M::GET, format!("/api/sessions/{id}/loop"), o.clone(), None).await;
     assert!(st == 200 && b["loop"].is_null(), "{b}");
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/loop"), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/loop"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::POST, format!("/api/sessions/{id}/cancel"), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/sessions/{id}/cancel"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert!(st == 200 && b["cancelled"] == false, "{b}");
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/steer"), o.clone(), Some(json!({"message":"x"}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/steer"),
+        o.clone(),
+        Some(json!({"message":"x"})),
+    )
+    .await;
     assert_eq!(st, 409);
-    let (st, _) = call(M::POST, format!("/api/sessions/{id}/approve"), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/sessions/{id}/approve"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::POST, format!("/api/sessions/{id}/fork"), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/sessions/{id}/fork"),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 201, "{b}");
     assert_ne!(b["id"], id.as_str());
     assert_eq!(b["userId"], s["userId"]);
@@ -187,11 +266,23 @@ async fn session_sub_routes_are_owned_through_the_binary() {
         (M::GET, format!("/api/sessions/{id}/messages"), None),
         (M::GET, format!("/api/sessions/{id}/runtime"), None),
         (M::GET, format!("/api/sessions/{id}/plan"), None),
-        (M::POST, format!("/api/sessions/{id}/plan/reject"), Some(json!({}))),
+        (
+            M::POST,
+            format!("/api/sessions/{id}/plan/reject"),
+            Some(json!({})),
+        ),
         (M::GET, format!("/api/sessions/{id}/loop"), None),
         (M::POST, format!("/api/sessions/{id}/loop"), Some(json!({}))),
-        (M::POST, format!("/api/sessions/{id}/cancel"), Some(json!({}))),
-        (M::POST, format!("/api/sessions/{id}/steer"), Some(json!({"message":"x"}))),
+        (
+            M::POST,
+            format!("/api/sessions/{id}/cancel"),
+            Some(json!({})),
+        ),
+        (
+            M::POST,
+            format!("/api/sessions/{id}/steer"),
+            Some(json!({"message":"x"})),
+        ),
         (M::POST, format!("/api/sessions/{id}/fork"), Some(json!({}))),
         (M::GET, format!("/api/sessions/{id}/trajectory"), None),
         (M::GET, format!("/api/sessions/{id}/stream"), None),

@@ -125,7 +125,6 @@ async fn store_routes_are_mounted_and_fail_closed_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     for (m, p) in [
         (M::GET, "/api/store/skills"),
         (M::GET, "/api/store/packages"),
@@ -143,11 +142,18 @@ async fn store_routes_are_mounted_and_fail_closed_through_the_binary() {
         (M::GET, "/api/store/packages", None),
         (M::GET, "/api/store/skills/example", None),
         (M::DELETE, "/api/store/skills/example", None),
-        (M::POST, "/api/store/skills/example/install", Some(json!({}))),
+        (
+            M::POST,
+            "/api/store/skills/example/install",
+            Some(json!({})),
+        ),
     ] {
         let (st, b) = call(m.clone(), p.into(), owner.clone(), body).await;
         assert_eq!(st, 500, "{m} {p} {b}");
-        assert!(b.to_string().contains("require host consent"), "{m} {p} {b}");
+        assert!(
+            b.to_string().contains("require host consent"),
+            "{m} {p} {b}"
+        );
     }
     let _ = other;
 }

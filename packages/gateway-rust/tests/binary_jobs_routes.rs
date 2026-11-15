@@ -125,7 +125,6 @@ async fn jobs_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     // Auth required.
     let r = client.get(url("/api/jobs")).send().await.unwrap();
     assert_eq!(r.status(), 401);
@@ -133,13 +132,31 @@ async fn jobs_routes_through_the_binary() {
     // Validation.
     let (st, _) = call(M::POST, "/api/jobs".into(), owner.clone(), Some(json!({}))).await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, "/api/jobs".into(), owner.clone(), Some(json!({"name":"x","cron_expression":"nope"}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(json!({"name":"x","cron_expression":"nope"})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, "/api/jobs".into(), owner.clone(), Some(json!({"name":"x","cron_expression":"* * * * *","job_type":"agent_task"}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(json!({"name":"x","cron_expression":"* * * * *","job_type":"agent_task"})),
+    )
+    .await;
     assert_eq!(st, 400);
 
     // Create, list, get.
-    let (st, job) = call(M::POST, "/api/jobs".into(), owner.clone(), Some(json!({"name":"nightly","cron_expression":"0 3 * * *","enabled":false}))).await;
+    let (st, job) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(json!({"name":"nightly","cron_expression":"0 3 * * *","enabled":false})),
+    )
+    .await;
     assert_eq!(st, 201, "{job}");
     assert_eq!(job["name"], "nightly");
     assert_eq!(job["job_type"], "system_job");
@@ -147,7 +164,13 @@ async fn jobs_routes_through_the_binary() {
     let id = job["id"].as_str().unwrap().to_owned();
     let (st, list) = call(M::GET, "/api/jobs".into(), owner.clone(), None).await;
     assert!(st == 200 && list["total"] == 1, "{list}");
-    let (_, list) = call(M::GET, "/api/jobs?include_disabled=false".into(), owner.clone(), None).await;
+    let (_, list) = call(
+        M::GET,
+        "/api/jobs?include_disabled=false".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(list["total"], 0, "{list}");
     let (_, list) = call(M::GET, "/api/jobs".into(), other.clone(), None).await;
     assert_eq!(list["total"], 0, "{list}");
@@ -157,7 +180,11 @@ async fn jobs_routes_through_the_binary() {
     // Another user cannot see or change it.
     for (m, p, body) in [
         (M::GET, format!("/api/jobs/{id}"), None),
-        (M::PATCH, format!("/api/jobs/{id}"), Some(json!({"name":"hijack"}))),
+        (
+            M::PATCH,
+            format!("/api/jobs/{id}"),
+            Some(json!({"name":"hijack"})),
+        ),
         (M::DELETE, format!("/api/jobs/{id}"), None),
         (M::GET, format!("/api/jobs/{id}/runs"), None),
         (M::POST, format!("/api/jobs/{id}/trigger"), Some(json!({}))),
@@ -167,15 +194,36 @@ async fn jobs_routes_through_the_binary() {
     }
 
     // Owner patch.
-    let (st, b) = call(M::PATCH, format!("/api/jobs/{id}"), owner.clone(), Some(json!({"cron_expression":"bad"}))).await;
+    let (st, b) = call(
+        M::PATCH,
+        format!("/api/jobs/{id}"),
+        owner.clone(),
+        Some(json!({"cron_expression":"bad"})),
+    )
+    .await;
     assert_eq!(st, 400, "{b}");
-    let (st, b) = call(M::PATCH, format!("/api/jobs/{id}"), owner.clone(), Some(json!({"name":"renamed","enabled":true}))).await;
-    assert!(st == 200 && b["name"] == "renamed" && b["enabled"] == true, "{b}");
+    let (st, b) = call(
+        M::PATCH,
+        format!("/api/jobs/{id}"),
+        owner.clone(),
+        Some(json!({"name":"renamed","enabled":true})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["name"] == "renamed" && b["enabled"] == true,
+        "{b}"
+    );
 
     // Runs, providers.
     let (st, b) = call(M::GET, format!("/api/jobs/{id}/runs"), owner.clone(), None).await;
     assert!(st == 200 && b["items"].is_array(), "{b}");
-    let (st, b) = call(M::GET, "/api/jobs/providers/available".into(), owner.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        "/api/jobs/providers/available".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["providers"].is_object(), "{b}");
 
     // Delete.

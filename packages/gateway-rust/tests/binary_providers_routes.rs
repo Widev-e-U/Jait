@@ -140,34 +140,97 @@ async fn provider_routes_through_the_binary() {
 
     let (st, b) = call(M::GET, "/api/providers".into(), o.clone(), None).await;
     assert_eq!(st, 200, "{b}");
-    assert!(b["providers"].as_array().is_some_and(|a| !a.is_empty()), "{b}");
+    assert!(
+        b["providers"].as_array().is_some_and(|a| !a.is_empty()),
+        "{b}"
+    );
     let (st, b) = call(M::GET, "/api/provider-accounts".into(), o.clone(), None).await;
     assert_eq!(st, 200, "{b}");
     assert_eq!(b["accounts"], json!([]));
     let (st, b) = call(M::GET, "/api/provider-usage".into(), o.clone(), None).await;
     assert!(st == 200 && b["usage"] == json!([]), "{b}");
-    let (st, b) = call(M::GET, "/api/provider-usage/summary".into(), o.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        "/api/provider-usage/summary".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert!(st == 200 && b["profiles"] == json!([]), "{b}");
 
-    let (st, _) = call(M::POST, "/api/provider-accounts".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/provider-accounts".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::PATCH, "/api/provider-accounts/nope".into(), o.clone(), Some(json!({"label":""}))).await;
+    let (st, b) = call(
+        M::PATCH,
+        "/api/provider-accounts/nope".into(),
+        o.clone(),
+        Some(json!({"label":""})),
+    )
+    .await;
     assert_eq!(st, 400, "{b}");
-    let (st, b) = call(M::PATCH, "/api/provider-accounts/nope".into(), o.clone(), Some(json!({"label":"x"}))).await;
+    let (st, b) = call(
+        M::PATCH,
+        "/api/provider-accounts/nope".into(),
+        o.clone(),
+        Some(json!({"label":"x"})),
+    )
+    .await;
     assert_eq!(st, 404, "{b}");
-    let (st, _) = call(M::DELETE, "/api/provider-accounts/nope".into(), o.clone(), None).await;
+    let (st, _) = call(
+        M::DELETE,
+        "/api/provider-accounts/nope".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, "/api/provider-accounts/nope/opencode-go".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/provider-accounts/nope/opencode-go".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
     let (st, b) = call(M::GET, "/api/providers/nope/models".into(), o.clone(), None).await;
     assert_eq!(st, 404, "{b}");
-    let (st, b) = call(M::GET, "/api/providers/nope/auth/status".into(), o.clone(), None).await;
+    let (st, b) = call(
+        M::GET,
+        "/api/providers/nope/auth/status".into(),
+        o.clone(),
+        None,
+    )
+    .await;
     assert_eq!(st, 404, "{b}");
-    let (st, b) = call(M::POST, "/api/providers/omniroute/test".into(), o.clone(), Some(json!({"baseUrl":"file:///x"}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/providers/omniroute/test".into(),
+        o.clone(),
+        Some(json!({"baseUrl":"file:///x"})),
+    )
+    .await;
     assert_eq!(st, 400, "{b}");
-    let (st, b) = call(M::POST, "/api/providers/backend/test".into(), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/providers/backend/test".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400, "{b}");
-    let (st, b) = call(M::POST, "/api/providers/nope/auth/logout".into(), o.clone(), Some(json!({}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/providers/nope/auth/logout".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404, "{b}");
     // Another user sees an empty account list and cannot touch accounts.
     let (st, b) = call(M::GET, "/api/provider-accounts".into(), x.clone(), None).await;

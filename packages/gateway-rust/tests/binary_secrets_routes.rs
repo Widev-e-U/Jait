@@ -125,7 +125,6 @@ async fn secrets_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     let o = owner.clone();
     let x = other.clone();
     let (st, _) = call(M::GET, "/api/secrets".into(), String::new(), None).await;
@@ -133,7 +132,13 @@ async fn secrets_routes_through_the_binary() {
 
     let (st, b) = call(M::GET, "/api/secrets".into(), o.clone(), None).await;
     assert!(st == 200 && b["secrets"] == json!([]), "{st} {b}");
-    let (st, _) = call(M::POST, "/api/secrets".into(), o.clone(), Some(json!({"type":"api"}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/secrets".into(),
+        o.clone(),
+        Some(json!({"type":"api"})),
+    )
+    .await;
     assert_eq!(st, 400);
     let (st, b) = call(
         M::POST,
@@ -144,7 +149,10 @@ async fn secrets_routes_through_the_binary() {
     .await;
     assert_eq!(st, 201, "{b}");
     let id = b["secret"]["id"].as_str().unwrap().to_owned();
-    assert!(!b.to_string().contains("hunter2-value"), "secret value leaked: {b}");
+    assert!(
+        !b.to_string().contains("hunter2-value"),
+        "secret value leaked: {b}"
+    );
 
     let (_, b) = call(M::GET, "/api/secrets".into(), o.clone(), None).await;
     assert_eq!(b["secrets"].as_array().unwrap().len(), 1, "{b}");
@@ -164,10 +172,28 @@ async fn secrets_routes_through_the_binary() {
     // Secret input requests.
     let (st, b) = call(M::GET, "/api/secrets/requests".into(), o.clone(), None).await;
     assert!(st == 200 && b["requests"] == json!([]), "{b}");
-    let (st, _) = call(M::POST, "/api/secrets/requests/nope/submit".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/secrets/requests/nope/submit".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, "/api/secrets/requests/nope/submit".into(), o.clone(), Some(json!({"value":"v"}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/secrets/requests/nope/submit".into(),
+        o.clone(),
+        Some(json!({"value":"v"})),
+    )
+    .await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, "/api/secrets/requests/nope/cancel".into(), o.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        "/api/secrets/requests/nope/cancel".into(),
+        o.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
 }

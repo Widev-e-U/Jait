@@ -127,7 +127,11 @@ async fn terminal_routes_through_the_binary() {
 
     let o = owner.clone();
     let x = other.clone();
-    for (m, p) in [(M::GET, "/api/terminals"), (M::GET, "/api/terminals/shells"), (M::GET, "/api/surfaces")] {
+    for (m, p) in [
+        (M::GET, "/api/terminals"),
+        (M::GET, "/api/terminals/shells"),
+        (M::GET, "/api/surfaces"),
+    ] {
         let (st, _) = call(m.clone(), p.into(), String::new(), None).await;
         assert_eq!(st, 401, "{m} {p}");
     }
@@ -141,7 +145,13 @@ async fn terminal_routes_through_the_binary() {
     assert_eq!(b["surfaces"], json!([]), "{b}");
     let (st, b) = call(M::GET, "/api/terminals/nope".into(), o.clone(), None).await;
     assert_eq!(st, 404, "{b}");
-    let (st, b) = call(M::POST, "/api/terminals".into(), o.clone(), Some(json!({"cols":80,"rows":24}))).await;
+    let (st, b) = call(
+        M::POST,
+        "/api/terminals".into(),
+        o.clone(),
+        Some(json!({"cols":80,"rows":24})),
+    )
+    .await;
     assert_eq!(st, 201, "{b}");
     assert_eq!(b["type"], "terminal");
     let id = b["id"].as_str().unwrap().to_owned();
@@ -153,15 +163,45 @@ async fn terminal_routes_through_the_binary() {
     let (_, b) = call(M::GET, "/api/surfaces".into(), o.clone(), None).await;
     assert!(b.to_string().contains(&id), "{b}");
 
-    let (st, b) = call(M::POST, format!("/api/terminals/{id}/execute"), o.clone(), Some(json!({"command":"echo binary-terminal-marker"}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/terminals/{id}/execute"),
+        o.clone(),
+        Some(json!({"command":"echo binary-terminal-marker"})),
+    )
+    .await;
     assert_eq!(st, 200, "{b}");
-    assert!(b["output"].as_str().unwrap().contains("binary-terminal-marker"), "{b}");
+    assert!(
+        b["output"]
+            .as_str()
+            .unwrap()
+            .contains("binary-terminal-marker"),
+        "{b}"
+    );
     assert_eq!(b["exitCode"], 0, "{b}");
-    let (st, _) = call(M::POST, format!("/api/terminals/{id}/execute"), o.clone(), Some(json!({"command":"  "}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("/api/terminals/{id}/execute"),
+        o.clone(),
+        Some(json!({"command":"  "})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, b) = call(M::POST, format!("/api/terminals/{id}/write"), o.clone(), Some(json!({"data":"true\n"}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/terminals/{id}/write"),
+        o.clone(),
+        Some(json!({"data":"true\n"})),
+    )
+    .await;
     assert!(st == 200 && b["ok"] == true, "{b}");
-    let (st, b) = call(M::POST, format!("/api/terminals/{id}/resize"), o.clone(), Some(json!({"cols":100,"rows":30}))).await;
+    let (st, b) = call(
+        M::POST,
+        format!("/api/terminals/{id}/resize"),
+        o.clone(),
+        Some(json!({"cols":100,"rows":30})),
+    )
+    .await;
     assert!(st == 200 && b["cols"] == 100 && b["rows"] == 30, "{b}");
 
     // Another user cannot see or drive it.
@@ -169,9 +209,21 @@ async fn terminal_routes_through_the_binary() {
     assert_eq!(b["terminals"], json!([]), "{b}");
     for (m, p, body) in [
         (M::GET, format!("/api/terminals/{id}"), None),
-        (M::POST, format!("/api/terminals/{id}/write"), Some(json!({"data":"x"}))),
-        (M::POST, format!("/api/terminals/{id}/resize"), Some(json!({}))),
-        (M::POST, format!("/api/terminals/{id}/execute"), Some(json!({"command":"id"}))),
+        (
+            M::POST,
+            format!("/api/terminals/{id}/write"),
+            Some(json!({"data":"x"})),
+        ),
+        (
+            M::POST,
+            format!("/api/terminals/{id}/resize"),
+            Some(json!({})),
+        ),
+        (
+            M::POST,
+            format!("/api/terminals/{id}/execute"),
+            Some(json!({"command":"id"})),
+        ),
         (M::DELETE, format!("/api/terminals/{id}"), None),
     ] {
         let (st, b) = call(m.clone(), p.clone(), x.clone(), body).await;

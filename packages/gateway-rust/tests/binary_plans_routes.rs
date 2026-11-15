@@ -144,7 +144,13 @@ async fn plan_routes_through_the_binary() {
     // Another user cannot see or create plans in the owner's repo.
     let (st, _) = call(M::GET, list_path.clone(), other.clone(), None).await;
     assert_eq!(st, 404);
-    let (st, _) = call(M::POST, list_path.clone(), other.clone(), Some(json!({"title":"x"}))).await;
+    let (st, _) = call(
+        M::POST,
+        list_path.clone(),
+        other.clone(),
+        Some(json!({"title":"x"})),
+    )
+    .await;
     assert_eq!(st, 404);
 
     let (st, b) = call(M::GET, list_path.clone(), owner.clone(), None).await;
@@ -170,7 +176,11 @@ async fn plan_routes_through_the_binary() {
         (M::PATCH, plan_path.clone(), Some(json!({"title":"hijack"}))),
         (M::DELETE, plan_path.clone(), None),
         (M::POST, format!("{plan_path}/start"), Some(json!({}))),
-        (M::POST, format!("{plan_path}/tasks/t1/start"), Some(json!({}))),
+        (
+            M::POST,
+            format!("{plan_path}/tasks/t1/start"),
+            Some(json!({})),
+        ),
     ] {
         let (st, b) = call(m.clone(), p.clone(), other.clone(), body).await;
         assert_eq!(st, 404, "{m} {p} {b}");
@@ -183,23 +193,62 @@ async fn plan_routes_through_the_binary() {
         Some(json!({"title":"Renamed","status":"active"})),
     )
     .await;
-    assert!(st == 200 && b["plan"]["title"] == "Renamed" && b["plan"]["status"] == "active", "{b}");
+    assert!(
+        st == 200 && b["plan"]["title"] == "Renamed" && b["plan"]["status"] == "active",
+        "{b}"
+    );
     // Unknown statuses are ignored rather than stored.
-    let (_, b) = call(M::PATCH, plan_path.clone(), owner.clone(), Some(json!({"status":"bogus"}))).await;
+    let (_, b) = call(
+        M::PATCH,
+        plan_path.clone(),
+        owner.clone(),
+        Some(json!({"status":"bogus"})),
+    )
+    .await;
     assert_eq!(b["plan"]["status"], "active", "{b}");
 
     // Starting with no approved tasks is rejected.
-    let (st, _) = call(M::POST, format!("{plan_path}/start"), owner.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("{plan_path}/start"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 400);
-    let (st, _) = call(M::POST, format!("{plan_path}/tasks/missing/start"), owner.clone(), Some(json!({}))).await;
+    let (st, _) = call(
+        M::POST,
+        format!("{plan_path}/tasks/missing/start"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(st, 404);
     // Starting a task approves it and returns the repo view.
-    let (st, b) = call(M::POST, format!("{plan_path}/tasks/t1/start"), owner.clone(), Some(json!({}))).await;
-    assert!(st == 200 && b["task"]["id"] == "t1" && b["repo"]["id"] == repo.as_str(), "{b}");
+    let (st, b) = call(
+        M::POST,
+        format!("{plan_path}/tasks/t1/start"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["task"]["id"] == "t1" && b["repo"]["id"] == repo.as_str(),
+        "{b}"
+    );
     let (_, b) = call(M::GET, plan_path.clone(), owner.clone(), None).await;
     assert_eq!(b["plan"]["tasks"][0]["status"], "approved", "{b}");
-    let (st, b) = call(M::POST, format!("{plan_path}/start"), owner.clone(), Some(json!({}))).await;
-    assert!(st == 200 && b["tasks"].as_array().unwrap().len() == 1, "{b}");
+    let (st, b) = call(
+        M::POST,
+        format!("{plan_path}/start"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert!(
+        st == 200 && b["tasks"].as_array().unwrap().len() == 1,
+        "{b}"
+    );
 
     // Delete: owner succeeds once.
     let (st, b) = call(M::DELETE, plan_path.clone(), owner.clone(), None).await;
