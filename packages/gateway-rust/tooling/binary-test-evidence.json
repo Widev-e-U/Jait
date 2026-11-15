@@ -1330,6 +1330,46 @@
           "name": "plan_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-accounts",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage/summary",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

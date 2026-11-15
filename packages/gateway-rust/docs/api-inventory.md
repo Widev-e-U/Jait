@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 166,
-  "native-tested": 133,
+  "native-untested": 162,
+  "native-tested": 137,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 133,
+  "nativeTested": 137,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 26.34,
+  "nativeTestedPct": 27.13,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -157,10 +157,10 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/projects/archived` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/last-active` | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/search` | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/projects.ts |
-| GET | `/api/provider-accounts` | native-untested |  | routes/providers.ts |
-| GET | `/api/provider-usage` | native-untested |  | routes/providers.ts |
-| GET | `/api/provider-usage/summary` | native-untested |  | routes/providers.ts |
-| GET | `/api/providers` | native-untested |  | routes/providers.ts |
+| GET | `/api/provider-accounts` | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
+| GET | `/api/provider-usage` | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
+| GET | `/api/provider-usage/summary` | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
+| GET | `/api/providers` | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/providers/:id/auth/status` | native-untested |  | routes/providers.ts |
 | GET | `/api/providers/:id/models` | native-untested |  | routes/providers.ts |
 | GET | `/api/reminders` | mounted-incomplete |  | routes/reminders.ts |
