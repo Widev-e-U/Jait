@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 156,
-  "native-tested": 143,
+  "native-untested": 149,
+  "native-tested": 150,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 143,
+  "nativeTested": 150,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 28.32,
+  "nativeTestedPct": 29.7,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -222,8 +222,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/update/changelog` | native-untested |  | routes/update.ts |
 | GET | `/api/update/check` | native-untested |  | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/user-questions.ts |
-| GET | `/api/voice-assistant/status` | native-untested |  | server.ts |
-| GET | `/api/voice/state/:sessionId` | native-untested |  | routes/voice.ts |
+| GET | `/api/voice-assistant/status` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | server.ts |
+| GET | `/api/voice/state/:sessionId` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | GET | `/health` | native-untested |  | routes/health.ts |
 | GET | `/mcp` | mounted-fail-closed |  | routes/mcp-server.ts |
 | GET | `/mcp/sse` | mounted-fail-closed |  | routes/mcp-server.ts |
@@ -251,7 +251,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/sessions/:id/state` | native-untested |  | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested |  | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
-| PATCH | `/api/voice/state/:sessionId` | native-untested |  | routes/voice.ts |
+| PATCH | `/api/voice/state/:sessionId` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | POST | `/api/agent-control/halt` | mounted-fail-closed |  | routes/agent-control.ts |
 | POST | `/api/agent-control/resume` | mounted-fail-closed |  | routes/agent-control.ts |
 | POST | `/api/agents/:agentId/github-app/installation` | mounted-fail-closed |  | routes/agent-github-apps.ts |
@@ -448,10 +448,10 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/update/apply` | native-untested |  | routes/update.ts |
 | POST | `/api/user-questions/requests/:id/cancel` | native-untested |  | routes/user-questions.ts |
 | POST | `/api/user-questions/requests/:id/submit` | native-untested |  | routes/user-questions.ts |
-| POST | `/api/voice/speak` | native-untested |  | routes/voice.ts |
-| POST | `/api/voice/transcribe` | native-untested |  | routes/voice.ts |
-| POST | `/api/voice/transcribe-audio` | native-untested |  | routes/voice.ts |
-| POST | `/api/voice/wake-candidate` | native-untested |  | routes/voice.ts |
+| POST | `/api/voice/speak` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
+| POST | `/api/voice/transcribe` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
+| POST | `/api/voice/transcribe-audio` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
+| POST | `/api/voice/wake-candidate` | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | POST | `/hooks/agent` | mounted-fail-closed |  | routes/hooks.ts |
 | POST | `/hooks/wake` | mounted-fail-closed |  | routes/hooks.ts |
 | POST | `/mcp` | mounted-fail-closed |  | routes/mcp-server.ts |

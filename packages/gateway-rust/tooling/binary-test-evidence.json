@@ -1430,6 +1430,76 @@
           "name": "terminal_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice/state/:sessionId",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/voice/state/:sessionId",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/speak",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe-audio",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/wake-candidate",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice-assistant/status",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

@@ -3,13 +3,13 @@
     "httpTotal": 433,
     "missing": 25,
     "mounted-fail-closed": 103,
-    "native-untested": 156,
-    "native-tested": 143,
+    "native-untested": 149,
+    "native-tested": 150,
     "mounted-incomplete": 6,
     "nativeRouteReferencePct": 69.1,
-    "nativeTested": 143,
+    "nativeTested": 150,
     "nativeTestedDenominator": 505,
-    "nativeTestedPct": 28.32,
+    "nativeTestedPct": 29.7,
     "wsTotal": 72,
     "wsInbound": 37,
     "wsOutboundCandidates": 35,
@@ -2547,10 +2547,15 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "runtime/application.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2558,10 +2563,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "GET",
@@ -2916,10 +2926,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -5306,10 +5321,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -5317,10 +5337,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -5328,10 +5353,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
@@ -5339,10 +5369,15 @@
       "nodeFiles": [
         "routes/voice.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/voice.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
     },
     {
       "method": "POST",
