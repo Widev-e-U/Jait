@@ -24,6 +24,9 @@ use std::sync::Arc;
 /// The host supplies ControlAccess::session, including owned thread fallback.
 /// Missing stores must deny access, rather than infer ownership from reachability.
 pub type ConsentOwnership = Arc<dyn Fn(&str, &str) -> Result<bool, String> + Send + Sync>;
+/// `(user, request id, approve, reason)`; true when this call resolved the request.
+pub type ConsentClaim =
+    Arc<dyn Fn(&str, &str, bool, Option<String>) -> Result<bool, String> + Send + Sync>;
 pub type ConsentAudit = Arc<dyn Fn(Value) -> Result<(), String> + Send + Sync>;
 
 /// Capture an ownership-filtered snapshot and its change subscription together.
@@ -170,7 +173,9 @@ pub async fn filter_owned_event(
                 }
                 Ok(Some(json!({"type":"consent.resolved", "sessionId":session_id, "payload":&*decision})))
             }
-            ConsentQueueEvent::SnapshotRequired => Err("consent event recovery required".into()),
+            ConsentQueueEvent::SnapshotRequired | ConsentQueueEvent::FinalizationComplete => {
+                Err("consent event recovery required".into())
+            }
         }
     }).await.map_err(|_| "consent event unavailable".to_string())?
 }
@@ -180,6 +185,10 @@ pub struct ConsentRoutes {
     pub manager: ConsentManager,
     pub owns_session: ConsentOwnership,
     pub audit: ConsentAudit,
+    /// Decides under the host's ownership lease so a revocation cannot slip in between
+    /// the ownership check and the decision. Without it, decisions use the manager
+    /// directly after the point-in-time `owns_session` check.
+    pub claim: Option<ConsentClaim>,
     pub lane: BlockingLane,
     pub active_profile_name: Option<String>,
     /// Preserve the host permission map's insertion order.
@@ -282,13 +291,7 @@ impl ConsentRoutes {
                 } else {
                     Some(reason.unwrap_or_else(|| "User rejected".into()))
                 };
-                let ok = if approve {
-                    self.manager
-                        .approve(id, Some(DecisionVia::Click), reason.clone())?
-                } else {
-                    self.manager
-                        .reject(id, Some(DecisionVia::Click), reason.clone())?
-                };
+                let ok = self.decide_owned(&user, id, approve, reason.clone())?;
                 if !ok {
                     return Ok(not_found(Some(
                         "Consent request not found or already resolved",
@@ -336,6 +339,22 @@ impl ConsentRoutes {
             _ => unreachable!("registered consent route"),
         };
         Ok((200, result))
+    }
+    fn decide_owned(
+        &self,
+        user: &str,
+        id: &str,
+        approve: bool,
+        reason: Option<String>,
+    ) -> Result<bool, String> {
+        if let Some(claim) = &self.claim {
+            return claim(user, id, approve, reason);
+        }
+        if approve {
+            self.manager.approve(id, Some(DecisionVia::Click), reason)
+        } else {
+            self.manager.reject(id, Some(DecisionVia::Click), reason)
+        }
     }
     fn approve_pending(
         &self,
@@ -387,13 +406,7 @@ impl crate::ws::WsConsentControl for ConsentRoutes {
         if req.status != ConsentStatus::Pending || !(self.owns_session)(&req.session_id, user)? {
             return Ok(false);
         }
-        let ok = if approve {
-            self.manager
-                .approve(request_id, Some(DecisionVia::Click), reason.clone())?
-        } else {
-            self.manager
-                .reject(request_id, Some(DecisionVia::Click), reason.clone())?
-        };
+        let ok = self.decide_owned(user, request_id, approve, reason.clone())?;
         if ok {
             let mut inputs = json!({"requestId":request_id});
             if let Some(reason) = reason {
@@ -553,6 +566,7 @@ mod owned_snapshot_tests {
                 count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 Ok(())
             }),
+            claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
@@ -597,6 +611,7 @@ mod owned_snapshot_tests {
                 manager: manager.clone(),
                 owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
                 audit: Arc::new(|_| Ok(())),
+                claim: None,
                 lane: lane(),
                 active_profile_name: None,
                 permissions: vec![],
@@ -647,6 +662,7 @@ mod owned_snapshot_tests {
             manager: manager.clone(),
             owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
             audit: Arc::new(|_| Ok(())),
+            claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
@@ -686,6 +702,7 @@ mod owned_snapshot_tests {
                 sink.lock().unwrap().push(event);
                 Ok(())
             }),
+            claim: None,
             lane: lane(),
             active_profile_name: None,
             permissions: vec![],
