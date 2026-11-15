@@ -1500,6 +1500,86 @@
           "name": "voice_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/interfaces",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/scan/latest",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/nodes",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/devices",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/topology",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/nodes/register",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/ssh/enable",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/assessments",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []

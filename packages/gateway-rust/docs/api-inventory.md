@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 149,
-  "native-tested": 150,
+  "native-untested": 141,
+  "native-tested": 158,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 150,
+  "nativeTested": 158,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 29.7,
+  "nativeTestedPct": 31.29,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -128,11 +128,11 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/mobile/os-tool/sessions` | mounted-incomplete |  | routes/mobile.ts |
 | GET | `/api/mobile/push-devices` | mounted-incomplete |  | routes/mobile.ts |
 | GET | `/api/mobile/routines` | mounted-incomplete |  | routes/mobile.ts |
-| GET | `/api/network/devices` | native-untested |  | routes/network.ts |
-| GET | `/api/network/interfaces` | native-untested |  | routes/network.ts |
-| GET | `/api/network/nodes` | native-untested |  | routes/network.ts |
-| GET | `/api/network/scan/latest` | native-untested |  | routes/network.ts |
-| GET | `/api/network/topology` | native-untested |  | routes/network.ts |
+| GET | `/api/network/devices` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
+| GET | `/api/network/interfaces` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
+| GET | `/api/network/nodes` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
+| GET | `/api/network/scan/latest` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
+| GET | `/api/network/topology` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | GET | `/api/persona-agents` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/plans/:id` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | GET | `/api/plugins` | mounted-fail-closed |  | routes/plugins.ts |
@@ -178,7 +178,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/screen-share/state` | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/secrets` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
 | GET | `/api/secrets/requests` | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
-| GET | `/api/security/assessments` | native-untested |  | routes/security-assessments.ts |
+| GET | `/api/security/assessments` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/security-assessments.ts |
 | GET | `/api/security/assessments/:id` | native-untested |  | routes/security-assessments.ts |
 | GET | `/api/security/checks/:id` | mounted-fail-closed |  | routes/security-workbench.ts |
 | GET | `/api/security/checks/:id/report` | mounted-fail-closed |  | routes/security-workbench.ts |
@@ -329,9 +329,9 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/mobile/devices/register` | mounted-incomplete |  | routes/mobile.ts |
 | POST | `/api/mobile/push-devices/test` | mounted-fail-closed |  | routes/mobile.ts |
 | POST | `/api/network/deploy` | missing |  | routes/network.ts |
-| POST | `/api/network/nodes/register` | native-untested |  | routes/network.ts |
+| POST | `/api/network/nodes/register` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | POST | `/api/network/scan` | native-untested |  | routes/network.ts |
-| POST | `/api/network/ssh/enable` | native-untested |  | routes/network.ts |
+| POST | `/api/network/ssh/enable` | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | POST | `/api/network/ssh/test` | missing |  | routes/network.ts |
 | POST | `/api/nodes/:id/credential` | native-untested |  | server.ts |
 | POST | `/api/plans/:id/generate` | native-untested |  | routes/plans.ts |
