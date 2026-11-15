@@ -9,13 +9,13 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
   "httpTotal": 433,
   "missing": 25,
   "mounted-fail-closed": 103,
-  "native-untested": 173,
-  "native-tested": 126,
+  "native-untested": 166,
+  "native-tested": 133,
   "mounted-incomplete": 6,
   "nativeRouteReferencePct": 69.1,
-  "nativeTested": 126,
+  "nativeTested": 133,
   "nativeTestedDenominator": 505,
-  "nativeTestedPct": 24.95,
+  "nativeTestedPct": 26.34,
   "wsTotal": 72,
   "wsInbound": 37,
   "wsOutboundCandidates": 35,
@@ -48,7 +48,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | DELETE | `/api/mobile/push-devices/:deviceId` | mounted-fail-closed |  | routes/mobile.ts |
 | DELETE | `/api/nodes/:id/credential` | native-untested |  | server.ts |
 | DELETE | `/api/persona-agents/:id` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
-| DELETE | `/api/plans/:id` | native-untested |  | routes/plans.ts |
+| DELETE | `/api/plans/:id` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | mounted-fail-closed |  | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | mounted-fail-closed |  | routes/browser-devtools.ts |
 | DELETE | `/api/projects/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
@@ -134,7 +134,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/network/scan/latest` | native-untested |  | routes/network.ts |
 | GET | `/api/network/topology` | native-untested |  | routes/network.ts |
 | GET | `/api/persona-agents` | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
-| GET | `/api/plans/:id` | native-untested |  | routes/plans.ts |
+| GET | `/api/plans/:id` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | GET | `/api/plugins` | mounted-fail-closed |  | routes/plugins.ts |
 | GET | `/api/plugins/:id` | mounted-fail-closed |  | routes/plugins.ts |
 | GET | `/api/plugins/:id/config` | mounted-fail-closed |  | routes/plugins.ts |
@@ -166,7 +166,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | GET | `/api/reminders` | mounted-incomplete |  | routes/reminders.ts |
 | GET | `/api/reminders/export.md` | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | GET | `/api/repos` | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/repositories.ts |
-| GET | `/api/repos/:repoId/plans` | native-untested |  | routes/plans.ts |
+| GET | `/api/repos/:repoId/plans` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | GET | `/api/repos/:repoId/proposals` | native-untested |  | routes/repo-proposals.ts |
 | GET | `/api/repos/:id/pull-requests` | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/pull-requests/:number` | native-untested |  | routes/pull-requests.ts |
@@ -238,7 +238,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | PATCH | `/api/email/accounts/:id` | mounted-fail-closed |  | routes/email.ts |
 | PATCH | `/api/jait-todos/:id` | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | PATCH | `/api/jobs/:id` | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
-| PATCH | `/api/plans/:id` | native-untested |  | routes/plans.ts |
+| PATCH | `/api/plans/:id` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | PATCH | `/api/plugins/:id/config` | mounted-fail-closed |  | routes/plugins.ts |
 | PATCH | `/api/projects/:id` | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | PATCH | `/api/projects/:id/state` | native-untested |  | routes/projects.ts |
@@ -335,8 +335,8 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/network/ssh/test` | missing |  | routes/network.ts |
 | POST | `/api/nodes/:id/credential` | native-untested |  | server.ts |
 | POST | `/api/plans/:id/generate` | native-untested |  | routes/plans.ts |
-| POST | `/api/plans/:id/start` | native-untested |  | routes/plans.ts |
-| POST | `/api/plans/:id/tasks/:taskId/start` | native-untested |  | routes/plans.ts |
+| POST | `/api/plans/:id/start` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
+| POST | `/api/plans/:id/tasks/:taskId/start` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | POST | `/api/plugins/:id/disable` | mounted-fail-closed |  | routes/plugins.ts |
 | POST | `/api/plugins/:id/enable` | mounted-fail-closed |  | routes/plugins.ts |
 | POST | `/api/plugins/scan` | mounted-fail-closed |  | routes/plugins.ts |
@@ -380,7 +380,7 @@ HTTP routes and WS messages are heuristic candidates, not a complete parity inve
 | POST | `/api/providers/omniroute/test` | native-untested |  | routes/providers.ts |
 | POST | `/api/reminders` | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | POST | `/api/repos` | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
-| POST | `/api/repos/:repoId/plans` | native-untested |  | routes/plans.ts |
+| POST | `/api/repos/:repoId/plans` | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | POST | `/api/repos/:repoId/proposals` | native-untested |  | routes/repo-proposals.ts |
 | POST | `/api/repos/:id/pull-requests/:number/comments` | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/pull-requests/:number/merge` | native-untested |  | routes/pull-requests.ts |

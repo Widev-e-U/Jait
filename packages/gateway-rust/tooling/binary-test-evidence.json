@@ -1260,6 +1260,76 @@
           "name": "secrets_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/plans",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/plans",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/start",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/tasks/:taskId/start",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": []
