@@ -2724,6 +2724,15 @@ async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
         .send()
         .await
         .unwrap();
+    assert_eq!(registered.status(), 401);
+    let token = token(&client, &base).await;
+    let registered = client
+        .post(format!("{base}/api/mobile/devices/register"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"id":"phone-1","name":"Phone","platform":"mobile"}))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(registered.status(), 200);
     let anon_beat = client
         .post(format!("{base}/api/mobile/devices/phone-1/heartbeat"))
@@ -2737,7 +2746,6 @@ async fn mobile_routes_register_devices_and_guard_consents_by_owner() {
         .await
         .unwrap();
     assert_eq!(anon_list.status(), 401);
-    let token = token(&client, &base).await;
     let beat = client
         .post(format!("{base}/api/mobile/devices/phone-1/heartbeat"))
         .bearer_auth(&token)
@@ -7034,7 +7042,8 @@ async fn project_repository_rejects_non_file_git_metadata() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::new();
     let owner = token(&client, &base).await;
-    let root = dir.join("socket-metadata");
+    // Unix-domain socket paths are limited to roughly 108 bytes on Linux.
+    let root = dir.join("s");
     std::fs::create_dir_all(&root).unwrap();
     let _socket = std::os::unix::net::UnixListener::bind(root.join(".git")).unwrap();
     let project: serde_json::Value = client

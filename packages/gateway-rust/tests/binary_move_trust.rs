@@ -125,46 +125,135 @@ async fn session_move_trust_and_project_search_through_the_binary() {
     };
     use reqwest::Method as M;
 
-
     // Session move: validation, ownership, no-op and real move.
-    let (_, project) = call(M::POST, "/api/projects".into(), owner.clone(), Some(json!({"title":"Searchable Zebra"}))).await;
+    let (_, project) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"title":"Searchable Zebra"})),
+    )
+    .await;
     let pid = project["id"].as_str().unwrap().to_owned();
-    let (status, session) = call(M::POST, "/api/sessions".into(), owner.clone(), Some(json!({}))).await;
+    let (status, session) = call(
+        M::POST,
+        "/api/sessions".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(status, 201, "{session}");
     let id = session["id"].as_str().unwrap().to_owned();
     let path = format!("/api/sessions/{id}/move");
-    let (status, body) = call(M::POST, path.clone(), owner.clone(), Some(json!({"projectId": 5}))).await;
+    let (status, body) = call(
+        M::POST,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"projectId": 5})),
+    )
+    .await;
     assert_eq!(status, 400, "{body}");
-    let (status, _) = call(M::POST, path.clone(), other.clone(), Some(json!({"projectId": null}))).await;
+    let (status, _) = call(
+        M::POST,
+        path.clone(),
+        other.clone(),
+        Some(json!({"projectId": null})),
+    )
+    .await;
     assert_eq!(status, 404);
-    let (status, _) = call(M::POST, path.clone(), owner.clone(), Some(json!({"projectId": "missing"}))).await;
+    let (status, _) = call(
+        M::POST,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"projectId": "missing"})),
+    )
+    .await;
     assert_eq!(status, 404);
-    let (status, body) = call(M::POST, path.clone(), owner.clone(), Some(json!({"projectId": null}))).await;
+    let (status, body) = call(
+        M::POST,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"projectId": null})),
+    )
+    .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["moved"], false, "{body}");
-    let (status, body) = call(M::POST, path.clone(), owner.clone(), Some(json!({"projectId": pid}))).await;
+    let (status, body) = call(
+        M::POST,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"projectId": pid})),
+    )
+    .await;
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["moved"], true, "{body}");
     assert_eq!(body["toProjectId"], pid.as_str(), "{body}");
-    let (_, listed) = call(M::GET, format!("/api/projects/{pid}/sessions"), owner.clone(), None).await;
+    let (_, listed) = call(
+        M::GET,
+        format!("/api/projects/{pid}/sessions"),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert!(listed.to_string().contains(&id), "{listed}");
-    let (_, other_project) = call(M::POST, "/api/projects".into(), other.clone(), Some(json!({"title":"Theirs"}))).await;
+    let (_, other_project) = call(
+        M::POST,
+        "/api/projects".into(),
+        other.clone(),
+        Some(json!({"title":"Theirs"})),
+    )
+    .await;
     let opid = other_project["id"].as_str().unwrap().to_owned();
-    let (status, _) = call(M::POST, path.clone(), owner.clone(), Some(json!({"projectId": opid}))).await;
+    let (status, _) = call(
+        M::POST,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"projectId": opid})),
+    )
+    .await;
     assert_eq!(status, 404);
 
     // Project search is owner-scoped.
-    let (status, found) = call(M::GET, "/api/projects/search?q=Zebra".into(), owner.clone(), None).await;
+    let (status, found) = call(
+        M::GET,
+        "/api/projects/search?q=Zebra".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(status, 200, "{found}");
     assert!(found.to_string().contains(&pid), "{found}");
-    let (_, found) = call(M::GET, "/api/projects/search?q=Zebra".into(), other.clone(), None).await;
+    let (_, found) = call(
+        M::GET,
+        "/api/projects/search?q=Zebra".into(),
+        other.clone(),
+        None,
+    )
+    .await;
     assert!(!found.to_string().contains(&pid), "{found}");
-    let (_, found) = call(M::GET, "/api/projects/search?q=".into(), owner.clone(), None).await;
+    let (_, found) = call(
+        M::GET,
+        "/api/projects/search?q=".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(found["projects"], json!([]), "{found}");
 
     // Trust level read and reset.
-    let (status, state) = call(M::GET, "/api/trust/levels/file.write".into(), owner.clone(), None).await;
+    let (status, state) = call(
+        M::GET,
+        "/api/trust/levels/file.write".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
     assert_eq!(status, 200, "{state}");
-    let (status, state) = call(M::POST, "/api/trust/levels/file.write/reset".into(), owner.clone(), Some(json!({}))).await;
+    let (status, state) = call(
+        M::POST,
+        "/api/trust/levels/file.write/reset".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(status, 200, "{state}");
 }
