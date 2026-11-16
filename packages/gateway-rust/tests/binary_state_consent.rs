@@ -170,6 +170,36 @@ async fn state_trust_and_consent_routes_are_owned_through_the_binary() {
     .await;
     assert_eq!(status, 201, "{session}");
     let id = session["id"].as_str().unwrap().to_owned();
+
+    // Session-wide approval can only be inspected or changed by its owner.
+    let approve_all = format!("/api/consent/pending/{id}/approve-all");
+    let pending_for_session = format!("/api/consent/pending/{id}");
+    let response = client.get(url(&approve_all)).send().await.unwrap();
+    assert_eq!(response.status(), 401);
+    for method in [M::GET, M::POST, M::DELETE] {
+        let (status, body) = call(method, approve_all.clone(), other.clone(), None).await;
+        assert_eq!(status, 404, "{body}");
+    }
+    let (status, body) = call(M::GET, pending_for_session.clone(), other.clone(), None).await;
+    assert_eq!(status, 404, "{body}");
+    let (status, body) = call(M::GET, pending_for_session, owner.clone(), None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["requests"], json!([]));
+    let (status, body) = call(M::GET, approve_all.clone(), owner.clone(), None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["approveAllEnabled"], false);
+    let (status, body) = call(M::POST, approve_all.clone(), owner.clone(), Some(json!({}))).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["approveAllEnabled"], true);
+    assert_eq!(body["approvedCount"], 0);
+    let (status, body) = call(M::DELETE, approve_all.clone(), other.clone(), None).await;
+    assert_eq!(status, 404, "{body}");
+    let (status, body) = call(M::GET, approve_all.clone(), owner.clone(), None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["approveAllEnabled"], true);
+    let (status, body) = call(M::DELETE, approve_all.clone(), owner.clone(), None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["approveAllEnabled"], false);
     let (status, state) = call(
         M::GET,
         format!("/api/sessions/{id}/state"),
