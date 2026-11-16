@@ -714,6 +714,25 @@ async fn create_thread(State(state): State<ThreadRoutes>, request: Request) -> R
         Ok(user) => user,
         Err(response) => return *response,
     };
+    let owner = user.id.clone();
+    let control = match run(&state, move |conn| {
+        crate::services::agent_control::AgentControlService::new(conn, &String::new)
+            .get_state(&owner)
+    })
+    .await
+    {
+        Ok(control) => control,
+        Err(response) => return *response,
+    };
+    if control.halted {
+        return json_response(
+            409,
+            json!(crate::services::agent_control::agent_halted_body(
+                &control,
+                Some("create-thread")
+            )),
+        );
+    }
     let body = match json_body(request).await {
         Ok(body) => body,
         Err(response) => return *response,
@@ -850,22 +869,37 @@ async fn create_thread(State(state): State<ThreadRoutes>, request: Request) -> R
     ];
     let lookup = id.clone();
     let created = run(&state, move |conn| {
-        conn.execute(
+        let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+        let control = crate::services::agent_control::AgentControlService::new(&tx, &String::new)
+            .get_state(&user_id)?;
+        if control.halted {
+            return Ok(Err(control));
+        }
+        tx.execute(
             "INSERT INTO agent_threads (id, user_id, session_id, persona_agent_id, title, provider_id, \
              model, reasoning_effort, runtime_mode, kind, skill_ids, working_directory, branch, \
              pr_base_branch, status, created_at, updated_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'idle',?15,?16)",
             params_from_iter(row.iter()),
         )?;
-        conn.query_row(
+        let thread = tx.query_row(
             &format!("SELECT {THREAD_COLUMNS} FROM agent_threads WHERE id = ?1"),
             params![&lookup],
             thread_json,
-        )
+        )?;
+        tx.commit()?;
+        Ok(Ok(thread))
     })
     .await;
     match created {
-        Ok(thread) => json_response(201, thread),
+        Ok(Ok(thread)) => json_response(201, thread),
+        Ok(Err(control)) => json_response(
+            409,
+            json!(crate::services::agent_control::agent_halted_body(
+                &control,
+                Some("create-thread")
+            )),
+        ),
         Err(response) => *response,
     }
 }

@@ -763,6 +763,26 @@ async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
         .await
         .unwrap();
     assert_eq!(state["state"]["halted"], true);
+    let blocked = client
+        .post(url("/api/threads"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blocked.status(), 409);
+    let body: Value = blocked.json().await.unwrap();
+    assert_eq!(body["code"], "agent_halted");
+    assert_eq!(body["action"], "create-thread");
+    assert_eq!(body["reason"], "maintenance");
+    let other_create = client
+        .post(url("/api/threads"))
+        .bearer_auth(other)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(other_create.status(), 400);
     let resumed: Value = client
         .post(url("/api/agent-control/resume"))
         .bearer_auth(owner)
@@ -774,6 +794,14 @@ async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
         .await
         .unwrap();
     assert_eq!(resumed["state"]["halted"], false);
+    let after_resume = client
+        .post(url("/api/threads"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(after_resume.status(), 400);
 }
 
 #[tokio::test]
