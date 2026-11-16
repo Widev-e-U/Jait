@@ -435,7 +435,8 @@ async fn code_graph_and_update_are_served_and_authenticated() {
 async fn environment_and_calendar_are_served_and_authenticated() {
     let (base, stop, task, dir) = start().await;
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
+        // The snapshot waits for provider availability checks, including subprocesses.
+        .timeout(Duration::from_secs(30))
         .build()
         .unwrap();
     for path in [
