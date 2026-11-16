@@ -683,3 +683,152 @@ async fn github_app_mount_fails_closed_without_a_native_host() {
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["detail"], "ambiguous_headers");
 }
+
+#[tokio::test]
+async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    assert_eq!(
+        client
+            .get(url("/api/agent-control"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let owner: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner = owner["access_token"].as_str().unwrap();
+    let invite: Value = client
+        .post(url("/api/auth/invitations"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: Value = client.post(url("/api/auth/register"))
+        .json(&json!({"username":"other", "password":"owner-pass-123", "invitation":invite["invitation"]}))
+        .send().await.unwrap().json().await.unwrap();
+    let other = other["access_token"].as_str().unwrap();
+    let response = client
+        .post(url("/api/agent-control/halt"))
+        .bearer_auth(owner)
+        .json(&json!({"reason":"  maintenance  "}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let halted: Value = response.json().await.unwrap();
+    assert_eq!(halted["state"]["halted"], true);
+    assert_eq!(halted["state"]["reason"], "maintenance");
+    assert_eq!(halted["stopped"], 0);
+    assert!(
+        halted["stopError"]
+            .as_str()
+            .unwrap()
+            .contains("not available")
+    );
+    let state: Value = client
+        .get(url("/api/agent-control"))
+        .bearer_auth(other)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["state"]["halted"], false);
+    let state: Value = client
+        .get(url("/api/agent-control"))
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["state"]["halted"], true);
+    let resumed: Value = client
+        .post(url("/api/agent-control/resume"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(resumed["state"]["halted"], false);
+}
+
+#[tokio::test]
+async fn plugin_mount_refuses_loading_without_native_host() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    assert_eq!(
+        client
+            .get(url("/api/plugins"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let registration: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registration["access_token"].as_str().unwrap();
+    let response = client
+        .get(url("/api/plugins"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.json::<Value>().await.unwrap(), json!([]));
+    let response = client
+        .post(url("/api/plugins/example/enable"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    let body: Value = response.json().await.unwrap();
+    assert!(body["error"].as_str().unwrap().contains("not available"));
+    assert_eq!(
+        client
+            .get(url("/api/plugins/example"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+}
