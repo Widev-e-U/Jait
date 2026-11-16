@@ -484,3 +484,202 @@ async fn update_activation_is_unavailable_through_the_binary() {
     let body = response.json::<Value>().await.unwrap();
     assert!(body["error"].as_str().unwrap().contains("systemd-managed"));
 }
+
+#[tokio::test]
+async fn team_rooms_enforce_thread_ownership_and_persist_messages() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let base = &gateway.base;
+    assert_eq!(
+        client
+            .get(format!("{base}/api/team-rooms"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let owner: Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner = owner["access_token"].as_str().unwrap();
+    let invitation: Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: Value = client.post(format!("{base}/api/auth/register"))
+        .json(&json!({"username":"other", "password":"owner-pass-123", "invitation":invitation["invitation"]}))
+        .send().await.unwrap().json().await.unwrap();
+    let other = other["access_token"].as_str().unwrap();
+    assert_eq!(
+        client
+            .put(format!("{base}/api/persona-agents/pa1"))
+            .bearer_auth(owner)
+            .json(&json!({"name":"Helper"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    let other_id: String = db
+        .query_row("SELECT id FROM users WHERE username='other'", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    db.execute("INSERT INTO agent_threads (id,user_id,title,provider_id,status,created_at,updated_at) VALUES ('foreign-thread',?1,'Other','test','idle','now','now')", [&other_id]).unwrap();
+    let owner_id: String = db
+        .query_row("SELECT id FROM users WHERE username='owner'", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    db.execute("INSERT INTO agent_threads (id,user_id,title,provider_id,status,created_at,updated_at) VALUES ('owned-thread',?1,'Owner','test','idle','now','now')", [&owner_id]).unwrap();
+    let collection = format!("{base}/api/team-rooms");
+    let response = client
+        .post(&collection)
+        .bearer_auth(owner)
+        .json(&json!({"agentId":"pa1", "sourceSessionId":"foreign-thread"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        400,
+        "foreign thread must not be accepted"
+    );
+    let response = client
+        .post(&collection)
+        .bearer_auth(owner)
+        .json(&json!({"agentId":"pa1", "sourceSessionId":"owned-thread"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200, "owned thread must be accepted");
+    let room: Value = client
+        .post(&collection)
+        .bearer_auth(owner)
+        .json(&json!({"name":"Team", "memberIds":["pa1"]}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let room_id = room["room"]["id"].as_str().expect("room was created");
+    let room_url = format!("{collection}/{room_id}");
+    assert_eq!(
+        client
+            .get(&room_url)
+            .bearer_auth(other)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let message_url = format!("{room_url}/messages");
+    let payload = json!({"content":"hello", "clientKey":"first", "recipientIds":[]});
+    let response = client
+        .post(&message_url)
+        .bearer_auth(owner)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    let message: Value = response.json().await.unwrap();
+    let repeated: Value = client
+        .post(&message_url)
+        .bearer_auth(owner)
+        .json(&payload)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(message["message"]["id"], repeated["message"]["id"]);
+    let loaded: Value = client
+        .get(&room_url)
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(loaded["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(loaded["messages"][0]["content"], "hello");
+    let foreign: Value = client
+        .get(&collection)
+        .bearer_auth(other)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(foreign["rooms"], json!([]));
+}
+
+#[tokio::test]
+async fn github_app_mount_fails_closed_without_a_native_host() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let list = format!("{}/api/github-apps", gateway.base);
+    assert_eq!(client.get(&list).send().await.unwrap().status(), 401);
+    let registration: Value = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registration["access_token"].as_str().unwrap();
+    let response = client.get(&list).bearer_auth(token).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["connections"], json!([]));
+    assert_eq!(body["configured"], 0);
+    let webhook = format!("{}/api/github/apps/webhook", gateway.base);
+    let response = client
+        .post(&webhook)
+        .json(&json!({"installation":{"id":123}}))
+        .header("x-hub-signature-256", "sha256=invalid")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    let response = client
+        .post(&webhook)
+        .json(&json!({}))
+        .header("x-github-delivery", "first")
+        .header("x-github-delivery", "second")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["detail"], "ambiguous_headers");
+}

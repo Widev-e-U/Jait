@@ -627,7 +627,13 @@ impl<'a> TeamChatService<'a> {
         source_session_id: Option<&str>,
     ) -> TeamChatResult<TeamRoom> {
         let root = team_root(agent_id, &self.agents(user_id))?;
-        let source_thread = source_session_id.and_then(|id| self.profiles.thread_by_id(id));
+        let source_thread = source_session_id.and_then(|id| {
+            if self.profiles.thread_owner(id).as_deref() == Some(user_id) {
+                self.profiles.thread_by_id(id)
+            } else {
+                None
+            }
+        });
         let source = match source_session_id {
             Some(session_id) => match self.sessions.get_by_id(user_id, session_id) {
                 Some(session) => Some(session),
