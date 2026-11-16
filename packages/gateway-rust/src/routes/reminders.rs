@@ -40,6 +40,61 @@ impl ReminderRoutes {
             time: None,
         }
     }
+    /// Use the production project service for ownership checks and the project
+    /// sidebar returned with the reminder list. All reads stay on the DB worker.
+    pub fn with_native_projects(mut self) -> Self {
+        let auth = self.auth.clone();
+        self.projects = Some(Arc::new(move |method, args| {
+            let auth = auth.clone();
+            let method = method.to_owned();
+            Box::pin(async move {
+                auth.with_database(move |db| {
+                    let service = crate::services::projects::ProjectService::new(db);
+                    match method.as_str() {
+                        "listWithSessions" => {
+                            let user = args.first().and_then(Value::as_str).unwrap_or("");
+                            if user.is_empty() {
+                                return Err(rusqlite::Error::InvalidQuery.into());
+                            }
+                            Ok(service.list_with_sessions(Some(user), "active", Some(200.0))?)
+                        }
+                        "getById" => {
+                            let id = args.first().and_then(Value::as_str).unwrap_or("");
+                            let user = args.get(1).and_then(Value::as_str).unwrap_or("");
+                            if id.is_empty() || user.is_empty() {
+                                return Err(rusqlite::Error::InvalidQuery.into());
+                            }
+                            Ok(json!(service.get(id, Some(user))?))
+                        }
+                        _ => Err(rusqlite::Error::InvalidQuery.into()),
+                    }
+                })
+                .await
+                .map_err(|_| "Project service unavailable".to_owned())
+            })
+        }));
+        self
+    }
+    /// Read thread metadata from the same owner-scoped store as the thread API.
+    pub fn with_native_threads(mut self) -> Self {
+        let auth = self.auth.clone();
+        self.threads = Some(Arc::new(move |method, args| {
+            let auth = auth.clone();
+            let method = method.to_owned();
+            Box::pin(async move {
+                auth.with_database(move |db| {
+                    if method != "list" {
+                        return Err(rusqlite::Error::InvalidQuery.into());
+                    }
+                    let owner = args.first().and_then(Value::as_str).unwrap_or("");
+                    Ok(json!(super::threads::list_owned_threads(db, owner, 100)?))
+                })
+                .await
+                .map_err(|_| "Thread service unavailable".to_owned())
+            })
+        }));
+        self
+    }
     pub fn router(self) -> Router {
         Router::new()
             .route("/api/reminders", get(handle).post(handle))

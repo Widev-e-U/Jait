@@ -381,6 +381,23 @@ fn persona_agent_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
 // database helpers
 // ---------------------------------------------------------------------------
 
+/// List a bounded number of threads for one authenticated owner using the same
+/// hydration as the HTTP thread route. Empty owners must never widen the query.
+pub(crate) fn list_owned_threads(
+    conn: &Connection,
+    user_id: &str,
+    limit: u32,
+) -> rusqlite::Result<Vec<Value>> {
+    if user_id.is_empty() || limit == 0 || limit > 100 {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+    let mut statement = conn.prepare(&format!(
+        "SELECT {THREAD_COLUMNS} FROM agent_threads WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2"
+    ))?;
+    let rows = statement.query_map(params![user_id, limit], thread_json)?;
+    rows.collect()
+}
+
 fn select_thread(conn: &Connection, id: &str) -> rusqlite::Result<Option<Value>> {
     let sql = format!("SELECT {} FROM agent_threads WHERE id = ?1", THREAD_COLUMNS);
     conn.query_row(&sql, params![id], thread_json).optional()

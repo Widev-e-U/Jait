@@ -578,7 +578,7 @@ impl Application {
                 })
                 .router(),
             )
-            .merge(ReminderRoutes::new(auth.clone()).router())
+            .merge(ReminderRoutes::new(auth.clone()).with_native_projects().with_native_threads().router())
             .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
             .merge(AssistantProfileRoutes { auth: auth.clone() }.router())
             .merge(ArchitectureRoutes { auth: auth.clone() }.router())
