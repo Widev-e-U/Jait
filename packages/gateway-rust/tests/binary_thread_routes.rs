@@ -346,3 +346,105 @@ async fn thread_routes_through_the_binary() {
     let (st, _) = call(M::GET, format!("/api/threads/{tid}"), owner.clone(), None).await;
     assert_eq!(st, 404);
 }
+
+#[tokio::test]
+async fn thread_creation_rechecks_halt_after_body_wait() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let owner: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner = owner["access_token"].as_str().unwrap();
+    let providers: Value = client
+        .get(url("/api/providers"))
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let provider = providers["providers"]
+        .as_array()
+        .or(providers.as_array())
+        .and_then(|list| list.first())
+        .and_then(|item| item["id"].as_str())
+        .expect("test gateway must have a provider");
+    let body = json!({"title":"race", "providerId":provider}).to_string();
+    let address = gateway.base.strip_prefix("http://").unwrap();
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    let headers = format!(
+        "POST /api/threads HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {owner}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(headers.as_bytes()).await.unwrap();
+    let mut interim = [0; 25];
+    tokio::time::timeout(Duration::from_secs(10), stream.read_exact(&mut interim))
+        .await
+        .expect("server did not begin reading the body")
+        .unwrap();
+    assert_eq!(&interim, b"HTTP/1.1 100 Continue\r\n\r\n");
+
+    // The server polls the body only after the first halt check has passed.
+    let halt = client
+        .post(url("/api/agent-control/halt"))
+        .bearer_auth(owner)
+        .json(&json!({"reason":"race"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(halt.status(), 200);
+    stream.write_all(body.as_bytes()).await.unwrap();
+    let mut response = Vec::new();
+    tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut response))
+        .await
+        .expect("server did not finish the thread request")
+        .unwrap();
+    let response = String::from_utf8(response).unwrap();
+    let (head, payload) = response.split_once("\r\n\r\n").unwrap();
+    assert!(head.starts_with("HTTP/1.1 409"), "{response}");
+    let payload: Value = serde_json::from_str(payload).unwrap();
+    assert_eq!(payload["code"], "agent_halted");
+    assert_eq!(payload["action"], "create-thread");
+    assert_eq!(payload["reason"], "race");
+    let threads: Value = client
+        .get(url("/api/threads"))
+        .bearer_auth(owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(threads["threads"], json!([]));
+
+    let resume = client
+        .post(url("/api/agent-control/resume"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resume.status(), 200);
+    let created = client
+        .post(url("/api/threads"))
+        .bearer_auth(owner)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), 201);
+}
