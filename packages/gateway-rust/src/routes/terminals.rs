@@ -459,7 +459,12 @@ async fn create_terminal(
     let project_root = string_field(&body, "projectRoot")
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| state.project_root.to_string());
-    let node_id = string_field(&body, "nodeId").unwrap_or_default();
+    // The gateway is the local execution target, not a remotely owned node.
+    // Keep all other IDs subject to the existing ownership check.
+    let node_id = string_field(&body, "nodeId")
+        .map(|value| crate::text::js_trim(&value).to_owned())
+        .filter(|value| value != "gateway")
+        .unwrap_or_default();
     let shell = string_field(&body, "shell").filter(|value| !value.is_empty());
     let cols = dimension(body.get("cols"), DEFAULT_COLS);
     let rows = dimension(body.get("rows"), DEFAULT_ROWS);
