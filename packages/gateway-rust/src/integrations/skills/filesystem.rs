@@ -230,6 +230,18 @@ mod native {
             Ok(names)
         }
         pub fn read(&self, child: &str, limit: usize) -> io::Result<Vec<u8>> {
+            self.read_checked(child, limit, false)
+        }
+        pub fn read_single_link(&self, child: &str, limit: usize) -> io::Result<Vec<u8>> {
+            self.read_checked(child, limit, true)
+        }
+        fn read_checked(
+            &self,
+            child: &str,
+            limit: usize,
+            single_link: bool,
+        ) -> io::Result<Vec<u8>> {
+            use std::os::unix::fs::MetadataExt;
             let n = name(child)?;
             // NONBLOCK prevents FIFO/device open from blocking before file-type check.
             let fd = unsafe {
@@ -240,8 +252,12 @@ mod native {
                 )
             };
             let file = fd_file(fd)?;
-            if !file.metadata()?.is_file() {
+            let metadata = file.metadata()?;
+            if !metadata.is_file() {
                 return Err(io::Error::other("Skill input must be a regular file"));
+            }
+            if single_link && metadata.nlink() != 1 {
+                return Err(io::Error::other("Input must have a single link"));
             }
             let mut out = Vec::new();
             file.take(limit as u64 + 1).read_to_end(&mut out)?;
@@ -435,6 +451,9 @@ impl Directory {
         Self::unsupported()
     }
     pub fn read(&self, _: &str, _: usize) -> io::Result<Vec<u8>> {
+        Self::unsupported()
+    }
+    pub fn read_single_link(&self, _: &str, _: usize) -> io::Result<Vec<u8>> {
         Self::unsupported()
     }
     pub fn write_new(&self, _: &str, _: &[u8]) -> io::Result<()> {

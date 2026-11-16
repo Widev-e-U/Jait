@@ -1,11 +1,17 @@
 //! File-first architecture diagrams with legacy SQLite fallback.
 //! Execute all operations on the bounded database/blocking worker.
+//! Secure writes require gateway-owned project and .jait directories without
+//! group/world write access; non-Unix platforms fail closed. Atomic replacement
+//! creates a new inode with private permissions instead of preserving metadata.
 use super::storage::Storage;
-use crate::{db::identifiers::uuidv7, security::path_guard::PathGuard, text::js_trim};
+use crate::{
+    db::identifiers::uuidv7, integrations::skills::filesystem::Directory,
+    security::path_guard::PathGuard, text::js_trim,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{
-    fs,
+    io,
     path::{Path, PathBuf},
 };
 pub type DiagramError = Box<dyn std::error::Error + Send + Sync>;
@@ -58,7 +64,20 @@ impl<'a> ArchitectureDiagramService<'a> {
             return Ok(None);
         }
         let path = self.get_file_path(root)?;
-        if let Ok(bytes) = fs::read(&path) {
+        let read = || -> io::Result<Vec<u8>> {
+            let root = path
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| io::Error::other("missing diagram root"))?;
+            let directory = Directory::open(root)?.child(".jait", false)?;
+            directory.read_single_link("architecture.mmd", usize::MAX - 1)
+        };
+        let file = match read() {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        };
+        if let Some(bytes) = file {
             let text = String::from_utf8_lossy(&bytes);
             let diagram = js_trim(&text);
             if !diagram.is_empty() {
@@ -96,8 +115,19 @@ impl<'a> ArchitectureDiagramService<'a> {
             return Err("diagram is required".into());
         }
         let path = self.get_file_path(root)?;
-        fs::create_dir_all(path.parent().expect("diagram parent"))?;
-        fs::write(&path, format!("{diagram}\n"))?;
+        let root_path = path
+            .parent()
+            .and_then(Path::parent)
+            .ok_or("missing diagram root")?;
+        let root_dir = Directory::open(root_path)?;
+        root_dir.ensure_owned()?;
+        let directory = root_dir.child(".jait", true)?;
+        let temporary = format!("architecture-{}.tmp", uuid::Uuid::new_v4());
+        directory.write_new(&temporary, format!("{diagram}\n").as_bytes())?;
+        if let Err(error) = directory.rename(&temporary, &directory, "architecture.mmd", true) {
+            let _ = directory.remove_file(&temporary);
+            return Err(error.into());
+        }
         let now = self.now()?;
         if let Some(existing) = self.stored(root, user)? {
             self.db.execute(

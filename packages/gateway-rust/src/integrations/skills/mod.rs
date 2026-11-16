@@ -1,6 +1,6 @@
 //! Native skill discovery and registry. Filesystem entrypoints are synchronous:
 //! hosts must admit them through the shared BlockingLane, never a session mutex.
-mod filesystem;
+pub(crate) mod filesystem;
 pub mod install;
 
 use crate::execution::process_runner::ProcessCancellation;
