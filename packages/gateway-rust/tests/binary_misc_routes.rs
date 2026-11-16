@@ -319,3 +319,168 @@ async fn misc_routes_are_owned_through_the_binary() {
 fn o_(t: &str) -> String {
     t.to_owned()
 }
+
+#[tokio::test]
+async fn node_credentials_enforce_ownership_and_revocation_through_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let register = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    let owner = register["access_token"].as_str().unwrap();
+    let invite = client
+        .post(format!("{}/api/auth/invitations", gateway.base))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    let other = client.post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"other", "password":"owner-pass-123", "invitation":invite["invitation"]}))
+        .send().await.unwrap().json::<Value>().await.unwrap();
+    let other = other["access_token"].as_str().unwrap();
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    let owner_id: String = db
+        .query_row("SELECT id FROM users WHERE username='owner'", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    db.execute("INSERT INTO nodes(node_id,first_seen_at,last_seen_at,created_at,updated_at,user_id) VALUES ('node-test','now','now','now','now',?1)", [&owner_id]).unwrap();
+    let url = format!("{}/api/nodes/node-test/credential", gateway.base);
+    assert_eq!(client.post(&url).send().await.unwrap().status(), 401);
+    assert_eq!(
+        client
+            .post(&url)
+            .bearer_auth(other)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .delete(&url)
+            .bearer_auth(other)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .post(&url)
+            .header("Origin", "https://untrusted.example")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    let issued = client.post(&url).bearer_auth(owner).send().await.unwrap();
+    assert_eq!(issued.status(), 200);
+    let issued = issued.json::<Value>().await.unwrap();
+    let credential = issued["credential"].as_str().unwrap();
+    assert!(credential.starts_with("jait-node-"));
+    let stored: String = db
+        .query_row(
+            "SELECT token_hash FROM node_credentials WHERE node_id='node-test'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    use sha2::{Digest, Sha256};
+    assert_eq!(stored, hex::encode(Sha256::digest(credential.as_bytes())));
+    let second = client.post(&url).bearer_auth(owner).send().await.unwrap();
+    assert_eq!(second.status(), 200);
+    let second = second.json::<Value>().await.unwrap();
+    assert_ne!(second["credential"].as_str().unwrap(), credential);
+    assert_eq!(
+        client
+            .delete(&url)
+            .bearer_auth(other)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let count: i64 = db
+        .query_row(
+            "SELECT count(*) FROM node_credentials WHERE node_id='node-test'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 2);
+    assert_eq!(
+        client
+            .delete(&url)
+            .bearer_auth(owner)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let count: i64 = db
+        .query_row(
+            "SELECT count(*) FROM node_credentials WHERE node_id='node-test'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn update_activation_is_unavailable_through_the_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let register = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(register.status(), 200);
+    let register = register.json::<Value>().await.unwrap();
+    let owner = register["access_token"].as_str().unwrap();
+    let url = format!("{}/api/update/apply", gateway.base);
+    assert_eq!(
+        client
+            .post(&url)
+            .json(&json!({"version":"1.2.3"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    let response = client
+        .post(&url)
+        .bearer_auth(owner)
+        .json(&json!({"version":"1.2.3"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 409);
+    let body = response.json::<Value>().await.unwrap();
+    assert!(body["error"].as_str().unwrap().contains("systemd-managed"));
+}
