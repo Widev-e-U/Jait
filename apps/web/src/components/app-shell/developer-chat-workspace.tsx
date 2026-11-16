@@ -736,6 +736,12 @@ export function DeveloperChatWorkspace({
 
   const loop = readChatLoop(sessionMetadata)
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
+  // Without a visible file-diff indicator the goal card takes its slot instead
+  // of leaving a gap under the header.
+  const gitDiffIndicatorVisible = !showDebugPanel && isProjectChat && activeProjectHasRepo && showGitDiffIndicator
+  // The mobile header is a fixed pill (top-2, h-10, bottom edge at 48px), so the
+  // goal always starts 8px below it, whether or not the diff indicator is shown.
+  const goalTop = isMobile ? 56 : gitDiffIndicatorVisible ? 48 : 8
 
   return (
     <div
@@ -761,8 +767,8 @@ export function DeveloperChatWorkspace({
             // Keep the card above the composer and allow more room for text on mobile.
             <div
               data-testid="chat-goal-overlay"
-              className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2 w-[calc(100%-1rem)]' : 'top-12 left-2 w-[calc(50%-0.5rem)]'}`}
-              style={{ maxHeight: `calc(100% - ${(isMobile ? 56 : 48) + composerDockHeight + 8}px)` }}
+              className={`pointer-events-none absolute left-2 z-40 flex flex-col items-start bg-transparent ${isMobile ? 'w-[calc(100%-1rem)]' : 'w-[calc(50%-0.5rem)]'}`}
+              style={{ top: goalTop, maxHeight: `calc(100% - ${goalTop + composerDockHeight + 8}px)` }}
             >
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
@@ -868,7 +874,7 @@ export function DeveloperChatWorkspace({
               {limitReached && (
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
-              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20 overflow-hidden">
               <div className="max-h-[40vh] overflow-y-auto divide-y divide-border [&:not(:empty)]:border-b [&:not(:empty)]:border-border">
                 {developerChatUiState.showTodoList && (
                   <TodoList items={todoList} onClear={onClearTodoList} merged />

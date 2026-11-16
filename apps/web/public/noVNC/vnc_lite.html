@@ -46,8 +46,7 @@
         #mobile_keyboard_button, #mobile_pointer_button {
             position: fixed;
             right: max(16px, env(safe-area-inset-right));
-            /* Sit above the parent's floating view toolbar (Adjust view / zoom), which overlays the iframe bottom. */
-            bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+            bottom: max(16px, env(safe-area-inset-bottom));
             z-index: 20;
             display: none;
             align-items: center;
@@ -62,6 +61,11 @@
             font: 600 14px/1 system-ui, sans-serif;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
             -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Sit above the parent's floating view toolbar (Adjust view / zoom) when it overlays the iframe bottom. */
+        body.controls-overlay #mobile_keyboard_button, body.controls-overlay #mobile_pointer_button {
+            bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
         }
 
         #mobile_keyboard_button.visible, #mobile_pointer_button.visible {
@@ -425,6 +429,7 @@
             touchPointer?.reset(); // Release held mouse buttons before disabling input.
             if (event.data.viewOnly) { hideVirtualKeyboard(); touchKeyboard?.ungrab(); }
             rfb.viewOnly = event.data.viewOnly;
+            document.body.classList.toggle('controls-overlay', event.data.controlsOverlay === true);
             if (isTouchDevice) {
                 keyboardButtonElement().classList.toggle('visible', !rfb.viewOnly);
                 if (!rfb.viewOnly) touchKeyboard?.grab();

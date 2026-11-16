@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download, CircleHelp } from 'lucide-react'
+import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download, Zap, Gauge, Sparkles, Rocket } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -18,6 +18,7 @@ import {
 } from '@/components/icons/provider-icons'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId } from '@/lib/agents-api'
@@ -29,7 +30,7 @@ import { useAuth, type JaitBackend, type ReasoningEffort } from '@/hooks/useAuth
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
-import { resolveActiveModel, resolveReasoningEffortOptions } from '@/lib/reasoning-effort-options'
+import { resolveActiveModel, resolveReasoningEffortOptions, effortSupportedByModel } from '@/lib/reasoning-effort-options'
 import { GATEWAY_NODE_ID, resolveScopedProviderSelection, scopeProviders } from '@/lib/provider-scope'
 import {
   readProjectReasoningEffortSelection,
@@ -45,35 +46,6 @@ import {
 } from './model-favorites'
 import { ModelPickerRail, type ModelPickerRailSection } from './model-picker-rail'
 
-const REASONING_EFFORT_HELP = 'Controls how much the model reasons before answering. Only applies to this reasoning model.'
-
-function ReasoningEffortHelp({ mobile }: { mobile: boolean }) {
-  const title = (
-    <button
-      type="button"
-      aria-label="About reasoning effort"
-      className="flex max-w-full items-center gap-1.5 text-left text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <Brain className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 text-2xs font-medium uppercase tracking-wider">Reasoning effort</span>
-      <CircleHelp className="h-3 w-3 shrink-0" aria-hidden="true" />
-    </button>
-  )
-
-  if (mobile) {
-    return (
-      <Popover>
-        <PopoverTrigger asChild>{title}</PopoverTrigger>
-        <PopoverContent side="top" align="end" className="max-w-[calc(100vw-2rem)] px-2.5 py-1.5 text-xs" aria-label="About reasoning effort">
-          {REASONING_EFFORT_HELP}
-        </PopoverContent>
-      </Popover>
-    )
-  }
-
-  return <TooltipHint side="top" content={REASONING_EFFORT_HELP}>{title}</TooltipHint>
-}
-
 interface ModelDef {
   id: string
   name: string
@@ -85,6 +57,17 @@ interface ModelDef {
     reasoningEffort: string
     description?: string
   }>
+}
+
+function effortIcon(value: string | null | undefined) {
+  switch (value) {
+    case 'minimal': return Zap
+    case 'low': return Gauge
+    case 'medium': return Brain
+    case 'high': return Sparkles
+    case 'ultra': case 'xhigh': return Rocket
+    default: return Brain
+  }
 }
 
 function isNativeReasoningEffort(value: string): value is ReasoningEffort {
@@ -132,6 +115,8 @@ interface ProviderModelSelectorProps {
   onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
   /** Which side the trigger tooltip opens on. Defaults to "top". */
   tooltipSide?: 'top' | 'bottom'
+  /** Show a separate effort control alongside the provider and model trigger. */
+  separateEffortControl?: boolean
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
@@ -366,6 +351,7 @@ export function ProviderModelSelector({
   reasoningEffort: controlledReasoningEffort,
   onReasoningEffortChange,
   tooltipSide = 'top',
+  separateEffortControl = false,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings, settings } = useAuth()
@@ -1106,7 +1092,7 @@ export function ProviderModelSelector({
     onReasoningEffortChange?.(next)
     if (provider === 'jait') {
       const nativeEffort = next === null || isNativeReasoningEffort(next) ? next : null
-      updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
+      updateSettings({ reasoning_effort: nativeEffort }).catch(() => toast.error('Could not save reasoning effort'))
     }
     setOpen(false)
   }
@@ -1123,21 +1109,24 @@ export function ProviderModelSelector({
         }).catch(() => {})
       }
     }
+    const clearEffort = !effortSupportedByModel(selectedModel ?? null, reasoningEffort ?? null)
+    if (clearEffort) {
+      saveProjectReasoningEffortSelection(projectId, provider, null)
+      onReasoningEffortChange?.(null)
+    }
     // Persist the picked model so background channels (e.g. WhatsApp) reply
     // with the same model instead of falling back to the server default.
     if (provider === 'jait') {
       // Clear a leftover reasoning-effort preference when moving to a model
       // that doesn't accept it, so it isn't silently forwarded to the API.
-      if (reasoningEffort && !selectedModel?.reasoningEffortSupported) {
-        saveProjectReasoningEffortSelection(projectId, provider, null)
-        onReasoningEffortChange?.(null)
-        updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => {})
+      if (clearEffort) {
+        updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => toast.error('Could not save model selection'))
       } else {
-        updateSettings({ selected_model: modelId }).catch(() => {})
+        updateSettings({ selected_model: modelId }).catch(() => toast.error('Could not save model selection'))
       }
     }
     onModelChange(modelId)
-    if (!resolveReasoningEffortOptions(selectedModel ?? null)) setOpen(false)
+    setOpen(false)
   }
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -1160,7 +1149,7 @@ export function ProviderModelSelector({
   }, [provider])
 
   const triggerButton = (
-    <TooltipHint side={tooltipSide} content={<div className="space-y-1 py-0.5"><p className="font-medium">{currentProvider.label}</p><p className="break-words text-muted-foreground">{displayModelLabel}</p>{reasoningLabel && <p className="text-muted-foreground">Reasoning: {reasoningLabel}</p>}<p className="border-t pt-1 text-[10px] text-muted-foreground">Choose provider and model</p></div>}>
+    <TooltipHint side={tooltipSide} contentClassName="provider-model-tooltip" content={<div className="space-y-1 py-0.5"><p className="font-medium">{currentProvider.label}</p><p className="break-words text-muted-foreground">{displayModelLabel}</p>{reasoningLabel && <p className="text-muted-foreground">Reasoning: {reasoningLabel}</p>}<p className="border-t pt-1 text-[10px] text-muted-foreground">Choose provider and model</p></div>}>
     <button
       type="button"
       disabled={disabled}
@@ -1172,7 +1161,7 @@ export function ProviderModelSelector({
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
-      aria-label={triggerLabel ?? `Provider ${currentProvider.label}, model ${displayModelLabel}${reasoningLabel ? `, reasoning ${reasoningLabel}` : ''}`}
+      aria-label={triggerLabel ?? `Provider ${currentProvider.label}, model ${displayModelLabel}${reasoningLabel && !separateEffortControl ? `, reasoning ${reasoningLabel}` : ''}`}
     >
       {currentProvider.iconUrl
         ? <RemoteProviderLogo url={currentProvider.iconUrl} className="h-4 w-4" />
@@ -1184,7 +1173,7 @@ export function ProviderModelSelector({
           <span className="max-w-36 truncate font-mono text-[11px] font-normal opacity-75">{displayModelLabel}</span>
         </span>
       )}
-      {!compact && reasoningLabel && (
+      {!compact && reasoningLabel && !separateEffortControl && (
         <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-blue-500">
           <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span className="truncate">{reasoningLabel}</span>
@@ -1389,6 +1378,7 @@ export function ProviderModelSelector({
             ref={inputRef}
             type="text"
             role="combobox"
+            aria-label="Search models"
             aria-expanded="true"
             aria-controls="model-selector-listbox"
             aria-autocomplete="list"
@@ -1424,11 +1414,11 @@ export function ProviderModelSelector({
           {!loadingModels && modelErrorMessage && (
             <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{modelErrorMessage}</span>
+              <span role="alert">{modelErrorMessage}</span>
             </div>
           )}
           {loadingModels && (
-            <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+            <div role="status" className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading models…
             </div>
@@ -1506,48 +1496,48 @@ export function ProviderModelSelector({
         {!isMobile && <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />}
       </div>
 
-      {modelSupportsReasoning && !loadingModels && (
+      {modelSupportsReasoning && !loadingModels && !separateEffortControl && (
         <div className="shrink-0 border-t px-3 py-2">
-          <div className="mb-1.5">
-            <ReasoningEffortHelp mobile={isMobile} />
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={() => handleReasoningEffortChange(null)}
-              className={cn(
-                'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
-                'hover:bg-accent hover:text-accent-foreground',
-                reasoningEffort === null && 'bg-accent/50',
-              )}
+          <label className="flex items-center justify-between gap-3 text-xs">
+            <span>Reasoning effort</span>
+            <select
+              aria-label="Reasoning effort"
+              disabled={disabled}
+              value={reasoningLabel ? (reasoningEffort ?? '') : ''}
+              onChange={(event) => handleReasoningEffortChange(event.target.value || null)}
+              className="rounded-md border bg-background px-2 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
-              <span className="text-muted-foreground">Default</span>
-              {reasoningEffort === null && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-            </button>
-            {reasoningEfforts!.map((effort) => {
-              const active = reasoningEffort === effort.value
-              return (
-                <TooltipHint key={effort.value} side="left" content={effort.hint}>
-                <button
-                  type="button"
-                  onClick={() => handleReasoningEffortChange(effort.value)}
-                  className={cn(
-                    'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    active && 'bg-accent/50',
-                  )}
-                >
-                  <span>{effort.label}</span>
-                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-                </button>
-                </TooltipHint>
-              )
-            })}
-          </div>
+              <option value="">Default</option>
+              {reasoningEfforts!.map((effort) => <option key={effort.value} value={effort.value}>{effort.label}</option>)}
+            </select>
+          </label>
         </div>
       )}
       </section>
     </div>
+  )
+
+  const selectedEffortValue = reasoningLabel ? (reasoningEffort ?? 'default') : 'default'
+  const SelectedEffortIcon = selectedEffortValue === 'default' ? Brain : effortIcon(selectedEffortValue)
+  const effortControl = separateEffortControl && modelSupportsReasoning && !loadingModels && (
+    <Select value={selectedEffortValue} onValueChange={(value) => handleReasoningEffortChange(value === 'default' ? null : value)} disabled={disabled}>
+      <SelectTrigger aria-label="Reasoning effort" className="h-10 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted/60 hover:text-foreground data-[state=open]:text-foreground focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60 sm:h-8 sm:px-1.5">
+        {/* Explicit children: Radix's ItemText portal duplicated the label into the trigger. */}
+        <SelectValue>
+          <span className="flex items-center gap-1.5">
+            <SelectedEffortIcon aria-hidden="true" className="h-3.5 w-3.5" />
+            {reasoningLabel ?? 'Default'}
+          </span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="default"><span className="flex items-center gap-2"><Brain aria-hidden="true" className="h-4 w-4" />Default</span></SelectItem>
+        {reasoningEfforts!.map((effort) => {
+          const Icon = effortIcon(effort.value)
+          return <SelectItem key={effort.value} value={effort.value}><span className="flex items-center gap-2"><Icon aria-hidden="true" className="h-4 w-4" />{effort.label}</span></SelectItem>
+        })}
+      </SelectContent>
+    </Select>
   )
 
   return (
@@ -1555,6 +1545,7 @@ export function ProviderModelSelector({
       {isMobile ? (
         <>
           {triggerWithProviderActions(triggerButton)}
+          {effortControl}
           <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
               showCloseButton={false}
@@ -1586,27 +1577,30 @@ export function ProviderModelSelector({
           </Dialog>
         </>
       ) : (
-        <Popover open={open} onOpenChange={handleOpenChange}>
-          {triggerWithProviderActions(
-            <PopoverTrigger asChild disabled={disabled}>
-              {triggerButton}
-            </PopoverTrigger>,
-          )}
-          {/* One slim width at every breakpoint. Scaling the popover with the
-              viewport (it used to reach 72rem on 2xl screens) stretched the
-              provider rail into empty space and left the model list mostly
-              blank, so the selector keeps the compact width the layout was
-              designed for and only ever shrinks to fit narrow windows. */}
-          <PopoverContent
-            align="start"
-            side="top"
-            collisionPadding={8}
-            className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
-            style={PROVIDER_SELECTOR_POPOVER_STYLE}
-          >
-            {selectorContent}
-          </PopoverContent>
-        </Popover>
+        <>
+          <Popover open={open} onOpenChange={handleOpenChange}>
+            {triggerWithProviderActions(
+              <PopoverTrigger asChild disabled={disabled}>
+                {triggerButton}
+              </PopoverTrigger>,
+            )}
+            {/* One slim width at every breakpoint. Scaling the popover with the
+                viewport (it used to reach 72rem on 2xl screens) stretched the
+                provider rail into empty space and left the model list mostly
+                blank, so the selector keeps the compact width the layout was
+                designed for and only ever shrinks to fit narrow windows. */}
+            <PopoverContent
+              align="start"
+              side="top"
+              collisionPadding={8}
+              className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0 provider-model-popover"
+              style={PROVIDER_SELECTOR_POPOVER_STYLE}
+            >
+              {selectorContent}
+            </PopoverContent>
+          </Popover>
+          {effortControl}
+        </>
       )}
       <Dialog open={Boolean(loginDialog)} onOpenChange={(next) => { if (!next) setLoginDialog(null) }}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">

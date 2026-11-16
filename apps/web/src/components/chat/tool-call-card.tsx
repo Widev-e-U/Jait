@@ -3514,7 +3514,11 @@ function FileSummaryButton({
   const openPath = useContext(ChatOpenPathContext)
   // Edits open their diff; everything else (reads, writes without a diff) opens the file.
   const openTarget = onOpenDiff ?? (openPath ? (target: string) => { void openPath(target, lineRange?.start) } : undefined)
-  const interactive = !!openTarget && !disabled
+  const [previewOpen, setPreviewOpen] = useState(false)
+  // Image files preview in a dialog; the project panel stays reachable via "Open in editor".
+  const isImage = !onOpenDiff && /\.(?:png|jpe?g|gif|webp)$/i.test(path)
+  const activate = isImage ? () => setPreviewOpen(true) : openTarget
+  const interactive = !!activate && !disabled
   const lineRangeLabel = formatLineRangeLabel(lineRange)
   const content = (
     <>
@@ -3538,6 +3542,7 @@ function FileSummaryButton({
   }
 
   return (
+    <>
     <TooltipHint content={onOpenDiff ? `Open diff for ${path}` : `Open ${path}`}>
     <span
       role="button"
@@ -3547,19 +3552,38 @@ function FileSummaryButton({
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        openTarget!(path)
+        activate!(path)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           event.stopPropagation()
-          openTarget!(path)
+          activate!(path)
         }
       }}
     >
       {content}
     </span>
     </TooltipHint>
+    {previewOpen && <ImagePathPreview path={path} onClose={() => setPreviewOpen(false)} onOpenInEditor={openPath ? () => { setPreviewOpen(false); void openPath(path) } : undefined} />}
+    </>
+  )
+}
+
+function ImagePathPreview({ path, onClose, onOpenInEditor }: { path: string; onClose: () => void; onOpenInEditor?: () => void }) {
+  const { sessionId } = useContext(SubAgentAuthContext)
+  const source = resolveChatImageUrl(path, getApiUrl(), sessionId)
+  const { src, failed } = useGatewayImage(source)
+  const unservable = !source || failed
+  useEffect(() => {
+    // Not servable (e.g. outside the project): fall back to the editor tab.
+    if (unservable) { if (onOpenInEditor) onOpenInEditor(); else onClose() }
+  }, [unservable]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!src) return null
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <ImageViewerContent src={src} alt={getBaseName(path)} />
+    </Dialog>
   )
 }
 
@@ -4384,7 +4408,7 @@ function ToolCallCardInner({
   ) : bodyKind === 'emailView' ? (
     <EmailToolView data={resultData} args={normalizedArgs} />
   ) : bodyKind === 'imageView' ? (
-    <ImageView src={imageDataUri} path={screenshotPath} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
+    <ImageView src={imageDataUri} path={screenshotPath} alt="Image" caption={screenshotPath ? `Image: ${screenshotPath}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
       <AgentSpecialistBlock
@@ -4425,8 +4449,7 @@ function ToolCallCardInner({
       oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.search != null) ? String(normalizedArgs.search ?? '') : undefined}
       newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.replace != null) ? String(normalizedArgs.replace ?? '') : undefined}
       writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
-      isNewFile={normalizedTool === 'file.write'}
-    />
+      isNewFile={normalizedTool === 'file.write'}    />
   ) : bodyKind === 'mermaidDiagram' && call.result?.ok ? (
     <MermaidToolResult data={call.result.data ?? call.result.message} />
   ) : bodyKind === 'jaitLink' && call.result?.ok ? (

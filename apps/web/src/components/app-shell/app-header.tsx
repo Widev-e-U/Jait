@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
+import { NotificationBell } from '@/components/ui/notification-center'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
@@ -206,6 +207,7 @@ export function AppHeader(props: AppHeaderProps) {
             {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0 shrink-0">
+                {isAuthenticated && <NotificationBell />}
                 {isAuthLoading ? (
                   <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />
                 ) : isAuthenticated ? (

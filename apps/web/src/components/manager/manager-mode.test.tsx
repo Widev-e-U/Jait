@@ -1,7 +1,13 @@
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ManagerMode } from './manager-mode'
+import { AuthProvider } from '@/hooks/useAuth'
+
+function renderWithAuth(element: ReactElement) {
+  return renderToStaticMarkup(<AuthProvider>{element}</AuthProvider>)
+}
 
 const account = {
   username: 'Jakob',
@@ -15,7 +21,7 @@ const account = {
 
 describe('ManagerMode', () => {
   it('keeps navigation, repository tools, and account in the expanded sidebar', () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderWithAuth(
       <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account}>
         <div>Thread activity</div>
       </ManagerMode>,
@@ -40,7 +46,7 @@ describe('ManagerMode', () => {
   it('shows icon controls and keeps the expand control in the collapsed header', () => {
     vi.stubGlobal('window', { localStorage: { getItem: () => 'true' } })
     try {
-      const markup = renderToStaticMarkup(
+      const markup = renderWithAuth(
         <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account}>
           <div>Thread activity</div>
         </ManagerMode>,
@@ -62,7 +68,7 @@ describe('ManagerMode', () => {
   })
 
   it('keeps the sidebar on Agents', () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderWithAuth(
       <ManagerMode currentPage="agents" onPageChange={() => {}} isMobile={false} account={account}>
         <div>Agents page</div>
       </ManagerMode>,

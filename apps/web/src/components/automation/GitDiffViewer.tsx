@@ -11,7 +11,11 @@ import { cn } from '@/lib/utils'
 import { Loader2, X, FileCode, FilePlus, FileX, FileEdit } from 'lucide-react'
 import { gitApi, type FileDiffEntry } from '@/lib/git-api'
 import { projectLanguageForPath } from '@/components/project'
-import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
+import { ReadOnlyDiffView, type DiffLineSelection } from '@/components/diff/read-only-diff-view'
+import { Textarea } from '@/components/ui/textarea'
+import { agentsApi } from '@/lib/agents-api'
+import { toast } from 'sonner'
+import { formatDiffFeedback, makeDiffFeedbackAnchor, type DiffFeedbackAnchor } from './diff-feedback'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 interface GitDiffViewerProps {
@@ -21,6 +25,8 @@ interface GitDiffViewerProps {
   /** When provided with baseBranch, diffs compare baseBranch..branch instead of working tree. */
   branch?: string
   onClose: () => void
+  /** Enables feedback addressed to the thread whose changes are being reviewed. */
+  threadId?: string
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -47,7 +53,12 @@ function statusLabel(status: string): string {
   }
 }
 
-export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewerProps) {
+export function GitDiffViewer({ cwd, baseBranch, branch, onClose, threadId }: GitDiffViewerProps) {
+  const [selection, setSelection] = useState<DiffLineSelection | null>(null)
+  const [anchor, setAnchor] = useState<DiffFeedbackAnchor | null>(null)
+  const [draftContext, setDraftContext] = useState<{ threadId: string; baseBranch?: string; branch?: string } | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [sending, setSending] = useState(false)
   const [files, setFiles] = useState<FileDiffEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -74,13 +85,33 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
     return () => window.removeEventListener('resize', update)
   }, [])
 
+  useEffect(() => { setSelection(null) }, [selectedIndex, files, cwd, baseBranch, branch])
+
   const selected = files[selectedIndex] ?? null
   const language = selected ? projectLanguageForPath(selected.path) : 'plaintext'
+
+  const sendFeedback = async () => {
+    if (!draftContext || !anchor || !feedback.trim() || sending) return
+    setSending(true)
+    try {
+      await agentsApi.sendTurn(draftContext.threadId, formatDiffFeedback(anchor, feedback, draftContext.baseBranch, draftContext.branch))
+      setAnchor(null)
+      setDraftContext(null)
+      setFeedback('')
+      toast.success('Feedback sent to the thread')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not send feedback')
+    } finally {
+      setSending(false)
+    }
+  }
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose()
+    } else if (e.target instanceof Element && e.target.closest('textarea, input, .monaco-editor')) {
+      return
     } else if (e.key === 'ArrowDown' || e.key === 'j') {
       e.preventDefault()
       setSelectedIndex(prev => Math.min(prev + 1, files.length - 1))
@@ -136,7 +167,7 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
                       'flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/50 transition-colors',
                       i === selectedIndex && 'bg-accent',
                     )}
-                    onClick={() => setSelectedIndex(i)}
+                    onClick={() => { setSelectedIndex(i); setSelection(null) }}
                   >
                     <StatusIcon status={f.status} />
                     <span className="truncate font-mono">{f.path.split(/[/\\]/).pop()}</span>
@@ -162,6 +193,30 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
                 </span>
               </div>
 
+              {threadId && (
+                <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+                  <span className="min-w-0 flex-1 text-muted-foreground">
+                    {selection ? `${selection.side === 'original' ? 'Original' : 'Modified'} line${selection.startLine === selection.endLine ? ` ${selection.startLine}` : `s ${selection.startLine}–${selection.endLine}`}` : 'Select a line or range in the diff'}
+                  </span>
+                  <Button size="sm" variant="outline" disabled={!selection || !!anchor} onClick={() => {
+                    if (selected && selection && threadId) {
+                      setAnchor(makeDiffFeedbackAnchor(selected.path, selection.side === 'original' ? selected.original : selected.modified, selection))
+                      setDraftContext({ threadId, baseBranch, branch })
+                    }
+                  }}>Add feedback</Button>
+                </div>
+              )}
+              {anchor && (
+                <div className="space-y-2 border-b p-3">
+                  <div className="break-all text-xs text-muted-foreground">{anchor.path} · {anchor.side} · {anchor.startLine === anchor.endLine ? `line ${anchor.startLine}` : `lines ${anchor.startLine}–${anchor.endLine}`}</div>
+                  <Textarea aria-label="Review feedback" placeholder="What should the agent change?" value={feedback} onChange={event => setFeedback(event.target.value)} disabled={sending} />
+                  <div className="flex gap-2">
+                    <Button size="sm" disabled={!feedback.trim() || sending} onClick={() => void sendFeedback()}>{sending ? 'Sending…' : 'Send to thread'}</Button>
+                    <Button size="sm" variant="ghost" disabled={sending} onClick={() => { setAnchor(null); setDraftContext(null); setFeedback('') }}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+
               {/* Editor */}
               <div className="flex-1 min-h-0">
                 {selected && (
@@ -174,6 +229,7 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
                     className="h-full"
                     editorClassName="h-full"
                     renderSideBySide={!isNarrow}
+                    onLineSelection={threadId ? setSelection : undefined}
                     options={{
                       readOnly: true,
                       minimap: { enabled: false },

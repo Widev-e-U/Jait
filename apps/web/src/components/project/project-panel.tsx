@@ -5701,7 +5701,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 {activeTab.saveError}
               </div>
             )}
-            <div className="flex-1 min-h-0 overflow-auto">
+            <div className="relative flex-1 min-h-0 overflow-auto">
               {scDiffLoading ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -5979,8 +5979,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   return (
     <aside
       className={cn(
-        'relative bg-muted/20 flex min-h-0',
-        panel.maxCollapsed ? 'flex-1' : 'shrink-0',
+        'relative bg-muted/20 flex min-h-0 flex-1',
         tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && showEditorProp && 'border-r',
       )}
       style={getDesktopProjectPanelStyle({
@@ -6596,7 +6595,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           </div>
         )}
         {/* Editor content area */}
-        <div className="flex-1 min-h-0">
+        <div className="relative flex-1 min-h-0">
         {scDiffLoading ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />

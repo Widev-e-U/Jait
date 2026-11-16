@@ -253,6 +253,23 @@ describe('explicit assistant access', () => {
     expect(JSON.stringify(status)).not.toContain('private-token')
   })
 
+  it('exposes safe attachment metadata in browser-owned searches and filters', async () => {
+    const { store } = makeStore(); await store.connect(input)
+    const client = clients.at(-1)!; const { room, events } = readRoom(client)
+    events[0]!.getContent = () => ({ body: 'caption', filename: 'flight.png', msgtype: 'm.image',
+      file: { url: 'mxc://test/file', key: { k: 'secret-attachment-key' } }, info: { mimetype: 'image/png', size: 123 } } as never)
+    store.setAssistantAccess(true)
+    const listed = await store.assistantCommand({ action: 'messages', roomId: room.roomId, attachmentsOnly: true }, Date.now() + 10000)
+    expect(listed.data).toMatchObject({ messages: [{ id: '$old', attachment: { name: 'flight.png', mime: 'image/png', image: true, size: 123 } }] })
+    expect((listed.data as { messages: unknown[] }).messages).toHaveLength(1)
+    const searched = await store.assistantCommand({ action: 'search', roomId: room.roomId, query: 'FLIGHT.PNG' }, Date.now() + 10000)
+    expect(searched.data).toMatchObject({ messages: [{ id: '$old' }] })
+    expect(JSON.stringify([listed, searched])).not.toContain('secret-attachment-key')
+    expect(JSON.stringify([listed, searched])).not.toContain('mxc://')
+    const download = await store.assistantCommand({ action: 'attachment', roomId: room.roomId, eventId: '$old' }, Date.now() + 10000)
+    expect(download).toMatchObject({ ok: false, message: expect.stringContaining('gateway-owned') })
+  })
+
   it('loads only the requested history page and rechecks opt-in after asynchronous loading', async () => {
     const { store } = makeStore(); await store.connect(input)
     const client = clients.at(-1)!; const { room } = readRoom(client)

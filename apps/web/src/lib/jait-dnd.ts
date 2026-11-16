@@ -161,7 +161,11 @@ export function setDragImageRow(
     const popover = rootStyle.getPropertyValue('--popover').trim()
     const clone = row.cloneNode(true) as HTMLElement
     clone.removeAttribute('draggable')
+    // Fixed descendants (e.g. a row's parked menu anchor at left:-9999px) would
+    // stretch the snapshot far off-screen, leaving the ghost empty.
+    clone.querySelectorAll<HTMLElement>('.fixed, [style*="position: fixed"]').forEach((node) => node.remove())
     clone.style.cssText += [
+      ';overflow:hidden',
       // Keep the clone in the viewport so browsers can capture it as a drag
       // image. Place it behind the page until it is removed on the next tick.
       ';position:fixed',

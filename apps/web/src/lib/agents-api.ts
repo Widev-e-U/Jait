@@ -688,7 +688,10 @@ export class AgentsApi {
       headers: this.getHeaders(true),
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`Failed to send turn: ${res.statusText}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>
+      throw new Error(typeof body.error === 'string' ? body.error : `Failed to send turn: ${res.statusText}`)
+    }
   }
 
   async steerThread(id: string, message: string): Promise<void> {

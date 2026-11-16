@@ -85,6 +85,18 @@ describe('normalizeSystemNotification', () => {
     expect(notify).toHaveBeenCalledWith({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
   })
 
+  it('forwards messenger image references to the Android bridge', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', { Capacitor: { Plugins: { AgentOverlay: { notify } } } })
+    await triggerSystemNotification({
+      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Alice', body: 'Photo',
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    })
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    }))
+  })
+
   it('drops notifications with no visible title or body', () => {
     expect(normalizeSystemNotification({
       id: 'notif-1',

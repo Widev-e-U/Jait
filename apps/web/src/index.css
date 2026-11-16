@@ -161,7 +161,6 @@
   }
 
   [data-sonner-toast] {
-    position: relative;
     border-radius: calc(var(--radius) + 0.25rem) !important;
     border-color: hsl(var(--toast-border)) !important;
     border-left: 4px solid hsl(var(--border) / 0.7) !important;
@@ -222,10 +221,52 @@
     padding-right: 2.5rem !important;
   }
 
+  /* Uniform layout: icon + single-line ellipsed text on row one, actions right-aligned underneath. */
+  [data-sonner-toast][data-styled='true'] {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: 2.5rem 1.75rem;
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.5rem;
+    width: var(--width);
+    min-height: 6.75rem;
+    align-content: center;
+  }
+
+  [data-sonner-toast] [data-icon] {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0 !important;
+  }
+
+  [data-sonner-toast] [data-content] {
+    grid-column: 2 / -1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  [data-sonner-toast] [data-title],
+  [data-sonner-toast] [data-description] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-sonner-toast] [data-cancel] {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  [data-sonner-toast] [data-button]:not([data-cancel]) {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
   [data-sonner-toast] [data-button],
   [data-sonner-toast] [data-cancel] {
     height: 1.75rem !important;
-    margin: 0 0 0 0.5rem !important;
+    margin: 0 !important;
     padding: 0 0.625rem !important;
     border-radius: calc(var(--radius) - 0.125rem) !important;
     font-size: 0.75rem !important;
@@ -674,4 +715,10 @@ html.is-dragging-row-resize {
 @container (min-width: 1088px) {
   .chat-conversation-minimap { display: block; position: absolute; inset: 0 0 0 auto; }
   .chat-scroll-latest-with-minimap { right: calc(var(--scroll-control-gap) + var(--minimap-rail-width)); }
+}
+
+/* Non-interactive provider hints and closing pickers must not cover adjacent controls. */
+[data-radix-popper-content-wrapper]:has(> .provider-model-tooltip),
+[data-radix-popper-content-wrapper]:has(> .provider-model-popover[data-state="closed"]) {
+  pointer-events: none;
 }

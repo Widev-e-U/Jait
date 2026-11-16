@@ -7,6 +7,12 @@ import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
 import { TooltipHint } from '@/components/ui/tooltip'
 
+export interface DiffLineSelection {
+  side: 'original' | 'modified'
+  startLine: number
+  endLine: number
+}
+
 interface ReadOnlyDiffViewProps {
   original: string
   modified: string
@@ -17,6 +23,7 @@ interface ReadOnlyDiffViewProps {
   renderSideBySide?: boolean
   emptyMessage?: string
   options?: any
+  onLineSelection?: (selection: DiffLineSelection) => void
 }
 
 interface DiffChange {
@@ -40,6 +47,7 @@ export function ReadOnlyDiffView({
   renderSideBySide = false,
   emptyMessage = 'Files are identical.',
   options,
+  onLineSelection,
 }: ReadOnlyDiffViewProps) {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -52,6 +60,8 @@ export function ReadOnlyDiffView({
   const [activeIndex, setActiveIndex] = useState(0)
   const monacoThemeName = useEditorThemeName()
   const monacoThemeNameRef = useRef(monacoThemeName)
+  const onLineSelectionRef = useRef(onLineSelection)
+  onLineSelectionRef.current = onLineSelection
 
   useEffect(() => {
     monacoThemeNameRef.current = monacoThemeName
@@ -101,6 +111,15 @@ export function ReadOnlyDiffView({
       })
       editorRef.current = editor
       diffUpdateDisposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
+      for (const side of ['original', 'modified'] as const) {
+        const sideEditor = side === 'original' ? editor.getOriginalEditor() : editor.getModifiedEditor()
+        sideEditor.onDidChangeCursorSelection((event: { selection: { startLineNumber: number; endLineNumber: number; endColumn: number } }) => {
+          if (!sideEditor.hasTextFocus()) return
+          const { startLineNumber, endLineNumber, endColumn } = event.selection
+          const endLine = endLineNumber > startLineNumber && endColumn === 1 ? endLineNumber - 1 : endLineNumber
+          onLineSelectionRef.current?.({ side, startLine: startLineNumber, endLine })
+        })
+      }
       setIsReady(true)
       syncChanges()
     }).catch((error) => {
@@ -302,7 +321,7 @@ export function ReadOnlyDiffView({
         </div>
       )}
 
-      {changes.length === 0 && original === modified && isReady && (
+      {changes.length === 0 && original === modified && isReady && emptyMessage && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-md border bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground shadow-sm">
           {emptyMessage}
         </div>

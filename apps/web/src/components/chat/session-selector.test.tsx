@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, SessionSelector as SessionSelectorBase } from './session-selector'
+import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, SessionSelector as SessionSelectorBase, sortSessionsByActivity } from './session-selector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
@@ -548,5 +548,32 @@ describe('sidebar manual order', () => {
 
   it('keeps saved items in order while placing new items first', () => {
     expect(orderSidebarItems([{ id: 'b' }, { id: 'new' }, { id: 'a' }], ['a', 'b', 'removed']).map((item) => item.id)).toEqual(['new', 'a', 'b'])
+  })
+})
+
+describe('sortSessionsByActivity', () => {
+  const session = (id: string, lastActiveAt: string, metadata: string | null = null) => ({ id, createdAt: '2026-01-01T00:00:00.000Z', lastActiveAt, metadata })
+  const loop = (status: string) => JSON.stringify({ loop: { id: 'loop', goal: 'ship it', criteria: ['shipped'], status, iteration: 1, revision: 1, checkedIteration: -1, summary: '', nextMessage: '', evidence: [], updatedAt: '2026-01-01T00:00:00.000Z' } })
+
+  it('orders by last activity, newest first', () => {
+    expect(sortSessionsByActivity([
+      session('old', '2026-01-01T10:00:00.000Z'),
+      session('new', '2026-01-01T12:00:00.000Z'),
+    ]).map((s) => s.id)).toEqual(['new', 'old'])
+  })
+
+  it('keeps a streaming chat above chats used since its turn started', () => {
+    expect(sortSessionsByActivity([
+      session('recent', '2026-01-01T12:00:00.000Z'),
+      session('long-turn', '2026-01-01T10:00:00.000Z'),
+    ], new Set(['long-turn'])).map((s) => s.id)).toEqual(['long-turn', 'recent'])
+  })
+
+  it('keeps a running goal loop on top between its turns', () => {
+    expect(sortSessionsByActivity([
+      session('recent', '2026-01-01T12:00:00.000Z'),
+      session('loop', '2026-01-01T10:00:00.000Z', loop('running')),
+      session('paused', '2026-01-01T11:00:00.000Z', loop('paused')),
+    ]).map((s) => s.id)).toEqual(['loop', 'recent', 'paused'])
   })
 })

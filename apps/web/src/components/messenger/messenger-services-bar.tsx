@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Archive, ArchiveRestore, ChevronDown, Search, Settings2, X } from 'lucide-react'
+import { ChevronDown, Search, Settings2, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { CenteredBadgeText } from './centered-badge-text'
@@ -138,15 +138,12 @@ function useServiceStates() {
 
 /**
  * The one and only messenger header row: icon-only search toggle, All chats / Connections buttons, connected
- * provider icons with unread badges on the right, and a hidden-chats button at the end.
+ * provider icons with unread badges on the right. Hidden chats are a list filter, not a header button.
  * Tapping a provider opens its settings popover.
  */
-export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount, onToggleHidden, onOptions, search, onSearch }: {
+export function MessengerHeaderBar({ service, onService, onOptions, search, onSearch }: {
   service: string
   onService: (service: string) => void
-  hiddenOpen: boolean
-  hiddenCount: number
-  onToggleHidden: () => void
   onOptions: () => void
   search: string
   onSearch: (value: string) => void
@@ -213,27 +210,17 @@ export function MessengerHeaderBar({ service, onService, hiddenOpen, hiddenCount
         </Popover>
       })}
     </div>
-    <button
-      type="button"
-      aria-label={hiddenOpen ? 'Back to all chats' : `Hidden chats (${hiddenCount})`}
-      aria-pressed={hiddenOpen}
-      onClick={onToggleHidden}
-      className={icon + (hiddenOpen ? ' text-foreground' : '')}
-    >
-      {hiddenOpen ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-      {badge(hiddenCount, 'bg-muted text-muted-foreground')}
-    </button>
     <button type="button" onClick={onOptions} aria-label="Connections" title="Connections" className={icon}>
       <Settings2 className="h-4 w-4" />
     </button>
   </div>
 }
 
-export type ChatFilter = 'all' | 'unread' | 'direct' | 'groups'
-const EXTRA_FILTERS: { value: 'direct' | 'groups'; label: string }[] = [{ value: 'direct', label: 'Direct' }, { value: 'groups', label: 'Groups' }]
+export type ChatFilter = 'all' | 'unread' | 'direct' | 'groups' | 'hidden'
+const EXTRA_FILTERS: { value: 'direct' | 'groups' | 'hidden'; label: string }[] = [{ value: 'direct', label: 'Direct' }, { value: 'groups', label: 'Groups' }, { value: 'hidden', label: 'Hidden' }]
 
 /** Compact second header row with quick list filters, similar to WhatsApp. */
-export function MessengerFilterBar({ filter, onFilter, unreadCount, service, onService }: { filter: ChatFilter; onFilter: (filter: ChatFilter) => void; unreadCount: number; service: string; onService: (service: string) => void }) {
+export function MessengerFilterBar({ filter, onFilter, hiddenCount, unreadCount, service, onService }: { filter: ChatFilter; onFilter: (filter: ChatFilter) => void; hiddenCount: number; unreadCount: number; service: string; onService: (service: string) => void }) {
   const { snapshot } = useMessenger()
   const services = [...new Set(['Teams', ...snapshot.rooms.filter(room => room.membership === 'join').map(room => room.service), ...(service === 'All' ? [] : [service])])]
   const chip = (active: boolean) => 'h-6 shrink-0 whitespace-nowrap rounded-full border px-2.5 text-xs font-medium hover:bg-muted ' + (active ? 'border-primary/40 bg-primary/15 text-primary' : 'text-muted-foreground')
@@ -242,11 +229,11 @@ export function MessengerFilterBar({ filter, onFilter, unreadCount, service, onS
     <button type="button" aria-pressed={filter === 'all'} onClick={() => onFilter('all')} className={chip(filter === 'all')}>All</button>
     <button type="button" aria-pressed={filter === 'unread'} onClick={() => onFilter('unread')} className={chip(filter === 'unread')}>Unread{unreadCount > 0 ? ` ${unreadCount}` : ''}</button>
     {services.map(name => <button key={name} type="button" aria-pressed={service === name} onClick={() => onService(service === name ? 'All' : name)} className={chip(service === name)}>{name}</button>)}
-    {extra && <button type="button" aria-pressed onClick={() => onFilter('all')} className={chip(true)}>{extra.label}<X className="ml-1 inline h-3 w-3" aria-hidden /></button>}
+    {extra && <button type="button" aria-pressed onClick={() => onFilter('all')} className={chip(true)}>{extra.label}{extra.value === 'hidden' && hiddenCount > 0 ? ` ${hiddenCount}` : ''}<X className="ml-1 inline h-3 w-3" aria-hidden /></button>}
     <DropdownMenu>
       <DropdownMenuTrigger asChild><button type="button" aria-label="More filters" className={chip(false) + ' grid place-items-center px-1.5'}><ChevronDown className="h-3.5 w-3.5" /></button></DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {EXTRA_FILTERS.map(item => <DropdownMenuItem key={item.value} onSelect={() => onFilter(item.value)}>{item.label}</DropdownMenuItem>)}
+        {EXTRA_FILTERS.map(item => <DropdownMenuItem key={item.value} onSelect={() => onFilter(item.value)}>{item.label}{item.value === 'hidden' && hiddenCount > 0 ? ` (${hiddenCount})` : ''}</DropdownMenuItem>)}
       </DropdownMenuContent>
     </DropdownMenu>
   </div>

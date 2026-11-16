@@ -1,7 +1,7 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical } from 'lucide-react'
-import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
+import { buildProjectTree, flattenProjectTree, readChatLoop, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
@@ -116,6 +116,26 @@ export function orderSidebarItems<T extends { id: string }>(items: T[], order?: 
   if (!order?.length) return items
   const ranks = new Map(order.map((id, index) => [id, index]))
   return [...items].sort((a, b) => (ranks.get(a.id) ?? -1) - (ranks.get(b.id) ?? -1))
+}
+
+/**
+ * Newest activity first. A running chat (streaming turn or running goal loop)
+ * counts as active now: the server only bumps `lastActiveAt` when a turn
+ * starts or ends, so a long loop turn would otherwise sink below chats used
+ * while it was still working.
+ */
+export function sortSessionsByActivity<T extends { id: string; createdAt: string; lastActiveAt: string; metadata?: string | null }>(
+  sessions: T[],
+  streamingSessionIds?: ReadonlySet<string>,
+): T[] {
+  const keyed = sessions.map((session) => ({
+    session,
+    live: (streamingSessionIds?.has(session.id) ?? false) || readChatLoop(session.metadata)?.status === 'running',
+    at: Date.parse(session.lastActiveAt || session.createdAt),
+  }))
+  return keyed
+    .sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at)
+    .map(({ session }) => session)
 }
 
 export function moveSidebarItem(ids: string[], source: string, target: string, after: boolean): string[] {
@@ -838,10 +858,10 @@ export function SessionSelector({
                   const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
-                  const sortedSessions = orderSidebarItems([...project.sessions]
-                    .sort((a, b) =>
-                      Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt
-                    )), manualOrder[`sessions:${project.id}`])
+                  const sortedSessions = orderSidebarItems(
+                    sortSessionsByActivity(project.sessions, streamingSessionIds),
+                    manualOrder[`sessions:${project.id}`],
+                  )
                   sessionOrderIdsRef.current.set(`sessions:${project.id}`, sortedSessions.map((item) => item.id))
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
                   const recentSessions = normalizedSearchQuery

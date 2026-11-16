@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Toaster, useSonner } from 'sonner'
+import { NotificationCornerControls } from '@/components/ui/notification-center'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { useNotifications } from '@/lib/notification-center'
 
-/** Keeps simultaneous in-app notifications in a compact, expandable deck. */
+/**
+ * In-app notification toasts. On desktop the top-right corner keeps
+ * "Show all notifications" / "Mark all as read" buttons while there are
+ * notifications; on mobile the header bell takes their place.
+ */
 export function NotificationToaster() {
-  const { toasts } = useSonner()
-  const [expanded, setExpanded] = useState(false)
+  const isMobile = useIsMobile()
+  const hasNotifications = useNotifications().length > 0
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
     document.documentElement.classList.contains('dark') ? 'dark' : 'light',
   )
@@ -18,38 +26,45 @@ export function NotificationToaster() {
     return () => observer.disconnect()
   }, [])
 
+  const { toasts } = useSonner()
+  const [expanded, setExpanded] = useState(false)
+
+  const isDesktopWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
+  const showControls = !isMobile && hasNotifications
+  const top = isDesktopWin32 ? 44 : 16
+  // Toasts stack as a deck; the toggle only matters once there is more than one.
+  const showDeckToggle = toasts.length > 1
+  const deckTop = top + (showControls ? 36 : 0)
+  const toggleHeight = showDeckToggle ? 36 : 0
+
   useEffect(() => {
     if (toasts.length < 2) setExpanded(false)
   }, [toasts.length])
 
-  const isDesktopWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
-  const showToggle = toasts.length > 1
-  const top = isDesktopWin32 ? 44 : 16
-
   return <>
-    {showToggle && <div className="fixed right-4 z-[101] flex items-center gap-2" style={{ top }}>
-      <span className="rounded-full border bg-background px-2 py-1 text-xs text-muted-foreground shadow-sm" aria-live="polite">
-        {toasts.length} notifications
-      </span>
+    {showControls && <NotificationCornerControls top={top} />}
+    {showDeckToggle && (
       <button
         type="button"
-        className="rounded-md border bg-background px-2 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={expanded ? 'Show fewer' : 'Show notifications'}
         aria-expanded={expanded}
-        aria-controls="notification-deck"
         onClick={() => setExpanded(value => !value)}
+        className="fixed right-4 z-[101] inline-flex h-7 items-center gap-1.5 rounded-md border bg-background/90 px-2 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ top: deckTop }}
       >
-        {expanded ? 'Show fewer' : 'Show notifications'}
+        {expanded ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+        <span>{expanded ? 'Show fewer' : `${toasts.length} notifications`}</span>
       </button>
-    </div>}
-    <div id="notification-deck"><Toaster
+    )}
+    <Toaster
       position="top-right"
       theme={theme}
       closeButton
       gap={8}
-      expand={expanded}
       visibleToasts={4}
-      offset={{ top: top + (showToggle ? 36 : 0), right: 16 }}
-      mobileOffset={{ top: top + (showToggle ? 36 : 0), right: 16, left: 16 }}
-    /></div>
+      expand={expanded}
+      offset={{ top: deckTop + toggleHeight, right: 16 }}
+      mobileOffset={{ top: top + toggleHeight, right: 16, left: 16 }}
+    />
   </>
 }

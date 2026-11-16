@@ -1,4 +1,5 @@
-import { parseMessengerReadLink } from './messenger/notification-actions'
+import { handleMessengerNotification, parseMessengerReadLink } from './messenger/notification-actions'
+import { markNotificationsRead, onNotificationRead, recordNotification, type NotificationEntry } from './notification-center'
 import { showMessengerBrowserNotification, closeMessengerBrowserNotification } from './messenger/browser-notifications'
 import { safeNotificationLink, type NotificationContext } from '@jait/shared'
 import { openNotification, androidNotificationBridge } from './notification-navigation'
@@ -12,6 +13,9 @@ export interface SystemNotificationInput extends NotificationContext {
   level?: 'info' | 'success' | 'warning' | 'error'
   includeToast?: boolean
   markReadLink?: string
+  roomId?: string
+  eventId?: string
+  imageAvailable?: boolean
   /** Locally produced events have no gateway-selected native notification owner. */
   independentOfAttention?: boolean
 }
@@ -138,6 +142,8 @@ export async function revokeSystemNotification(id: string, eventId?: string): Pr
     seenEvents.add(eventId)
     if (seenEvents.size > 256) seenEvents.delete(seenEvents.values().next().value!)
   }
+  markNotificationsRead([id], false)
+  toast.dismiss(id)
   void closeMessengerBrowserNotification(id).catch(() => {})
   const browserNotification = liveBrowserNotifications.get(id)
   if (browserNotification) {
@@ -205,6 +211,9 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
     ...(notif.replaceId ? { replaceId: notif.replaceId } : {}),
     ...(notif.sessionId ? { sessionId: notif.sessionId } : {}),
     ...(notif.kind ? { kind: notif.kind } : {}),
+    ...(notif.imageAvailable && notif.roomId && notif.eventId ? {
+      imageAvailable: true, roomId: notif.roomId, eventId: notif.eventId,
+    } : {}),
   }
   const browserInput = { ...nativeInput, id: notif.replaceId ?? notif.id }
   const capacitorLocalNotifications = capacitorNotifications()
@@ -255,15 +264,46 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
   emitToast(notif)
 }
 
+// Reading a notification anywhere (toast, notification panel, "Mark all as
+// read") closes its toast and, for Matrix messages, sends the read receipt.
+onNotificationRead((entry) => {
+  toast.dismiss(entry.id)
+  if (!entry.markReadLink) return
+  const activation = { id: entry.id, link: entry.markReadLink }
+  void handleMessengerNotification(activation)
+    .then(accepted => { if (!accepted) openNotification(activation) })
+    .catch(() => openNotification(activation))
+})
+
+/** Opens a notification's target; opening it counts as reading it. */
+export function openNotificationEntry(entry: Pick<NotificationEntry, 'id' | 'link'>): void {
+  // Local read only: the opened room marks itself read, and a second queued
+  // activation would replace this navigation.
+  markNotificationsRead([entry.id], false)
+  toast.dismiss(entry.id)
+  if (entry.link) openNotification({ id: entry.id, link: entry.link })
+}
+
 function emitToast(notif: SystemNotificationInput): void {
   if (!notif.includeToast) return
   const toastFn = notif.level === 'error' ? toast.error
     : notif.level === 'warning' ? toast.warning
     : notif.level === 'success' ? toast.success
     : toast.info
+  const id = notif.replaceId ?? notif.id
   const link = safeNotificationLink(notif.link)
   const markReadLink = parseMessengerReadLink(notif.markReadLink) ? safeNotificationLink(notif.markReadLink) : null
-  toastFn(notif.title, { description: notif.body, ...(markReadLink ? { cancel: { label: 'Mark as read', onClick: () => openNotification({ id: notif.replaceId ?? notif.id, link: markReadLink }) } } : {}), ...(link ? { action: {
-    label: 'Open', onClick: () => openNotification({ id: notif.replaceId ?? notif.id, link }),
-  } } : {}) })
+  recordNotification({
+    id, title: notif.title, body: notif.body, level: notif.level ?? 'info',
+    ...(link ? { link } : {}), ...(markReadLink ? { markReadLink } : {}),
+  })
+  toastFn(notif.title, {
+    id,
+    description: notif.body,
+    // Closing a Matrix toast keeps the message unread; other notifications
+    // have no read state beyond the toast, so closing one reads it.
+    onDismiss: () => { if (!markReadLink) markNotificationsRead([id], false) },
+    ...(markReadLink ? { cancel: { label: 'Mark as read', onClick: () => markNotificationsRead([id]) } } : {}),
+    ...(link ? { action: { label: 'Open', onClick: () => openNotificationEntry({ id, link }) } } : {}),
+  })
 }

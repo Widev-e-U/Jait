@@ -76,3 +76,8 @@ export function resolveReasoningEffortOptions(
   }
   return model.reasoningEffortSupported ? DEFAULT_REASONING_EFFORTS : null
 }
+
+/** Retain an effort only when the newly selected model advertises it. */
+export function effortSupportedByModel(model: ReasoningEffortCapableModel | null, effort: string | null): boolean {
+  return effort === null || Boolean(resolveReasoningEffortOptions(model)?.some((option) => option.value === effort))
+}

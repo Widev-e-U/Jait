@@ -10,10 +10,8 @@ function Harness() {
   const noop = () => {}
   return <TooltipProvider><main className="p-2 text-xs">
     <DeveloperComposerControlRow
-      activeProjectId={null}
-      activeProjectSessions={[]}
-      activeProjectTitle={null}
       activeSessionId={null}
+      provider="codex"
       approveAllInSession={approved}
       compact={compact}
       disableSendTargetSelector={false}
@@ -25,12 +23,9 @@ function Harness() {
       getRuntimeInfo={() => ({ hostType: 'gateway', nodeId: 'gateway', locationLabel: 'Local', online: true, loading: false, availableProviders: [] })}
       onAddRepository={noop}
       onClearApproveAll={() => setApproved(false)}
-      onCreateSession={noop}
       onSendTargetChange={noop}
-      onSessionSwitcherOpenChange={noop}
       onStartNewChat={noop}
       onSelectRepo={noop}
-      onSelectSession={noop}
     />
   </main></TooltipProvider>
 }

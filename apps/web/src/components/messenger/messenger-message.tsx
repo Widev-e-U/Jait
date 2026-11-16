@@ -1,7 +1,8 @@
 import { MessageText } from '@/components/ui/message-text'
 import { useEffect, useRef, useState } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { createPortal } from 'react-dom'
-import { ChevronDown, Forward, Reply, Search, Smile } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Forward, Reply, Search, Smile } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -11,14 +12,67 @@ import { isStandaloneEmoji, isStandaloneImage } from '@/lib/messenger/standalone
 import { EmojiPickerDialog, QUICK_REACTIONS } from './messenger-emoji-picker'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
+import { CenteredEmoji } from './centered-emoji'
 import { ForwardDialog } from './messenger-forward-dialog'
 import { useMessenger } from './messenger-provider'
 import { TooltipHint } from '@/components/ui/tooltip'
 
-export function MessengerAttachment({ attachment, large = false }: {
-  attachment: NonNullable<MessengerMessage['attachment']>
+type MessengerAttachmentData = NonNullable<MessengerMessage['attachment']>
+
+/** Full-size viewer for an image album with previous/next arrows (and arrow keys) between its images. */
+export function AlbumViewer({ attachments, index, onIndexChange, onClose }: {
+  attachments: MessengerAttachmentData[]
+  index: number
+  onIndexChange: (index: number) => void
+  onClose: () => void
+}) {
+  const { store } = useMessenger()
+  const attachment = attachments[index]
+  const [url, setUrl] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+  useEffect(() => {
+    if (!attachment) return
+    let cancelled = false
+    let objectUrl: string | undefined
+    setUrl(null); setError(false)
+    void store.attachmentBlob(attachment).then(blob => {
+      if (cancelled) return
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    }).catch(() => { if (!cancelled) setError(true) })
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [store, attachment?.url]) // eslint-disable-line react-hooks/exhaustive-deps -- snapshot objects change every poll; media identity does not
+  const hasPrev = index > 0
+  const hasNext = index < attachments.length - 1
+  if (!attachment) return null
+  const arrow = 'absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-background/80 shadow ring-1 ring-border transition hover:bg-background'
+  return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+    <DialogContent
+      className="max-w-4xl"
+      onKeyDown={event => {
+        if (event.key === 'ArrowLeft' && hasPrev) { event.preventDefault(); onIndexChange(index - 1) }
+        if (event.key === 'ArrowRight' && hasNext) { event.preventDefault(); onIndexChange(index + 1) }
+      }}
+    >
+      <DialogTitle className="truncate">{attachment.name} <span className="text-sm font-normal text-muted-foreground">({index + 1} / {attachments.length})</span></DialogTitle>
+      <div className="relative">
+        {url ? <img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" />
+          : <p role={error ? 'alert' : 'status'} className="grid h-40 place-items-center text-sm text-muted-foreground">{error ? 'Could not load image.' : 'Loading image…'}</p>}
+        {hasPrev && <button type="button" aria-label="Previous image" onClick={() => onIndexChange(index - 1)} className={arrow + ' left-1'}><ChevronLeft className="h-5 w-5" /></button>}
+        {hasNext && <button type="button" aria-label="Next image" onClick={() => onIndexChange(index + 1)} className={arrow + ' right-1'}><ChevronRight className="h-5 w-5" /></button>}
+      </div>
+      {url && <a href={url} download={attachment.name} className="text-sm underline">Download image</a>}
+    </DialogContent>
+  </Dialog>
+}
+
+export function MessengerAttachment({ attachment, large = false, tile = false, onOpen }: {
+  attachment: MessengerAttachmentData
   /** Sent on its own: the photo fills the bubble instead of sitting in a padding box. */
   large?: boolean
+  tile?: boolean
+  /** When set (image albums), opening the image is delegated so the viewer can page through siblings. */
+  onOpen?: () => void
 }) {
   const { store } = useMessenger()
   const [url, setUrl] = useState<string | null>(null)
@@ -52,12 +106,12 @@ export function MessengerAttachment({ attachment, large = false }: {
   }, [store, attachment.url, attachment.image, tooLarge, visible, attempt]) // Snapshot objects change every poll; media identity does not.
   return <div ref={container} data-large={large ? 'true' : 'false'} className={large ? 'w-full max-w-full' : 'mt-1 max-w-full'}>
     {url ? attachment.image ? <>
-      <button type="button" aria-label={'Open image ' + attachment.name} onClick={() => setExpanded(true)} className={(large ? 'block w-full' : 'block max-w-full') + ' overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-primary'}>
-        <img src={url} alt={attachment.name} className={large ? 'max-h-[70vh] w-full object-contain' : 'max-h-80 max-w-full object-contain'} />
+      <button type="button" aria-label={'Open image ' + attachment.name} onClick={() => onOpen ? onOpen() : setExpanded(true)} className={(tile ? 'block aspect-square w-full' : large ? 'block w-full' : 'block max-w-full') + ' overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-primary'}>
+        <img src={url} alt={attachment.name} className={tile ? 'h-full w-full object-cover' : large ? 'max-h-[70vh] w-full object-contain' : 'max-h-80 max-w-full object-contain'} />
       </button>
-      <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent className="max-w-4xl"><DialogTitle className="truncate">{attachment.name}</DialogTitle><img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" /><a href={url} download={attachment.name} className="text-sm underline">Download image</a></DialogContent></Dialog>
+      {!onOpen && <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent className="max-w-4xl"><DialogTitle className="truncate">{attachment.name}</DialogTitle><img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" /><a href={url} download={attachment.name} className="text-sm underline">Download image</a></DialogContent></Dialog>}
     </> : <a href={url} download={attachment.name} className="break-all text-sm underline">Download {attachment.name}</a>
-      : <div className={attachment.image ? 'flex items-center justify-center rounded-lg bg-background/40 p-3 ' + (large ? 'min-h-40 w-full' : 'min-h-28 min-w-32') : ''}>
+      : <div className={attachment.image ? 'flex items-center justify-center rounded-lg bg-background/40 p-3 ' + (tile ? 'aspect-square w-full' : large ? 'min-h-40 w-full' : 'min-h-28 min-w-32') : ''}>
         {busy ? <span role="status" className="text-xs text-muted-foreground">Loading {attachment.image ? 'image' : 'attachment'}…</span>
           : <Button size="sm" variant="outline" disabled={tooLarge} onClick={() => setAttempt(n => n + 1)}>{tooLarge ? 'Attachment exceeds 20 MB' : error ? 'Retry attachment' : attachment.image ? 'Load image' : 'Load attachment'}</Button>}
       </div>}
@@ -100,8 +154,11 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef, actions }: 
   </div>, document.body)
 }
 
-export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply }: {
+export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
   message: MessengerMessage
+  imageTile?: boolean
+  /** Album tiles open the shared carousel viewer instead of a per-image dialog. */
+  onOpenImage?: () => void
   messageId?: string
   /** Offered on other people's messages only. */
   onReply?: (message: MessengerMessage) => void
@@ -132,6 +189,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const swipeFeedback = useRef(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
+  const isMobile = useIsMobile()
   const hoverTimer = useRef<number | null>(null)
   const root = useRef<HTMLElement>(null)
   const run = async (action: () => Promise<unknown>) => {
@@ -147,9 +205,9 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   /** A body made only of a short emoji run gets the jumbo treatment. */
   const emojiOnly = !standaloneImage && !editing && isStandaloneEmoji(message.body)
   const wide = standaloneImage || emojiOnly
-  const showSenderName = (!message.own || channel) && groupStart
+  const showSenderName = !imageTile && (!message.own || channel) && groupStart
   /** Direct chats get a gutter; only the bubble that opens a run fills it. */
-  const showAvatar = !channel && !message.own
+  const showAvatar = !imageTile && !channel && !message.own
   const corner = channel
     ? 'rounded-lg'
     : 'rounded-xl'
@@ -202,7 +260,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
     </div>}
     <div
       onPointerEnter={event => {
-        if (event.pointerType !== 'mouse' || unavailable || editing) return
+        if (!isMobile || event.pointerType !== 'mouse' || unavailable || editing) return
         const bounds = event.currentTarget.getBoundingClientRect()
         hoverTimer.current = window.setTimeout(() => { setPosition({ x: bounds.left, y: bounds.bottom + 4 }); hoverTimer.current = null }, 600)
       }}
@@ -253,7 +311,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         setPosition({ x: event.clientX, y: event.clientY })
       }}
       style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out' }}
-      className={'relative min-w-0 [touch-action:pan-y] ' + (wide
+      className={'relative min-w-0 [touch-action:pan-y] ' + (imageTile ? 'w-full max-w-full' : wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
       <div
@@ -285,14 +343,14 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full min-w-40 resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
         </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.body}</MessageText></p>}
-        {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} />}
+        {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} tile={imageTile} {...(onOpenImage ? { onOpen: onOpenImage } : {})} />}
         <div className={standaloneImage
           ? 'absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] leading-4 text-white shadow-sm'
           : 'mt-0.5 flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-[10px] leading-4 text-muted-foreground'}>
           {message.edited && <span>Edited</span>}
           {message.pending && <span>Sending…</span>}{message.failed && <span className="text-destructive">Not sent</span>}
           <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
-          {message.own && !message.pending && !message.failed && <MessageReadStatus inline readers={message.readBy ?? []} />}
+          {message.own && !message.pending && !message.failed && <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />}
           <DropdownMenu><DropdownMenuTrigger asChild>
             <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
           </DropdownMenuTrigger>
@@ -325,13 +383,14 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
               ? 'border-primary/40 bg-primary/15 hover:bg-primary/25'
               : 'border-border/70 bg-background/95 hover:bg-muted')}
         >
-          {/* Canvas ink metrics are unreliable for colour emoji; centre a fixed square box instead of the glyph's own advance width. */}
-          <span
-            aria-hidden
-            data-reaction-emoji
-            className="relative -top-px grid size-4 shrink-0 place-items-center overflow-visible text-center text-[13px] leading-none"
-            style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }}
-          >{reaction.key}</span>
+          {/* Centre the glyph's rendered pixels; line-box and advance-width centring is always a bit off for colour emoji. */}
+          <span className="grid size-4 shrink-0 place-items-center overflow-visible">
+            <CenteredEmoji
+              emoji={reaction.key}
+              className="text-[13px]"
+              fontFamily='"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'
+            />
+          </span>
           {reaction.count > 1 && <CenteredBadgeText
             text={reaction.count}
             className={'font-medium tabular-nums ' + (reaction.own ? 'text-foreground/80' : 'text-muted-foreground')}

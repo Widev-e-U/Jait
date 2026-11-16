@@ -382,6 +382,7 @@ export function ThreadActions({
       {diffOpen && (
         <GitDiffViewer
           cwd={cwd}
+          threadId={threadId}
           baseBranch={diffRequest.baseBranch}
           branch={diffRequest.branch}
           onClose={() => setDiffOpen(false)}

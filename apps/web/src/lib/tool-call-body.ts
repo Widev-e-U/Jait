@@ -110,6 +110,10 @@ function extractPathLikeStrings(value: string): string[] {
   return [...paths]
 }
 
+function isFileReadToolName(normalizedTool: string): boolean {
+  return normalizedTool === 'read' || normalizedTool === 'file.read'
+}
+
 function isImagePath(value: string): boolean {
   return /\.(?:png|jpe?g|gif|webp)$/i.test(value.trim())
 }
@@ -598,6 +602,9 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
     && input.status === 'success'
     && (input.imageDataUri || input.screenshotPath)
   ) return 'imageView'
+  // Reading an image file is not a browser capture: show it as an image with
+  // its own path instead of the "Captured page" screenshot card.
+  if (input.screenshotPath && input.status === 'success' && isFileReadToolName(normalizedTool)) return 'imageView'
   if (input.screenshotPath) return 'browserScreenshot'
   if (isAgentToolName(normalizedTool)) return 'subagent'
   if (normalizedTool === 'thread.control' && (input.args.action === 'create_many' || input.args.action === 'create')) return 'threadList'

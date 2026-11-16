@@ -440,6 +440,7 @@ export class MessengerStore {
           })), truncated: matches.length > cmd.limit,
         } }
       }
+      if (cmd.action === 'attachment') return { ok: false, message: 'Attachment retrieval requires the gateway-owned Messenger connection.' }
       const room = cmd.roomId ? client.getRoom(cmd.roomId) : null
       if (cmd.roomId && (!room || room.getMyMembership() !== 'join')) return { ok: false, message: 'Use an exact joined room ID from messenger.rooms.' }
       if (cmd.action === 'send') {
@@ -454,17 +455,20 @@ export class MessengerStore {
       const rooms = room ? [room] : client.getRooms().filter(item => item.getMyMembership() === 'join').slice(0, 50)
       let scanned = 0
       let undecryptable = 0
-      const matches: Array<{ roomId: string; id: string; sender: string; body: string; timestamp: number; encrypted: boolean; unableToDecrypt: boolean; bodyTruncated: boolean }> = []
+      const matches: Array<{ roomId: string; id: string; sender: string; body: string; timestamp: number; encrypted: boolean; unableToDecrypt: boolean; bodyTruncated: boolean; attachment?: { name: string; mime: string; image: boolean; size?: number } }> = []
       for (const item of rooms) {
         for (const event of item.getLiveTimeline().getEvents().slice(-2000)) {
           scanned++
           const message = this.message(event, item)
           if (!message || message.pending || message.failed) continue
           if (message.unableToDecrypt) undecryptable++
-          if (cmd.action === 'search' && (message.unableToDecrypt || !message.body.toLowerCase().includes(cmd.query.toLowerCase()))) continue
+          if (cmd.action === 'messages' && cmd.attachmentsOnly && !message.attachment) continue
+          if (cmd.action === 'search' && (message.unableToDecrypt || !(message.body.toLowerCase().includes(cmd.query.toLowerCase()) || message.attachment?.name.toLowerCase().includes(cmd.query.toLowerCase())))) continue
           matches.push({ roomId: item.roomId, id: message.id, sender: message.sender.slice(0, 200),
             body: message.body.slice(0, 2000), bodyTruncated: message.body.length > 2000,
-            timestamp: message.timestamp, encrypted: message.encrypted, unableToDecrypt: message.unableToDecrypt })
+            timestamp: message.timestamp, encrypted: message.encrypted, unableToDecrypt: message.unableToDecrypt,
+            ...(message.attachment ? { attachment: { name: message.attachment.name.slice(0, 512), mime: message.attachment.mime.slice(0, 200),
+              image: message.attachment.image, ...(message.attachment.size === undefined ? {} : { size: message.attachment.size }) } } : {}) })
         }
       }
       check()
@@ -490,12 +494,12 @@ export class MessengerStore {
     await client.sendTextMessage(roomId, body)
   }
 
-  async sendAttachment(roomId: string, file: File) {
+  async sendAttachment(roomId: string, file: File, options: { caption?: string; viewOnce?: boolean } = {}) {
     const { client, sdk } = this.connected()
     if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('Attachments must be 20 MB or smaller.')
     const encrypted = !!client.getRoom(roomId)?.currentState.getStateEvents('m.room.encryption', '')
     const image = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)
-    const base = { body: file.name, info: { mimetype: file.type || 'application/octet-stream', size: file.size } }
+    const base = { body: options.caption?.trim() || file.name, filename: file.name, ...(options.viewOnce ? { 'com.beeper.view_once': true } : {}), info: { mimetype: file.type || 'application/octet-stream', size: file.size } }
     let media: { url: string } | { file: import('matrix-js-sdk/lib/@types/media').EncryptedFile }
     if (encrypted) {
       const { encryptAttachment } = await import('matrix-encrypt-attachment')

@@ -13,7 +13,7 @@ interface BridgeStatus {
   expiresAt?: string
   detail?: string
   reauth?: { command?: string; hint?: string }
-  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string; tenants?: { id: string; name: string; connected: boolean }[]; tenantError?: string }[]
+  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string; tenants?: { id: string; name: string; connected: boolean; state?: BridgeStatus['state'] | 'disconnected' }[]; tenantError?: string }[]
 }
 
 interface ReauthState {
@@ -241,7 +241,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                 <AccountIcon className={`h-4 w-4 shrink-0 ${accountLook.className}`} />
                 <span className="min-w-0 flex-1 truncate font-medium" title={account.detail}>{account.name}</span>
                 <Badge variant={accountLook.variant}>{accountLook.text}</Badge>
-                {account.state !== 'connected' && (
+                {(account.state !== 'connected' || account.tenantError) && (
                   <Button size="sm" variant="outline" onClick={() => startReauth()}>
                     <LogIn className="mr-2 h-3.5 w-3.5" />
                     Sign in again
@@ -267,15 +267,24 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                       <li key={tenant.id} className="flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate">{tenant.name}</span>
                         {tenant.connected ? <Badge variant="secondary">Connected</Badge> : (
-                          <Button size="sm" variant="outline" onClick={() => startReauth({ accountId: account.id, tenantId: tenant.id, name: tenant.name })}>
-                            <LogIn className="mr-2 h-3.5 w-3.5" /> Sign in
-                          </Button>
+                          <>
+                            {tenant.state === 'expired' && <Badge variant="destructive">Auth timed out</Badge>}
+                            {tenant.state === 'error' && <Badge variant="destructive">Check failed</Badge>}
+                            {tenant.state === 'unknown' && <Badge variant="outline">Unknown</Badge>}
+                            <Button size="sm" variant="outline" onClick={() => startReauth({ accountId: account.id, tenantId: tenant.id, name: tenant.name })}>
+                              <LogIn className="mr-2 h-3.5 w-3.5" /> {tenant.state && tenant.state !== 'disconnected' ? 'Sign in again' : 'Sign in'}
+                            </Button>
+                          </>
                         )}
                       </li>
                     ))}
                   </ul>
                 )}
-                {account.tenantError && <p role="status" className="w-full pl-6 text-xs text-muted-foreground">{account.tenantError}</p>}
+                {account.tenantError && (
+                  <p role="status" className={`w-full pl-6 text-xs ${account.state === 'expired' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {account.tenantError}
+                  </p>
+                )}
                 {confirming && (
                   <p className="w-full text-xs text-muted-foreground">
                     Stops syncing this Teams account. Its chats stay in Matrix but no longer update.

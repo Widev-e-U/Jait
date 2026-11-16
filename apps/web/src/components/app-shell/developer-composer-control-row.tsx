@@ -3,18 +3,16 @@ import { Bug, CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } fr
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
 import { ChatComposerSurface } from '@/components/chat/chat-composer-surface'
-import { SessionSwitcher } from '@/components/chat/session-switcher'
+import { ProviderUsageBadge } from '@/components/chat/provider-usage-badge'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import type { ProjectSession } from '@/hooks/useProjects'
 import type { AutomationRepository, RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 interface DeveloperComposerControlRowProps {
-  activeProjectId: string | null
-  activeProjectSessions: ProjectSession[]
-  activeProjectTitle: string | null
   activeSessionId: string | null
+  provider: string
+  model?: string | null
   approveAllInSession: boolean
   compact: boolean
   disableSendTargetSelector: boolean
@@ -28,21 +26,17 @@ interface DeveloperComposerControlRowProps {
   getRuntimeInfo: (repo: AutomationRepository) => RepositoryRuntimeInfo
   onAddRepository: () => void
   onClearApproveAll: () => void
-  onCreateSession: () => void
   onSendTargetChange: (target: SendTarget) => void
-  onSessionSwitcherOpenChange: (open: boolean) => void
   onStartNewChat: () => void
   onStartNewChatInTab?: () => void
   onStartNewChatInWindow?: () => void
   onSelectRepo: (repoId: string) => void
-  onSelectSession: (projectId: string | null, sessionId: string) => void
 }
 
 export function DeveloperComposerControlRow({
-  activeProjectId,
-  activeProjectSessions,
-  activeProjectTitle,
   activeSessionId,
+  provider,
+  model,
   approveAllInSession,
   compact,
   disableSendTargetSelector,
@@ -56,14 +50,11 @@ export function DeveloperComposerControlRow({
   getRuntimeInfo,
   onAddRepository,
   onClearApproveAll,
-  onCreateSession,
   onSendTargetChange,
-  onSessionSwitcherOpenChange,
   onStartNewChat,
   onStartNewChatInTab,
   onStartNewChatInWindow,
   onSelectRepo,
-  onSelectSession,
 }: DeveloperComposerControlRowProps) {
   const threadToolbarRepoPicker = sendTarget === 'thread' ? (
     <ManagerRepoPicker
@@ -102,16 +93,7 @@ export function DeveloperComposerControlRow({
             {sendTarget === 'thread' ? (
               threadToolbarRepoPicker
             ) : (
-              <SessionSwitcher
-                sessions={activeProjectSessions}
-                activeSessionId={activeSessionId}
-                projectTitle={activeProjectTitle ?? 'Personal chat'}
-                onSelectSession={(sessionId) => onSelectSession(activeProjectId, sessionId)}
-                onNewSession={onCreateSession}
-                onOpenChange={onSessionSwitcherOpenChange}
-                showTitle={false}
-                triggerLabel="History"
-              />
+              <ProviderUsageBadge provider={provider} model={model} />
             )}
             {approvalButton}
           </div>

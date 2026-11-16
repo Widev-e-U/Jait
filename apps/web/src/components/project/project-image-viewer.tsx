@@ -19,7 +19,7 @@ export function ProjectImageViewer({ src, path }: { src: string; path: string })
       className={fit ? 'block max-w-full max-h-full object-contain mx-auto' : 'block max-w-none'}
       style={fit ? undefined : {width:size.width * zoom,height:size.height * zoom}} />}
   </div>
-  const controls = <div className="flex gap-2 items-center border-b p-2 shrink-0 overflow-x-auto">
+  const controls = <div className="flex flex-wrap gap-x-2 gap-y-1 items-center border-b p-2 shrink-0">
     <Button variant="ghost" size="sm" onClick={()=>{setFit(false);setZoom(value=>Math.max(.1,value/1.25))}} aria-label="Zoom out">−</Button>
     <span>{fit ? 'Fit' : `${Math.round(zoom*100)}%`}</span>
     <Button variant="ghost" size="sm" onClick={()=>{setFit(false);setZoom(value=>Math.min(16,value*1.25))}} aria-label="Zoom in">+</Button>
@@ -27,7 +27,8 @@ export function ProjectImageViewer({ src, path }: { src: string; path: string })
     <Button variant="ghost" size="sm" onClick={()=>setFit(true)}>Fit image</Button>
     <Button variant="ghost" size="sm" onClick={()=>setFullscreen(value=>!value)}>{fullscreen ? 'Exit fullscreen' : 'Fullscreen image'}</Button>
   </div>
-  return <div className="flex h-full min-h-0 flex-col" data-testid="project-image-viewer">
+  // Fill the (relative) editor area directly; a percentage height chain collapsed or overflowed in the split panel.
+  return <div className="absolute inset-0 flex min-h-0 flex-col" data-testid="project-image-viewer">
     {!fullscreen && <>{controls}{image}</>}
     <Dialog open={fullscreen} onOpenChange={setFullscreen}>
       <DialogContent className="flex flex-col w-[100vw] h-[100dvh] max-w-none rounded-none p-0 gap-0">

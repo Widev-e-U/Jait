@@ -117,14 +117,26 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
   const navigationHeights = navigationItems.map(heightFor)
   const toolsHeights = items.map(heightFor)
   // Wrapper chrome around each section's content: the separated nav adds
-  // pb-3 + border-b (13px), the plain nav py-3 (24px).
-  const wrapperChrome = (navigationItems.length > 0 ? 13 : 0) + (items.length > 0 ? 24 : 0)
+  // pb-2 + border-b (9px), the plain nav py-2 (16px).
+  const wrapperChrome = (navigationItems.length > 0 ? 9 : 0) + (items.length > 0 ? 16 : 0)
   const availableContent = railHeight === null ? Number.POSITIVE_INFINITY : Math.max(0, railHeight - wrapperChrome)
   const [navigationAllocation, toolsAllocation] = allocateRailSections(
     [{ itemHeights: navigationHeights }, { itemHeights: toolsHeights }],
     availableContent,
     buttonHeights?.regular ?? 36,
   )
+
+  const menuDragProps = (item: ModeSidebarItem) => reorderable(item.id) ? {
+    draggable: true,
+    // Deferred so the browser snapshots the drag image (the item the cursor
+    // holds) before the source is dimmed.
+    onDragStart: (event: DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); setTimeout(() => setDragId(item.id), 0) },
+    onDragOver: (event: DragEvent) => { if (dragId) { event.preventDefault(); setDropId(item.id) } },
+    onDrop: (event: DragEvent) => { event.preventDefault(); finishDrag() },
+    onDragEnd: () => { setDragId(null); setDropId(null) },
+    dragging: dragId === item.id,
+    dropTarget: !!dragId && dropId === item.id && dragId !== item.id,
+  } : undefined
 
   const renderItem = (item: ModeSidebarItem) => {
     const Icon = item.icon
@@ -186,7 +198,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
       </div>
       {header && <div className={collapsed ? 'flex shrink-0 flex-col items-center gap-1 pb-3' : 'shrink-0 px-1 pb-3'}>{header(collapsed)}</div>}
       <div ref={railRef} className="flex min-h-0 flex-1 flex-col">
-        {navigationItems.length > 0 && <OverflowSidebarNavigation label="Main navigation" moreLabel="More navigation options" items={navigationItems} collapsed={collapsed} renderItem={renderItem} visibleCount={navigationAllocation.visibleCount} separated />}
+        {navigationItems.length > 0 && <OverflowSidebarNavigation label="Main navigation" moreLabel="More navigation options" items={navigationItems} collapsed={collapsed} renderItem={renderItem} visibleCount={navigationAllocation.visibleCount} separated menuDragProps={menuDragProps} />}
         {items.length > 0 && <OverflowSidebarNavigation label="Workspace tools" moreLabel="More workspace tools" items={items} collapsed={collapsed} renderItem={renderItem} visibleCount={toolsAllocation.visibleCount} />}
       </div>
       <div className="flex shrink-0 flex-col gap-1 border-t pt-2">

@@ -267,7 +267,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         const sender = notificationSenderName(room.latestSender);
         const peerName = notificationSenderName(room.peer?.name);
         void triggerSystemNotification({
-          id: 'matrix-room:' + room.id,
+          id: room.latestEventId ? 'matrix-message:' + room.latestEventId : 'matrix-room-event:' + room.id + ':' + room.timestamp,
+          replaceId: 'matrix-room:' + room.id,
           title: room.peer ? sender ?? peerName ?? room.name : room.name,
           body: messengerNotificationPreview(!room.peer && sender ? `${sender}: ${room.preview || 'New message'}` : room.preview || 'New message'),
           independentOfAttention: true,
@@ -496,10 +497,15 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     try { window.localStorage.setItem(key, enabled ? '1' : '0'); } catch { /* Keep the preference for this session. */ }
     this.publish({ notifications: enabled });
   }
-  async sendAttachment(roomId: string, file: File) {
+  async sendAttachment(
+    roomId: string,
+    file: File,
+    options: { caption?: string; viewOnce?: boolean } = {},
+  ) {
     if (file.size > 20 * 1024 * 1024)
       throw new Error('Attachments must be 20 MB or smaller.');
-    await this.sendOptimistic(roomId, file.name, async () => {
+    const caption = options.caption?.trim();
+    await this.sendOptimistic(roomId, caption || file.name, async () => {
       const data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]!);
@@ -512,6 +518,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         data,
         name: file.name,
         mime: file.type,
+        ...(caption ? { caption } : {}),
+        ...(options.viewOnce ? { viewOnce: true } : {}),
       });
     });
   }

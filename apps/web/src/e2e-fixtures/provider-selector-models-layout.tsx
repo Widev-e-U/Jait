@@ -10,8 +10,9 @@ setAuthToken('layout-fixture-token')
 
 function Harness() {
   const [model, setModel] = useState<string | null>('agy/claude-sonnet-4-6')
+  const [effort, setEffort] = useState<string | null>(null)
   return <TooltipProvider><ProviderModelSelector provider="jait" model={model}
-    onProviderChange={() => {}} onModelChange={setModel} /></TooltipProvider>
+    separateEffortControl onProviderChange={() => {}} onModelChange={setModel} reasoningEffort={effort} onReasoningEffortChange={setEffort} /></TooltipProvider>
 }
 const mount = document.createElement('div')
 document.body.replaceChildren(mount)

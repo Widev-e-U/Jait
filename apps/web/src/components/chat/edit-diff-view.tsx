@@ -57,7 +57,7 @@ export function EditDiffView({
         language={language}
         className="h-80"
         editorClassName="h-full"
-        emptyMessage={isNewFile ? 'New file contents.' : 'No visible changes.'}
+        emptyMessage=""
         options={{
           renderSideBySide: false,
           lineNumbers: 'on',

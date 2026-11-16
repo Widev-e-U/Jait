@@ -570,7 +570,6 @@ function App() {
   const {
     projects,
     personalSessions,
-    archivedSessionsByProject,
     activeProjectId,
     activeSessionId,
     loading: projectsLoading,
@@ -590,7 +589,6 @@ function App() {
     archiveSession,
     moveSession,
     renameSession,
-    fetchArchivedSessions,
     removeProject,
     clearArchivedProjects,
     fetchArchivedProjects,
@@ -740,15 +738,6 @@ function App() {
       ?? null,
     [activeSessionId, activeProjectRecord, personalSessions]
   )
-  const activeProjectSessions = useMemo(() => {
-    if (!activeProjectRecord) return personalSessions
-    const active = activeProjectRecord.sessions
-    const archived = archivedSessionsByProject[activeProjectRecord.id] ?? []
-    const seen = new Set<string>()
-    return [...active, ...archived]
-      .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
-      .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
-  }, [activeProjectRecord, archivedSessionsByProject, personalSessions])
   const waitForProjectHydration = useCallback(async () => {
     const deadline = Date.now() + 1500
     while (Date.now() < deadline) {
@@ -2990,11 +2979,12 @@ function App() {
         setCurrentView('threads')
         automation.setSelectedThreadId(threadId)
       } else {
-        const view = parseAppView(url.pathname.replace(/^\//, '')) ?? 'chat'
+        const view = parseAppView(url.pathname.replace(/^\//, '').split('/')[0]!) ?? 'chat'
         setCurrentView(view)
       }
-      const destinationView = sessionId ? 'chat' : threadId ? 'threads' : parseAppView(url.pathname.replace(/^\//, '')) ?? 'chat'
-      window.history.pushState(window.history.state, '', appViewToPath(destinationView) + url.search)
+      const destinationView = sessionId ? 'chat' : threadId ? 'threads' : parseAppView(url.pathname.replace(/^\//, '').split('/')[0]!) ?? 'chat'
+      const subPath = destinationView === 'messenger' && url.pathname === '/messenger/settings' ? '/settings' : ''
+      window.history.pushState(window.history.state, '', appViewToPath(destinationView) + subPath + url.search)
       window.dispatchEvent(new PopStateEvent('popstate'))
       await Promise.allSettled([
         window.jaitDesktop?.acknowledgeNotification?.({ id: activation.id }),
@@ -3050,13 +3040,6 @@ function App() {
     personalSessions,
     projects,
     switchSession],)
-
-  const handleSessionSwitcherOpen = useCallback((open: boolean) => {
-    if (!open || !activeProjectId) return
-    if (!archivedSessionsByProject[activeProjectId]) {
-      void fetchArchivedSessions(activeProjectId)
-    }
-  }, [activeProjectId, archivedSessionsByProject, fetchArchivedSessions],)
 
   const handleProjectFolderSelected = useCallback(async (
     path: string,
@@ -5113,10 +5096,9 @@ function App() {
     () =>
       viewMode === 'developer' ? (
         <DeveloperComposerControlRow
-          activeProjectId={activeProjectId}
-          activeProjectSessions={activeProjectSessions}
-          activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
           activeSessionId={activeSessionId}
+          provider={chatProvider}
+          model={cliModel}
           approveAllInSession={approveAllInSession}
           compact={compactDeveloperComposer}
           disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
@@ -5130,27 +5112,21 @@ function App() {
           getRuntimeInfo={automation.getRuntimeInfoForRepository}
           onAddRepository={handleFolderPickerOpen}
           onClearApproveAll={handleClearApproveAll}
-          onCreateSession={() => {
-            void createSession()
-          }}
           onSendTargetChange={setSendTarget}
-          onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
           onStartNewChat={handleStartNewChat}
           onStartNewChatInTab={handleStartNewChatInTab}
           onStartNewChatInWindow={handleStartNewChatInWindow}
           onSelectRepo={automation.setSelectedRepoId}
-          onSelectSession={switchSession}
         />
       ) : null,
     [
       viewMode,
       chatPersonaAgentId,
       token,
-      activeProjectId,
-      activeProjectSessions,
-      activeProjectRecord?.title,
       showDebugPanel,
       activeSessionId,
+      chatProvider,
+      cliModel,
       approveAllInSession,
       compactDeveloperComposer,
       developerChatUiState.disableSendTargetSelector,
@@ -5163,12 +5139,9 @@ function App() {
       sendTarget,
       handleFolderPickerOpen,
       handleClearApproveAll,
-      createSession,
-      handleSessionSwitcherOpen,
       handleStartNewChat,
       handleStartNewChatInTab,
       handleStartNewChatInWindow,
-      switchSession,
     ],
   )
   const editComposerBag = useMemo(

@@ -264,6 +264,20 @@ describe('gateway Messenger notifications', () => {
     expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
   })
 
+  it('uses event IDs for deduplication and a room ID for replacement', async () => {
+    await start()
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1, latestEventId: '$one' }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: 'matrix-message:$one', replaceId: 'matrix-room:' + ROOM_ID,
+    }))
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 3_000, unread: 2, latestEventId: '$two' }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: 'matrix-message:$two', replaceId: 'matrix-room:' + ROOM_ID,
+    }))
+  })
+
   it('includes group senders and uses direct sender names in notifications', async () => {
     await start()
     remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1, name: 'Team-Chat', preview: 'Hello', latestSender: 'Bob' }] }

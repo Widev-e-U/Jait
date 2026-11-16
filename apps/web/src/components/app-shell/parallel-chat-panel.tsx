@@ -1,3 +1,4 @@
+import { ProviderUsageBadge } from '@/components/chat/provider-usage-badge'
 import { collectAttachments } from '@/components/chat/attachment-list'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
@@ -479,7 +480,7 @@ function ParallelChatPanelImpl({
           />
         )}
         <div hidden={!shouldShowNormalChatComposer(isMobile, null, editingQueue)} className="space-y-1.5">
-        <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+        <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20 overflow-hidden">
         <PromptInput
           merged
           value={draft}
@@ -519,6 +520,9 @@ function ParallelChatPanelImpl({
         {composerControlRow}
         </div>
         </div>
+      </div>
+      <div className="shrink-0 px-2 pb-1 empty:hidden">
+        <ProviderUsageBadge provider={panelProvider} model={panelModel} />
       </div>
     </section>
     </>

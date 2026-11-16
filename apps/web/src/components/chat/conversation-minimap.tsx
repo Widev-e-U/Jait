@@ -665,6 +665,13 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
         if (e.buttons > 0) handlePointer(e.currentTarget, e.clientY)
       }}
       onPointerUp={(e) => e.currentTarget.releasePointerCapture?.(e.pointerId)}
+      // The rail is a sibling of the scroller, so wheel events over it would
+      // otherwise go nowhere. Forward them so scrolling works over the minimap.
+      onWheel={(e) => {
+        if (!scrollElement) return
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scrollElement.clientHeight : 1
+        scrollElement.scrollBy({ top: e.deltaY * unit, left: e.deltaX * unit })
+      }}
       className="relative h-full shrink-0 cursor-pointer select-none overflow-hidden border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
       style={{ width: MINIMAP_RAIL_WIDTH_PX }}
       role="slider"

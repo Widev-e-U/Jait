@@ -25,7 +25,6 @@ import { SendTargetSelector, type SendTarget } from '@/components/chat/send-targ
 import { ChatNodeSelector } from '@/components/chat/chat-node-selector'
 import { usePersonalChatNode } from '@/hooks/usePersonalChatNode'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
-import { ProviderUsageBadge } from '@/components/chat/provider-usage-badge'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
@@ -2527,7 +2526,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           ? 'bg-transparent'
           : cn(
               isMessenger ? 'rounded-[26px]' : 'rounded-2xl',
-              'border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+              'border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20',
             ),
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
@@ -2763,8 +2762,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <div className="min-w-0 flex-1">
               {hasFooterControls && (
                 <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 overflow-x-auto scrollbar-none">
+                  <div className="-mx-1 -my-1 min-w-0 overflow-x-auto px-1 py-1 scrollbar-none">
                     <div className="flex min-w-max items-center gap-1 pr-1">
                       {footerLeadingContent}
                       {showResponseStyleSelector && (
@@ -2794,6 +2792,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                           reasoningEffort={reasoningEffort}
                           onReasoningEffortChange={onReasoningEffortChange}
                           tooltipSide="bottom"
+                          separateEffortControl
                         />
                       )}
                       {showProviderRuntimeSelector && (
@@ -2809,10 +2808,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                         <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
                       )}
                     </div>
-                  </div>
-                  {showProviderModelSelector && (
-                    <ProviderUsageBadge provider={provider!} className="hidden xl:flex" />
-                  )}
                   </div>
                   {shouldShowSendTargetSelector && (
                     <div className="mt-1.5">
