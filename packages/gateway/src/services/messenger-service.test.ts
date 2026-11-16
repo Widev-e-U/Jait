@@ -2,6 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { encryptAttachment } from 'matrix-encrypt-attachment';
+import { MessengerBridge } from './messenger-bridge.js';
+import { SurfaceRegistry } from '../surfaces/registry.js';
+import { FileSystemSurfaceFactory } from '../surfaces/filesystem.js';
+import { createMessengerTools } from '../tools/messenger-tools.js';
+import { createImageViewTool } from '../tools/file-tools.js';
+import { mcpContentForToolResult } from '../routes/mcp-server.js';
+import { mkdirSync, readFileSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { MessengerService, messengerHomeserver } from './messenger-service.js';
 
 function setup() {
@@ -13,7 +22,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 
 describe('Messenger assistant access persistence', () => {
@@ -38,6 +47,26 @@ describe('Messenger assistant access persistence', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Notification image retrieval', () => {
+  it('returns a bounded JPEG only for an image in the owner’s visible joined room', async () => {
+    const { service, c, room, message } = setup();
+    const sharp = (await import('sharp')).default;
+    const source = await sharp({ create: { width: 600, height: 400, channels: 3, background: '#c46422' } }).png().toBuffer();
+    c.client.doRequest.mockResolvedValue(source);
+    room.events.push(message('$photo', '@bob:test', { body: 'photo.png', msgtype: 'm.image', url: 'mxc://test/photo', info: { mimetype: 'image/png', size: source.length } } as any));
+    const preview = await service.notificationImage('test', '!room:test', '$photo');
+    expect(preview.length).toBeLessThanOrEqual(256 * 1024);
+    expect(await sharp(preview).metadata()).toMatchObject({ format: 'jpeg', width: 384, height: 256 });
+    await expect(service.notificationImage('other', '!room:test', '$photo')).rejects.toThrow();
+    await expect(service.notificationImage('test', '!room:test', '$one')).rejects.toThrow();
+    (room.summary as any).hidden = true;
+    await expect(service.notificationImage('test', '!room:test', '$photo')).rejects.toThrow();
+    (room.summary as any).hidden = false;
+    room.summary.membership = 'leave';
+    await expect(service.notificationImage('test', '!room:test', '$photo')).rejects.toThrow();
   });
 });
 
@@ -145,6 +174,28 @@ describe('Messenger message actions and history', () => {
     const messages = c.messages('!room:test');
     expect(messages[0].readBy).toHaveLength(1);
     expect(messages[2].readBy).toEqual([{ userId: '@bob:test', name: '@bob:test', timestamp: 300, exact: true }]);
+  });
+  it('projects only bridge-authored message status and distinguishes sent from delivered', async () => {
+    const { c, room } = setup();
+    room.states = [{ type: 'm.bridge', state_key: 'teams', content: { bridgebot: '@teamsbot:test' } }] as any;
+    room.receipts = { '$one': { '@teamsbot:test': { ts: 123 } } } as any;
+    expect(c.messages('!room:test')[0]).toMatchObject({ readBy: [], bridgeStatus: 'sent' });
+    room.receipts = {};
+    const status = (id: string, sender: string, state: string, delivered?: string[]) => ({
+      event_id: id, type: 'com.beeper.message_send_status', sender,
+      content: { 'm.relates_to': { rel_type: 'm.reference', event_id: '$one' }, status: state, ...(delivered ? { delivered_to_users: delivered } : {}) },
+    });
+    const sync = (event: any) => c.sync({ rooms: { join: { '!room:test': { timeline: { events: [event] } } } } });
+    await sync(status('$forged', '@other:test', 'SUCCESS', ['@bob:test']));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBeUndefined();
+    await sync(status('$sent', '@teamsbot:test', 'SUCCESS'));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBe('sent');
+    await sync(status('$empty', '@teamsbot:test', 'SUCCESS', []));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBe('sent');
+    await sync(status('$delivered', '@teamsbot:test', 'SUCCESS', ['@bob:test']));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBe('delivered');
+    await sync(status('$failed', '@teamsbot:test', 'FAIL_PERMANENT'));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBe('failed');
   });
   it('keeps receipt positions stable when an earlier message is redacted', () => {
     const { c, room, message } = setup();
@@ -269,5 +320,92 @@ describe('Messenger bridged service detection', () => {
       { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
     ] }, timeline: { events: [] } } } } });
     expect(c.snapshot().rooms.find((r: any) => r.id === '!teams:test')).toMatchObject({ membership: 'join', service: 'Teams' });
+  });
+});
+
+
+describe('Messenger assistant attachment retrieval', () => {
+  it('lists safe metadata and saves an encrypted image that the model can view', async () => {
+    const { service, c, room, message } = setup();
+    c.assistantAccess = true;
+    const original = Buffer.from('fixture image bytes');
+    const encrypted = await encryptAttachment(Uint8Array.from(original).buffer);
+    c.client.doRequest.mockResolvedValue(Buffer.from(encrypted.data));
+    room.events.push(message('$picture', '@bob:test', {
+      msgtype: 'm.image', body: 'photo', filename: '../../escape.png',
+      file: { ...encrypted.info, url: 'mxc://test/media-id' },
+      info: { mimetype: 'image/png', size: original.length },
+    }) as any);
+
+    const listed = await service.assistant('test', { action: 'messages', roomId: '!room:test' });
+    expect(listed.ok).toBe(true);
+    const text = JSON.stringify(listed);
+    expect(text).toContain('$picture');
+    expect(text).toContain('escape.png');
+    expect(text).not.toContain('mxc://');
+    expect(text).not.toContain(encrypted.info.key.k);
+    const attachmentList = await service.assistant('test', { action: 'messages', roomId: '!room:test', attachmentsOnly: true });
+    expect((attachmentList.data as any).messages.map((item: any) => item.id)).toEqual(['$picture']);
+    const searched = await service.assistant('test', { action: 'search', roomId: '!room:test', query: 'escape.png' });
+    expect(JSON.stringify(searched)).toContain('$picture');
+    expect(JSON.stringify(searched)).not.toContain(encrypted.info.key.k);
+
+    const bridge = new MessengerBridge();
+    bridge.setGatewayHandler((owner, cmd, signal) => service.assistant(owner, cmd, signal));
+    const registry = new SurfaceRegistry();
+    registry.register(new FileSystemSurfaceFactory());
+    const root = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-test-${randomUUID()}`, import.meta.url));
+    mkdirSync(root, { recursive: true });
+    const context = { userId: 'test', sessionId: 'attachment-session', actionId: 'a', projectRoot: root, requestedBy: 'test' };
+    try {
+      const tool = createMessengerTools(bridge, registry).find(t => t.name === 'messenger.attachment')!;
+      const result = await tool.execute({ roomId: '!room:test', eventId: '$picture' }, context);
+      expect(result.ok, result.message).toBe(true);
+      const data = result.data as { path: string; size: number };
+      expect(data.path.startsWith(join(root, '.jait/artifacts/messenger') + '/')).toBe(true);
+      expect(readFileSync(data.path)).toEqual(original);
+      expect(JSON.stringify(result)).not.toContain(encrypted.info.key.k);
+      expect(JSON.stringify(result)).not.toContain(original.toString('base64'));
+      const viewed = await createImageViewTool(registry).execute({ path: data.path }, context);
+      const content = mcpContentForToolResult(viewed, context, 'image.view');
+      expect(content).toContainEqual({ type: 'image', data: original.toString('base64'), mimeType: 'image/png' });
+      expect(JSON.stringify(content[0])).not.toContain(original.toString('base64'));
+      expect(JSON.stringify(viewed)).not.toContain('modelImage');
+      expect(c.client.doRequest).toHaveBeenCalledTimes(1);
+    } finally {
+      await registry.stopAll('test');
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects disabled access, wrong rooms, missing messages, and oversized media', async () => {
+    const { service, c, room, message } = setup();
+    room.events.push(message('$large', '@bob:test', { msgtype: 'm.file', body: 'large', url: 'mxc://test/id', info: { size: 21 * 1024 * 1024 } }) as any);
+    expect((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).ok).toBe(false);
+    c.assistantAccess = true;
+    expect((await service.assistant('test', { action: 'attachment', roomId: '!missing:test', eventId: '$large' })).ok).toBe(false);
+    expect((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$missing' })).ok).toBe(false);
+    expect((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).message).toContain('20 MiB');
+    room.summary.membership = 'leave';
+    expect((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).ok).toBe(false);
+    expect(c.client.doRequest).not.toHaveBeenCalled();
+  });
+
+  it('does not save through a project artifact symlink', async () => {
+    const root = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-link-test-${randomUUID()}`, import.meta.url));
+    const outside = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-link-outside-${randomUUID()}`, import.meta.url));
+    mkdirSync(root, { recursive: true }); mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, join(root, '.jait'), 'dir');
+    const registry = new SurfaceRegistry(); registry.register(new FileSystemSurfaceFactory());
+    const bridge = new MessengerBridge();
+    bridge.setGatewayHandler(async () => ({ ok: true, message: 'loaded', data: { name: 'x.png', mime: 'image/png', image: true, size: 1, base64: 'eA==' } }));
+    try {
+      const tool = createMessengerTools(bridge, registry).find(t => t.name === 'messenger.attachment')!;
+      const result = await tool.execute({ roomId: '!room:test', eventId: '$picture' }, { userId: 'test', sessionId: 'symlink-session', actionId: 'a', projectRoot: root, requestedBy: 'test' });
+      expect(result.ok).toBe(false);
+    } finally {
+      await registry.stopAll('test');
+      rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

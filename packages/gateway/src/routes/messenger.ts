@@ -73,6 +73,8 @@ const command = z.discriminatedUnion('action', [
       roomId,
       name: z.string().min(1).max(512),
       mime: z.string().max(200),
+      caption: z.string().max(4000).optional(),
+      viewOnce: z.boolean().optional(),
       data: z
         .string()
         .max(28_000_000)
@@ -251,6 +253,19 @@ export function registerMessengerRoutes(
           error:
             'Could not restore encrypted history. Check the recovery key and server backup.',
         });
+    }
+  });
+  app.post('/api/messenger/notification-image', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const parsed = z.object({ roomId, eventId: z.string().min(1).max(512) }).strict().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid image reference.' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const image = await messenger.notificationImage(user.id, parsed.data.roomId, parsed.data.eventId);
+      return reply.type('image/jpeg').send(image);
+    } catch {
+      return reply.code(404).send({ error: 'Image unavailable.' });
     }
   });
   app.post('/api/messenger/media', async (request, reply) => {

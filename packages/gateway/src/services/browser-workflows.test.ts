@@ -41,6 +41,35 @@ describe("saved browser workflows", () => {
     ]) expect(browserWorkflowSchema.safeParse({ ...definition, ...patch }).success).toBe(false);
   });
 
+  it("executes descriptive click steps through the normal executor and stops on failure", async () => {
+    const { service, execute } = await fixture(async (_name, input) =>
+      (input as { target?: string }).target === "Open Billing"
+        ? { ok: false, message: "Target was ambiguous" }
+        : { ok: true, message: "done" });
+    const steps = [
+      definition.steps[0]!,
+      { action: "click", label: "Settings", target: "Open Settings" },
+      { action: "click", label: "Billing", target: "Open Billing" },
+      { action: "click", label: "Confirm", target: "Click Confirm" },
+    ];
+    const saved = service.save({ ...definition, steps }, context);
+    const result = await service.run(saved.id, {}, context, saved.revision);
+    expect(result).toMatchObject({ ok: false, data: { status: "failed", nextStep: 2 } });
+    expect(execute.mock.calls.map(call => [call[0], call[1]])).toEqual([
+      ["browser.open", { url: "https://example.com/invoices" }],
+      ["browser.click", { target: "Open Settings" }],
+      ["browser.click", { target: "Open Billing" }],
+    ]);
+    for (const invalid of [
+      { action: "click", label: "Missing" },
+      { action: "click", label: "Both", selector: "#settings", target: "Open Settings" },
+      { action: "click", label: "Blank", target: "  " },
+      { action: "click", label: "Too long", target: "x".repeat(501) },
+    ]) {
+      expect(browserWorkflowSchema.safeParse({ ...definition, steps: [steps[0], invalid] }).success).toBe(false);
+    }
+  });
+
   it("persists definitions and enforces owner/project and revision checks", async () => {
     const { service, saved } = await fixture();
     expect(service.get(saved.id, context)).toEqual(saved);

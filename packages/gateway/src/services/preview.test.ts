@@ -6,6 +6,20 @@ import { describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./preview.js";
 
 describe("PreviewService", () => {
+  it("notifies capture listeners when control is taken or the preview stops", async () => {
+    const browser = { id: "browser-1", sessionId: "owner", type: "browser", state: "running", getLiveViewInfo: () => null };
+    const service = new PreviewService({ getSurface: () => browser, stopSurface: async () => {} } as any);
+    service.attachAgentBrowser("owner", browser as any);
+    const listener = vi.fn();
+    const unsubscribe = service.onBrowserControlLost(listener);
+    service.setSharedWithAgent("owner", false);
+    expect(listener).toHaveBeenCalledWith("browser-1");
+    service.setSharedWithAgent("owner", true);
+    await service.stop("owner");
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
   it("revokes DevTools grants across handoff, restart and pending attachment", async () => {
     const browser = {
       id: "browser-1", sessionId: "owner", type: "browser", state: "running",

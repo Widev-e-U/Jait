@@ -140,6 +140,12 @@ export class PreviewService {
   private readonly restartingSessions = new Map<string, Promise<PreviewSession | null>>();
   private readonly startingSessions = new Map<string, Promise<PreviewSession>>();
   private devToolsRevisions = new Map<string, number>();
+  private readonly controlLossListeners = new Set<(browserId: string) => void>();
+
+  onBrowserControlLost(callback: (browserId: string) => void): () => void {
+    this.controlLossListeners.add(callback);
+    return () => this.controlLossListeners.delete(callback);
+  }
   private _onSessionChanged: ((session: PreviewSession) => void) | null = null;
 
   constructor(private readonly surfaceRegistry: SurfaceRegistry) {
@@ -345,11 +351,13 @@ export class PreviewService {
       const shared = existing.sharedWithAgent;
       const previous = existing.browserId ? this.surfaceRegistry.getSurface(existing.browserId) as BrowserSurface | undefined : undefined;
       const currentUrl = previous?.state === "running" ? (await previous.inspect()).snapshot.url : existing.target;
-      if (!currentUrl || !/^https?:\/\//i.test(currentUrl)) throw new Error("Cannot restart the browser without a current HTTP/HTTPS page. Open a URL first.");
+      // A stopped agent browser may never have navigated away from about:blank.
+      // Recreate it as a blank browser so browser.open can inspect or navigate it.
+      const recoverableUrl = currentUrl && /^https?:\/\//i.test(currentUrl) ? currentUrl : null;
       await this.stop(sessionId);
       const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
       try {
-        await browser.navigate(currentUrl);
+        if (recoverableUrl) await browser.navigate(recoverableUrl);
         this.attachAgentBrowser(sessionId, browser, existing.projectRoot ?? undefined, shared);
       } catch (error) {
         await this.surfaceRegistry.stopSurface(browser.id, "browser-restart-failed").catch(() => {});
@@ -389,6 +397,9 @@ export class PreviewService {
     if (!session) return false;
 
     session.terminating = true;
+    if (session.browserId) {
+      for (const listener of this.controlLossListeners) listener(session.browserId);
+    }
     this.devToolsRevisions.set(sessionId, (this.devToolsRevisions.get(sessionId) ?? 0) + 1);
 
     if (session.runnerResult) {
@@ -450,6 +461,9 @@ export class PreviewService {
     if (!session) return null;
     if (session.sharedWithAgent !== shared) {
       session.sharedWithAgent = shared;
+      if (!shared && session.browserId) {
+        for (const listener of this.controlLossListeners) listener(session.browserId);
+      }
       // Sharing back with the agent ends the takeover wait; a fresh takeover only
       // starts one once the agent actually tries to drive the browser.
       if (shared) sessionWaits.clear(browserWaitKey(session.sessionId));

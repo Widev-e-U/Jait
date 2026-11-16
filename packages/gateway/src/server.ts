@@ -280,6 +280,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
         level: 'info',
         includeToast: false,
         independentOfAttention: true,
+        roomId: message.roomId,
+        eventId: message.eventId,
+        imageAvailable: !!message.image,
+        timestamp: message.timestamp,
         link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
       },
     });

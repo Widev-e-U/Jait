@@ -428,7 +428,8 @@ function resolveBundledAdapter(config: AcpProviderConfig, providerType: string):
   const args = config.args ?? [];
   const packageSpec = args[0] === "-y" ? args[1] : args[0];
   if (packageSpec !== packageName && !packageSpec?.startsWith(`${packageName}@`)) return null;
-  const adapterEntry = requireAcpAdapter.resolve(`${packageName}/dist/index.js`);
+  // Newer adapters declare an `exports` map that hides dist/index.js, but package.json stays resolvable.
+  const adapterEntry = join(dirname(requireAcpAdapter.resolve(`${packageName}/package.json`)), "dist", "index.js");
   return { command: process.execPath, args: [adapterEntry, ...args.slice(args[0] === "-y" ? 2 : 1)] };
 }
 

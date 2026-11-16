@@ -81,6 +81,8 @@ export const ASK_MODE_TOOLS = new Set([
 export const MUTATING_TOOLS = new Set([
   "agent.profiles",
   "team.chat",
+  "project.chat.create",
+  "chat.control",
   // Core tools
   "edit",
   "execute",
@@ -109,6 +111,7 @@ export const MUTATING_TOOLS = new Set([
   "browser.select",
   "browser.scroll",
   "browser.screenshot",
+  "browser.record",
   "browser.sandbox.start",
   "windows.sandbox.start",
   "windows.sandbox.stop",

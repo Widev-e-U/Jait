@@ -122,6 +122,17 @@ export class FileSystemSurface implements Surface {
     this.onOutput?.(`wrote ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
   }
 
+  /** Save new binary artifacts without overwriting an existing file. */
+  async writeNewBinary(filePath: string, content: Uint8Array): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    await mkdir(dirname(abs), { recursive: true, mode: 0o700 });
+    await this.guard!.validateWithSymlinkCheck(filePath);
+    await writeFile(abs, content, { flag: "wx", mode: 0o600 });
+    this._opCount++;
+    this.onOutput?.(`wrote binary ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
+  }
+
   async patch(filePath: string, search: string, replace: string): Promise<{ matched: boolean }> {
     this.ensureRunning();
     const abs = await this.guard!.validateWithSymlinkCheck(filePath);

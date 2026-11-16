@@ -44,6 +44,8 @@ export class MessengerBridge {
     if (!userId) return { ok: false, message: "An authenticated Jait user is required." };
     if (signal?.aborted) return { ok: false, message: "Cancelled." };
     if (this.gatewayHandler) return this.gatewayHandler(userId, parsed.data, signal);
+    // Attachment bytes and encryption metadata must stay on the gateway; the legacy browser RPC is not an attachment transport.
+    if (parsed.data.action === "attachment") return { ok: false, message: "Attachment retrieval requires the gateway-owned Messenger connection." };
     const clients = [...this.clients].filter(([, client]) => client.userId === userId && client.active());
     if (clients.length !== 1) return {
       ok: false,

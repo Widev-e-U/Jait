@@ -15,6 +15,7 @@ const definitionProperty: ToolPropertySchema = {
     steps: { type: "array", items: { type: "object", properties: {
       action: { type: "string", enum: ["open", "navigate", "click", "type", "select", "wait", "snapshot", "extract", "check", "checkpoint"] },
       label: { type: "string" }, url: { type: "string" }, selector: { type: "string" },
+      target: { type: "string", description: "For click: a single control with its full visible label. Requires System One; supply target or selector, never both. Do not include credentials." },
       instruction: { type: "string" }, fields: { type: "array", items: { type: "object", properties: {
         name: { type: "string" }, description: { type: "string" }, type: { type: "string", enum: ["string", "number", "boolean", "strings"] },
       }, required: ["name", "description", "type"] } },
@@ -28,8 +29,29 @@ export function createBrowserWorkflowTools(service: BrowserWorkflowService): Too
   const idProperty = { type: "string", description: "Saved workflow ID" };
   return [
     {
+      ...common, name: "browser.task",
+      description: "Prefer this for an authorized multi-step browser goal instead of separate calls for each action. Execute a short task in the already open browser. Omit actions for an adaptive loop that chooses clicks, typing, dropdown selections, scrolling, or waiting from fresh page feedback; it cannot click arbitrary coordinates. For adaptive text entry, supply fieldValues with exact selectors, accessible names and documentUrl/documentTimeOrigin from an earlier browser snapshot, plus user-authorized text; the task description need not repeat those values to avoid repeated handoffs; values are never sent to System One as fieldValues. The field name and selector must uniquely match the fresh page. On status needs_text, immediately call browser.task again with the returned resumeToken and the exact authorized text in text; this continues the same task and preserves its action limit. Do not invent missing information or credentials. If the user has not provided enough information, ask instead. A continuation expires with the task deadline, can be used once, and cannot be resumed after a restart. Optionally supply up to 12 concrete candidate actions with conditions. System One chooses among them using fresh structured page feedback after each action, or stops when uncertain. Each action runs at most once through normal browser permissions. Page text is sent to the configured System One provider. Set visual to send screenshots to System One before decisions and after the final action, including visible canvas and iframe content; screenshots can contain sensitive page content and are saved in the project. Visual support depends on the configured provider. Verify the final page; do not include secrets or actions the user has not authorized.",
+      parameters: { type: "object", properties: {
+        task: { type: "string", description: "User-authorized goal and relevant context; required when starting a task." },
+        resumeToken: { type: "string", description: "For needs_text only: the exact token returned by browser.task. Supply only resumeToken and text when resuming." },
+        text: { type: "string", description: "For needs_text only: the exact authorized text for the selected field; supply with resumeToken." },
+        fieldValues: { type: "array", description: "Adaptive mode: exact authorized text for observed fields. Each selector must be unique, and name must exactly match the observed accessible name (use an empty string when absent), and documentUrl/documentTimeOrigin must match the observation. Unmatched or ambiguous fields still require a handoff. Do not supply credentials.", items: { type: "object", properties: { selector: { type: "string" }, name: { type: "string" }, text: { type: "string" }, documentUrl: { type: "string" }, documentTimeOrigin: { type: "number" } }, required: ["selector", "name", "text", "documentUrl", "documentTimeOrigin"] } },
+        visual: { type: "boolean", description: "Opt in to capturing screenshots and sending them to System One for this task." },
+        maxActions: { type: "number", description: "Adaptive mode: maximum actions, 1–100 (default 30)." },
+        actions: { type: "array", description: "Concrete candidate actions and when each should run", items: { type: "object", properties: {
+          when: { type: "string", description: "Page condition and ordering for this action" },
+          step: { type: "object", properties: {
+            action: { type: "string", enum: ["navigate", "click", "type", "select", "wait", "check"] },
+            label: { type: "string" }, url: { type: "string" }, selector: { type: "string" }, target: { type: "string" },
+            text: { type: "string" }, value: { type: "string" }, timeoutMs: { type: "number" },
+          }, required: ["action", "label"] },
+        }, required: ["when", "step"] } },
+      } },
+      execute: async (input, context) => service.runTask(input, context),
+    },
+    {
       ...common, name: "browser.workflow.save",
-      description: "Save a reusable, structured browser workflow in this project. Updates require the current expectedRevision. Review the saved steps before running. Use checkpoints for login and user decisions; never save secrets. Markdown skills may explain the workflow but are not executable steps.",
+      description: "Save a reusable, structured browser workflow in this project. Click steps can use a selector or, with System One configured, a target containing the full visible control label. Updates require the current expectedRevision. Review the saved steps before running. Use checkpoints for login and user decisions; never save secrets. Markdown skills may explain the workflow but are not executable steps.",
       parameters: { type: "object", properties: { definition: definitionProperty, id: idProperty, expectedRevision: { type: "number" } }, required: ["definition"] },
       async execute(input, context) {
         const body = z.object({ definition: z.unknown(), id: id.optional(), expectedRevision: revision.optional() }).strict().parse(input);

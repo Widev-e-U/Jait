@@ -5,7 +5,8 @@ const limit = z.number().int().min(1).max(50).default(20);
 export const messengerCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }).strict(),
   z.object({ action: z.literal("rooms"), query: z.string().max(200).default(""), service: z.string().max(100).optional(), limit }).strict(),
-  z.object({ action: z.literal("messages"), roomId, limit, earlier: z.boolean().default(false) }).strict(),
+  z.object({ action: z.literal("messages"), roomId, limit, earlier: z.boolean().default(false), attachmentsOnly: z.boolean().default(false) }).strict(),
+  z.object({ action: z.literal("attachment"), roomId, eventId: z.string().min(1).max(512) }).strict(),
   z.object({ action: z.literal("search"), query: z.string().trim().min(1).max(200), roomId: roomId.optional(), limit }).strict(),
   z.object({ action: z.literal("send"), roomId, text: z.string().min(1).max(10_000).refine(text => !!text.trim()) }).strict(),
   z.object({ action: z.literal("open"), userId: z.string().max(512).regex(/^@[^:\s]+:[^\s]+$/) }).strict(),
@@ -86,6 +87,8 @@ export interface MessengerMessage {
   replyTo?: { id: string; sender: string; body: string }
   reactions?: { key: string; count: number; own: boolean; senders: string[] }[]
   readBy?: MessengerReadReceipt[]
+  /** Status reported by the room's bridge; delivery requires an explicit recipient acknowledgement. */
+  bridgeStatus?: 'pending' | 'sent' | 'delivered' | 'failed'
   attachment?: {
     url: string
     name: string
@@ -121,6 +124,8 @@ export interface MessengerRoom {
   encrypted: boolean
   timestamp: number
   preview: string
+  /** Event ID of the latest message, for notification deduplication. */
+  latestEventId?: string
   /** Sender of the latest message, for notification display. */
   latestSender?: string
   /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */

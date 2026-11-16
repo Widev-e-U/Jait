@@ -85,7 +85,14 @@ export class TeamsReauthService {
       })) as BrowserSurface;
       const live = surface.getLiveViewInfo();
       if (!live) throw new Error('Der Browser stellt keine Live-Ansicht bereit.');
-      await surface.navigate(tenant ? `${TEAMS_URL}v2/?tenantId=${encodeURIComponent(tenant.tenantId)}` : TEAMS_URL);
+      const loginUrl = tenant ? `${TEAMS_URL}v2/?tenantId=${encodeURIComponent(tenant.tenantId)}` : TEAMS_URL;
+      // Retry a search-page result before exposing the view; never interrupt
+      // the user's later sign-in or force navigation away from an identity provider.
+      let page = await surface.navigate(loginUrl);
+      if (isDuckDuckGoPage(page.url)) page = await surface.navigate(loginUrl);
+      if (isDuckDuckGoPage(page.url)) {
+        throw new Error('Teams could not open because the browser showed a search page. Please try signing in again.');
+      }
       run.state = {
         ...run.state,
         phase: 'waiting_login',
@@ -192,6 +199,15 @@ export class TeamsReauthService {
     if (!command) throw new Error('Kein Entfernen-Befehl konfiguriert (JAIT_TEAMS_REMOVE_CMD).');
     await runHostCommand(command, loginId);
     this.onApplied();
+  }
+}
+
+function isDuckDuckGoPage(rawUrl: string): boolean {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    return host === 'duckduckgo.com' || host.endsWith('.duckduckgo.com');
+  } catch {
+    return false;
   }
 }
 

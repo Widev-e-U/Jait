@@ -91,6 +91,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function mcpContentForToolResult(uiResult: ToolResult, context?: ToolContext, toolName?: string): McpToolContent[] {
+  if (toolName === "image.view" && uiResult.ok && uiResult.modelImage) {
+    // Keep image bytes out of text evidence and persisted tool data; MCP carries
+    // them as actual visual content to the selected provider.
+    const data = isRecord(uiResult.data) ? { ...uiResult.data } : {};
+    delete data.base64;
+    const sanitized = { ok: uiResult.ok, message: uiResult.message, data };
+    const content = context?.userId ? projectToolEvidence(sanitized, context, toolName).content
+      : JSON.stringify(sanitized);
+    return [{ type: "text", text: content }, { type: "image", data: uiResult.modelImage.base64, mimeType: uiResult.modelImage.mimeType }];
+  }
   if (context?.userId && !(isRecord(uiResult.data) && isRecord(uiResult.data.screenshot))) {
     return [{ type: "text", text: projectToolEvidence(uiResult, context, toolName).content }];
   }

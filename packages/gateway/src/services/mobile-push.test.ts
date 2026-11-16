@@ -38,6 +38,22 @@ describe("MobilePushService", () => {
     } finally { sqlite.close(); }
   });
 
+  it("sends only a gateway image reference, never attachment contents or encryption keys", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, { project_id: "test", client_email: "test@example.com", private_key: "unused" }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone", "user-a", "token-a");
+      await service.sendMessengerMessage("user-a", { roomId: "!room:test", eventId: "$photo", title: "Bob", body: "Photo", timestamp: 1234, image: true });
+      const data = JSON.parse(send.mock.calls[0]![1]!.body as string).message.data;
+      expect(data).toMatchObject({ id: "matrix-message:$photo", replaceId: "matrix-room:!room:test", roomId: "!room:test", eventId: "$photo", imageAvailable: "true", timestamp: "1234" });
+      expect(JSON.stringify(data)).not.toContain("secret");
+      expect(JSON.stringify(data)).not.toContain("mxc://");
+    } finally { sqlite.close(); }
+  });
+
   it("clears the exact completion on only the owner's devices, even if one push fails", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

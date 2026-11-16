@@ -76,6 +76,7 @@ export const ToolName = {
   BrowserScroll: "browser.scroll",
   BrowserWait: "browser.wait",
   BrowserScreenshot: "browser.screenshot",
+  BrowserRecord: "browser.record",
   BrowserSandboxStart: "browser.sandbox.start",
   WindowsSandboxStart: "windows.sandbox.start",
   WindowsSandboxStop: "windows.sandbox.stop",

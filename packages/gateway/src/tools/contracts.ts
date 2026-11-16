@@ -41,6 +41,8 @@ export interface ToolContext {
    * the parent turn's event stream. See {@link NestedAgentEvent}.
    */
   onNestedEvent?: (event: NestedAgentEvent) => void;
+  /** Internal browser task may recover only from a verified pre-dispatch stale target. */
+  browserTaskRecoverStale?: boolean;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
   /**
@@ -57,6 +59,8 @@ export interface ToolResult {
   ok: boolean;
   message: string;
   data?: unknown;
+  /** Ephemeral visual content for a model; non-enumerable so it is not persisted in tool data. */
+  modelImage?: { base64: string; mimeType: string };
 }
 
 /** JSON Schema for OpenAI function-calling format */

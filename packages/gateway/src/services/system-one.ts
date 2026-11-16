@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import sharp from "sharp";
+import { createHash, randomUUID } from "node:crypto";
 
 /** Wire contract: https://docs.typesafe.ai/introduction/quickstart */
 export type DecisionQuestion =
@@ -87,7 +88,7 @@ function renderQuestions(entries: Array<[string, DecisionQuestion]>): string {
   }).join("\n");
 }
 
-async function requestGeneric(endpoint: SystemOneEndpoint, state: string, entries: Array<[string, DecisionQuestion]>, signal?: AbortSignal): Promise<DecisionResponse> {
+async function requestGeneric(endpoint: SystemOneEndpoint, state: string, entries: Array<[string, DecisionQuestion]>, signal?: AbortSignal, image?: Buffer): Promise<DecisionResponse> {
   const base = endpoint.baseUrl!.replace(/\/+$/, "");
   const url = base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
   const body = JSON.stringify({
@@ -96,7 +97,7 @@ async function requestGeneric(endpoint: SystemOneEndpoint, state: string, entrie
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: DECISION_SYSTEM_PROMPT },
-      { role: "user", content: `${state}\n\nQuestions:\n${renderQuestions(entries)}` },
+      { role: "user", content: image ? [{ type: "text", text: `${state}\n\nQuestions:\n${renderQuestions(entries)}` }, { type: "image_url", image_url: { url: `data:image/png;base64,${image.toString("base64")}` } }] : `${state}\n\nQuestions:\n${renderQuestions(entries)}` },
     ],
   });
   const response = await fetch(url, {
@@ -119,14 +120,40 @@ async function requestGeneric(endpoint: SystemOneEndpoint, state: string, entrie
   return { model: endpoint.model || "system-one", answers: (record.answers ?? parsed) as Record<string, DecisionAnswer> };
 }
 
+/** Preserve the entire screenshot while respecting TypeSafe image dimensions. */
+async function prepareTypeSafeImage(image: Buffer): Promise<Buffer> {
+  try {
+    const source = sharp(image, { limitInputPixels: 40_000_000 });
+    const { width, height } = await source.metadata();
+    if (!width || !height) throw new Error("Missing image dimensions");
+    const scale = Math.min(1, 1568 / width, 1568 / height);
+    const resizedWidth = Math.max(1, Math.round(width * scale));
+    const resizedHeight = Math.max(1, Math.round(height * scale));
+    const horizontal = Math.max(0, 280 - resizedWidth);
+    const vertical = Math.max(0, 280 - resizedHeight);
+    const output = await source.resize(resizedWidth, resizedHeight).extend({
+      left: Math.floor(horizontal / 2), right: Math.ceil(horizontal / 2),
+      top: Math.floor(vertical / 2), bottom: Math.ceil(vertical / 2),
+      background: "#ffffff",
+    }).png().toBuffer();
+    if (output.length > 4 * 1024 * 1024) throw new Error("Image too large");
+    return output;
+  } catch {
+    throw new DecisionError("invalid_input", "Decision image could not be prepared.");
+  }
+}
+
 export async function evaluateDecision(
   apiKeys: Record<string, string> | undefined,
   state: string,
   questions: Record<string, DecisionQuestion>,
   signal?: AbortSignal,
+  image?: Buffer,
 ): Promise<DecisionResponse> {
+  if (image && (image.length === 0 || image.length > 4 * 1024 * 1024)) throw new DecisionError("invalid_input", "Decision image exceeds size limit.");
   const endpoint = resolveSystemOne(apiKeys);
   if (!endpoint) throw new DecisionError("not_configured", "System One Model is not configured in Settings.");
+  if (image && !endpoint.baseUrl) image = await prepareTypeSafeImage(image);
   const entries = Object.entries(questions);
   if (!state.trim() || state.length > 24000 || !entries.length || entries.length > 48) throw new DecisionError("invalid_input", "Invalid decision size.");
   for (const [, q] of entries) {
@@ -145,18 +172,19 @@ export async function evaluateDecision(
     body = JSON.stringify({ model: endpoint.model || "jev-latest", state, questions });
   }
   if (body.length > 64000) throw new DecisionError("invalid_input", "Decision payload is too large.");
-  const digest = createHash("sha256").update(tenant).update(body).digest("hex");
+  const digest = createHash("sha256").update(tenant).update(body).update(image ?? "").digest("hex");
   const hit = cache.get(digest);
   if (hit && hit.until > Date.now()) return hit.value;
   try {
     let result: DecisionResponse;
     if (endpoint.baseUrl) {
-      result = await requestGeneric(endpoint, state, entries, signal);
+      result = await requestGeneric(endpoint, state, entries, signal, image);
     } else {
+      const imageRef = `jait-image-${randomUUID()}`;
       const response = await fetch(DEFAULT_TYPESAFE_URL, {
         method: "POST", redirect: "error",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.key}` },
-        body: JSON.stringify({ model: endpoint.model || "jev-latest", state, questions }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.key}`, ...(image ? { "TypeSafe-Danger-Zone-Images": "true" } : {}) },
+        body: JSON.stringify(image ? { model: endpoint.model || "jev-latest", state: { text: state, screenshot: imageRef }, assets: { [imageRef]: { type: "image", format: "png", data_base64: image.toString("base64") } }, questions } : { model: endpoint.model || "jev-latest", state, questions }),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(endpoint.timeoutMs)]) : AbortSignal.timeout(endpoint.timeoutMs),
       });
       if (!response.ok) throw new DecisionError("upstream_http", "System One request failed.", response.status);

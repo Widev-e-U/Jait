@@ -23,7 +23,7 @@ export type BrowserExtractionFields = z.infer<typeof browserExtractionFieldsSche
 export const browserWorkflowStepSchema = z.discriminatedUnion("action", [
   step({ action: z.literal("open"), url: text }),
   step({ action: z.literal("navigate"), url: text }),
-  step({ action: z.literal("click"), selector }),
+  step({ action: z.literal("click"), selector: selector.optional(), target: z.string().min(1).max(500).optional() }),
   step({ action: z.literal("type"), selector, text }),
   step({ action: z.literal("select"), selector, value: text }),
   step({ action: z.literal("wait"), selector, timeoutMs: z.number().int().min(1).max(30000).optional() }),
@@ -31,7 +31,11 @@ export const browserWorkflowStepSchema = z.discriminatedUnion("action", [
   step({ action: z.literal("extract"), instruction: text, fields: browserExtractionFieldsSchema }),
   step({ action: z.literal("check"), selector, text: text.optional() }),
   step({ action: z.literal("checkpoint"), message: text }),
-]);
+]).superRefine((item, context) => {
+  if (item.action === "click" && Boolean(item.selector?.trim()) === Boolean(item.target?.trim())) {
+    context.addIssue({ code: "custom", message: "Click requires exactly one non-empty selector or target" });
+  }
+});
 
 export const browserWorkflowSchema = z.object({
   formatVersion: z.literal(1),

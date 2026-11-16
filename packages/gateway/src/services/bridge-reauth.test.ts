@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyCommand, pickRefreshToken, removeCommand, tenantApplyCommand, TeamsReauthService } from './bridge-reauth.js';
 
 const CID = '5e3ce6c0-2b1f-4285-8d4b-75ee78787346';
@@ -53,6 +53,45 @@ describe('applyCommand', () => {
   });
 });
 
+
+describe('Teams sign-in browser startup', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  function setup(urls: string[]) {
+    vi.stubEnv('JAIT_TEAMS_APPLY_CMD', 'unused');
+    const navigate = vi.fn();
+    for (const url of urls) navigate.mockResolvedValueOnce({ url });
+    const surface = { getLiveViewInfo: () => ({ websockifyPort: 1234 }), navigate };
+    const registry = { stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn().mockResolvedValue(surface) };
+    return { service: new TeamsReauthService(registry as never), registry, navigate };
+  }
+
+  it('retries an unexpected DuckDuckGo page before showing the sign-in view', async () => {
+    const { service, navigate } = setup(['https://duckduckgo.com/', 'https://login.microsoftonline.com/common/login']);
+    const state = await service.start('user');
+    expect(state.phase).toBe('waiting_login');
+    expect(navigate).toHaveBeenCalledTimes(2);
+    expect(navigate).toHaveBeenNthCalledWith(1, 'https://teams.microsoft.com/');
+    expect(navigate).toHaveBeenNthCalledWith(2, 'https://teams.microsoft.com/');
+    await service.cancel('user');
+  });
+
+  it('stops and reports an error if the search page persists', async () => {
+    const { service, registry, navigate } = setup(['https://duckduckgo.com/', 'https://www.duckduckgo.com/']);
+    const state = await service.start('user');
+    expect(state.phase).toBe('error');
+    expect(state.liveViewUrl).toBeNull();
+    expect(navigate).toHaveBeenCalledTimes(2);
+    expect(registry.stopSurface).toHaveBeenCalledWith('teams-reauth-user', 'teams-reauth-finished');
+  });
+
+  it('allows external identity providers reached from Teams', async () => {
+    const { service, navigate } = setup(['https://identity.example.com/login']);
+    expect((await service.start('user')).phase).toBe('waiting_login');
+    expect(navigate).toHaveBeenCalledTimes(1);
+    await service.cancel('user');
+  });
+});
 
 describe('tenant sign-in', () => {
   it('uses only a dedicated tenant importer', () => {

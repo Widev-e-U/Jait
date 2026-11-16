@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { StagehandBrowserIntelligence, extractionFieldsSchema, type BrowserIntelligence } from "../services/browser-intelligence.js";
+import { chooseFastClickTarget } from "../services/browser-fast-click.js";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, realpath, mkdtemp, rm, stat, chmod, open as openFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { relative, sep } from "node:path";
 import { resolve, win32 } from "node:path";
 import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
@@ -16,6 +20,7 @@ type BrowserCollaborationService = {
   assertAgentControl(id?: string): void;
   restart?(sessionId: string): Promise<unknown>;
   attachAgentBrowser?(sessionId: string, browser: BrowserSurface, projectRoot?: string): void;
+  onBrowserControlLost?(callback: (browserId: string) => void): () => void;
 };
 type BrowserSessionRecord = {
   id: string;
@@ -40,6 +45,7 @@ interface BrowserNavigateInput {
 
 interface BrowserSnapshotInput {
   browserId?: string;
+  maxElements?: number;
 }
 
 interface BrowserEvalInput {
@@ -72,11 +78,14 @@ interface BrowserInspectInput {
 }
 
 interface BrowserClickInput {
-  selector: string;
+  selector?: string;
+  target?: string;
+  expected?: string;
   browserId?: string;
 }
 
 interface BrowserTypeInput {
+  expected?: string;
   selector: string;
   text: string;
   browserId?: string;
@@ -89,13 +98,15 @@ interface BrowserScrollInput {
 }
 
 interface BrowserSelectInput {
+  expected?: string;
   selector: string;
   value: string;
   browserId?: string;
 }
 
 interface BrowserWaitInput {
-  selector: string;
+  selector?: string;
+  durationMs?: number;
   timeoutMs?: number;
   browserId?: string;
 }
@@ -248,7 +259,11 @@ function redactBrowserCapturePayload(
   return {
     ...payload,
     textPreview: "",
+    documentUrl: undefined,
+    documentTimeOrigin: undefined,
+    scrollPosition: undefined,
     interactiveElements: [],
+    visualContent: undefined,
     activeElement: null,
     dialogs: [],
     obstruction: null,
@@ -263,13 +278,18 @@ function buildSnapshotPayload(
   snapshot: BrowserPageSnapshot,
   session: BrowserSessionRecord | null,
   target?: BrowserTargetDiagnostics,
+  maxElements = 10,
 ): Record<string, unknown> {
   return redactBrowserCapturePayload({
     browserId,
     url: snapshot.url,
     title: snapshot.title,
+    documentUrl: snapshot.documentUrl,
+    documentTimeOrigin: snapshot.documentTimeOrigin,
+    scrollPosition: snapshot.scrollPosition,
     textPreview: snapshot.text.slice(0, 500),
-    interactiveElements: snapshot.elements.slice(0, 10),
+    interactiveElements: snapshot.elements.slice(0, maxElements),
+    visualContent: snapshot.visualContent,
     activeElement: snapshot.activeElement ?? null,
     dialogs: snapshot.dialogs ?? [],
     obstruction: snapshot.obstruction ?? null,
@@ -371,6 +391,7 @@ export function createBrowserSnapshotTool(
       type: "object",
       properties: {
         browserId: { type: "string", description: "Optional browser surface ID" },
+        maxElements: { type: "number", description: "Maximum listed controls, 1–30 (default 10)." },
       },
     },
     async execute(input, context): Promise<ToolResult> {
@@ -379,6 +400,7 @@ export function createBrowserSnapshotTool(
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
+      const maxElements = z.number().int().min(1).max(30).default(10).parse(input.maxElements);
       const description = await surface.describe(context.signal);
       const inspection = await surface.inspect(undefined, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
@@ -391,7 +413,7 @@ export function createBrowserSnapshotTool(
           snapshot: isSecretSafeSession(session)
             ? "Browser capture is suppressed while the session is marked secret-safe."
             : description,
-          ...buildSnapshotPayload(surface.id, inspection.snapshot, session),
+          ...buildSnapshotPayload(surface.id, inspection.snapshot, session, undefined, maxElements),
         },
       };
     },
@@ -444,7 +466,7 @@ function makeActionTool<TInput>(
   description: string,
   properties: Record<string, { type: string; description: string }>,
   required: string[],
-  action: (surface: BrowserSurface, input: TInput, signal?: AbortSignal) => Promise<unknown>,
+  action: (surface: BrowserSurface, input: TInput, signal: AbortSignal | undefined, context: ToolContext) => Promise<unknown>,
 ): ToolDefinition<TInput> {
   return {
     name,
@@ -462,19 +484,159 @@ function makeActionTool<TInput>(
       assertPreviewBrowserSelection(previewSession, browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
       const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
-      const result = await action(surface, input, context.signal);
+      let result: unknown;
+      try {
+        result = await action(surface, input, context.signal, context);
+      } catch (error) {
+        if ((name === "browser.click" || name === "browser.type") && context.browserTaskRecoverStale === true && error instanceof Error && "code" in error && error.code === "BROWSER_STALE_TARGET") {
+          return { ok: false, message: error.message, data: { code: "BROWSER_STALE_TARGET", actionDispatched: false } };
+        }
+        throw error;
+      }
       // Return a page snapshot after every action so agents can verify the
       // result without a separate browser.snapshot / browser.inspect call.
-      const inspection = await surface.inspect(undefined, context.signal).catch(() => null);
+      let inspection: Awaited<ReturnType<BrowserSurface["inspect"]>> | null = null;
+      try {
+        collaboration?.assertAgentControl(surface.id);
+        if (!isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+          inspection = await surface.inspect(undefined, context.signal);
+          collaboration?.assertAgentControl(surface.id);
+        }
+      } catch { inspection = null; }
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       const payload = inspection
         ? buildSnapshotPayload(surface.id, inspection.snapshot, session)
-        : { browserId: surface.id };
+        : redactBrowserCapturePayload({ browserId: surface.id }, session);
       return {
         ok: true,
         message: `${name} executed`,
-        data: { ...payload, actionResult: result },
+        data: { ...payload, actionResult: isSecretSafeSession(session) ? { captureSuppressed: true } : result },
       };
+    },
+  };
+}
+
+
+interface BrowserRecording {
+  sessionId: string;
+  userId: string | undefined;
+  projectRoot: string;
+  browserId: string;
+  directory: string;
+  output: string;
+  stopped: boolean;
+  revoked: boolean;
+  frames: number;
+  unsubscribe: () => void;
+  done: Promise<void>;
+  error?: string;
+}
+
+const browserRecordings = new WeakMap<SurfaceRegistry, Map<string, BrowserRecording>>();
+const runEncoder = promisify(execFile);
+const browserRecordingStarts = new WeakMap<SurfaceRegistry, Set<string>>();
+
+/** Record only the current chat's shared browser, with a bounded lifetime and frame rate. */
+export function createBrowserRecordTool(registry: SurfaceRegistry, collaboration?: BrowserCollaborationService): ToolDefinition<{ action: string }> {
+  let recordings = browserRecordings.get(registry);
+  if (!recordings) { recordings = new Map(); browserRecordings.set(registry, recordings); }
+  const active = recordings;
+  let starts = browserRecordingStarts.get(registry);
+  if (!starts) { starts = new Set(); browserRecordingStarts.set(registry, starts); }
+  const starting = starts;
+  return {
+    name: "browser.record",
+    description: "Start, stop, or check a bounded video recording of this chat's shared browser. Requires ffmpeg. Capture ends and is discarded if browser control is taken away.",
+    tier: "standard", category: "browser", source: "builtin",
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["start", "stop", "status"] } }, required: ["action"] },
+    async execute(input, context) {
+      if (!context.sessionId || !context.projectRoot) return { ok: false, message: "A chat session and project are required." };
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      if (context.executionNodeId) return { ok: false, message: "Browser recording currently requires a project on the gateway machine." };
+      const key = context.sessionId;
+      const existing = active.get(key);
+      if (existing && (existing.userId !== context.userId || existing.projectRoot !== resolve(context.projectRoot))) return { ok: false, message: "Recording belongs to another user or project." };
+      if (input.action === "status") return { ok: true, message: existing ? (existing.stopped ? "Recording is finishing or ready." : "Recording is active.") : "No recording for this chat." };
+      if (input.action === "stop") {
+        if (!existing) return { ok: false, message: "No recording for this chat." };
+        existing.stopped = true;
+        await existing.done;
+        active.delete(key);
+        if (existing.error) return { ok: false, message: existing.error };
+        return { ok: true, message: `Recording saved to ${existing.output}`, data: { path: existing.output, frames: existing.frames } };
+      }
+      if (input.action !== "start") return { ok: false, message: "Action must be start, stop, or status." };
+      if (existing || starting.has(key)) return { ok: false, message: "Stop the existing recording first." };
+      if (!collaboration?.onBrowserControlLost) return { ok: false, message: "Browser recording requires control-change monitoring." };
+      starting.add(key);
+      try {
+      const surface = await ensureBrowserSurface(registry, context, undefined, collaboration);
+      const check = () => {
+        collaboration.assertAgentControl(surface.id);
+        const session = collaboration.getSessionByBrowserId(surface.id);
+        if (!session || session.sessionId !== context.sessionId || session.secretSafe || (session.status && session.status !== "ready") || surface.state !== "running") throw new Error("Browser capture permission was lost.");
+      };
+      check();
+      const root = await realpath(context.projectRoot);
+      const jaitDir = resolve(root, ".jait");
+      await mkdir(jaitDir, { mode: 0o700 }).catch(error => { if (error.code !== "EEXIST") throw error; });
+      const realJait = await realpath(jaitDir);
+      const jaitRel = relative(root, realJait);
+      if (jaitRel === ".." || jaitRel.startsWith(`..${sep}`) || jaitRel.startsWith(sep)) throw new Error("Artifact directory escapes the project.");
+      const artifactDir = resolve(realJait, "artifacts");
+      await mkdir(artifactDir, { mode: 0o700 }).catch(error => { if (error.code !== "EEXIST") throw error; });
+      const actualDir = await realpath(artifactDir);
+      const rel = relative(root, actualDir);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || rel.startsWith(sep)) throw new Error("Artifact directory escapes the project.");
+      check();
+      const directory = await mkdtemp(resolve(actualDir, "browser-recording-"));
+      const output = resolve(actualDir, `browser-${randomUUID()}.mp4`);
+      const recording: BrowserRecording = { sessionId: key, userId: context.userId, projectRoot: resolve(context.projectRoot), browserId: surface.id, directory, output, stopped: false, revoked: false, frames: 0, unsubscribe: () => {}, done: Promise.resolve() };
+      recording.unsubscribe = collaboration.onBrowserControlLost((id) => { if (id === surface.id) { recording.revoked = true; recording.stopped = true; } });
+      try { check(); } catch (error) { recording.unsubscribe(); await rm(directory, { recursive: true, force: true }); throw error; }
+      active.set(key, recording);
+      recording.done = (async () => {
+        let outputCreated = false;
+        try {
+          const deadline = Date.now() + 60_000;
+          let totalBytes = 0;
+          while (!recording.stopped && Date.now() < deadline) {
+            const started = Date.now();
+            check();
+            const frame = resolve(directory, `frame-${String(recording.frames).padStart(5, "0")}.png`);
+            await surface.screenshot(frame, undefined, true);
+            check();
+            if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+            const size = (await stat(frame)).size;
+            totalBytes += size;
+            if (size > 8 * 1024 * 1024 || totalBytes > 100 * 1024 * 1024) throw new Error("Recording exceeded its frame storage limit.");
+            recording.frames++;
+            await new Promise<void>(r => setTimeout(r, Math.max(0, 200 - (Date.now() - started))));
+          }
+          recording.stopped = true;
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+          check();
+          if (!recording.frames) throw new Error("No frames were captured.");
+          const outputFile = await openFile(output, "wx", 0o600);
+          outputCreated = true;
+          await outputFile.close();
+          await runEncoder("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-framerate", "5", "-i", resolve(directory, "frame-%05d.png"), "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2", "-c:v", "libx264", "-pix_fmt", "yuv420p", output], { timeout: 120_000, maxBuffer: 64 * 1024 });
+          check();
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+          await chmod(output, 0o600);
+          check();
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+        } catch (error) {
+          recording.error = recording.revoked ? "Browser control changed; recording discarded." : `Recording failed: ${error instanceof Error ? error.message : "unknown error"}`;
+          if (outputCreated) await rm(output, { force: true }).catch(() => {});
+        } finally {
+          recording.stopped = true;
+          recording.unsubscribe();
+          await rm(directory, { recursive: true, force: true }).catch(() => {});
+        }
+      })();
+      return { ok: true, message: "Browser recording started; use browser.record stop to save it. It stops automatically after 60 seconds." };
+      } finally { starting.delete(key); }
     },
   };
 }
@@ -484,20 +646,66 @@ export function createBrowserInteractionTools(
   collaboration?: BrowserCollaborationService,
   ws?: Pick<WsControlPlane, "proxyFsOp">,
 ): ToolDefinition[] {
+  const parseGuard = (expected: string) => z.object({ documentUrl: z.string().min(1).max(4096), documentTimeOrigin: z.number().finite(), tagName: z.string().min(1).max(100), name: z.string().max(200), text: z.string().max(200), inputType: z.string().max(50).optional(), option: z.object({ value: z.string().max(200), label: z.string().max(200) }).strict().optional() }).strict().parse(JSON.parse(expected));
   return [
+    createBrowserRecordTool(registry, collaboration),
     makeActionTool<BrowserClickInput>(
       registry,
       collaboration,
       "browser.click",
-      "Click an element in the browser and return the updated page snapshot. When a preview is active, automatically targets the preview browser. Supports CSS selectors and Playwright text selectors (e.g. 'button:has-text(\"Save\")' or 'text=Submit').",
+      "Click one browser control and return the updated page snapshot. Give a CSS/Playwright selector, or use target with the control's full visible label to let configured System One confirm a unique matching control in one call. Target mode sends control labels and the target description to System One, is disabled in secret-safe sessions, and stops on ambiguity or page changes. Do not include credentials in target.",
       {
-        selector: { type: "string", description: "CSS or Playwright selector for the target element (e.g. '#my-btn', 'button:has-text(\"OK\")')." },
-        browserId: { type: "string", description: "Browser surface ID (from preview.inspect or preview.status). Auto-resolves to the preview browser when omitted." },
+        selector: { type: "string", description: "CSS or Playwright selector. Supply either selector or target." },
+        target: { type: "string", description: "One requested control, including its complete visible label, e.g. 'Open Settings'. Requires configured System One; do not include credentials." },
+        expected: { type: "string", description: "Optional JSON identity from a fresh browser snapshot; reject changed or ambiguous targets." },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
-      ["selector"],
-      async (surface, input, signal) => {
-        await surface.click(input.selector, signal);
-        return { selector: input.selector };
+      [],
+      async (surface, input, signal, context) => {
+        const selector = typeof input.selector === "string" ? input.selector.trim() : "";
+        const target = typeof input.target === "string" ? input.target.trim() : "";
+        if (Boolean(selector) === Boolean(target) || target.length > 500) throw new Error("Provide exactly one selector or target (at most 500 characters).");
+        if (input.expected && !selector) throw new Error("Expected identity requires a selector.");
+        if (selector) {
+          const guard = input.expected ? parseGuard(input.expected) : undefined;
+          if (guard) {
+            const controlLost = new AbortController();
+            const unsubscribe = collaboration?.onBrowserControlLost?.(browserId => {
+              if (browserId === surface.id) controlLost.abort();
+            });
+            const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+            try {
+              collaboration?.assertAgentControl(surface.id);
+              if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+              await surface.click(selector, actionSignal, guard);
+            } finally { unsubscribe?.(); }
+          } else await surface.click(selector, signal);
+          return { selector };
+        }
+        const controlLost = new AbortController();
+        const unsubscribe = collaboration?.onBrowserControlLost?.(browserId => {
+          if (browserId === surface.id) controlLost.abort();
+        });
+        const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+        const assertCapture = () => {
+          actionSignal.throwIfAborted();
+          collaboration?.assertAgentControl(surface.id);
+          if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+            throw new Error("Browser inference is suppressed while this session is secret-safe. Return control after login first.");
+          }
+        };
+        try {
+          assertCapture();
+          const snapshot = await surface.fastClickSnapshot(target, actionSignal);
+          assertCapture();
+          const selected = await chooseFastClickTarget(snapshot, target, context.apiKeys, actionSignal);
+          assertCapture();
+          await surface.click(selected.selector, actionSignal, selected.guard);
+          // Once the click completed, report it even if the user takes control.
+          return { selector: selected.selector, resolvedBy: "system-one" };
+        } finally {
+          unsubscribe?.();
+        }
       },
     ),
     makeActionTool<BrowserTypeInput>(
@@ -508,11 +716,22 @@ export function createBrowserInteractionTools(
       {
         selector: { type: "string", description: "CSS or Playwright selector for the target input" },
         text: { type: "string", description: "Text to type" },
+        expected: { type: "string", description: "Optional observed target identity; reject changed or ambiguous targets." },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "text"],
       async (surface, input, signal) => {
-        await surface.typeText(input.selector, input.text, signal);
+        if (input.expected) {
+          const guard = parseGuard(input.expected);
+          const controlLost = new AbortController();
+          const unsubscribe = collaboration?.onBrowserControlLost?.(id => { if (id === surface.id) controlLost.abort(); });
+          const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+          try {
+            collaboration?.assertAgentControl(surface.id);
+            if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+            await surface.typeText(input.selector, input.text, actionSignal, guard);
+          } finally { unsubscribe?.(); }
+        } else await surface.typeText(input.selector, input.text, signal);
         return { selector: input.selector };
       },
     ),
@@ -540,11 +759,22 @@ export function createBrowserInteractionTools(
       {
         selector: { type: "string", description: "CSS or Playwright selector for the select element" },
         value: { type: "string", description: "Option value to choose" },
+        expected: { type: "string", description: "Optional observed target identity; reject changed or ambiguous targets." },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "value"],
       async (surface, input, signal) => {
-        await surface.select(input.selector, input.value, signal);
+        if (input.expected) {
+          const guard = parseGuard(input.expected);
+          const controlLost = new AbortController();
+          const unsubscribe = collaboration?.onBrowserControlLost?.(id => { if (id === surface.id) controlLost.abort(); });
+          const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+          try {
+            collaboration?.assertAgentControl(surface.id);
+            if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+            await surface.select(input.selector, input.value, actionSignal, guard);
+          } finally { unsubscribe?.(); }
+        } else await surface.select(input.selector, input.value, signal);
         return { selector: input.selector, value: input.value };
       },
     ),
@@ -555,11 +785,20 @@ export function createBrowserInteractionTools(
       "Wait for an element to appear and return the page snapshot once found. When a preview is active, automatically targets the preview browser.",
       {
         selector: { type: "string", description: "CSS or Playwright selector to wait for" },
+        durationMs: { type: "number", description: "Bounded delay in milliseconds, 1–5000, instead of a selector" },
         timeoutMs: { type: "number", description: "Timeout in milliseconds (default 10000)" },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
-      ["selector"],
+      [],
       async (surface, input, signal) => {
+        if (input.durationMs !== undefined) {
+          const duration = z.number().int().min(1).max(5000).parse(input.durationMs);
+          if (input.selector) throw new Error("Choose a selector or a duration.");
+          const { setTimeout: delay } = await import("node:timers/promises");
+          await delay(duration, undefined, { signal });
+          return { durationMs: duration };
+        }
+        if (!input.selector) throw new Error("A selector or duration is required.");
         await surface.waitFor(input.selector, input.timeoutMs ?? 10000, signal);
         return { selector: input.selector, timeoutMs: input.timeoutMs ?? 10000 };
       },

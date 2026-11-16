@@ -2768,19 +2768,22 @@ export function registerChatRoutes(
   const loopDispatches = new Set<string>();
   let loopsClosed = false;
   const wakeLoop = (sessionId: string): void => {
-    if (loopsClosed || loopTimers.has(sessionId) || loopDispatches.has(sessionId)) return;
+    if (loopsClosed || loopDispatches.has(sessionId)) return;
+    const existing = loopTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
       loopTimers.delete(sessionId);
       void dispatchLoop(sessionId);
-    }, 250);
+    }, Math.max(250, (chatLoops?.get(sessionId)?.continuation?.waitUntil ?? 0) - Date.now()));
     timer.unref?.();
     loopTimers.set(sessionId, timer);
   };
   const dispatchLoop = async (sessionId: string): Promise<void> => {
     if (loopsClosed || !chatLoops || !sessionService || !userService || activeStreams.has(sessionId) || drainingQueuedSessions.has(sessionId) || loopDispatches.has(sessionId)) return;
     const session = sessionService.getById(sessionId);
-    const loop = chatLoops.get(sessionId);
+    let loop = chatLoops.get(sessionId);
     if (!session?.userId || session.status !== "active" || loop?.status !== "running") return;
+    if ((loop.continuation?.waitUntil ?? 0) > Date.now()) { wakeLoop(sessionId); return; }
     if (sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
     const queue = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"]);
     if (queue[0] && !queue[0].held) return;
@@ -2788,6 +2791,12 @@ export function registerChatRoutes(
     if (!user) return;
     loopDispatches.add(sessionId);
     try {
+      loop = await chatLoops.reviewContinuation(sessionId, loop.revision, userService.getSettings(user.id).apiKeys);
+      if (!loop || loop.status !== "running" || activeStreams.has(sessionId) || sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
+      if (loop.iteration > 0 && loop.continuation?.iteration !== loop.iteration) return;
+      const nextQueued = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"])[0];
+      if (nextQueued && !nextQueued.held) return;
+      if ((loop.continuation?.waitUntil ?? 0) > Date.now()) return;
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
       // A pause/goal edit may have arrived while signing the internal request.
       if (loopsClosed || chatLoops.get(sessionId)?.revision !== loop.revision) return;
@@ -5907,7 +5916,7 @@ export function registerChatRoutes(
         void mobilePush?.sendChatCompleted(authUser.id, notification).catch(() => { /* best effort */ });
       }
     }
-    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored, performance.now() - loopTurnStartedAt) : null;
+    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored, performance.now() - loopTurnStartedAt, fullContent) : null;
     if (loopAtEnd?.status === "error") notifyLoopAttention(sessionId, "Loop stopped", loopAtEnd.summary);
     if (loopAtEnd?.status === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question")) {
       notifyLoopAttention(sessionId, "Loop needs your answer", loopAtEnd.summary);

@@ -203,6 +203,8 @@ import {
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool, createProjectTransferTool } from "./project-tools.js";
 import { createProjectMessageTool } from "./project-message-tool.js";
+import { createProjectChatTool } from "./project-chat-tool.js";
+import { createChatControlTool } from "./chat-control-tool.js";
 import { createProjectEditorOpenTool } from "./project-editor-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
@@ -610,6 +612,24 @@ export function createToolRegistry(
   }
 
   if (deps.threadService && deps.providerRegistry && deps.projectService && deps.sessionService) {
+    tools.register(createProjectChatTool({
+      projectService: deps.projectService,
+      sessionService: deps.sessionService,
+      threadService: deps.threadService,
+      providerRegistry: deps.providerRegistry,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+      config: deps.config,
+      getApp: deps.getApp,
+      ws: deps.ws,
+    }));
+    tools.register(createChatControlTool({
+      sessionService: deps.sessionService,
+      sessionState: deps.sessionState,
+      userService: deps.userService,
+      config: deps.config,
+      getApp: deps.getApp,
+    }));
     tools.register(
       createProjectMessageTool({
         projectService: deps.projectService,

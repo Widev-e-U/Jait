@@ -184,6 +184,33 @@ describe('chat agent browser', () => {
     expect(service.get('idle-open')).toMatchObject({ status: 'ready', sharedWithAgent: true });
   });
 
+  it('reopens a stopped blank browser and navigates to the requested URL', async () => {
+    const { service, context, registry } = fixture();
+    const open = createBrowserOpenTool(registry as any, service);
+    const chat = context('blank-open');
+    await open.execute({}, chat);
+    const browserId = service.get('blank-open')!.browserId!;
+    await registry.stopSurface(browserId);
+    const result = await open.execute({ url: 'https://example.com/next' }, chat);
+    expect(result).toMatchObject({ ok: true, data: { browserId, url: 'https://example.com/next' } });
+    expect(registry.startSurface).toHaveBeenCalledTimes(2);
+  });
+
+  it('reopens a stopped blank browser for inspection and respects takeover', async () => {
+    const { service, context, registry } = fixture();
+    const open = createBrowserOpenTool(registry as any, service);
+    const chat = context('blank-inspect');
+    await open.execute({}, chat);
+    const browserId = service.get('blank-inspect')!.browserId!;
+    service.setSharedWithAgent('blank-inspect', false);
+    await registry.stopSurface(browserId);
+    await expect(open.execute({}, chat)).rejects.toThrow(/not shared/);
+    expect(registry.startSurface).toHaveBeenCalledTimes(1);
+    service.setSharedWithAgent('blank-inspect', true);
+    expect(await open.execute({}, chat)).toMatchObject({ ok: true, data: { browserId, url: 'about:blank' } });
+    expect(registry.startSurface).toHaveBeenCalledTimes(2);
+  });
+
   it('preserves user takeover when opening a suspended browser', async () => {
     const { service, tool, context, registry } = fixture();
     const chat = context('idle-takeover');

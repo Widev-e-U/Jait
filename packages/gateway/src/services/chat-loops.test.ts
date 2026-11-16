@@ -64,30 +64,52 @@ describe("persistent chat goal loops", () => {
     expect(loops.resumeAfterAnswer(sessionId, "real")?.status).toBe("running");
   });
 
-  it("bounds unchecked continuation by the turn budget instead of stopping after three turns", () => {
+  it("continues beyond 50 turns and respects questions", () => {
     loops.goal(sessionId, "Fix", ["Pass"]);
-    for (let i = 0; i < 49; i++) expect(loops.finishTurn(sessionId)?.status).toBe("running");
-    expect(loops.finishTurn(sessionId)).toMatchObject({ status: "paused", iteration: 50 });
-  });
-
-  it("does not let Q&A on the last turn bypass the budget", () => {
-    loops.goal(sessionId, "Fix", ["Pass"]);
-    for (let i = 0; i < 49; i++) loops.finishTurn(sessionId);
+    for (let i = 0; i < 55; i++) expect(loops.finishTurn(sessionId)?.status).toBe("running");
     sessionWaits.raise({ key: "question:last", kind: "question", sessionId });
-    const goal = loops.get(sessionId)!;
-    loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "What next?" });
-    expect(loops.finishTurn(sessionId)).toMatchObject({ status: "paused", iteration: 50 });
-    expect(loops.resumeAfterAnswer(sessionId, "last")?.status).toBe("paused");
+    expect(loops.finishTurn(sessionId)?.status).toBe("waiting");
+    sessionWaits.clear("question:last");
+    expect(loops.resumeAfterAnswer(sessionId)?.status).toBe("running");
   });
 
-  it("keeps the turn budget when a waiting goal receives a direct chat reply", () => {
+  it("reviews unchecked turns and schedules a bounded automatic wait", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue({ model: "test", answers: { continuation: { type: "choice", choice: "wait", confidence: 0.9 } } });
     loops.goal(sessionId, "Fix", ["Pass"]);
-    for (let i = 0; i < 48; i++) loops.finishTurn(sessionId);
-    sessionWaits.raise({ key: "question:reply", kind: "question", sessionId });
-    expect(loops.finishTurn(sessionId)?.status).toBe("waiting");
-    sessionWaits.clear("question:reply");
-    expect(loops.resumeAfterAnswer(sessionId)?.nextMessage).toContain("replied directly");
-    expect(loops.finishTurn(sessionId)).toMatchObject({ status: "paused", iteration: 50 });
+    const ended = loops.finishTurn(sessionId, undefined, false, 10, "Waiting for compilation")!;
+    const reviewed = await loops.reviewContinuation(sessionId, ended.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    expect(reviewed?.continuation).toMatchObject({ iteration: 1, decision: "wait" });
+    expect(reviewed!.continuation!.waitUntil).toBeGreaterThan(Date.now());
+    expect(reviewed?.nextMessage).toContain("brief wait");
+    await loops.reviewContinuation(sessionId, reviewed!.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it("redacts review input and falls back if System One fails", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("unavailable"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    const ended = loops.finishTurn(sessionId, undefined, false, 10, "Bearer abc123 and secret-key")!;
+    const reviewed = await loops.reviewContinuation(sessionId, ended.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    const state = evaluate.mock.calls[0]![1];
+    expect(state).not.toContain("abc123");
+    expect(state).not.toContain("secret-key");
+    expect(reviewed?.continuation?.decision).toBe("fallback");
+    expect(new ChatLoopService(sessions).get(sessionId)?.continuation).toEqual(reviewed?.continuation);
+    expect(reviewed?.status).toBe("running");
+  });
+
+  it("does not override a pause while the reviewer is running", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    let resolve!: (value: any) => void;
+    vi.spyOn(systemOne, "evaluateDecision").mockReturnValue(new Promise(r => { resolve = r; }));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    const ended = loops.finishTurn(sessionId)!;
+    const pending = loops.reviewContinuation(sessionId, ended.revision, {});
+    loops.control(sessionId, "pause");
+    resolve({ model: "test", answers: { continuation: { type: "choice", choice: "follow", confidence: 1 } } });
+    expect((await pending)?.status).toBe("paused");
   });
 
   it("requires execution references for designated criteria", async () => {
@@ -300,7 +322,7 @@ describe("persistent chat goal loops", () => {
     expect(loops.control(sessionId, "resume")).toMatchObject({ status: "running", stalledChecks: 0, budgetStartIteration: 3 });
   });
 
-  it("bounds unchecked turns and total turns even without System One", () => {
+  it("tracks unchecked turns and continues without System One", () => {
     loops.goal(sessionId, "Fix", ["Pass"]);
     for (let i = 0; i < 3; i++) loops.finishTurn(sessionId);
     expect(loops.get(sessionId)).toMatchObject({ status: "running", uncheckedTurns: 3 });
@@ -310,8 +332,7 @@ describe("persistent chat goal loops", () => {
       loops.check(sessionId, { revision: goal.revision, outcome: "continue", summary: `Progress ${i}`, nextMessage: "Next" });
       loops.finishTurn(sessionId);
     }
-    expect(loops.get(sessionId)).toMatchObject({ status: "paused", iteration: 53 });
-    expect(loops.get(sessionId)?.summary).toContain("50 turns since the last resume");
+    expect(loops.get(sessionId)).toMatchObject({ status: "running", iteration: 53 });
     expect(loops.get(sessionId)?.summary).toContain("Progress 49");
   });
 

@@ -95,6 +95,8 @@ export interface IncomingMessengerMessage {
   body: string;
   timestamp: number;
   service: string;
+  /** Whether a preview can be fetched through the authenticated gateway. */
+  image?: boolean;
 }
 export type IncomingMessengerHandler = (owner: string, message: IncomingMessengerMessage) => void;
 /** Messages older than this are bridge backfill or catch-up, not something to wake the user for. */
@@ -339,6 +341,11 @@ class Connection {
         ?.displayname ?? event.sender ?? '';
     const direct = !!room.peer && room.peer.userId === event.sender;
     const body = failed ? 'New message' : text || 'Sent an attachment';
+    const imageContent = event.type === 'm.room.message' && event.content?.msgtype === 'm.image';
+    const imageUrl = event.content?.file?.url ?? event.content?.url;
+    const image = imageContent && typeof imageUrl === 'string' && imageUrl.startsWith('mxc://')
+      && (event.content?.info?.size === undefined || (typeof event.content.info.size === 'number' && event.content.info.size <= MAX_MEDIA))
+      ? true : undefined;
     const message: IncomingMessengerMessage = {
       roomId: room.summary.id,
       eventId,
@@ -346,11 +353,12 @@ class Connection {
       body: messengerNotificationPreview(direct ? body : `${String(sender).slice(0, 60)}: ${body}`),
       timestamp,
       service: room.summary.service,
+      ...(image ? { image } : {}),
     };
     // Reading the room in the open UI sends a receipt within seconds; that
     // user is already looking at the message and must not be buzzed twice.
     setTimeout(() => {
-      if (this.rooms.get(room.summary.id) !== room || this.ownActivityAt(room) >= timestamp) return;
+      if (this.rooms.get(room.summary.id) !== room || room.summary.hidden || this.ownActivityAt(room) >= timestamp) return;
       try {
         handler(this.owner, message);
       } catch {
@@ -608,6 +616,10 @@ class Connection {
     active.forEach((item, index) => {
       if (item.event_id) receiptIndex.set(item.event_id, index);
     });
+    const bridgeBots = new Set((room?.states ?? [])
+      .filter(s => ['m.bridge', 'uk.half-shot.bridge'].includes(s.type))
+      .map(s => s.content?.bridgebot)
+      .filter((id): id is string => typeof id === 'string' && !!id));
     const furthestRead = new Map<
       string,
       { index: number; eventId: string; timestamp: number | null }
@@ -616,7 +628,7 @@ class Connection {
       const index = receiptIndex.get(eventId);
       if (index === undefined) continue;
       for (const [userId, receipt] of Object.entries(users)) {
-        if (userId === this.session?.userId) continue;
+        if (userId === this.session?.userId || bridgeBots.has(userId)) continue;
         const timestamp = typeof receipt?.ts === 'number' ? receipt.ts : null;
         const current = furthestRead.get(userId);
         if (
@@ -626,6 +638,33 @@ class Connection {
         ) {
           furthestRead.set(userId, { index, eventId, timestamp });
         }
+      }
+    }
+    // Only the bot identified by the room's bridge state can report bridge
+    // status. A SUCCESS means accepted by the remote service; it only means
+    // delivered to a recipient when delivered_to_users contains that recipient.
+    const bridgeStatuses = new Map<string, 'pending' | 'sent' | 'delivered' | 'failed'>();
+    // Mautrix may acknowledge successful bridging with the bot's m.read receipt
+    // instead of a status event. It acknowledges that exact event, not a person.
+    for (const [eventId, users] of Object.entries(room?.receipts ?? {})) {
+      if (originals.get(eventId)?.sender === this.session?.userId && Object.keys(users).some(id => bridgeBots.has(id))) {
+        bridgeStatuses.set(eventId, 'sent');
+      }
+    }
+    for (const event of active) {
+      if (event.type !== 'com.beeper.message_send_status' || !event.sender || !bridgeBots.has(event.sender)) continue;
+      const relation = event.content?.['m.relates_to'];
+      if (relation?.rel_type !== 'm.reference' || typeof relation.event_id !== 'string') continue;
+      const target = originals.get(relation.event_id);
+      if (!target || target.sender !== this.session?.userId) continue;
+      const status = event.content?.status;
+      if (status === 'SUCCESS') {
+        const recipients = event.content?.delivered_to_users;
+        bridgeStatuses.set(relation.event_id, Array.isArray(recipients) && recipients.some((id: unknown) => typeof id === 'string' && /^@[^:\s]+:[^\s]+$/.test(id) && id !== this.session?.userId && !bridgeBots.has(id)) ? 'delivered' : 'sent');
+      } else if (status === 'PENDING' || status === 'FAIL_RETRIABLE') {
+        bridgeStatuses.set(relation.event_id, 'pending');
+      } else if (status === 'FAIL_PERMANENT') {
+        bridgeStatuses.set(relation.event_id, 'failed');
       }
     }
     const readerNames = new Map<string, string>();
@@ -706,6 +745,7 @@ class Connection {
           edited: !!edit,
           reactions: [...(reactions.get(e.event_id!) ?? [])].map(([key, users]) => ({ key, count: users.size, own: users.has(this.session?.userId ?? ''), senders: [...users] })),
           readBy,
+          ...(bridgeStatuses.has(e.event_id!) ? { bridgeStatus: bridgeStatuses.get(e.event_id!) } : {}),
           ...(typeof attachment === 'string' && attachment.startsWith('mxc://')
             ? {
                 attachment: {
@@ -959,12 +999,12 @@ class Connection {
         // Bridged group/team channels often carry their picture only in the
         // bridge record (MSC2346 `channel.avatar_url`), not in `m.room.avatar`.
         const bridgeAvatar = bridge?.channel?.avatar_url;
-        const avatar =
-          room.peer?.avatarUrl ??
-          [roomAvatar, bridgeAvatar].find(
-            (url): url is string =>
-              typeof url === 'string' && url.startsWith('mxc://'),
-          );
+        // The room's own picture wins over the peer's member avatar: bridges can
+        // leave a shared ghost with a placeholder while the room carries the photo.
+        const avatar = [roomAvatar, bridgeAvatar, room.peer?.avatarUrl].find(
+          (url): url is string =>
+            typeof url === 'string' && url.startsWith('mxc://'),
+        );
         if (avatar) room.summary.avatarUrl = avatar;
         else delete room.summary.avatarUrl;
         const protocol = bridge?.protocol;
@@ -1051,6 +1091,7 @@ class Connection {
         const latest = this.messages(id).at(-1);
         room.summary.timestamp = latest?.timestamp ?? 0;
         room.summary.latestSender = latest?.sender;
+        room.summary.latestEventId = latest?.id;
         room.summary.preview =
           latest?.body ??
           (membership === 'invite' ? 'Invitation' : 'No messages yet');
@@ -1336,8 +1377,12 @@ class Connection {
       } else media = { url: await client.uploadContent(data, mime, body.name) };
       return {
         eventId: await client.sendMessage(id, {
-          body: body.name,
+          // MSC2530: a body that differs from `filename` is the caption.
+          body: body.caption?.trim() || body.name,
+          filename: body.name,
           info: { mimetype: mime, size: data.length },
+          // Bridges (mautrix-whatsapp) forward this as WhatsApp "view once".
+          ...(body.viewOnce ? { 'com.beeper.view_once': true } : {}),
           ...media,
           msgtype: [
             'image/png',
@@ -1695,7 +1740,24 @@ export class MessengerService {
   }
   async media(owner: string, url: string, file?: Record<string, any>) {
     await this.resume(owner);
+    return this.readMedia(this.connection(owner), url, file);
+  }
+  /** Resolve the image from the owner's joined room, keeping Matrix keys on the gateway. */
+  async notificationImage(owner: string, roomId: string, eventId: string): Promise<Buffer> {
+    await this.resume(owner);
     const c = this.connection(owner);
+    const room = c.snapshot().rooms.find((entry) => entry.id === roomId && entry.membership === 'join' && !entry.hidden);
+    const attachment = room && c.messages(roomId).find((message) => message.id === eventId)?.attachment;
+    if (!attachment?.image || (attachment.size !== undefined && attachment.size > MAX_MEDIA)) throw new Error('Image unavailable.');
+    const input = await this.readMedia(c, attachment.url, attachment.file);
+    const sharp = (await import('sharp')).default;
+    const result = await sharp(input, { limitInputPixels: 16_000_000, animated: false })
+      .rotate().resize(384, 384, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 65 }).toBuffer();
+    if (result.length > 256 * 1024) throw new Error('Preview exceeds size limit.');
+    return result;
+  }
+  private async readMedia(c: Connection, url: string, file?: Record<string, any>) {
     const client = c.connected();
     const match = /^mxc:\/\/([^/]+)\/([^/?#]+)$/.exec(url);
     if (!match) throw new Error('Invalid Matrix media URL.');
@@ -1793,6 +1855,23 @@ export class MessengerService {
             message: 'Messenger action completed.',
             data: await c.command(cmd),
           };
+        if (cmd.action === 'attachment') {
+          const room = snapshot.rooms.find((r) => r.id === cmd.roomId && r.membership === 'join');
+          if (!room) return { ok: false, message: 'Joined room not found.' };
+          const attachment = c.messages(room.id).find((m) => m.id === cmd.eventId)?.attachment;
+          if (!attachment) return { ok: false, message: 'Attachment not found in loaded room messages. Load earlier messages first if needed.' };
+          if (attachment.size !== undefined && attachment.size > MAX_MEDIA)
+            return { ok: false, message: 'Attachment exceeds the 20 MiB limit.' };
+          const bytes = await this.readMedia(c, attachment.url, attachment.file);
+          if (!c.assistantAccess || signal?.aborted)
+            return { ok: false, message: 'Assistant access disabled or request cancelled.' };
+          // This result travels only to the built-in attachment tool, which writes
+          // the bytes to the project and never exposes encryption keys or base64.
+          return { ok: true, message: 'Attachment loaded.', data: {
+            name: attachment.name.slice(0, 512), mime: attachment.mime.slice(0, 200),
+            image: attachment.image, size: bytes.length, base64: bytes.toString('base64'),
+          } };
+        }
         if (cmd.action === 'messages' && cmd.earlier)
           await c.earlier(cmd.roomId);
         const rooms = cmd.roomId
@@ -1806,14 +1885,20 @@ export class MessengerService {
               .messages(room.id)
               .filter(
                 (m) =>
-                  cmd.action !== 'search' ||
+                  (cmd.action !== 'messages' || !cmd.attachmentsOnly || !!m.attachment) &&
+                  (cmd.action !== 'search' ||
                   (!m.unableToDecrypt &&
-                    m.body.toLowerCase().includes(cmd.query.toLowerCase())),
+                    (m.body.toLowerCase().includes(cmd.query.toLowerCase()) ||
+                     (m.attachment?.name.toLowerCase().includes(cmd.query.toLowerCase()) ?? false)))),
               )
-              .map(({ attachment: _attachment, ...message }) => ({
+              .map(({ attachment, ...message }) => ({
                 ...message,
                 roomId: room.id,
                 body: message.body.slice(0, 2000),
+                ...(attachment ? { attachment: {
+                  name: attachment.name.slice(0, 512), mime: attachment.mime.slice(0, 200),
+                  image: attachment.image, ...(attachment.size === undefined ? {} : { size: attachment.size }),
+                } } : {}),
               })),
           )
           .sort((a, b) => b.timestamp - a.timestamp)

@@ -6,6 +6,7 @@ export interface BridgeTenant {
   id: string;
   name: string;
   connected: boolean;
+  state?: BridgeState | 'disconnected';
 }
 
 export interface BridgeAccount {
@@ -74,7 +75,9 @@ function normaliseTenants(value: unknown): BridgeTenant[] | undefined {
     const id = entry.id.toLowerCase();
     if (seen.has(id)) continue;
     seen.add(id);
-    tenants.push({ id, name: entry.name.trim(), connected: entry.connected === true });
+    const state = entry.state === 'disconnected' ? 'disconnected' :
+      entry.state === undefined ? undefined : normaliseState(entry.state);
+    tenants.push({ id, name: entry.name.trim(), connected: state === undefined ? entry.connected === true : state === 'connected', state });
   }
   return tenants;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-const { clickWithVisibleCursor } = require("./browser-cursor.cjs");
+const { clickWithVisibleCursor, guardedFieldAction } = require("./browser-cursor.cjs");
 
 const { chromium } = require("playwright");
 const { createInterface } = require("node:readline");
@@ -479,12 +479,14 @@ async function main() {
       await (await ensurePage()).reload({ waitUntil: "domcontentloaded", timeout: 30000 });
       return null;
     },
-    click: async (params) => {
-      await clickWithVisibleCursor(await ensurePage(), String(params.selector || ""));
+    click: async (params, signal) => {
+      await clickWithVisibleCursor(await ensurePage(), String(params.selector || ""), signal, params.guard);
       return null;
     },
-    typeText: async (params) => {
-      await (await ensurePage()).fill(String(params.selector || ""), String(params.text || ""));
+    typeText: async (params, signal) => {
+      const page = await ensurePage();
+      if (params.guard) await guardedFieldAction(page, String(params.selector || ""), String(params.text || ""), "fill", signal, params.guard);
+      else await page.fill(String(params.selector || ""), String(params.text || ""));
       return null;
     },
     scroll: async (params) => {
@@ -493,8 +495,10 @@ async function main() {
       await (await ensurePage()).evaluate(([targetX, targetY]) => window.scrollTo(targetX, targetY), [x, y]);
       return null;
     },
-    select: async (params) => {
-      await (await ensurePage()).selectOption(String(params.selector || ""), String(params.value || ""));
+    select: async (params, signal) => {
+      const page = await ensurePage();
+      if (params.guard) await guardedFieldAction(page, String(params.selector || ""), String(params.value || ""), "select", signal, params.guard);
+      else await page.selectOption(String(params.selector || ""), String(params.value || ""));
       return null;
     },
     waitFor: async (params) => {
@@ -507,12 +511,12 @@ async function main() {
         ? resolve(String(params.path))
         : resolve(process.cwd(), ".jait", "shots", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await (await ensurePage()).screenshot({ path: outPath, fullPage: true });
+      await (await ensurePage()).screenshot({ path: outPath, fullPage: !params.viewportOnly });
       return outPath;
     },
-    snapshot: async () => (await ensurePage()).evaluate(() => {
+    snapshot: async (params) => (await ensurePage()).evaluate((requestedTarget) => {
       const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
-      const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12000);
+      const bodyText = requestedTarget === undefined ? normalize(document.body?.innerText ?? "").slice(0, 12000) : "";
       const title = document.title || "(untitled)";
       const esc = (raw) => {
         if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
@@ -527,7 +531,7 @@ async function main() {
       };
       const guessRole = (el, tag) =>
         el.getAttribute("role")
-        ?? (tag === "a" ? "link" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
+        ?? (tag === "a" ? "link" : tag === "textarea" ? "textbox" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
       const getName = (el) => normalize(
         el.getAttribute("aria-label")
           ?? el.getAttribute("aria-labelledby")
@@ -550,7 +554,7 @@ async function main() {
         const fieldName = el.getAttribute("name");
         if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
         if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
-        if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+        if (placeholder) push("placeholder", placeholder, `${tag}[placeholder=${esc(placeholder)}]`);
         if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
         if (id) push("id", id, `#${esc(id)}`);
         const css = id
@@ -579,7 +583,7 @@ async function main() {
           role,
           name,
           text,
-          selector: selectors[0]?.selector ?? undefined,
+          selector: (tag === "textarea" ? selectors.find(item => item.kind === "id") ?? selectors.find(item => item.kind === "placeholder") ?? selectors.find(item => item.kind === "name") : undefined)?.selector ?? selectors[0]?.selector ?? undefined,
           selectors,
           tagName: tag,
           placeholder,
@@ -589,13 +593,30 @@ async function main() {
           selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
           active: document.activeElement === el,
           value: selectedValue,
+          inputType: tag === "input" ? String(el.type ?? "text").toLowerCase() : undefined,
+          readOnly: el.readOnly === true,
+          options: tag === "select" ? Array.from(el.options ?? []).slice(0, 30).map(option => ({ value: String(option.value).slice(0, 200), label: normalize(option.textContent ?? "").slice(0, 200), disabled: option.disabled === true || option.parentElement?.disabled === true })) : undefined,
         };
       };
 
       const rawElements = Array.from(
         document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
       );
-      const elements = rawElements.filter((el) => isVisible(el)).slice(0, 60).map((el) => serializeElement(el));
+      const normalizeMatch = (value) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+      const intent = requestedTarget === undefined ? "" : normalizeMatch(requestedTarget);
+      const clickRoles = new Set(["button", "link", "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio", "switch", "tab"]);
+      const elements = rawElements.filter((el) => {
+        if (!isVisible(el)) return false;
+        if (requestedTarget === undefined) return true;
+        if (el.disabled === true || el.getAttribute("aria-disabled") === "true") return false;
+        const tag = el.tagName.toLowerCase();
+        const role = guessRole(el, tag).toLowerCase();
+        const rawLabel = getName(el) || normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
+        if (rawLabel.length >= 200) return false;
+        const label = normalizeMatch(rawLabel);
+        return Boolean(label && (clickRoles.has(role) || tag === "button" || tag === "a") && (` ${intent} `).includes(` ${label} `));
+      }).slice(0, requestedTarget === undefined ? 60 : 32).map((el) => serializeElement(el));
+      if (requestedTarget !== undefined) return { url: window.location.href, documentTimeOrigin: performance.timeOrigin, title, text: "", elements };
       const activeElement = document.activeElement && document.activeElement !== document.body
         ? {
           ...serializeElement(document.activeElement),
@@ -640,6 +661,8 @@ async function main() {
 
       return {
         url: window.location.href,
+        documentTimeOrigin: performance.timeOrigin,
+        scrollPosition: { x: window.scrollX, y: window.scrollY, height: window.innerHeight },
         title,
         text: bodyText,
         elements,
@@ -658,7 +681,7 @@ async function main() {
           ],
         },
       };
-    }),
+    }, params.fastTarget),
     getMetrics: async () => (await ensurePage()).evaluate(() => {
       const navEntries = performance.getEntriesByType("navigation");
       const nav = navEntries.length > 0 ? navEntries[0] : null;
@@ -967,6 +990,7 @@ async function main() {
 
   send({ event: "ready", strategy: cdpUrl ? "cdp" : "launch" });
 
+  const activeCommands = new Map();
   rl.on("line", async (line) => {
     let parsed;
     try {
@@ -978,19 +1002,27 @@ async function main() {
     const id = parsed.id;
     const method = String(parsed.method || "");
     const params = parsed.params && typeof parsed.params === "object" ? parsed.params : {};
+    if (method === "cancel") {
+      activeCommands.get(params.id)?.abort();
+      return;
+    }
     const handler = handlers[method];
     if (!handler) {
       send({ id, ok: false, error: `Unknown method: ${method}` });
       return;
     }
+    const controller = new AbortController();
+    activeCommands.set(id, controller);
     try {
-      const result = await handler(params);
+      const result = await handler(params, controller.signal);
       send({ id, ok: true, result });
       if (method === "close") {
         process.exit(0);
       }
     } catch (err) {
       send({ id, ok: false, error: normalizeText(errorMessage(err)) });
+    } finally {
+      activeCommands.delete(id);
     }
   });
 }
