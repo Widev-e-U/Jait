@@ -202,6 +202,50 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     .await;
     assert_eq!(status, 201, "{project}");
     let pid = project["id"].as_str().unwrap().to_owned();
+    // Selection is persisted per owner and cannot reference another owner's project.
+    let anonymous = client
+        .get(url("/api/projects/last-active"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), 401);
+    let (status, body) = call(
+        M::POST,
+        "/api/projects/select".into(),
+        other.clone(),
+        Some(json!({"projectId": pid})),
+    )
+    .await;
+    assert_eq!(status, 404, "{body}");
+    let (status, body) = call(
+        M::POST,
+        "/api/projects/select".into(),
+        owner.clone(),
+        Some(json!({"projectId": pid})),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["ok"], true);
+    let (status, selected) = call(
+        M::GET,
+        "/api/projects/last-active".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{selected}");
+    assert_eq!(selected["project"]["id"], pid);
+    assert!(selected["session"].is_null(), "{selected}");
+    let (status, foreign) = call(
+        M::GET,
+        "/api/projects/last-active".into(),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{foreign}");
+    assert!(foreign["project"].is_null(), "{foreign}");
+    assert!(foreign["session"].is_null(), "{foreign}");
     // Environment snapshots use the same owner-scoped project store through
     // the production composition. Node connectivity is still unimplemented.
     let anonymous = client
