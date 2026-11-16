@@ -202,6 +202,134 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     .await;
     assert_eq!(status, 201, "{project}");
     let pid = project["id"].as_str().unwrap().to_owned();
+    // Creation must validate the parent within the authenticated owner's active tree.
+    let (status, rejected) = call(
+        M::POST,
+        "/api/projects".into(),
+        other.clone(),
+        Some(json!({"title":"Foreign child", "parentId":pid})),
+    )
+    .await;
+    assert_eq!(status, 400, "{rejected}");
+    assert_eq!(rejected["error"], "PARENT_NOT_FOUND");
+    let (_, other_projects) = call(M::GET, "/api/projects".into(), other.clone(), None).await;
+    assert!(
+        !other_projects.to_string().contains("Foreign child"),
+        "{other_projects}"
+    );
+    let mut parent = pid.clone();
+    for depth in 2..=5 {
+        let (status, child) = call(
+            M::POST,
+            "/api/projects".into(),
+            owner.clone(),
+            Some(json!({"title":format!("Depth {depth}"), "parentId":parent})),
+        )
+        .await;
+        assert_eq!(status, 201, "{child}");
+        parent = child["id"].as_str().unwrap().to_owned();
+    }
+    let (status, rejected) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"title":"Too deep child", "parentId":parent})),
+    )
+    .await;
+    assert_eq!(status, 400, "{rejected}");
+    assert_eq!(rejected["error"], "TOO_DEEP");
+    let (_, projects) = call(M::GET, "/api/projects".into(), owner.clone(), None).await;
+    assert!(
+        !projects.to_string().contains("Too deep child"),
+        "{projects}"
+    );
+    // Opening an existing root reuses its owned project; explicit creation conflicts.
+    let root = "/binary-project-root";
+    let (status, first) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "title":"Original root"})),
+    )
+    .await;
+    assert_eq!(status, 201, "{first}");
+    let root_id = first["id"].as_str().unwrap().to_owned();
+    let (status, reopened) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "title":"Ignored", "parentId":pid})),
+    )
+    .await;
+    assert_eq!(status, 201, "{reopened}");
+    assert_eq!(reopened["id"], root_id);
+    assert_eq!(reopened["title"], "Original root");
+    assert_eq!(reopened["parentId"], pid);
+    let (status, conflict) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "exclusiveRoot":true})),
+    )
+    .await;
+    assert_eq!(status, 409, "{conflict}");
+    assert_eq!(conflict["error"], "ROOT_PATH_IN_USE");
+    let (status, foreign_root) = call(
+        M::POST,
+        "/api/projects".into(),
+        other.clone(),
+        Some(json!({"rootPath":root})),
+    )
+    .await;
+    assert_eq!(status, 201, "{foreign_root}");
+    assert_ne!(foreign_root["id"], root_id);
+    let (status, rejected) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "parentId":"missing-parent"})),
+    )
+    .await;
+    assert_eq!(status, 400, "{rejected}");
+    assert_eq!(
+        rejected["details"],
+        "Cannot create under parent: PARENT_NOT_FOUND"
+    );
+    let (_, still_owned) = call(
+        M::GET,
+        format!("/api/projects/{root_id}"),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(still_owned["parentId"], pid);
+    let (status, cycle) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "parentId":root_id})),
+    )
+    .await;
+    assert_eq!(status, 400, "{cycle}");
+    assert_eq!(cycle["error"], "CYCLE");
+    let (_, unchanged) = call(
+        M::GET,
+        format!("/api/projects/{root_id}"),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(unchanged["parentId"], pid);
+    let (status, empty_node) = call(
+        M::POST,
+        "/api/projects".into(),
+        owner.clone(),
+        Some(json!({"rootPath":root, "nodeId":"", "exclusiveRoot":true})),
+    )
+    .await;
+    assert_eq!(status, 201, "{empty_node}");
+    assert_eq!(empty_node["nodeId"], "");
+    assert_ne!(empty_node["id"], root_id);
     // Selection is persisted per owner and cannot reference another owner's project.
     let anonymous = client
         .get(url("/api/projects/last-active"))

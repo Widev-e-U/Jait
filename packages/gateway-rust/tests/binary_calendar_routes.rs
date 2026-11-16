@@ -163,30 +163,61 @@ async fn calendar_routes_through_the_binary() {
     )
     .await;
     assert_eq!(st, 400);
+    // A failed snapshot write must roll back the account.
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_snapshot BEFORE INSERT ON device_calendar_snapshots BEGIN SELECT RAISE(ABORT, 'injected failure'); END;").unwrap();
+    let (st, _) = call(
+        M::POST,
+        "/api/calendar/device/sync".into(),
+        o.clone(),
+        Some(json!({"deviceId":"failed","calendars":[],"events":[]})),
+    )
+    .await;
+    assert_eq!(st, 500);
+    let (_, accounts) = call(M::GET, "/api/calendar/accounts".into(), o.clone(), None).await;
+    assert_eq!(accounts["accounts"], json!([]));
+    db.execute_batch("DROP TRIGGER reject_snapshot").unwrap();
+
     let (st, b) = call(
         M::POST,
         "/api/calendar/device/sync".into(),
         o.clone(),
-        Some(json!({"deviceId":"dev-1","deviceName":"Phone","calendars":[],"events":[]})),
+        Some(json!({"deviceId":"dev-1","deviceName":"Phone","calendars":[{"id":"work"}],"events":[{"id":"later","calendarId":"work","title":"Planning","start":"2030-01-03T10:00:00.000Z","end":"2030-01-03T11:00:00.000Z"},{"id":"earlier","calendarId":"work","title":"Planning","start":"2030-01-02T10:00:00.000Z","end":"2030-01-02T11:00:00.000Z"}]})),
     )
     .await;
     assert_eq!(st, 200, "{b}");
     let account_id = b["account"]["id"].as_str().unwrap().to_owned();
+    db.execute_batch("CREATE TRIGGER reject_snapshot_update BEFORE UPDATE ON device_calendar_snapshots BEGIN SELECT RAISE(ABORT, 'injected failure'); END;").unwrap();
+    let (st, _) = call(
+        M::POST,
+        "/api/calendar/device/sync".into(),
+        o.clone(),
+        Some(json!({"deviceId":"dev-1","deviceName":"Changed","calendars":[],"events":[]})),
+    )
+    .await;
+    assert_eq!(st, 500);
+    let (_, accounts) = call(M::GET, "/api/calendar/accounts".into(), o.clone(), None).await;
+    assert_eq!(accounts["accounts"][0]["displayName"], "Phone");
+    db.execute_batch("DROP TRIGGER reject_snapshot_update")
+        .unwrap();
     let (_, b) = call(M::GET, "/api/calendar/accounts".into(), o.clone(), None).await;
     assert_eq!(b["accounts"].as_array().unwrap().len(), 1, "{b}");
     let (_, b) = call(M::GET, "/api/calendar/accounts".into(), x.clone(), None).await;
     assert_eq!(b["accounts"], json!([]), "{b}");
 
-    let (st, _) = call(M::GET, "/api/calendar/calendars".into(), o.clone(), None).await;
-    assert!(st == 200 || st == 400);
-    let (st, _) = call(
+    let (st, b) = call(M::GET, "/api/calendar/calendars".into(), o.clone(), None).await;
+    assert_eq!(st, 200);
+    assert_eq!(b["calendars"], json!([{"id":"work"}]));
+    let (st, b) = call(
         M::GET,
-        "/api/calendar/events?limit=5".into(),
+        "/api/calendar/events?timeMin=2030-01-01T00%3A00%3A00Z&timeMax=2030-01-05T00%3A00%3A00Z&calendarId=work&q=planning&limit=1".into(),
         o.clone(),
         None,
     )
     .await;
-    assert!(st == 200 || st == 400);
+    assert_eq!(st, 200);
+    assert_eq!(b["events"].as_array().unwrap().len(), 1);
+    assert_eq!(b["events"][0]["id"], "earlier");
     let (st, _) = call(
         M::GET,
         "/api/calendar/connect/google".into(),

@@ -180,10 +180,99 @@ async fn thread_routes_through_the_binary() {
     .await;
     assert_eq!(st, 201, "{b}");
     let tid = b["id"].as_str().unwrap().to_owned();
+    let (st, _) = call(
+        M::POST,
+        "/api/agent-control/halt".into(),
+        owner.clone(),
+        Some(json!({"reason":"maintenance"})),
+    )
+    .await;
+    assert_eq!(st, 200);
+    for (path, action) in [
+        ("start", "start-thread"),
+        ("send", "send-message"),
+        ("steer", "steer-thread"),
+    ] {
+        let (st, response) = call(
+            M::POST,
+            format!("/api/threads/{tid}/{path}"),
+            owner.clone(),
+            Some(json!({"message":"continue"})),
+        )
+        .await;
+        assert_eq!(st, 409, "{path}: {response}");
+        assert_eq!(response["code"], "agent_halted");
+        assert_eq!(response["action"], action);
+        assert_eq!(response["reason"], "maintenance");
+    }
+    let (st, response) = call(
+        M::POST,
+        format!("/api/threads/{tid}/start"),
+        other.clone(),
+        Some(json!({"message":"continue"})),
+    )
+    .await;
+    assert_eq!(st, 404, "{response}");
+    let (st, _) = call(
+        M::POST,
+        "/api/agent-control/resume".into(),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(st, 200);
     assert!(
         b["status"] == "idle" && b["providerId"] == pid.as_str() && b["userId"] == s["userId"],
         "{b}"
     );
+
+    // The body can arrive after the first halt check. Recheck before admitting work.
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let address = gateway.base.strip_prefix("http://").unwrap();
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        let body = json!({"message":"continue"}).to_string();
+        let headers = format!(
+            "POST /api/threads/{tid}/send HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {owner}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(headers.as_bytes()).await.unwrap();
+        let mut interim = [0; 25];
+        tokio::time::timeout(Duration::from_secs(10), stream.read_exact(&mut interim))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&interim, b"HTTP/1.1 100 Continue\r\n\r\n");
+        let (st, _) = call(
+            M::POST,
+            "/api/agent-control/halt".into(),
+            owner.clone(),
+            Some(json!({"reason":"body race"})),
+        )
+        .await;
+        assert_eq!(st, 200);
+        stream.write_all(body.as_bytes()).await.unwrap();
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        let response = String::from_utf8(response).unwrap();
+        let (head, body) = response.split_once("\r\n\r\n").unwrap();
+        assert!(head.starts_with("HTTP/1.1 409"), "{response}");
+        let payload: Value = serde_json::from_str(body).unwrap();
+        assert_eq!(payload["code"], "agent_halted");
+        assert_eq!(payload["action"], "send-message");
+        assert_eq!(payload["reason"], "body race");
+        let (st, _) = call(
+            M::POST,
+            "/api/agent-control/resume".into(),
+            owner.clone(),
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(st, 200);
+    }
 
     let (st, b) = call(M::GET, "/api/threads".into(), owner.clone(), None).await;
     assert!(

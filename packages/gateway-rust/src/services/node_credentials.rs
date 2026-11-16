@@ -58,16 +58,29 @@ impl<'a> NodeCredentialsService<'a> {
         Ok(true)
     }
     pub fn issue(&mut self, node_id: &str, user_id: &str) -> Result<Option<String>, Error> {
-        if self.owner(node_id)?.as_deref() != Some(user_id) {
-            return Ok(None);
-        }
         let mut bytes = [0; 32];
         getrandom::fill(&mut bytes)?;
         let token = format!("jait-node-{}", URL_SAFE_NO_PAD.encode(bytes));
         let hash = digest(&token);
         if let Some(db) = self.db {
-            db.execute("INSERT INTO node_credentials(token_hash,node_id,user_id,created_at) VALUES(?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))",params![hash,node_id,user_id])?;
+            // The owner check and insert must share one write-locked transaction:
+            // another connection may otherwise transfer the node between them.
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;
+            let owned: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM nodes WHERE node_id=? AND user_id=?)",
+                params![node_id, user_id],
+                |row| row.get(0),
+            )?;
+            if !owned {
+                return Ok(None);
+            }
+            tx.execute("INSERT INTO node_credentials(token_hash,node_id,user_id,created_at) VALUES(?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))",params![hash,node_id,user_id])?;
+            tx.commit()?;
         } else {
+            if self.owner(node_id)?.as_deref() != Some(user_id) {
+                return Ok(None);
+            }
             self.credentials.insert(
                 hash,
                 NodeIdentity {
@@ -80,10 +93,14 @@ impl<'a> NodeCredentialsService<'a> {
     }
     pub fn resolve(&self, token: &str) -> rusqlite::Result<Option<NodeIdentity>> {
         let hash = digest(token);
-        let identity = match self.db {
+        match self.db {
+            // Resolve the credential and verify its owner in one SQLite snapshot.
+            // Separate queries could accept a credential revoked between the reads.
             Some(db) => db
                 .query_row(
-                    "SELECT user_id,node_id FROM node_credentials WHERE token_hash=?",
+                    "SELECT c.user_id,c.node_id FROM node_credentials c \
+                     JOIN nodes n ON n.node_id=c.node_id AND n.user_id=c.user_id \
+                     WHERE c.token_hash=?",
                     [hash],
                     |r| {
                         Ok(NodeIdentity {
@@ -92,23 +109,31 @@ impl<'a> NodeCredentialsService<'a> {
                         })
                     },
                 )
-                .optional()?,
-            None => self.credentials.get(&hash).cloned(),
-        };
-        if let Some(identity) = identity
-            && self.owner(&identity.node_id)?.as_deref() == Some(&identity.user_id)
-        {
-            Ok(Some(identity))
-        } else {
-            Ok(None)
+                .optional(),
+            None => Ok(self
+                .credentials
+                .get(&hash)
+                .filter(|identity| self.owners.get(&identity.node_id) == Some(&identity.user_id))
+                .cloned()),
         }
     }
+
     pub fn revoke(&mut self, node_id: &str, user_id: &str) -> rusqlite::Result<bool> {
-        if self.owner(node_id)?.as_deref() != Some(user_id) {
-            return Ok(false);
-        }
         if let Some(db) = self.db {
-            db.execute("DELETE FROM node_credentials WHERE node_id=?", [node_id])?;
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;
+            let owned: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM nodes WHERE node_id=? AND user_id=?)",
+                params![node_id, user_id],
+                |row| row.get(0),
+            )?;
+            if !owned {
+                return Ok(false);
+            }
+            tx.execute("DELETE FROM node_credentials WHERE node_id=?", [node_id])?;
+            tx.commit()?;
+        } else if self.owner(node_id)?.as_deref() != Some(user_id) {
+            return Ok(false);
         }
         self.credentials
             .retain(|_, credential| credential.node_id != node_id);

@@ -28,7 +28,6 @@ pub(crate) fn effect_permit() -> ApiResult<tokio::sync::OwnedSemaphorePermit> {
 }
 pub type RepositoryAutoAssignPort =
     Arc<dyn Fn(String, EffectCancellation) -> BoxFuture<'static, Result<(), String>> + Send + Sync>;
-pub type EventSink = Arc<dyn Fn(&str, Value) + Send + Sync>;
 pub type RepositoryEventSink = Arc<dyn Fn(&str, &str, Value) + Send + Sync>;
 #[derive(Clone, Debug)]
 pub struct GenerationRequest {
@@ -118,11 +117,6 @@ pub(crate) fn publish_repository(
 ) {
     if let Some(events) = events {
         events(owner, kind, v)
-    }
-}
-pub(crate) fn publish(events: &Option<EventSink>, kind: &str, value: Value) {
-    if let Some(events) = events {
-        events(kind, value);
     }
 }
 pub(crate) async fn generate(

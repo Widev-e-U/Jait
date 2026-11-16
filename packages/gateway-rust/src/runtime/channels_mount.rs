@@ -330,12 +330,33 @@ impl crate::routes::mcp_server::McpAuthenticator for McpBearerAuth {
 /// as chat, so consent, path confinement and cancellation are unchanged. Execution needs a
 /// caller-owned session; there is no default session and no caller-chosen root.
 struct ProjectMcpTools {
+    auth: crate::routes::auth::AuthState,
     consent: crate::security::consent_manager::ConsentManager,
     descriptors: Vec<crate::routes::mcp_server::McpToolDescriptor>,
 }
 
 impl ProjectMcpTools {
-    fn new(consent: crate::security::consent_manager::ConsentManager) -> Result<Self, String> {
+    async fn disabled_tools(
+        &self,
+        user_id: &str,
+    ) -> Result<std::collections::HashSet<String>, String> {
+        let settings_user = user_id.to_owned();
+        self.auth
+            .with_database(move |db| {
+                Ok(crate::services::users::UserService::new(db)
+                    .get_settings(&settings_user)?
+                    .disabled_tools
+                    .into_iter()
+                    .collect())
+            })
+            .await
+            .map_err(|_| "Could not load tool settings".to_string())
+    }
+
+    fn new(
+        auth: crate::routes::auth::AuthState,
+        consent: crate::security::consent_manager::ConsentManager,
+    ) -> Result<Self, String> {
         let descriptors = super::chat_tools::project_tool_definitions()?
             .iter()
             .map(|d| {
@@ -357,6 +378,7 @@ impl ProjectMcpTools {
             })
             .collect();
         Ok(Self {
+            auth,
             consent,
             descriptors,
         })
@@ -366,6 +388,21 @@ impl ProjectMcpTools {
 impl crate::routes::mcp_server::McpToolSource for ProjectMcpTools {
     fn list(&self) -> Vec<crate::routes::mcp_server::McpToolDescriptor> {
         self.descriptors.clone()
+    }
+    fn list_for_context<'a>(
+        &'a self,
+        ctx: &'a crate::routes::mcp_server::McpToolContext,
+    ) -> BoxFuture<'a, Result<Vec<crate::routes::mcp_server::McpToolDescriptor>, String>> {
+        Box::pin(async move {
+            let user_id = ctx.user_id.as_deref().ok_or("Authentication required")?;
+            let disabled = self.disabled_tools(user_id).await?;
+            Ok(self
+                .descriptors
+                .iter()
+                .filter(|tool| !crate::tools::tool_names::is_tool_disabled(&tool.name, &disabled))
+                .cloned()
+                .collect())
+        })
     }
     fn get(&self, name: &str) -> Option<crate::routes::mcp_server::McpToolDescriptor> {
         self.descriptors.iter().find(|d| d.name == name).cloned()
@@ -389,8 +426,14 @@ impl crate::routes::mcp_server::McpToolSource for ProjectMcpTools {
             if !project_root.is_absolute() {
                 return Err("Session project root is invalid".into());
             }
-            let (_, executor) =
-                super::chat_tools::project_tools(&user_id, &session_id, self.consent.clone())?;
+            let disabled_tools = self.disabled_tools(&user_id).await?;
+            let (_, executor) = super::chat_tools::project_tools_with_policy(
+                &user_id,
+                &session_id,
+                self.consent.clone(),
+                None,
+                disabled_tools,
+            )?;
             let context = crate::security::consent_executor::ToolExecutionContext {
                 user_id,
                 session_id,
@@ -426,7 +469,10 @@ pub fn mcp_routes(
 ) -> Result<axum::Router, String> {
     Ok(crate::routes::mcp_server::router(
         crate::routes::mcp_server::McpRoutes::new()
-            .with_tools(std::sync::Arc::new(ProjectMcpTools::new(consent)?))
+            .with_tools(std::sync::Arc::new(ProjectMcpTools::new(
+                auth.clone(),
+                consent,
+            )?))
             .with_auth(std::sync::Arc::new(McpBearerAuth {
                 auth: auth.clone(),
                 project_root,

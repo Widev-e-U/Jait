@@ -251,6 +251,13 @@ impl std::fmt::Debug for McpToolContext {
 pub trait McpToolSource: Send + Sync {
     /// All tools exposed to MCP, already filtered the way `list_for_mcp` filters.
     fn list(&self) -> Vec<McpToolDescriptor>;
+    /// Apply caller-specific visibility policy to the tool list.
+    fn list_for_context<'a>(
+        &'a self,
+        _ctx: &'a McpToolContext,
+    ) -> futures_util::future::BoxFuture<'a, Result<Vec<McpToolDescriptor>, String>> {
+        Box::pin(async move { Ok(self.list()) })
+    }
     /// Exact-name lookup using the internal dotted name.
     fn get(&self, name: &str) -> Option<McpToolDescriptor>;
     /// Runs one tool. Errors are surfaced as `isError` text, as in the TS route.
@@ -431,15 +438,18 @@ pub async fn handle_request(
             json!({ "jsonrpc": "2.0", "id": id, "result": result })
         }
         "tools/list" => {
-            let tools: Vec<Value> = source
-                .map(|s| {
-                    s.list()
-                        .into_iter()
-                        .filter(|t| tool_set.admits(t))
-                        .map(|t| t.to_mcp_tool())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let descriptors = match source {
+                Some(source) => match source.list_for_context(ctx).await {
+                    Ok(tools) => tools,
+                    Err(_) => return error(id, -32603, "Could not load tool settings"),
+                },
+                None => Vec::new(),
+            };
+            let tools: Vec<Value> = descriptors
+                .into_iter()
+                .filter(|t| tool_set.admits(t))
+                .map(|t| t.to_mcp_tool())
+                .collect();
             json!({ "jsonrpc": "2.0", "id": id, "result": { "tools": tools } })
         }
         "tools/call" => tools_call(id, source, ctx, tool_set, params).await,
@@ -543,8 +553,7 @@ x-jait-session-id.",
 
 struct SessionEntry {
     sender: mpsc::Sender<String>,
-    /// Owner stamp (TS tracks the authenticated user per client).
-    #[allow(dead_code)]
+    /// Authenticated owner at stream creation; anonymous adapters retain `None`.
     owner: Option<String>,
 }
 
@@ -610,6 +619,18 @@ impl SessionRegistry {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .contains_key(id)
+    }
+
+    fn owned_by(&self, id: &str, owner: Option<&str>, allow_anonymous: bool) -> bool {
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .is_some_and(|entry| match (entry.owner.as_deref(), owner) {
+                (Some(expected), Some(actual)) => expected == actual,
+                (None, None) => allow_anonymous,
+                _ => false,
+            })
     }
 
     pub fn len(&self) -> usize {
@@ -1045,6 +1066,12 @@ pub async fn post_mcp_messages(
         Ok(context) => context,
         Err(response) => return response,
     };
+    if !state
+        .sessions
+        .owned_by(client_id, context.user_id.as_deref(), state.auth.is_none())
+    {
+        return json_error(StatusCode::BAD_REQUEST, "Invalid or missing clientId");
+    }
     let tool_set = parse_tool_set(&query);
     let response = handle_request(
         &request,
@@ -1070,6 +1097,7 @@ mod tests {
         tools: Vec<McpToolDescriptor>,
         calls: StdMutex<Vec<(String, Value)>>,
         fail: bool,
+        fail_list: bool,
     }
 
     impl FakeTools {
@@ -1078,6 +1106,7 @@ mod tests {
                 tools,
                 calls: StdMutex::new(Vec::new()),
                 fail: false,
+                fail_list: false,
             }
         }
         fn failing() -> Self {
@@ -1090,6 +1119,18 @@ mod tests {
     impl McpToolSource for FakeTools {
         fn list(&self) -> Vec<McpToolDescriptor> {
             self.tools.clone()
+        }
+        fn list_for_context<'a>(
+            &'a self,
+            _ctx: &'a McpToolContext,
+        ) -> BoxFuture<'a, Result<Vec<McpToolDescriptor>, String>> {
+            Box::pin(async move {
+                if self.fail_list {
+                    Err("private settings error".into())
+                } else {
+                    Ok(self.list())
+                }
+            })
         }
         fn get(&self, name: &str) -> Option<McpToolDescriptor> {
             self.tools.iter().find(|t| t.name == name).cloned()
@@ -1291,6 +1332,23 @@ mod tests {
                 .starts_with("Jait gateway")
         );
         assert!(response.get("error").is_none());
+    }
+
+    #[tokio::test]
+    async fn tools_list_fails_closed_if_caller_policy_cannot_be_loaded() {
+        let mut fake = FakeTools::with(vec![McpToolDescriptor::new("fs.read")]);
+        fake.fail_list = true;
+        let response = handle_request(
+            &json!({"jsonrpc":"2.0", "id":1, "method":"tools/list"}),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
+        assert_eq!(response["error"]["code"], -32603);
+        assert!(response.get("result").is_none());
+        assert!(!response.to_string().contains("private settings error"));
     }
 
     #[tokio::test]
@@ -1623,6 +1681,85 @@ mod tests {
             "dropping the stream removes the session"
         );
         assert!(!registry.push(&id, "x".to_string()));
+    }
+
+    #[tokio::test]
+    async fn legacy_messages_reject_cross_owner_before_execution() {
+        struct HeaderAuth;
+        impl McpAuthenticator for HeaderAuth {
+            fn resolve<'a>(
+                &'a self,
+                headers: &'a HeaderMap,
+                _query: &'a HashMap<String, String>,
+            ) -> BoxFuture<'a, Result<McpToolContext, Response>> {
+                Box::pin(async move {
+                    Ok(McpToolContext {
+                        user_id: headers
+                            .get("x-test-user")
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_owned),
+                        session_id: Some("owned-session".into()),
+                        ..Default::default()
+                    })
+                })
+            }
+        }
+        let tools = Arc::new(FakeTools::with(vec![McpToolDescriptor::new("shell.exec")]));
+        let state = McpRoutes::new()
+            .with_auth(Arc::new(HeaderAuth))
+            .with_tools(tools.clone());
+        let (id, mut frames) = state.sessions.register(Some("owner".into())).unwrap();
+        let uri: axum::http::Uri = format!("/mcp/messages?clientId={id}").parse().unwrap();
+        let request = call_request("shell_exec").to_string();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-test-user", "other".parse().unwrap());
+        let denied = post_mcp_messages(
+            State(state.clone()),
+            headers.clone(),
+            uri.clone(),
+            Body::from(request.clone()),
+        )
+        .await;
+        assert_eq!(denied.status(), StatusCode::BAD_REQUEST);
+        assert!(tools.calls.lock().unwrap().is_empty());
+        assert!(matches!(
+            frames.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+
+        headers.remove("x-test-user");
+        let anonymous = post_mcp_messages(
+            State(state.clone()),
+            headers.clone(),
+            uri.clone(),
+            Body::from(request.clone()),
+        )
+        .await;
+        assert_eq!(anonymous.status(), StatusCode::BAD_REQUEST);
+        assert!(tools.calls.lock().unwrap().is_empty());
+
+        headers.insert("x-test-user", "owner".parse().unwrap());
+        let accepted = post_mcp_messages(State(state), headers, uri, Body::from(request)).await;
+        assert_eq!(accepted.status(), StatusCode::ACCEPTED);
+        assert_eq!(tools.calls.lock().unwrap().len(), 1);
+        assert!(frames.recv().await.unwrap().contains("done"));
+    }
+
+    #[tokio::test]
+    async fn legacy_messages_allow_anonymous_when_no_authenticator_is_wired() {
+        let state = McpRoutes::new();
+        let (id, mut frames) = state.sessions.register(None).unwrap();
+        let uri = format!("/mcp/messages?clientId={id}").parse().unwrap();
+        let request = json!({"jsonrpc":"2.0", "id":1, "method":"ping"});
+        let response = post_mcp_messages(
+            State(state),
+            HeaderMap::new(),
+            uri,
+            Body::from(request.to_string()),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        assert!(frames.recv().await.unwrap().contains("result"));
     }
 
     #[tokio::test]

@@ -177,7 +177,7 @@ pub async fn filter_owned_event(
                 }
                 Ok(Some(json!({"type":"consent.resolved", "sessionId":session_id, "payload":&*decision})))
             }
-            ConsentQueueEvent::SnapshotRequired => {
+            ConsentQueueEvent::SnapshotRequired | ConsentQueueEvent::FinalizationComplete => {
                 Err("consent event recovery required".into())
             }
         }

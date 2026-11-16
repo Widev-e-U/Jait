@@ -1,10 +1,9 @@
 //! Delivers consent queue transitions to WebSocket clients.
 //!
-//! Frames go through `broadcast_to_session`, so only clients that are bound to the request's
-//! session and still authorized for it receive them. The Node gateway broadcast to everyone;
-//! this does not. Pending requests are replayed at bridge startup. Lag recovery remains
-//! incomplete: a pending-only replay cannot restore missed decisions, and re-subscribing
-//! after that replay can miss a transition. Clients need a separate reconciliation path.
+//! Events are scoped to currently authorized session owners. If the bounded
+//! queue loses a transition, disconnect clients and re-establish the subscription
+//! before releasing the snapshot ordering lock. Reconnecting clients reconcile
+//! their pending state through the normal snapshot and HTTP refresh paths.
 use crate::{
     security::consent_manager::{ConsentManager, ConsentQueueEvent},
     ws::WsHub,
@@ -28,7 +27,7 @@ pub fn spawn(consent: ConsentManager, hub: Arc<WsHub>) -> Result<(), &'static st
             if let Some(pending) = consent.get_request(&identity.id) {
                 let request = pending.snapshot();
                 if request.status == crate::security::consent_manager::ConsentStatus::Pending {
-                    hub.broadcast_to_session(
+                    hub.broadcast_consent_to_owners(
                         &request.session_id,
                         "consent.required",
                         json!(request),
@@ -51,7 +50,7 @@ pub fn spawn(consent: ConsentManager, hub: Arc<WsHub>) -> Result<(), &'static st
                         if consent.get_request(&request.id).is_none() {
                             continue;
                         }
-                        hub.broadcast_to_session(
+                        hub.broadcast_consent_to_owners(
                             &request.session_id,
                             "consent.required",
                             json!(request.as_ref()),
@@ -61,31 +60,41 @@ pub fn spawn(consent: ConsentManager, hub: Arc<WsHub>) -> Result<(), &'static st
                         session_id,
                         decision,
                     }) => {
-                        hub.broadcast_to_session(
+                        hub.broadcast_consent_to_owners(
                             &session_id,
                             "consent.resolved",
                             json!(decision.as_ref()),
                         );
                     }
+                    Ok(ConsentQueueEvent::FinalizationComplete) => {}
                     Ok(ConsentQueueEvent::SnapshotRequired) | Err(RecvError::Lagged(_)) => {
-                        for pending in consent.list_pending(None) {
-                            let request = pending.snapshot();
-                            hub.broadcast_to_session(
-                                &request.session_id,
-                                "consent.required",
-                                json!(request),
-                            );
-                        }
+                        // A pending-only replay cannot remove decisions lost in the gap.
+                        // Keep new snapshots behind this lock until a fresh receiver is
+                        // installed, then clients can reconnect and reconcile safely.
+                        hub.disconnect_for_reconciliation();
                         break;
                     }
                     Err(RecvError::Closed) => return,
                 }
             }
             drop(events);
-            let Ok((_, receiver)) = consent.try_subscribe_pending_changes() else {
-                return;
-            };
-            events = receiver;
+            // The previous lock guard was released by `break`, so reacquire it
+            // before installing the receiver. Disconnect again to catch clients
+            // admitted in that interval; their next snapshot waits for this lock.
+            let _order = hub.consent_order.lock().await;
+            hub.disconnect_for_reconciliation();
+            loop {
+                match consent.try_subscribe_pending_changes() {
+                    Ok((_, receiver)) => {
+                        events = receiver;
+                        break;
+                    }
+                    Err(_) => tokio::select! {
+                        _ = shutdown.recv() => return,
+                        _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {},
+                    },
+                }
+            }
         }
     });
     Ok(())
@@ -169,6 +178,213 @@ mod tests {
             spawn(ConsentManager::default(), hub),
             Err("websocket hub stopped")
         );
+    }
+
+    #[tokio::test]
+    async fn failed_or_abandoned_finalization_disconnects_and_keeps_recovery_closed() {
+        use crate::security::consent_manager::{ConsentManagerOptions, DecisionVia};
+
+        for abandoned in [false, true] {
+            let consent = ConsentManager::new(ConsentManagerOptions {
+                on_decision: (!abandoned).then(|| Arc::new(|_| Err("observer failed".into())) as _),
+                ..Default::default()
+            });
+            let verifier = StaticTokenVerifier::new().with_token(
+                "fixture",
+                WsIdentity {
+                    user_id: "owner".into(),
+                    session_id: None,
+                    expires_at: u64::MAX,
+                },
+            );
+            let hub = Arc::new(WsHub::new(WsHubConfig {
+                token_verifier: Arc::new(verifier),
+                authorizer: Some(Arc::new(SessionAuthority)),
+                pending_consents: Some(consent.clone()),
+                ..Default::default()
+            }));
+            let (server, mut client) = tokio::io::duplex(1 << 16);
+            let task_hub = hub.clone();
+            let connection = tokio::spawn(async move {
+                task_hub
+                    .serve_upgraded(server, Some("fixture".into()))
+                    .await
+            });
+            assert_eq!(next(&mut client).await["type"], "session.created");
+            spawn(consent.clone(), hub.clone()).unwrap();
+            let pending = consent.request_consent(request("failure")).unwrap();
+            assert_eq!(next(&mut client).await["type"], "consent.required");
+            if abandoned {
+                let claim = consent
+                    .claim_for_session(
+                        &pending.id,
+                        "session",
+                        false,
+                        DecisionVia::Click,
+                        None,
+                        consent.prepare_decision_time().unwrap(),
+                    )
+                    .unwrap()
+                    .unwrap();
+                drop(claim);
+            } else {
+                assert!(consent.approve(&pending.id, None, None).is_err());
+            }
+            tokio::time::timeout(Duration::from_secs(3), connection)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert!(consent.pending_snapshot().is_err());
+            assert!(consent.try_subscribe_pending_changes().is_err());
+            hub.stop();
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn lag_disconnects_clients_and_reconnect_reconciles_then_receives_events() {
+        let consent = ConsentManager::default();
+        let verifier = StaticTokenVerifier::new().with_token(
+            "fixture",
+            WsIdentity {
+                user_id: "owner".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            token_verifier: Arc::new(verifier),
+            authorizer: Some(Arc::new(SessionAuthority)),
+            pending_consents: Some(consent.clone()),
+            ..Default::default()
+        }));
+        let (server, mut old_client) = tokio::io::duplex(1 << 16);
+        let task_hub = hub.clone();
+        let old_connection = tokio::spawn(async move {
+            task_hub
+                .serve_upgraded(server, Some("fixture".into()))
+                .await
+        });
+        assert_eq!(next(&mut old_client).await["type"], "session.created");
+        spawn(consent.clone(), hub.clone()).unwrap();
+        // Overflow the 64-event queue before this single-thread runtime polls it.
+        for n in 0..70 {
+            let pending = consent
+                .request_consent(request(&format!("lag-{n}")))
+                .unwrap();
+            assert!(consent.approve(&pending.id, None, None).unwrap());
+        }
+        tokio::time::timeout(Duration::from_secs(3), old_connection)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let (server, mut client) = tokio::io::duplex(1 << 16);
+        let task_hub = hub.clone();
+        let connection = tokio::spawn(async move {
+            task_hub
+                .serve_upgraded(server, Some("fixture".into()))
+                .await
+        });
+        assert_eq!(next(&mut client).await["type"], "session.created");
+        write_client_frame(
+            &mut client,
+            OpCode::Text,
+            br#"{"type":"resource.subscribe","payload":{"resource":"root:/pending-consents"}}"#,
+            [1, 2, 3, 4],
+        )
+        .await
+        .unwrap();
+        let snapshot = next(&mut client).await;
+        assert_eq!(snapshot["type"], "consent.pending-snapshot");
+        assert!(
+            snapshot["payload"]["requests"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        let pending = consent.request_consent(request("after-lag")).unwrap();
+        let required = next(&mut client).await;
+        assert_eq!(required["type"], "consent.required");
+        assert_eq!(required["payload"]["id"], pending.id);
+        hub.stop();
+        client.shutdown().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), connection)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unbound_owner_receives_events_but_foreign_user_does_not() {
+        let consent = ConsentManager::default();
+        let verifier = StaticTokenVerifier::new()
+            .with_token(
+                "owner",
+                WsIdentity {
+                    user_id: "owner".into(),
+                    session_id: None,
+                    expires_at: u64::MAX,
+                },
+            )
+            .with_token(
+                "foreign",
+                WsIdentity {
+                    user_id: "foreign".into(),
+                    session_id: None,
+                    expires_at: u64::MAX,
+                },
+            );
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            token_verifier: Arc::new(verifier),
+            authorizer: Some(Arc::new(SessionAuthority)),
+            ..Default::default()
+        }));
+        let (owner_server, mut owner) = tokio::io::duplex(1 << 16);
+        let task_hub = hub.clone();
+        let owner_task = tokio::spawn(async move {
+            task_hub
+                .serve_upgraded(owner_server, Some("owner".into()))
+                .await
+        });
+        let (foreign_server, mut foreign) = tokio::io::duplex(1 << 16);
+        let task_hub = hub.clone();
+        let foreign_task = tokio::spawn(async move {
+            task_hub
+                .serve_upgraded(foreign_server, Some("foreign".into()))
+                .await
+        });
+        assert_eq!(next(&mut owner).await["type"], "session.created");
+        assert_eq!(next(&mut foreign).await["type"], "session.created");
+        spawn(consent.clone(), hub.clone()).unwrap();
+        let pending = consent.request_consent(request("background")).unwrap();
+        let required = next(&mut owner).await;
+        assert_eq!(required["type"], "consent.required");
+        assert_eq!(required["payload"]["id"], pending.id);
+        assert!(consent.approve(&pending.id, None, None).unwrap());
+        assert_eq!(next(&mut owner).await["type"], "consent.resolved");
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                read_frame(&mut foreign, 1 << 20)
+            )
+            .await
+            .is_err()
+        );
+        hub.stop();
+        owner.shutdown().await.unwrap();
+        foreign.shutdown().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(3), owner_task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), foreign_task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
     }
 
     #[tokio::test(flavor = "current_thread")]

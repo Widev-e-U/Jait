@@ -1,6 +1,6 @@
 /** Test boundary fixtures only; Rust owns the scenarios and assertions. */
 import { selectVisibleBrowserPage } from '../../../packages/gateway/src/surfaces/browser.ts';
-import { clickWithVisibleCursor, type CursorPage } from '../../../packages/gateway/src/surfaces/browser-cursor.cjs';
+import { clickWithVisibleCursor, guardedFieldAction, type CursorPage } from '../../../packages/gateway/src/surfaces/browser-cursor.cjs';
 
 type PageState = { id: string; visible?: boolean; focused?: boolean; closed?: boolean; fails?: boolean };
 type Call = {
@@ -14,6 +14,9 @@ type Call = {
   cancelAfterMoves?: number;
   waitError?: string;
   clickError?: string;
+  fieldOperation?: "fill" | "select";
+  guardCount?: number;
+  guardMatches?: boolean[];
 };
 
 export async function dispatch(call: Call) {
@@ -31,6 +34,42 @@ export async function dispatch(call: Call) {
     const fallback = pages.find(page => page.id === call.fallback);
     if (!fallback) throw new Error('Missing fallback fixture');
     return { selected: (await selectVisibleBrowserPage(pages, fallback)).id, inspected };
+  }
+  if (call.op === 'browsercontrol.fieldguard') {
+    const events: string[] = [];
+    const handle = {
+      evaluate: async () => { events.push('check'); return call.guardMatches?.[0] ?? true; },
+      fill: async () => { events.push('fill'); },
+      selectOption: async () => { events.push('select'); },
+      dispose: async () => { events.push('dispose'); },
+    };
+    const page = { locator: () => ({ count: async () => call.guardCount ?? 1, elementHandle: async () => handle }) } as unknown as CursorPage;
+    const controller = new AbortController();
+    if (call.cancelled) controller.abort();
+    try {
+      await guardedFieldAction(page, '#field', 'value', call.fieldOperation ?? 'fill', controller.signal, { documentUrl: 'https://example.test/', documentTimeOrigin: 1, tagName: 'input', name: 'Field', text: '' });
+      return { events, error: null };
+    } catch (error) { return { events, error: error instanceof Error ? error.message : String(error) }; }
+  }
+  if (call.op === 'browsercontrol.guard') {
+    const events: string[] = [];
+    let checks = 0;
+    const handle = {
+      evaluate: async () => { events.push('check'); return (call.guardMatches ?? [true, true])[checks++] ?? false; },
+      scrollIntoViewIfNeeded: async () => { events.push('scroll'); },
+      boundingBox: async () => null,
+      click: async () => { events.push('click'); },
+      dispose: async () => { events.push('dispose'); },
+    };
+    const page = {
+      locator: () => ({ count: async () => call.guardCount ?? 1, elementHandle: async () => handle }),
+      click: async () => { events.push('unprotected-click'); },
+      evaluate: async () => undefined,
+    } as unknown as CursorPage;
+    try {
+      await clickWithVisibleCursor(page, '#target', undefined, { documentUrl: 'https://example.test/', documentTimeOrigin: 1, tagName: 'button', name: 'Save', text: 'Save' });
+      return { events, error: null };
+    } catch (error) { return { events, error: error instanceof Error ? error.message : String(error) }; }
   }
   if (call.op !== 'browsercontrol.cursor') throw new Error('Unknown browser control operation');
   const events: Record<string, unknown>[] = [];

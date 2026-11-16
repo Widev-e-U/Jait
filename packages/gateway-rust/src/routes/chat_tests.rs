@@ -1111,7 +1111,7 @@ async fn stream_delivers_live_events_published_after_subscribe() {
 #[tokio::test]
 async fn snapshot_retries_when_session_lease_completes_during_projection() {
     let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
-    let lease = fixture.routes.admit("owner", "session").unwrap();
+    let lease = fixture.routes.admit("owner", "session", false).unwrap();
     let started = Arc::new(tokio::sync::Barrier::new(2));
     let resume = Arc::new(tokio::sync::Barrier::new(2));
     let attempts = Arc::new(AtomicUsize::new(0));
@@ -1175,7 +1175,12 @@ async fn independent_session_activity_does_not_retry_snapshot() {
     };
     started.wait().await;
     for _ in 0..4 {
-        drop(fixture.routes.admit("owner", "other-session").unwrap());
+        drop(
+            fixture
+                .routes
+                .admit("owner", "other-session", false)
+                .unwrap(),
+        );
     }
     resume.wait().await;
     let value = task.await.unwrap();
@@ -1214,7 +1219,7 @@ async fn snapshot_detects_a_complete_lease_between_projection_boundaries() {
         })
     };
     started.wait().await;
-    drop(fixture.routes.admit("owner", "session").unwrap());
+    drop(fixture.routes.admit("owner", "session", false).unwrap());
     resume.wait().await;
     let value = task.await.unwrap();
     assert_eq!(attempts.load(Ordering::SeqCst), 2);
@@ -1230,7 +1235,7 @@ async fn repeated_same_session_changes_exhaust_snapshot_retries() {
     let attempts = AtomicUsize::new(0);
     let result = consistent_snapshot(&fixture.routes.active, "owner", "session", || {
         attempts.fetch_add(1, Ordering::SeqCst);
-        drop(routes.admit("owner", "session").unwrap());
+        drop(routes.admit("owner", "session", false).unwrap());
         async { Ok::<_, ()>(json!({"seq": 0})) }
     })
     .await
@@ -1244,11 +1249,11 @@ async fn repeated_same_session_changes_exhaust_snapshot_retries() {
 #[tokio::test]
 async fn close_cancels_admitted_turn_and_rejects_new_turns() {
     let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
-    let lease = fixture.routes.admit("owner", "session").unwrap();
+    let lease = fixture.routes.admit("owner", "session", false).unwrap();
     let cancellation = lease.cancellation.clone();
     fixture.routes.close();
     assert!(cancellation.is_cancelled());
-    assert!(fixture.routes.admit("owner", "other").is_err());
+    assert!(fixture.routes.admit("owner", "other", false).is_err());
     drop(lease);
     fixture.routes.shutdown().await.unwrap();
     let _ = fixture.shutdown.send(());
@@ -1269,12 +1274,30 @@ async fn device_change_and_turn_admission_are_exclusive_per_session() {
         .unwrap();
     assert_eq!(blocked.status(), 409);
     assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
-    let other = fixture.routes.admit("owner", "other-session").unwrap();
+    let other = fixture
+        .routes
+        .admit("owner", "other-session", false)
+        .unwrap();
     drop(other);
     drop(change);
-    let turn = fixture.routes.admit("owner", "session").unwrap();
+    let turn = fixture.routes.admit("owner", "session", false).unwrap();
     assert!(fixture.routes.device_change_lease("session").is_none());
     drop(turn);
     assert!(fixture.routes.device_change_lease("session").is_some());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn halt_cancels_only_the_owners_thread_leases() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let thread = fixture.routes.admit("owner", "thread", true).unwrap();
+    let chat = fixture.routes.admit("owner", "chat", false).unwrap();
+    let other = fixture.routes.admit("other", "other-thread", true).unwrap();
+    fixture.routes.cancel_owner_threads("owner");
+    assert!(thread.cancellation.is_cancelled());
+    assert!(!chat.cancellation.is_cancelled());
+    assert!(!other.cancellation.is_cancelled());
+    drop((thread, chat, other));
+    assert!(fixture.routes.active.turns.lock().unwrap().is_empty());
     fixture.finish().await;
 }

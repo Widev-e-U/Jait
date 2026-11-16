@@ -32,7 +32,7 @@ use crate::{
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     num::{NonZeroU16, NonZeroUsize},
     path::{Path, PathBuf},
     rc::Rc,
@@ -253,6 +253,16 @@ pub fn project_tools_with_questions(
     consent: ConsentManager,
     questions: Option<crate::services::input_requests::UserQuestionService>,
 ) -> Result<(Vec<TurnTool>, Arc<ConsentAwareExecutor>), String> {
+    project_tools_with_policy(user_id, session_id, consent, questions, HashSet::new())
+}
+
+pub fn project_tools_with_policy(
+    user_id: &str,
+    session_id: &str,
+    consent: ConsentManager,
+    questions: Option<crate::services::input_requests::UserQuestionService>,
+    disabled_tools: HashSet<String>,
+) -> Result<(Vec<TurnTool>, Arc<ConsentAwareExecutor>), String> {
     let read_definition = metadata("read")
         .ok_or("file.read definition missing")?
         .clone();
@@ -285,6 +295,8 @@ pub fn project_tools_with_questions(
     if questions.is_some() {
         turn_tools.push(turn_tool(crate::tools::user_ask::metadata(), "user.ask"));
     }
+    turn_tools
+        .retain(|tool| !crate::tools::tool_names::is_tool_disabled(&tool.name, &disabled_tools));
     let terminal_definition_for_registry = terminal_definition.clone();
     let (handle_tx, handle_rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
@@ -439,7 +451,8 @@ pub fn project_tools_with_questions(
         consent,
         Arc::new(NoTrust),
         delegate,
-    );
+    )
+    .with_disabled_tools(disabled_tools);
     Ok((turn_tools, Arc::new(executor)))
 }
 
@@ -449,6 +462,41 @@ mod question_integration_tests {
     use crate::security::consent_executor::{
         ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext,
     };
+
+    #[tokio::test]
+    async fn disabled_tool_is_rejected_before_consent_or_dispatch() {
+        let consent = ConsentManager::default();
+        let (tools, executor) = project_tools_with_policy(
+            "owner",
+            "session",
+            consent.clone(),
+            None,
+            HashSet::from(["terminal.run".to_string()]),
+        )
+        .unwrap();
+        assert!(!tools.iter().any(|tool| tool.name == "terminal.run"));
+        let context = ToolExecutionContext {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            action_id: "action".into(),
+            project_root: PathBuf::from("/"),
+            origin: ExecutionOrigin::Agent,
+            runtime_mode: RuntimeMode::Guarded,
+            cancellation: Default::default(),
+            on_output: None,
+        };
+        let result = executor
+            .execute(
+                "terminal.run",
+                &json!({"command":"true"}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!result.ok);
+        assert!(result.message.contains("disabled"));
+    }
 
     #[tokio::test]
     async fn settings_dispatcher_shares_owner_scoped_question_service() {

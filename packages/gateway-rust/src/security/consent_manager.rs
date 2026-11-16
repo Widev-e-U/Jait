@@ -216,6 +216,8 @@ pub enum ConsentQueueEvent {
         decision: Arc<ConsentDecision>,
     },
     SnapshotRequired,
+    /// A decision finished successfully; consumers waiting to reconcile may retry.
+    FinalizationComplete,
 }
 // Bound each retained broadcast payload by its serialized size. The channel
 // retains at most 64 events; oversize or unserializable transitions require
@@ -342,10 +344,14 @@ impl Drop for DecisionFinalization {
         if !self.finalized {
             state.unrecoverable_transition = true;
         }
-        // Publish only after recovery can observe the completed transition.
-        let _ = state
-            .pending_changes
-            .send(ConsentQueueEvent::SnapshotRequired);
+        // Wake recovery waiters after finalization. A successful, already
+        // published decision does not itself require clients to disconnect.
+        let event = if self.finalized {
+            ConsentQueueEvent::FinalizationComplete
+        } else {
+            ConsentQueueEvent::SnapshotRequired
+        };
+        let _ = state.pending_changes.send(event);
     }
 }
 /// Result for a previously observed pending request. Callers must authenticate
@@ -2292,7 +2298,7 @@ mod clock_failure_tests {
         claim.finalize().unwrap();
         assert!(matches!(
             events.try_recv(),
-            Ok(ConsentQueueEvent::SnapshotRequired)
+            Ok(ConsentQueueEvent::FinalizationComplete)
         ));
         assert!(matches!(
             &manager.reconcile_observed(&[handle.id]).unwrap()[0],
@@ -2369,7 +2375,7 @@ mod clock_failure_tests {
         ));
         assert!(matches!(
             events.try_recv(),
-            Ok(ConsentQueueEvent::SnapshotRequired)
+            Ok(ConsentQueueEvent::FinalizationComplete)
         ));
         assert!(
             matches!(&manager.reconcile_observed(&[handle.id]).unwrap()[0],
@@ -2479,7 +2485,7 @@ mod clock_failure_tests {
         ));
         assert!(matches!(
             changes.try_recv(),
-            Ok(ConsentQueueEvent::SnapshotRequired)
+            Ok(ConsentQueueEvent::FinalizationComplete)
         ));
         let claim = manager.claim_cancelled(&second.id).unwrap();
         assert!(changes.try_recv().is_ok());

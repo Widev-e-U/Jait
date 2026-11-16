@@ -12,7 +12,7 @@ use crate::{
         consent_executor::{ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext},
         consent_manager::ConsentManager,
     },
-    services::sessions::SessionService,
+    services::{sessions::SessionService, users::UserService},
 };
 use axum::{
     Router,
@@ -128,11 +128,25 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
     if !project_root.is_absolute() {
         return auth::response(409, json!({"error": "SESSION_PROJECT_ROOT_INVALID"}));
     }
-    let (_, executor) =
-        match chat_tools::project_tools(&user.id, &session_id, state.consent.clone()) {
-            Ok(pair) => pair,
-            Err(_) => return auth::internal_error(),
-        };
+    let user_id = user.id.clone();
+    let disabled_tools = match state
+        .auth
+        .with_database(move |db| Ok(UserService::new(db).get_settings(&user_id)?.disabled_tools))
+        .await
+    {
+        Ok(disabled_tools) => disabled_tools.into_iter().collect(),
+        Err(_) => return auth::internal_error(),
+    };
+    let (_, executor) = match chat_tools::project_tools_with_policy(
+        &user.id,
+        &session_id,
+        state.consent.clone(),
+        None,
+        disabled_tools,
+    ) {
+        Ok(pair) => pair,
+        Err(_) => return auth::internal_error(),
+    };
     let context = ToolExecutionContext {
         user_id: user.id,
         session_id,

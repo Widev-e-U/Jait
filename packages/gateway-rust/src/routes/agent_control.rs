@@ -38,6 +38,8 @@ pub struct AgentControlRoutes {
     pub auth: AuthState,
     pub clock: Clock,
     pub stop_running: StopAgents,
+    /// Invoked immediately after persisting halt on the database worker.
+    pub on_halt_persisted: Arc<dyn Fn(&str) + Send + Sync>,
     pub on_change: StateChanged,
     pub audit: Option<ControlAudit>,
 }
@@ -47,6 +49,7 @@ impl AgentControlRoutes {
             auth,
             clock: default_clock(),
             stop_running: Arc::new(|_| Box::pin(async { Ok(AgentStopResult::Count(0.0)) })),
+            on_halt_persisted: Arc::new(|_| {}),
             on_change: Arc::new(|_, _| Ok(())),
             audit: None,
         }
@@ -126,12 +129,14 @@ async fn handle(State(state): State<AgentControlRoutes>, request: Request) -> Re
         };
         let owner = user.id.clone();
         let clock = state.clock.clone();
+        let on_halt_persisted = state.on_halt_persisted.clone();
         if let Err(error) = state
             .auth
             .with_database(move |db| {
                 let now = iso(clock()).map_err(std::io::Error::other)?;
                 AgentControlService::new(db, &|| now.clone())
                     .persist_halt(&owner, reason.as_deref())?;
+                on_halt_persisted(&owner);
                 Ok(())
             })
             .await

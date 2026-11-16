@@ -465,7 +465,8 @@ impl MaintenanceService {
         job_id: Option<String>,
         limit: usize,
     ) -> Result<Vec<MaintenanceRunRecord>, String> {
-        let limit = limit.clamp(1, 100);
+        let limit = limit.clamp(1, 200);
+        let job_id = job_id.filter(|id| !id.is_empty());
         let records=self.0.db.run(move|db|{let mut stmt=db.prepare("SELECT id,job_id,status,triggered_by,output,error,plan_id,started_at,completed_at FROM scheduled_job_runs WHERE (?1 IS NULL OR job_id=?1) ORDER BY started_at DESC,id LIMIT ?2")?;Ok(stmt.query_map(params![job_id,limit as i64],run_record)?.collect::<Result<Vec<_>,_>>()?)}).await.map_err(|e|e.to_string())?;
         for record in &records {
             self.0.authority.read_run(record)?;

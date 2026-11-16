@@ -74,6 +74,19 @@ impl<'a> AssistantProfileService<'a> {
         self.create_with_id(&uuidv7().to_string(), user, input)
     }
     pub fn create_with_id(&self, id: &str, user: &str, input: &Value) -> rusqlite::Result<Value> {
+        let tx = rusqlite::Transaction::new_unchecked(
+            self.db,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
+        let service = AssistantProfileService {
+            db: &tx,
+            time: self.time,
+        };
+        let result = service.create_with_id_inner(id, user, input)?;
+        tx.commit()?;
+        Ok(result)
+    }
+    fn create_with_id_inner(&self, id: &str, user: &str, input: &Value) -> rusqlite::Result<Value> {
         let now = self.storage().now()?;
         let default = input["isDefault"] == true || self.list(Some(user))?.is_empty();
         if default {
@@ -84,6 +97,19 @@ impl<'a> AssistantProfileService<'a> {
         Ok(self.get(id, Some(user))?.expect("inserted profile"))
     }
     pub fn update(&self, id: &str, user: &str, input: &Value) -> rusqlite::Result<Option<Value>> {
+        let tx = rusqlite::Transaction::new_unchecked(
+            self.db,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
+        let service = AssistantProfileService {
+            db: &tx,
+            time: self.time,
+        };
+        let result = service.update_inner(id, user, input)?;
+        tx.commit()?;
+        Ok(result)
+    }
+    fn update_inner(&self, id: &str, user: &str, input: &Value) -> rusqlite::Result<Option<Value>> {
         if self.get(id, Some(user))?.is_none() {
             return Ok(None);
         }
@@ -146,6 +172,19 @@ impl<'a> AssistantProfileService<'a> {
         self.get(id, Some(user))
     }
     pub fn delete(&self, id: &str, user: &str) -> rusqlite::Result<bool> {
+        let tx = rusqlite::Transaction::new_unchecked(
+            self.db,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
+        let service = AssistantProfileService {
+            db: &tx,
+            time: self.time,
+        };
+        let result = service.delete_inner(id, user)?;
+        tx.commit()?;
+        Ok(result)
+    }
+    fn delete_inner(&self, id: &str, user: &str) -> rusqlite::Result<bool> {
         let Some(existing) = self.get(id, Some(user))? else {
             return Ok(false);
         };

@@ -1,5 +1,77 @@
 # Gateway migration to Rust
 
+## Direct tool execution policy compatibility — 2026-11-16
+
+The authenticated Rust `/api/tools/execute` path reads the caller's current
+`disabled_tools` setting and denies a disabled tool before execution; if settings
+cannot be loaded, it fails closed. The TypeScript route does not itself consult
+this setting before handing off to its executor. This is an intentional Rust
+security tightening: direct API clients that previously invoked a tool disabled
+in Settings may now receive an `ok: false` result until the user re-enables it.
+The Settings UI writes the disabled names through `/api/auth/settings/tools`.
+
+`binary_tool_policy` exercises enable, disable, and re-enable through the composed
+binary. `binary_agent_tool_policy` checks that an agent-disabled tool is also
+denied to the direct API and succeeds again after re-enabling. These tests do not
+establish compatibility for all external clients or remote-node execution.
+
+
+## MCP tool discovery compatibility decision — 2026-11-15
+
+Rust applies the authenticated user's current `disabled_tools` setting to each
+MCP `tools/list` request and fails closed if the setting cannot be read. The
+TypeScript `tools/list` branch filters by MCP tool set but does not consult this
+setting. This intentional difference keeps discovery consistent with Rust's
+execution policy. Tool names are filtered before their dotted names are mapped
+to MCP underscore names. A client's cached list can become stale: the server
+currently advertises `listChanged: false`, so clients must request the list again
+when settings change; execution checks the current setting independently.
+
+The composed-application test `mcp_enforces_each_owners_live_disabled_tool_settings`
+checks owner isolation and disable/re-enable behavior. The MCP dispatcher test
+`tools_list_fails_closed_if_caller_policy_cannot_be_loaded` checks settings-read
+failure. External client caching and notifications still need review before the
+replacement gate. These checks have not been independently mapped to inventory
+parity.
+
+## Legacy MCP SSE ownership compatibility decision — 2026-11-15
+
+Rust binds each `GET /mcp/sse` stream's `clientId` to its authenticated user
+and requires the same user on `POST /mcp/messages`, before dispatching a tool
+or delivering a response. An authenticated mismatch receives the same 400 invalid-client response as an
+unknown ID; an authentication failure is returned by the authenticator. Anonymous
+POSTs to anonymous streams are accepted only when no authenticator is configured. This intentionally tightens the TypeScript behavior: its legacy SSE
+route stores only the client ID and writer, checks that the ID exists, and
+resolves the POST's context independently (`packages/gateway/src/routes/mcp-server.ts`,
+GET and POST handlers). Merely knowing a stream ID should not let a different
+user route a response into that stream or invoke a tool in that context.
+
+Client evidence is limited but concrete: the Node gateway's outbound MCP bridge
+constructs `SSEClientTransport(new URL(config.url))` for configured SSE servers
+(`packages/gateway/src/tools/mcp-bridge.ts`). The installed MCP SDK 1.32.1's SSE
+transport uses its common headers on both the EventSource GET and endpoint POST,
+and follows the endpoint announced by the stream only when it has the same
+origin. A client that authenticates both legs as the same user is compatible in
+principle; a client that changes identity or sends credentials only on GET will
+now fail. The bridge does not supply explicit transport options here. We have not
+established how every external CLI configures its credentials.
+
+The focused Rust router tests cover owner checks before dispatch and anonymous
+use without an authenticator. `packages/gateway-rust/tests/mcp_legacy_sdk.test.cjs`
+also starts the composed Rust executable with isolated storage and uses SDK 1.32.1
+with real owner credentials for SSE GET and POST. It receives tool lists, rejects
+separate POSTs with missing credentials or another user's credentials, confirms
+the owner stream remains usable, and checks the client ID is removed after
+closing. It checks live discovery filtering, isolation between two users, and
+re-enabling. A cached `file_read` call succeeds before disablement, is denied
+while disabled without returning file content, and succeeds after re-enabling. Run it after building the executable with `cargo build --manifest-path
+packages/gateway-rust/Cargo.toml --bin jait-gateway` and `node --test
+packages/gateway-rust/tests/mcp_legacy_sdk.test.cjs` from the repository root.
+This is one SDK and configuration; relevant external CLI credential flows and
+client caching remain to be verified. Do not count this as inventory parity until
+independently reviewed.
+
+
 ## Native transport and retention integration — 2026-10-27
 
 The registered library passes **62 focused checks** across native email
@@ -1907,3 +1979,26 @@ paused-action and visible-tab regressions documented in
 refresh adds no native component count or production-readiness credit. UI clients
 can collapse both prompts into a single line without losing selections, custom
 text, or their chat draft.
+
+## Plan event audience during migration
+
+The Node plan routes broadcast `plan.created`, `plan.updated`, and
+`plan.deleted` to all connected WebSocket clients. The Rust composition emits
+these events only to authenticated connections belonging to the plan's owner,
+matching the plan HTTP ownership boundary. This is an intentional audience
+restriction to avoid exposing plan contents to other users; callers relying on
+cross-user broadcasts need a separately authorized sharing mechanism. The
+composed-binary plan test checks the owner receives the event and another user
+does not. Plan task generation still requires a production generator binding;
+this event wiring does not establish generation or overall plan parity.
+
+## Paired-node credential limitation
+
+The Rust composition mounts the node credential issuance and revocation HTTP
+routes. Their binary regression checks owner-scoped access, hashed token storage,
+ownership changes and revocation in the credential store. The production
+WebSocket verifier currently accepts user JWTs and does not resolve these node
+credentials. In contrast, the Node WebSocket hub authenticates paired nodes with
+node credentials and closes their connections when credentials are revoked.
+Consequently the HTTP route and its test do not establish paired-node support or
+live-connection revocation parity; both remain required before replacement.

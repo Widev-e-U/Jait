@@ -342,7 +342,7 @@ async fn provisional_resolved_event_requires_finalization_before_delivery() {
     claim.finalize().unwrap();
     assert!(matches!(
         events.try_recv(),
-        Ok(crate::security::consent_manager::ConsentQueueEvent::SnapshotRequired)
+        Ok(crate::security::consent_manager::ConsentQueueEvent::FinalizationComplete)
     ));
     assert!(events.try_recv().is_err());
     assert!(handle.wait().await.unwrap().approved);

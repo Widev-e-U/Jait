@@ -1198,6 +1198,31 @@ impl WsHub {
         })
     }
 
+    /// Send a consent event to every authenticated owner of its session,
+    /// including clients viewing a different session. Delivery rechecks authority.
+    pub(crate) fn broadcast_consent_to_owners(
+        &self,
+        session_id: &str,
+        kind: &str,
+        payload: Value,
+    ) -> usize {
+        if self.config.authorizer.is_none() && self.config.session_authority.is_none() {
+            return 0;
+        }
+        self.fan_out_scoped(envelope(kind, Some(session_id), payload), |client| {
+            Some(DeliveryScope::OwnerSessions {
+                user_id: client.user_id.clone()?,
+                session_ids: vec![session_id.to_owned()],
+                generation: client.generation,
+            })
+        })
+    }
+
+    /// Force clients to reconnect and reconcile state after an event stream gap.
+    pub(crate) fn disconnect_for_reconciliation(&self) {
+        self.inner.lock().expect("hub state").clients.clear();
+    }
+
     /// Mirror of `broadcastToUser`: every authorized client of one user,
     /// regardless of which session that client subscribed to.
     ///

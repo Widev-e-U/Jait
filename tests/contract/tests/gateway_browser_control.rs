@@ -81,7 +81,7 @@ fn unavailable_visibility_retains_the_adopted_page() {
 }
 
 #[test]
-fn pointer_arrives_before_click_and_remembers_its_position() {
+fn pointer_arrives_before_each_click() {
     let result =
         reference(json!({"op":"browsercontrol.cursor","selectors":["#sign-in","#confirm"]}));
     assert_eq!(result["error"], Value::Null);
@@ -95,11 +95,11 @@ fn pointer_arrives_before_click_and_remembers_its_position() {
         .iter()
         .filter(|event| event["op"] == "move")
         .collect();
-    assert!(
-        moves.len() > 1,
-        "The cursor must visibly travel before activation"
+    assert_eq!(
+        moves.len(),
+        1,
+        "The pointer must reach the target before activation"
     );
-    assert!(moves[0]["x"].as_f64().unwrap() < 100.0);
     assert_eq!(moves.last().unwrap()["x"], 100.0);
     assert_eq!(moves.last().unwrap()["y"], 50.0);
     assert_eq!(stream[first_click]["selector"], "#sign-in");
@@ -109,7 +109,7 @@ fn pointer_arrives_before_click_and_remembers_its_position() {
         .unwrap();
     assert_eq!(
         next_move["x"], 100.0,
-        "A second click must not jump back to the origin"
+        "The pointer must reach the next target before activation"
     );
     assert_eq!(stream.last().unwrap()["selector"], "#confirm");
 }
@@ -119,7 +119,7 @@ fn cancellation_before_or_during_movement_prevents_activation() {
     let before = reference(json!({"op":"browsercontrol.cursor","cancelled":true}));
     assert_eq!(before["error"], "Cancelled");
     assert!(events(&before).is_empty());
-    let during = reference(json!({"op":"browsercontrol.cursor","cancelAfterMoves":3}));
+    let during = reference(json!({"op":"browsercontrol.cursor","cancelAfterMoves":1}));
     assert_eq!(during["error"], "Cancelled");
     assert_eq!(clicks(&during), 0);
     assert_eq!(
@@ -127,7 +127,7 @@ fn cancellation_before_or_during_movement_prevents_activation() {
             .iter()
             .filter(|event| event["op"] == "move")
             .count(),
-        3
+        1
     );
 }
 
@@ -158,4 +158,60 @@ fn failed_selector_click_is_reported_without_retrying_activation() {
     let result = reference(json!({"op":"browsercontrol.cursor","clickError":"Target detached"}));
     assert_eq!(result["error"], "Target detached");
     assert_eq!(clicks(&result), 1);
+}
+
+#[test]
+fn guarded_click_rejects_ambiguous_and_changed_targets() {
+    let ambiguous = reference(json!({"op":"browsercontrol.guard","guardCount":2}));
+    assert!(ambiguous["error"].as_str().unwrap().contains("ambiguous"));
+    assert!(
+        !ambiguous["events"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("click"))
+    );
+    let changed = reference(json!({"op":"browsercontrol.guard","guardMatches":[true,false]}));
+    assert!(changed["error"].as_str().unwrap().contains("changed"));
+    assert_eq!(changed["events"], json!(["check", "check", "dispose"]));
+    let stable = reference(json!({"op":"browsercontrol.guard","guardMatches":[true,true]}));
+    assert_eq!(stable["error"], Value::Null);
+    assert_eq!(
+        stable["events"],
+        json!(["check", "check", "click", "dispose"])
+    );
+}
+
+#[test]
+fn guarded_field_actions_reject_changed_ambiguous_and_cancelled_targets() {
+    for operation in ["fill", "select"] {
+        let stable =
+            reference(json!({"op":"browsercontrol.fieldguard", "fieldOperation":operation}));
+        assert_eq!(stable["error"], Value::Null);
+        assert!(
+            stable["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e == operation)
+        );
+        for options in [
+            json!({"guardCount":2}),
+            json!({"guardMatches":[false]}),
+            json!({"cancelled":true}),
+        ] {
+            let mut call = json!({"op":"browsercontrol.fieldguard", "fieldOperation":operation});
+            call.as_object_mut()
+                .unwrap()
+                .extend(options.as_object().unwrap().clone());
+            let result = reference(call);
+            assert_ne!(result["error"], Value::Null);
+            assert!(
+                !result["events"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|e| e == operation)
+            );
+        }
+    }
 }

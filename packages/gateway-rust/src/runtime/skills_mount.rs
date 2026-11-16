@@ -21,7 +21,19 @@ fn scan_dirs(project_root: &Path, home: &Path, state: Option<&str>) -> Vec<(Path
     }
     dirs.push((project_root.join(".jait/skills"), SkillSource::Project));
     dirs.push((project_root.join(".agents/skills"), SkillSource::Project));
-    if let Some(extra) = std::env::var_os("OPENCLAW_SKILLS_DIR") {
+    // Match the gateway's optional sibling OpenClaw scan and source precedence.
+    // The existing scanner still enforces its no-follow and size boundaries.
+    if let Some(parent) = project_root.parent() {
+        let openclaw = parent.join("openclaw");
+        let sibling = openclaw.join("skills");
+        let real_directory = |path: &Path| {
+            std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+        };
+        if real_directory(&openclaw) && real_directory(&sibling) {
+            dirs.push((sibling, SkillSource::Bundled));
+        }
+    }
+    if let Some(extra) = std::env::var_os("OPENCLAW_SKILLS_DIR").filter(|value| !value.is_empty()) {
         dirs.push((PathBuf::from(extra), SkillSource::Bundled));
     }
     dirs

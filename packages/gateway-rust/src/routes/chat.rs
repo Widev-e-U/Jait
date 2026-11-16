@@ -96,6 +96,7 @@ impl ChatLimits {
 }
 struct ActiveTurn {
     owner: String,
+    thread: bool,
     cancellation: ProcessCancellation,
     done: watch::Sender<bool>,
 }
@@ -297,7 +298,7 @@ impl ChatRoutes {
     }
     #[cfg(test)]
     pub(crate) fn test_admit(&self) -> (impl Drop + use<>, ProcessCancellation) {
-        let lease = self.admit("test-owner", "test-session").unwrap();
+        let lease = self.admit("test-owner", "test-session", false).unwrap();
         let cancellation = lease.cancellation.clone();
         (lease, cancellation)
     }
@@ -328,7 +329,16 @@ impl ChatRoutes {
         .map_err(|_| "Chat shutdown exceeded cleanup deadline".to_owned())?;
         Ok(())
     }
-    fn admit(&self, owner: &str, session: &str) -> Result<TurnLease, Box<Response>> {
+    pub(crate) fn cancel_owner_threads(&self, owner: &str) {
+        let active = self.active.turns.lock().unwrap();
+        for turn in active
+            .values()
+            .filter(|turn| turn.thread && turn.owner == owner)
+        {
+            turn.cancellation.cancel();
+        }
+    }
+    fn admit(&self, owner: &str, session: &str, thread: bool) -> Result<TurnLease, Box<Response>> {
         let mut active = self.active.turns.lock().unwrap();
         if self.active.closed.load(Ordering::Acquire) {
             return Err(Box::new(response(503, json!({"error":"CHAT_CLOSED"}))));
@@ -347,6 +357,7 @@ impl ChatRoutes {
             session.into(),
             ActiveTurn {
                 owner: owner.into(),
+                thread,
                 cancellation: cancellation.clone(),
                 done: done.clone(),
             },
@@ -532,7 +543,7 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
             Err(_) => return auth::internal_error(),
         }
     }
-    let lease = match state.admit(&user.id, &input.session_id) {
+    let lease = match state.admit(&user.id, &input.session_id, false) {
         Ok(lease) => lease,
         Err(error) => return *error,
     };
@@ -692,6 +703,40 @@ enum ThreadAction {
 const RESUME_PROMPT: &str = "Continue the interrupted task from the saved history and current workspace. Preserve completed work, verify side effects before repeating actions, and finish the remaining steps.";
 type DbError = Box<dyn std::error::Error + Send + Sync>;
 
+async fn check_thread_halt(
+    state: &ChatRoutes,
+    owner: &str,
+    action: ThreadAction,
+) -> Result<(), Box<Response>> {
+    let owner = owner.to_owned();
+    let control = state
+        .auth
+        .with_database(move |db| {
+            Ok::<_, DbError>(
+                crate::services::agent_control::AgentControlService::new(db, &String::new)
+                    .get_state(&owner)?,
+            )
+        })
+        .await
+        .map_err(|_| Box::new(auth::internal_error()))?;
+    if control.halted {
+        let action = match action {
+            ThreadAction::Start => "start-thread",
+            ThreadAction::Send => "send-message",
+            ThreadAction::Resume => "resume-thread",
+            ThreadAction::Steer => "steer-thread",
+        };
+        return Err(Box::new(response(
+            409,
+            json!(crate::services::agent_control::agent_halted_body(
+                &control,
+                Some(action)
+            )),
+        )));
+    }
+    Ok(())
+}
+
 async fn thread_start(
     State(state): State<ChatRoutes>,
     Path(id): Path<String>,
@@ -825,6 +870,11 @@ async fn thread_turn(
         Ok(user) => user,
         Err(error) => return *error,
     };
+    if matches!(action, ThreadAction::Send | ThreadAction::Steer)
+        && let Err(error) = check_thread_halt(&state, &user.id, action).await
+    {
+        return *error;
+    }
     let message = if action == ThreadAction::Resume {
         RESUME_PROMPT.to_owned()
     } else {
@@ -886,6 +936,9 @@ async fn thread_turn(
     } else if status == "running" {
         return response(409, json!({"error":"A turn is already in progress"}));
     }
+    if let Err(error) = check_thread_halt(&state, &user.id, action).await {
+        return *error;
+    }
     let Some(session_id) = session_id.filter(|s| valid_session(s)) else {
         return response(409, json!({"error":"Thread has no chat session"}));
     };
@@ -926,10 +979,13 @@ async fn thread_turn(
             );
         }
     }
-    let lease = match state.admit(&user.id, &session_id) {
+    let lease = match state.admit(&user.id, &session_id, true) {
         Ok(lease) => lease,
         Err(error) => return *error,
     };
+    if let Err(error) = check_thread_halt(&state, &user.id, action).await {
+        return *error;
+    }
     let session = match owned_session(&state, &user.id, &session_id).await {
         Ok(session) => session,
         Err(error) => return *error,

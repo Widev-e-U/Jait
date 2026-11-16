@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 #[derive(Clone)]
 pub struct PlanRoutes {
     pub auth: AuthState,
-    pub events: Option<EventSink>,
+    pub events: Option<RepositoryEventSink>,
     pub generator: Option<Generator>,
 }
 impl PlanRoutes {
@@ -183,11 +183,14 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
             title: body["title"].as_str().unwrap_or("New Plan").into(),
             tasks: body.get("tasks").and_then(Value::as_array).cloned(),
         };
-        let row = with_repo(&s.auth, plan.repo_id.clone(), owner, move |db, _| {
-            PlanService::new(db).create(plan)
-        })
+        let row = with_repo(
+            &s.auth,
+            plan.repo_id.clone(),
+            owner.clone(),
+            move |db, _| PlanService::new(db).create(plan),
+        )
         .await?;
-        publish(&s.events, "plan.created", json!({"plan":row}));
+        publish_repository(&s.events, &owner, "plan.created", json!({"plan":row}));
         return Ok(bounded(201, json!({"plan":row})));
     }
     let id = parts[2].clone();
@@ -202,11 +205,11 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
             return Ok(bounded(200, json!({"plan":plan})));
         }
         if method == Method::DELETE {
-            with_plan(&s.auth, id, owner, move |db, plan| {
+            with_plan(&s.auth, id, owner.clone(), move |db, plan| {
                 PlanService::new(db).delete(&plan.id)
             })
             .await?;
-            publish(&s.events, "plan.deleted", json!({"planId":plan.id}));
+            publish_repository(&s.events, &owner, "plan.deleted", json!({"planId":plan.id}));
             return Ok(response(200, json!({"ok":true})));
         }
         let patch = PlanPatch {
@@ -217,11 +220,11 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
                 .map(str::to_owned),
             tasks: body.get("tasks").and_then(Value::as_array).cloned(),
         };
-        let row = with_plan(&s.auth, id, owner, move |db, plan| {
+        let row = with_plan(&s.auth, id, owner.clone(), move |db, plan| {
             PlanService::new(db).update(&plan.id, patch)
         })
         .await?;
-        publish(&s.events, "plan.updated", json!({"plan":row}));
+        publish_repository(&s.events, &owner, "plan.updated", json!({"plan":row}));
         return Ok(bounded(200, json!({"plan":row})));
     }
     let repo = owned(&s.auth, plan.repo_id.clone(), owner.clone()).await?;
@@ -259,7 +262,7 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
         })
         .await?
         .ok_or_else(|| error(404, "Plan not found"))?;
-        publish(&s.events, "plan.updated", json!({"plan":row}));
+        publish_repository(&s.events, &owner, "plan.updated", json!({"plan":row}));
         return Ok(bounded(200, json!({"plan":row,"generated":count})));
     }
     if parts[3] == "tasks" {
@@ -274,7 +277,7 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
             TaskAdmission::AlreadyStarted => return Err(error(409, "Task already has a thread")),
             TaskAdmission::Accepted { task, plan } => (task, plan),
         };
-        publish(&s.events, "plan.updated", json!({"plan":row}));
+        publish_repository(&s.events, &owner, "plan.updated", json!({"plan":row}));
         return Ok(bounded(200, json!({"task":task,"repo":repo_view})));
     }
     let plan_id = id.clone();
@@ -285,7 +288,7 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
         BulkAdmission::NoTasks => return Err(error(400, "No approved tasks to start")),
         BulkAdmission::Accepted { tasks, plan } => (tasks, plan),
     };
-    publish(&s.events, "plan.updated", json!({"plan":row}));
+    publish_repository(&s.events, &owner, "plan.updated", json!({"plan":row}));
     Ok(bounded(200, json!({"tasks":tasks,"repo":repo_view})))
 }
 

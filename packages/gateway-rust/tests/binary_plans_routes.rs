@@ -70,6 +70,61 @@ impl Drop for Gateway {
         let _ = std::fs::remove_dir_all(&self.directory);
     }
 }
+/// Minimal WebSocket client over the gateway's own frame codec.
+struct WsClient(tokio::net::TcpStream);
+
+impl WsClient {
+    async fn connect(base: &str, token: &str) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let host = base.trim_start_matches("http://");
+        let mut stream = tokio::net::TcpStream::connect(host).await.unwrap();
+        let request = format!(
+            "GET /ws?token={token} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(stream.read_u8().await.unwrap());
+        }
+        assert!(String::from_utf8_lossy(&head).starts_with("HTTP/1.1 101"));
+        Self(stream)
+    }
+
+    /// Next text message, or None if nothing arrives within `wait`.
+    async fn next(&mut self, wait: Duration) -> Option<serde_json::Value> {
+        use jait_gateway::ws::{OpCode, read_frame, write_client_frame};
+        tokio::time::timeout(wait, async {
+            loop {
+                let frame = read_frame(&mut self.0, 1 << 20).await.unwrap()?;
+                match frame.opcode {
+                    OpCode::Text => return serde_json::from_str(frame.text()?).ok(),
+                    OpCode::Ping => {
+                        write_client_frame(&mut self.0, OpCode::Pong, &frame.payload, [1, 2, 3, 4])
+                            .await
+                            .unwrap()
+                    }
+                    OpCode::Pong => {}
+                    _ => return None,
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    async fn until(&mut self, kind: &str, wait: Duration) -> Option<serde_json::Value> {
+        let deadline = tokio::time::Instant::now() + wait;
+        while let Some(left) = deadline.checked_duration_since(tokio::time::Instant::now()) {
+            let message = self.next(left).await?;
+            if message["type"] == kind {
+                return Some(message);
+            }
+        }
+        None
+    }
+}
+
 #[tokio::test]
 async fn plan_routes_through_the_binary() {
     let gateway = Gateway::start();
@@ -140,6 +195,8 @@ async fn plan_routes_through_the_binary() {
     assert_eq!(st, 200, "{b}");
     let repo = b["repo"]["id"].as_str().unwrap().to_owned();
     let list_path = format!("/api/repos/{repo}/plans");
+    let mut owner_ws = WsClient::connect(&gateway.base, &owner).await;
+    let mut other_ws = WsClient::connect(&gateway.base, &other).await;
 
     // Another user cannot see or create plans in the owner's repo.
     let (st, _) = call(M::GET, list_path.clone(), other.clone(), None).await;
@@ -165,6 +222,18 @@ async fn plan_routes_through_the_binary() {
     assert_eq!(st, 201, "{b}");
     let id = b["plan"]["id"].as_str().unwrap().to_owned();
     assert_eq!(b["plan"]["title"], "Roadmap");
+    let event = owner_ws
+        .until("plan.created", Duration::from_secs(2))
+        .await
+        .expect("owner receives plan.created");
+    assert_eq!(event["payload"]["plan"]["id"], id);
+    assert!(
+        other_ws
+            .until("plan.created", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "other user received private plan event"
+    );
     let (_, b) = call(M::GET, list_path.clone(), owner.clone(), None).await;
     assert_eq!(b["plans"].as_array().unwrap().len(), 1, "{b}");
 
@@ -196,6 +265,18 @@ async fn plan_routes_through_the_binary() {
     assert!(
         st == 200 && b["plan"]["title"] == "Renamed" && b["plan"]["status"] == "active",
         "{b}"
+    );
+    let event = owner_ws
+        .until("plan.updated", Duration::from_secs(2))
+        .await
+        .expect("owner receives plan.updated");
+    assert_eq!(event["payload"]["plan"]["title"], "Renamed");
+    assert!(
+        other_ws
+            .until("plan.updated", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "other user received private plan event"
     );
     // Unknown statuses are ignored rather than stored.
     let (_, b) = call(
@@ -253,6 +334,18 @@ async fn plan_routes_through_the_binary() {
     // Delete: owner succeeds once.
     let (st, b) = call(M::DELETE, plan_path.clone(), owner.clone(), None).await;
     assert!(st == 200 && b["ok"] == true, "{b}");
+    let event = owner_ws
+        .until("plan.deleted", Duration::from_secs(2))
+        .await
+        .expect("owner receives plan.deleted");
+    assert_eq!(event["payload"]["planId"], id);
+    assert!(
+        other_ws
+            .until("plan.deleted", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "other user received private plan event"
+    );
     let (st, _) = call(M::GET, plan_path, owner.clone(), None).await;
     assert_eq!(st, 404);
 }

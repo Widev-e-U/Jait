@@ -1761,11 +1761,22 @@ impl<C> Connection<C> {
                 } else {
                     "m.file"
                 };
+                let caption = body
+                    .get("caption")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or(&name)
+                    .to_string();
                 let mut content = json!({
-                    "body": name,
+                    "body": caption,
+                    "filename": name,
                     "info": {"mimetype": mime, "size": bytes.len()},
                     "msgtype": msgtype,
                 });
+                if body.get("viewOnce").and_then(|v| v.as_bool()) == Some(true) {
+                    content["com.beeper.view_once"] = json!(true);
+                }
                 if let (Value::Object(target), Value::Object(extra)) = (&mut content, media) {
                     target.extend(extra);
                 }
@@ -5211,8 +5222,18 @@ pub mod route_validation {
                 Ok(Value::Object(map))
             }),
             "attachment" => {
-                let parsed = with_room_id(&["action", "roomId", "name", "mime", "data"], &[])?;
+                let parsed = with_room_id(
+                    &["action", "roomId", "name", "mime", "data"],
+                    &["caption", "viewOnce"],
+                )?;
                 let mut map = parsed.as_object().cloned().unwrap();
+                if map.contains_key("caption") {
+                    let caption = capped(&map, "caption", 4000).ok_or(INVALID_ACTION)?;
+                    map.insert("caption".into(), Value::String(caption));
+                }
+                if map.get("viewOnce").is_some_and(|v| !v.is_boolean()) {
+                    return Err(INVALID_ACTION);
+                }
                 let name = bounded(&map, "name", 512).ok_or(INVALID_ACTION)?;
                 let mime = capped(&map, "mime", 200).ok_or(INVALID_ACTION)?;
                 let data = string(&map, "data").ok_or(INVALID_ACTION)?;

@@ -149,7 +149,7 @@ thread UI decisions carry a boolean without permission duration; the TypeScript
 ACP adapter may select a persistent or positional fallback option. The audit
 did not exercise a live provider or establish client compatibility.
 
-A single-turn ACP owner has been added in `providers/acp_provider.rs`; worker
+At this historical checkpoint, a single-turn ACP owner was added in `providers/acp_provider.rs`; worker
 `01a1ad42-e960-7551-95fa-5bc8d368be36` reports two focused tests passing for
 approval/interrupt during a prompt and a mismatched session update. It is not yet
 wired into the runtime registry or provider entry point. Raw transport now bounds
@@ -159,6 +159,13 @@ and `.jait/artifacts/acp-transport-regression-tests.log`). Frame size remains un
 overload client compatibility and descendant cleanup are unproven, and multi-turn
 ownership and end-to-end decision delivery remain open. No component verification credit
 is promoted.
+
+Current ACP runtime limitation: the native chat path now uses the single-turn
+owner, and inbound frames are bounded. Shutdown requests termination of the direct
+provider child and aborts its transport readers; it does not establish that the
+child or its descendants have stopped. The separate supervisor drafts are not mounted and do not provide
+production descendant containment. Provider actions that do not request ACP
+permission also remain outside the gateway's consent callback.
 
 ## Preview lifecycle draft — 2026-11-05
 

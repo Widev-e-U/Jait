@@ -384,6 +384,39 @@ async fn reminder_projects_use_owned_live_project_data() {
             .unwrap();
         assert_eq!(session.status(), 201);
         let session = session.json::<Value>().await.unwrap();
+        let session_id = session["id"].as_str().unwrap();
+        let foreign_token = if user_token == token {
+            other_token
+        } else {
+            token
+        };
+        let denied = client
+            .post(&reminders)
+            .bearer_auth(foreign_token)
+            .json(&json!({"content":"foreign session", "sessionId":session_id}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), 404);
+        let created = client
+            .post(&reminders)
+            .bearer_auth(user_token)
+            .json(&json!({"content":title, "sessionId":session_id}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(created.status(), 201);
+        let filtered = client
+            .get(format!("{reminders}?sessionId={session_id}"))
+            .bearer_auth(user_token)
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap();
+        assert_eq!(filtered["reminders"].as_array().unwrap().len(), 1);
+        assert_eq!(filtered["reminders"][0]["content"], title);
         let thread = client
             .post(url("/api/threads"))
             .bearer_auth(user_token)

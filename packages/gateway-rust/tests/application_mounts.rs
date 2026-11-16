@@ -831,6 +831,67 @@ async fn fake_model_calling(
 }
 
 #[tokio::test]
+async fn disabled_tool_is_not_advertised_or_executed_by_settings_chat() {
+    let (model_base, seen) = fake_tool_model().await;
+    let (base, stop, task, dir) = start_seeded(false, |d| {
+        std::fs::write(d.join("notes.txt"), "disabled-secret-marker").unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "k"},
+            "selected_model": "m", "disabled_tools": ["file.read"]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let reply = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"sessionId": session["id"], "content": "read notes"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), 200);
+    let body = reply.text().await.unwrap();
+    assert!(!body.contains("disabled-secret-marker"), "{body}");
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    assert!(
+        !calls[0]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["function"]["name"] == "file_read")
+    );
+    assert!(calls[1].to_string().contains("not advertised"));
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn chat_turn_reads_a_project_file_through_the_consent_executor() {
     let (model_base, seen) = fake_tool_model().await;
     let (base, stop, task, dir) = start_seeded(false, |d| {
@@ -1370,11 +1431,25 @@ impl WsClient {
 
     /// Next text message, or None if nothing arrives within `wait`.
     async fn next(&mut self, wait: Duration) -> Option<serde_json::Value> {
-        let frame = tokio::time::timeout(wait, jait_gateway::ws::read_frame(&mut self.0, 1 << 20))
-            .await
-            .ok()?
-            .unwrap()?;
-        serde_json::from_str(frame.text()?).ok()
+        use jait_gateway::ws::{OpCode, read_frame, write_client_frame};
+        tokio::time::timeout(wait, async {
+            loop {
+                let frame = read_frame(&mut self.0, 1 << 20).await.unwrap()?;
+                match frame.opcode {
+                    OpCode::Text => return serde_json::from_str(frame.text()?).ok(),
+                    OpCode::Ping => {
+                        write_client_frame(&mut self.0, OpCode::Pong, &frame.payload, [1, 2, 3, 4])
+                            .await
+                            .unwrap()
+                    }
+                    OpCode::Pong => {}
+                    _ => return None,
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
     }
 
     async fn until(&mut self, kind: &str, wait: Duration) -> Option<serde_json::Value> {
@@ -1390,7 +1465,43 @@ impl WsClient {
 }
 
 #[tokio::test]
-async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
+async fn consent_test_client_answers_ping_before_reading_event() {
+    use jait_gateway::ws::{OpCode, encode_frame, read_frame};
+    use tokio::io::AsyncWriteExt;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let stream = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+        .await
+        .unwrap();
+    let (mut server, _) = listener.accept().await.unwrap();
+    let peer = tokio::spawn(async move {
+        server
+            .write_all(&encode_frame(OpCode::Ping, b"check"))
+            .await
+            .unwrap();
+        let pong = read_frame(&mut server, 1024).await.unwrap().unwrap();
+        assert_eq!(pong.opcode, OpCode::Pong);
+        assert_eq!(pong.payload, b"check");
+        server
+            .write_all(&encode_frame(
+                OpCode::Text,
+                br#"{"type":"consent.required"}"#,
+            ))
+            .await
+            .unwrap();
+    });
+    let mut client = WsClient(stream);
+    assert_eq!(
+        client
+            .until("consent.required", Duration::from_secs(5))
+            .await
+            .unwrap()["type"],
+        "consent.required"
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn consent_prompts_reach_session_owners_but_not_other_users() {
     let (model_base, _seen) = fake_model_calling(
         "terminal_run",
         serde_json::json!({"command": "printf ran > marker.txt"}),
@@ -1422,6 +1533,33 @@ async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
         .json()
         .await
         .unwrap();
+    let invite: serde_json::Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: serde_json::Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&serde_json::json!({"username":"other-consent-user", "password":"correct-horse-2", "invitation":invite["invitation"]}))
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other_token = other["access_token"].as_str().expect("other user token");
+    let mut foreign = WsClient::connect(&base, other_token).await;
+    let foreign_ready = foreign
+        .until("session.created", Duration::from_secs(5))
+        .await
+        .expect("foreign socket must be admitted before the prompt");
+    assert_eq!(foreign_ready["payload"]["authenticated"], true);
     let mut bound = WsClient::connect(&base, &token).await;
     bound
         .send(serde_json::json!({"type":"subscribe","sessionId":session["id"]}))
@@ -1434,6 +1572,12 @@ async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
     );
     // Authenticated as the same user but never bound to the session.
     let mut unbound = WsClient::connect(&base, &token).await;
+    // HTTP 101 only completes the upgrade; wait for identity admission before starting the turn.
+    let unbound_ready = unbound
+        .until("session.created", Duration::from_secs(5))
+        .await
+        .expect("owner socket must be admitted before the prompt");
+    assert_eq!(unbound_ready["payload"]["authenticated"], true);
     let turn = {
         let (client, base, token) = (client.clone(), base.clone(), token.clone());
         let body = serde_json::json!({"sessionId": session["id"], "content": "run it"});
@@ -1456,6 +1600,18 @@ async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
         .expect("bound client must be told about the pending consent");
     assert_eq!(required["payload"]["toolName"], "terminal.run");
     assert_eq!(required["sessionId"], session["id"]);
+    let owner_required = unbound
+        .until("consent.required", Duration::from_secs(5))
+        .await
+        .expect("owner viewing another session must receive background approvals");
+    assert_eq!(owner_required, required);
+    assert!(
+        foreign
+            .until("consent.required", Duration::from_millis(300))
+            .await
+            .is_none(),
+        "another user's socket must not receive the owner's prompt"
+    );
     let id = required["payload"]["id"].as_str().unwrap().to_owned();
     let decided = client
         .post(format!("{base}/api/consent/{id}/reject"))
@@ -1471,12 +1627,17 @@ async fn consent_prompts_reach_only_websocket_clients_bound_to_the_session() {
         .expect("bound client must see the decision");
     assert_eq!(resolved["payload"]["requestId"], id);
     assert_eq!(resolved["payload"]["approved"], false);
+    let owner_resolved = unbound
+        .until("consent.resolved", Duration::from_secs(5))
+        .await
+        .expect("owner must receive the resolution");
+    assert_eq!(owner_resolved, resolved);
     assert!(
-        unbound
-            .until("consent.required", Duration::from_millis(300))
+        foreign
+            .until("consent.resolved", Duration::from_millis(300))
             .await
             .is_none(),
-        "a client not bound to the session must not receive its consent prompt"
+        "another user's socket must not receive the owner's resolution"
     );
     let _ = tokio::time::timeout(Duration::from_secs(20), turn).await;
     assert!(!dir.join("marker.txt").exists());
@@ -2142,6 +2303,43 @@ async fn tools_list_and_execute_need_login_and_an_owned_session() {
     assert_eq!(ok.status(), 200);
     let body: serde_json::Value = ok.json().await.unwrap();
     assert!(body.to_string().contains("tool-marker-7"), "{body}");
+
+    let updated = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"disabled_tools": ["file.read"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), 200);
+    let denied: serde_json::Value = exec(serde_json::json!({
+        "tool": "file.read", "sessionId": session["id"], "input": {"path": "notes.txt"}
+    }))
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(denied["ok"], false, "{denied}");
+    assert!(denied.to_string().contains("disabled"), "{denied}");
+    assert!(!denied.to_string().contains("tool-marker-7"), "{denied}");
+
+    let updated = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"disabled_tools": []}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), 200);
+    let restored: serde_json::Value = exec(serde_json::json!({
+        "tool": "file.read", "sessionId": session["id"], "input": {"path": "notes.txt"}
+    }))
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert!(restored.to_string().contains("tool-marker-7"), "{restored}");
+
     let escape = exec(serde_json::json!({
         "tool": "file.read", "sessionId": session["id"], "input": {"path": "../../etc/passwd"}
     }))
@@ -7281,6 +7479,140 @@ async fn websocket_session_subscribe_requires_owned_session() {
     assert_eq!(accepted["sessionId"], id);
     assert_eq!(accepted["payload"]["subscribed"], true);
     drop(socket);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn mcp_enforces_each_owners_live_disabled_tool_settings() {
+    let (base, stop, task, dir) = start_seeded(false, |dir| {
+        std::fs::write(dir.join("policy.txt"), "mcp-policy-marker").unwrap();
+    })
+    .await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap();
+    let owner = token(&client, &base).await;
+    let invite: serde_json::Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: serde_json::Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&serde_json::json!({"username":"mcp-other", "password":"correct-horse-2", "invitation":invite["invitation"]}))
+        .timeout(Duration::from_secs(60))
+        .send().await.unwrap().json().await.unwrap();
+    let other = other["access_token"].as_str().expect("other token");
+    let make_session = |token: &str| {
+        let (client, base, token) = (client.clone(), base.clone(), token.to_string());
+        async move {
+            let session: serde_json::Value = client
+                .post(format!("{base}/api/sessions"))
+                .bearer_auth(token)
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            session["id"].as_str().expect("session id").to_owned()
+        }
+    };
+    let owner_session = make_session(&owner).await;
+    let other_session = make_session(other).await;
+    let list = |token: &str| {
+        let (client, base, token) = (client.clone(), base.clone(), token.to_string());
+        async move {
+            client
+                .post(format!("{base}/mcp"))
+                .bearer_auth(token)
+                .header("accept", "application/json, text/event-stream")
+                .json(&serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+        }
+    };
+    assert!(list(&owner).await.contains("\"file_read\""));
+    let invoke = |token: &str, session: &str| {
+        let (client, base, token, session) = (
+            client.clone(),
+            base.clone(),
+            token.to_string(),
+            session.to_string(),
+        );
+        async move {
+            client.post(format!("{base}/mcp"))
+                .bearer_auth(token).header("x-jait-session-id", session)
+                .header("accept", "application/json, text/event-stream")
+                .json(&serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"file_read","arguments":{"path":"policy.txt"}}}))
+                .send().await.unwrap()
+        }
+    };
+    assert!(
+        invoke(&owner, &owner_session)
+            .await
+            .text()
+            .await
+            .unwrap()
+            .contains("mcp-policy-marker")
+    );
+    let updated = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"disabled_tools":["file.read"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), 200);
+    let owner_list = list(&owner).await;
+    assert!(!owner_list.contains("\"file_read\""), "{owner_list}");
+    assert!(owner_list.contains("\"file_list\""), "{owner_list}");
+    assert!(list(other).await.contains("\"file_read\""));
+    let denied = invoke(&owner, &owner_session).await.text().await.unwrap();
+    assert!(denied.contains("disabled"), "{denied}");
+    assert!(!denied.contains("mcp-policy-marker"), "{denied}");
+    assert!(
+        invoke(other, &other_session)
+            .await
+            .text()
+            .await
+            .unwrap()
+            .contains("mcp-policy-marker")
+    );
+    assert_eq!(invoke(other, &owner_session).await.status(), 404);
+    let updated = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&owner)
+        .json(&serde_json::json!({"disabled_tools":[]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), 200);
+    assert!(list(&owner).await.contains("\"file_read\""));
+    assert!(
+        invoke(&owner, &owner_session)
+            .await
+            .text()
+            .await
+            .unwrap()
+            .contains("mcp-policy-marker")
+    );
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task)
         .await

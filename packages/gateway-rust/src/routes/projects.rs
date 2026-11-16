@@ -60,6 +60,54 @@ async fn run<T: Send + 'static>(
     }
 }
 
+// Apply the Node project response fields after the project has been owner-scoped.
+// Remote filesystem probes are not yet wired into this router and fail closed.
+fn project_status(db: &rusqlite::Connection, project: &mut Value) -> rusqlite::Result<()> {
+    let Some(id) = project.get("id").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    let state = ProjectStateService::new(db).get(id, Some(&["project.ui".to_owned()]))?;
+    let active = state
+        .get("project.ui")
+        .and_then(|ui| ui.get("panel"))
+        .and_then(|panel| panel.get("open"))
+        == Some(&Value::Bool(true));
+    let root = project
+        .get("rootPath")
+        .and_then(Value::as_str)
+        .map(crate::text::js_trim)
+        .filter(|root| !root.is_empty());
+    let node = project
+        .get("nodeId")
+        .and_then(Value::as_str)
+        .map(crate::text::js_trim)
+        .filter(|node| !node.is_empty())
+        .unwrap_or("gateway");
+    let status = root.map(|root| {
+        if node != "gateway" {
+            "unreachable"
+        } else if std::path::Path::new(root).exists() {
+            "available"
+        } else {
+            "missing"
+        }
+    });
+    if let Some(object) = project.as_object_mut() {
+        object.insert("editorModeActive".into(), json!(active));
+        object.insert("rootPathStatus".into(), json!(status));
+    }
+    Ok(())
+}
+
+fn project_list_status(db: &rusqlite::Connection, body: &mut Value) -> rusqlite::Result<()> {
+    if let Some(projects) = body.get_mut("projects").and_then(Value::as_array_mut) {
+        for project in projects {
+            project_status(db, project)?;
+        }
+    }
+    Ok(())
+}
+
 /// JavaScript `String(value)` coercion used throughout the TS routes.
 fn js_text(value: Option<&Value>) -> Option<String> {
     match value? {
@@ -120,6 +168,60 @@ fn assign_repository(
     user_id: &str,
     requested: Option<&str>,
     events: &Option<crate::routes::repositories::RepositoryEventSink>,
+    project_events: &Option<crate::routes::repositories::RepositoryEventSink>,
+) -> Response {
+    // Ownership checks, reconciliation and assignment are one decision: do not
+    // leave a reconciled repository behind if assignment fails or its owner changes.
+    let tx =
+        match rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate) {
+            Ok(tx) => tx,
+            Err(error) => return *db_err(error),
+        };
+    let pending = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let collector = pending.clone();
+    let buffered: Option<crate::routes::repositories::RepositoryEventSink> =
+        events.as_ref().map(|_| {
+            std::sync::Arc::new(move |owner: &str, kind: &str, value: Value| {
+                collector.lock().unwrap_or_else(|e| e.into_inner()).push((
+                    owner.to_owned(),
+                    kind.to_owned(),
+                    value,
+                ));
+            }) as crate::routes::repositories::RepositoryEventSink
+        });
+    let project_result = std::cell::RefCell::new(None);
+    let result = assign_repository_in_transaction(
+        &tx,
+        project_id,
+        user_id,
+        requested,
+        &buffered,
+        &project_result,
+    );
+    if !result.status().is_success() {
+        return result;
+    }
+    if let Err(error) = tx.commit() {
+        return *db_err(error);
+    }
+    if let Some(events) = events {
+        for (owner, kind, value) in pending.lock().unwrap_or_else(|e| e.into_inner()).drain(..) {
+            events(&owner, &kind, value);
+        }
+    }
+    if let (Some(events), Some(project)) = (project_events, project_result.into_inner()) {
+        events(user_id, "project.updated", json!({"project": project}));
+    }
+    result
+}
+
+fn assign_repository_in_transaction(
+    db: &rusqlite::Connection,
+    project_id: &str,
+    user_id: &str,
+    requested: Option<&str>,
+    events: &Option<crate::routes::repositories::RepositoryEventSink>,
+    project_result: &std::cell::RefCell<Option<Value>>,
 ) -> Response {
     use crate::services::repositories::RepositoryService;
     let projects = ProjectService::new(db);
@@ -143,6 +245,11 @@ fn assign_repository(
                    repo: &crate::services::repositories::RepositoryRecord,
                    assigned: bool,
                    created: bool| {
+        let mut project = json!(project);
+        if let Err(error) = project_status(db, &mut project) {
+            return *db_err(error);
+        }
+        *project_result.borrow_mut() = Some(project.clone());
         response(
             200,
             json!({
@@ -200,7 +307,8 @@ fn assign_repository(
         if existing_id.as_deref() == Some(repo.id.as_str()) {
             return outcome(&project, &repo, false, false);
         }
-        return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
+        return match projects.assign_repository_in_transaction(&project.id, &repo.id, Some(user_id))
+        {
             Ok(Some(updated)) => {
                 crate::routes::repositories::publish_repository(
                     events,
@@ -263,7 +371,11 @@ fn assign_repository(
                 Ok(repo) => repo,
                 Err(error) => return *db_err(error),
             };
-            return match projects.assign_repository(&project.id, &repo.id, Some(user_id)) {
+            return match projects.assign_repository_in_transaction(
+                &project.id,
+                &repo.id,
+                Some(user_id),
+            ) {
                 Ok(Some(updated)) => {
                     crate::routes::repositories::publish_repository(
                         events,
@@ -299,11 +411,16 @@ fn mid(path: &str, prefix: &str, suffix: &str) -> Option<String> {
 pub struct ProjectCollectionRoutes {
     pub auth: AuthState,
     pub events: Option<crate::routes::repositories::RepositoryEventSink>,
+    pub project_events: Option<crate::routes::repositories::RepositoryEventSink>,
 }
 
 impl ProjectCollectionRoutes {
     pub fn new(auth: AuthState) -> Self {
-        Self { auth, events: None }
+        Self {
+            auth,
+            events: None,
+            project_events: None,
+        }
     }
 
     pub fn router(self) -> axum::Router {
@@ -350,18 +467,36 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 Ok(body) => body,
                 Err(response) => return *response,
             };
-            // TS: `exclusiveRoot` (falling back to `rootPath`) names a folder at
-            // most one project may own; two rows on one path collide in the
-            // path-keyed code-graph tables.
-            let exclusive_root = js_text(body.get("exclusiveRoot"))
-                .or_else(|| js_text(body.get("rootPath")))
-                .filter(|value| !value.trim().is_empty());
-            let parent_id = js_text(body.get("parentId")).filter(|value| !value.trim().is_empty());
-            let create = create_from(&body, &uid);
+            let root = body
+                .get("rootPath")
+                .and_then(Value::as_str)
+                .filter(|value| !crate::text::js_trim(value).is_empty())
+                .map(str::to_owned);
+            let exclusive = body.get("exclusiveRoot") == Some(&Value::Bool(true));
+            let parent_id = body
+                .get("parentId")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned);
+            let mut create = create_from(&body, &uid);
+            create.root_path = root.clone();
+            create.node_id = Some(
+                body.get("nodeId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("gateway")
+                    .to_owned(),
+            );
+            create.parent_id = None;
             let user_id = uid.clone();
+            let project_events = state.project_events.clone();
             return run(&state.auth, move |db| {
-                let service = ProjectService::new(db);
-                if let Some(root) = exclusive_root.as_deref() {
+                let transaction = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Immediate,
+                )
+                .map_err(db_err)?;
+                let service = ProjectService::new(&transaction);
+                if let Some(root) = root.as_deref().filter(|_| exclusive) {
                     let node = create
                         .node_id
                         .clone()
@@ -379,23 +514,56 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                         Err(error) => return Err(db_err(error)),
                     }
                 }
-                let record = match service.create(create) {
-                    Ok(record) => record,
-                    Err(error) => return Err(db_err(error)),
-                };
                 if let Some(parent) = parent_id.as_deref()
-                    && record.parent_id.as_deref() != Some(parent)
+                    && let Some(rejection) = service
+                        .validate_new_parent(parent, Some(&user_id))
+                        .map_err(db_err)?
+                {
+                    let code = match rejection {
+                        MoveRejection::ParentNotFound => "PARENT_NOT_FOUND",
+                        MoveRejection::Cycle => "CYCLE",
+                        MoveRejection::TooDeep => "TOO_DEEP",
+                    };
+                    return Res::Ok(fail(
+                        400,
+                        code,
+                        &format!("Cannot create under parent: {code}"),
+                    ));
+                }
+                let record = if root.is_some() {
+                    service.get_or_create_for_root(create)
+                } else {
+                    service.create(create)
+                }
+                .map_err(db_err)?;
+                let record = if let Some(parent) = parent_id
+                    .as_deref()
+                    .filter(|parent| record.parent_id.as_deref() != Some(*parent))
                 {
                     match service.move_project(&record.id, Some(parent), Some(&user_id)) {
-                        Ok(Some(moved)) => return Res::Ok(response(201, json!(moved))),
-                        Ok(None) => {}
+                        Ok(Some(moved)) => moved,
+                        Ok(None) => {
+                            return Err(Box::new(fail(
+                                500,
+                                "INTERNAL_ERROR",
+                                "Database operation failed",
+                            )));
+                        }
                         Err(ProjectError::Move(rejection)) => {
                             return Res::Ok(move_rejection(rejection));
                         }
                         Err(ProjectError::Database(error)) => return Err(db_err(error)),
                     }
+                } else {
+                    record
+                };
+                let mut project = json!(record);
+                project_status(&transaction, &mut project).map_err(db_err)?;
+                transaction.commit().map_err(db_err)?;
+                if let Some(events) = project_events {
+                    events(&user_id, "project.created", json!({"project": project}));
                 }
-                Res::Ok(response(201, json!(record)))
+                Res::Ok(response(201, project))
             })
             .await
             .unwrap_or_else(|response| *response);
@@ -411,9 +579,10 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             let user_id = uid.clone();
             return run(&state.auth, move |db| {
                 let service = ProjectService::new(db);
-                let body = service
+                let mut body = service
                     .list_with_sessions(Some(&user_id), &status, limit)
                     .map_err(db_err)?;
+                project_list_status(db, &mut body).map_err(db_err)?;
                 Res::Ok(response(200, body))
             })
             .await
@@ -432,9 +601,10 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         let user_id = uid.clone();
         return run(&state.auth, move |db| {
             let service = ProjectService::new(db);
-            let body = service
+            let mut body = service
                 .search_with_sessions(&user_id, &needle)
                 .map_err(db_err)?;
+            project_list_status(db, &mut body).map_err(db_err)?;
             Res::Ok(response(200, body))
         })
         .await
@@ -541,9 +711,15 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         }
         if method == axum::http::Method::DELETE {
             let user_id = uid.clone();
+            let project_events = state.project_events.clone();
             return run(&state.auth, move |db| {
-                let projects = ProjectService::new(db);
-                let sessions = crate::services::sessions::SessionService::new(db);
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Immediate,
+                )
+                .map_err(db_err)?;
+                let projects = ProjectService::new(&tx);
+                let sessions = crate::services::sessions::SessionService::new(&tx);
                 let archived = projects
                     .list(Some("archived"), Some(&user_id), None)
                     .map_err(db_err)?;
@@ -553,6 +729,16 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                         .map_err(db_err)?;
                 }
                 let removed = projects.delete_archived(&user_id).map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
+                if let Some(events) = project_events {
+                    for project in archived {
+                        events(
+                            &user_id,
+                            "project.deleted",
+                            json!({"projectId": project.id, "permanent": true}),
+                        );
+                    }
+                }
                 Res::Ok(response(200, json!({"ok": true, "removed": removed})))
             })
             .await
@@ -567,9 +753,13 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             return fail(405, "METHOD_NOT_ALLOWED", "Method not allowed");
         }
         let user_id = uid.clone();
+        let project_events = state.project_events.clone();
         return run(&state.auth, move |db| {
-            let projects = ProjectService::new(db);
-            let sessions = crate::services::sessions::SessionService::new(db);
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)
+                    .map_err(db_err)?;
+            let projects = ProjectService::new(&tx);
+            let sessions = crate::services::sessions::SessionService::new(&tx);
             match projects.get(&id, Some(&user_id)) {
                 Ok(Some(project)) if project.status.as_deref() != Some("archived") => {
                     return Res::Ok(fail(400, "BAD_REQUEST", "Project is not archived"));
@@ -585,10 +775,16 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 .project_status(&id, "restore", Some(&user_id))
                 .map_err(db_err)?;
             let restored = projects.get(&id, Some(&user_id)).map_err(db_err)?;
-            match restored {
-                Some(project) => Res::Ok(response(200, json!(project))),
-                None => Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
+            let Some(project) = restored else {
+                return Res::Ok(fail(404, "NOT_FOUND", "Project not found"));
+            };
+            let mut project = json!(project);
+            project_status(&tx, &mut project).map_err(db_err)?;
+            tx.commit().map_err(db_err)?;
+            if let Some(events) = project_events {
+                events(&user_id, "project.restored", json!({"project": project}));
             }
+            Res::Ok(response(200, project))
         })
         .await
         .unwrap_or_else(|response| *response);
@@ -642,15 +838,21 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 _ => None,
             };
             let user_id = uid.clone();
+            let project_events = state.project_events.clone();
             return run(&state.auth, move |db| {
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Immediate,
+                )
+                .map_err(db_err)?;
                 // The session inherits the owned project's root, never a client path.
-                let projects = ProjectService::new(db);
+                let projects = ProjectService::new(&tx);
                 let project_path = match projects.get(&id, Some(&user_id)) {
                     Ok(Some(project)) => project.root_path,
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
                 };
-                let sessions = crate::services::sessions::SessionService::new(db);
+                let sessions = crate::services::sessions::SessionService::new(&tx);
                 let record = sessions
                     .create(crate::services::sessions::CreateSession {
                         user_id: Some(user_id.clone()),
@@ -661,7 +863,16 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                     })
                     .map_err(db_err)?;
                 projects.touch(&id).map_err(db_err)?;
-                Res::Ok(response(201, json!(record)))
+                let session = json!(record);
+                tx.commit().map_err(db_err)?;
+                if let Some(events) = project_events {
+                    events(
+                        &user_id,
+                        "chat.created",
+                        json!({"projectId": id, "session": session}),
+                    );
+                }
+                Res::Ok(response(201, session))
             })
             .await
             .unwrap_or_else(|response| *response);
@@ -756,17 +967,34 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             Ok(body) => body,
             Err(response) => return *response,
         };
-        let parent_id = js_text(body.get("parentId")).filter(|value| !value.is_empty());
+        let parent_id = body
+            .get("parentId")
+            .and_then(Value::as_str)
+            .map(crate::text::js_trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
         let user_id = uid.clone();
+        let project_events = state.project_events.clone();
         return run(&state.auth, move |db| {
-            let service = ProjectService::new(db);
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)
+                    .map_err(db_err)?;
+            let service = ProjectService::new(&tx);
             match service.get(&id, Some(&user_id)) {
                 Ok(Some(_)) => {}
                 Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                 Err(error) => return Err(db_err(error)),
             }
             match service.move_project(&id, parent_id.as_deref(), Some(&user_id)) {
-                Ok(Some(project)) => Res::Ok(response(200, json!(project))),
+                Ok(Some(project)) => {
+                    let mut project = json!(project);
+                    project_status(&tx, &mut project).map_err(db_err)?;
+                    tx.commit().map_err(db_err)?;
+                    if let Some(events) = project_events {
+                        events(&user_id, "project.updated", json!({"project": project}));
+                    }
+                    Res::Ok(response(200, project))
+                }
                 Ok(None) => Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                 Err(ProjectError::Move(rejection)) => Res::Ok(move_rejection(rejection)),
                 Err(ProjectError::Database(error)) => Err(db_err(error)),
@@ -787,6 +1015,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         let requested = requested_repository_id(&body);
         let user_id = uid.clone();
         let events = state.events.clone();
+        let project_events = state.project_events.clone();
         return run(&state.auth, move |db| {
             Res::Ok(assign_repository(
                 db,
@@ -794,6 +1023,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 &user_id,
                 requested.as_deref(),
                 &events,
+                &project_events,
             ))
         })
         .await
@@ -824,6 +1054,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 if let Value::Object(map) = &mut value {
                     map.insert("sessions".to_string(), json!(rows));
                 }
+                project_status(db, &mut value).map_err(db_err)?;
                 Res::Ok(response(200, value))
             })
             .await
@@ -835,8 +1066,16 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 Err(response) => return *response,
             };
             let user_id = uid.clone();
+            let project_events = state.project_events.clone();
             return run(&state.auth, move |db| {
-                let service = ProjectService::new(db);
+                // Keep authorization, root changes and repository metadata in one
+                // transaction so a failed metadata update cannot leave stale links.
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Immediate,
+                )
+                .map_err(db_err)?;
+                let service = ProjectService::new(&tx);
                 let current = match service.get(&id, Some(&user_id)) {
                     Ok(Some(project)) => project,
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
@@ -900,43 +1139,57 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                         Err(error) => return Err(db_err(error)),
                     }
                 }
-                if fields.is_empty() {
-                    return Res::Ok(response(200, json!(current)));
-                }
-                service
-                    .update(&id, &fields, Some(&user_id))
-                    .map_err(db_err)?;
-                if cleared_root {
+                if !fields.is_empty() {
                     service
-                        .clear_repository(&id, Some(&user_id))
+                        .update(&id, &fields, Some(&user_id))
                         .map_err(db_err)?;
+                    if cleared_root {
+                        service
+                            .clear_repository(&id, Some(&user_id))
+                            .map_err(db_err)?;
+                    }
                 }
-                match service.get(&id, Some(&user_id)) {
-                    Ok(Some(updated)) => Res::Ok(response(200, json!(updated))),
-                    Ok(None) => Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
-                    Err(error) => Err(db_err(error)),
+                let updated = match service.get(&id, Some(&user_id)) {
+                    Ok(Some(updated)) => updated,
+                    Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
+                    Err(error) => return Err(db_err(error)),
+                };
+                let mut project = json!(updated);
+                project_status(&tx, &mut project).map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
+                if let Some(events) = project_events {
+                    events(&user_id, "project.updated", json!({"project": project}));
                 }
+                Res::Ok(response(200, project))
             })
             .await
             .unwrap_or_else(|response| *response);
         }
         if method == axum::http::Method::DELETE {
             let user_id = uid.clone();
+            let project_events = state.project_events.clone();
             return run(&state.auth, move |db| {
-                let projects = ProjectService::new(db);
-                let sessions = crate::services::sessions::SessionService::new(db);
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Immediate,
+                )
+                .map_err(db_err)?;
+                let projects = ProjectService::new(&tx);
+                let sessions = crate::services::sessions::SessionService::new(&tx);
                 match projects.get(&id, Some(&user_id)) {
                     Ok(Some(_)) => {}
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
                 }
-                let archived = projects.archive(&id, Some(&user_id)).map_err(db_err)?;
-                for archived_id in &archived {
-                    sessions
-                        .project_status(archived_id, "archive", Some(&user_id))
-                        .map_err(db_err)?;
+                sessions
+                    .project_status(&id, "archive", Some(&user_id))
+                    .map_err(db_err)?;
+                projects.archive(&id, Some(&user_id)).map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
+                if let Some(events) = project_events {
+                    events(&user_id, "project.deleted", json!({"projectId": id}));
                 }
-                Res::Ok(response(200, json!({"ok": true, "archived": archived})))
+                Res::Ok(StatusCode::NO_CONTENT.into_response())
             })
             .await
             .unwrap_or_else(|response| *response);

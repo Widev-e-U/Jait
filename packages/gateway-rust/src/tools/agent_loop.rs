@@ -1043,12 +1043,6 @@ pub fn list_ambiguous_openai_names() -> Vec<String> {
     names
 }
 
-/// Test-only reset of the process-global name map.
-#[cfg(test)]
-fn reset_name_map() {
-    *name_map().lock().expect("tool name map poisoned") = NameMap::default();
-}
-
 /// Convert tool schemas to their OpenAI-safe equivalents.
 pub fn to_tool_schemas(schemas: &[OpenAiToolSchema]) -> Vec<OpenAiToolSchema> {
     register_openai_name_mappings(
@@ -5156,7 +5150,6 @@ mod tests {
 
     #[test]
     fn openai_name_mapping_is_stable_sanitised_and_reversible() {
-        reset_name_map();
         assert_eq!(to_openai_name("mcp__server.tool"), "mcp__server_tool");
         assert_eq!(to_openai_name("mcp__server.tool"), "mcp__server_tool");
         assert_eq!(from_openai_name("mcp__server_tool"), "mcp__server.tool");
@@ -5880,7 +5873,6 @@ mod tests {
 
     #[test]
     fn tool_schemas_are_sanitised_for_the_provider() {
-        reset_name_map();
         let schemas = to_tool_schemas(&[OpenAiToolSchema::new(
             "mcp__x.y",
             "d",

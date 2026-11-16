@@ -30,6 +30,7 @@ impl Gateway {
             .env("JAIT_RUST_PROJECT_ROOT", &directory)
             .env("JAIT_RUST_DB", directory.join("gateway.sqlite"))
             .env("JWT_SECRET", "isolated-repos-secret")
+            .env("HOOK_SECRET", "isolated-hook-secret")
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -70,6 +71,61 @@ impl Drop for Gateway {
         let _ = std::fs::remove_dir_all(&self.directory);
     }
 }
+/// Minimal WebSocket client over the gateway's own frame codec.
+struct WsClient(tokio::net::TcpStream);
+
+impl WsClient {
+    async fn connect(base: &str, token: &str) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let host = base.trim_start_matches("http://");
+        let mut stream = tokio::net::TcpStream::connect(host).await.unwrap();
+        let request = format!(
+            "GET /ws?token={token} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(stream.read_u8().await.unwrap());
+        }
+        assert!(String::from_utf8_lossy(&head).starts_with("HTTP/1.1 101"));
+        Self(stream)
+    }
+
+    /// Next text message, or None if nothing arrives within `wait`.
+    async fn next(&mut self, wait: Duration) -> Option<serde_json::Value> {
+        use jait_gateway::ws::{OpCode, read_frame, write_client_frame};
+        tokio::time::timeout(wait, async {
+            loop {
+                let frame = read_frame(&mut self.0, 1 << 20).await.unwrap()?;
+                match frame.opcode {
+                    OpCode::Text => return serde_json::from_str(frame.text()?).ok(),
+                    OpCode::Ping => {
+                        write_client_frame(&mut self.0, OpCode::Pong, &frame.payload, [1, 2, 3, 4])
+                            .await
+                            .unwrap()
+                    }
+                    OpCode::Pong => {}
+                    _ => return None,
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    async fn until(&mut self, kind: &str, wait: Duration) -> Option<serde_json::Value> {
+        let deadline = tokio::time::Instant::now() + wait;
+        while let Some(left) = deadline.checked_duration_since(tokio::time::Instant::now()) {
+            let message = self.next(left).await?;
+            if message["type"] == kind {
+                return Some(message);
+            }
+        }
+        None
+    }
+}
+
 #[tokio::test]
 async fn misc_routes_are_owned_through_the_binary() {
     let gateway = Gateway::start();
@@ -725,6 +781,8 @@ async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
         .json(&json!({"username":"other", "password":"owner-pass-123", "invitation":invite["invitation"]}))
         .send().await.unwrap().json().await.unwrap();
     let other = other["access_token"].as_str().unwrap();
+    let mut owner_ws = WsClient::connect(&gateway.base, owner).await;
+    let mut other_ws = WsClient::connect(&gateway.base, other).await;
     let response = client
         .post(url("/api/agent-control/halt"))
         .bearer_auth(owner)
@@ -736,6 +794,20 @@ async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
     let halted: Value = response.json().await.unwrap();
     assert_eq!(halted["state"]["halted"], true);
     assert_eq!(halted["state"]["reason"], "maintenance");
+    let event = owner_ws
+        .until("agent.halted", Duration::from_secs(2))
+        .await
+        .expect("owner receives halt event");
+    assert_eq!(event["sessionId"], "");
+    assert_eq!(event["payload"], halted["state"]);
+    assert!(event["timestamp"].as_str().is_some());
+    assert!(
+        other_ws
+            .until("agent.halted", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "halt event leaked to another owner"
+    );
     assert_eq!(halted["stopped"], 0);
     assert!(
         halted["stopError"]
@@ -794,6 +866,18 @@ async fn agent_control_reports_unavailable_stop_and_isolates_owners() {
         .await
         .unwrap();
     assert_eq!(resumed["state"]["halted"], false);
+    let event = owner_ws
+        .until("agent.halted", Duration::from_secs(2))
+        .await
+        .expect("owner receives resume event");
+    assert_eq!(event["payload"], resumed["state"]);
+    assert!(
+        other_ws
+            .until("agent.halted", Duration::from_millis(250))
+            .await
+            .is_none(),
+        "resume event leaked to another owner"
+    );
     let after_resume = client
         .post(url("/api/threads"))
         .bearer_auth(owner)
@@ -859,4 +943,288 @@ async fn plugin_mount_refuses_loading_without_native_host() {
             .status(),
         404
     );
+}
+
+#[tokio::test]
+async fn maintenance_routes_enforce_auth_and_read_real_empty_store() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let unauthorized = client
+        .get(url("/api/maintenance/runs"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), 401);
+    let unauthorized_detail = client
+        .get(url("/api/maintenance/runs/missing"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_detail.status(), 401);
+    let unauthorized_run = client
+        .post(url("/api/maintenance/run"))
+        .json(&json!({"repoId":"missing"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_run.status(), 401);
+
+    let registered: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registered["access_token"].as_str().unwrap();
+    let response = client
+        .get(url("/api/maintenance/runs?jobId=missing&limit=1"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.json::<Value>().await.unwrap(), json!({"runs":[]}));
+    let response = client
+        .get(url("/api/maintenance/runs/missing"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 404);
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"error":"Run not found"})
+    );
+    let response = client
+        .post(url("/api/maintenance/run"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"error":"repoId is required"})
+    );
+}
+
+#[tokio::test]
+async fn maintenance_reads_persisted_runs_with_node_filter_and_limit() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let registered: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registered["access_token"].as_str().unwrap();
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    for index in 0..150 {
+        db.execute(
+            "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,output,started_at) VALUES(?1,'job-a','completed','maintenance','stored output',?2)",
+            rusqlite::params![format!("run-{index:03}"), format!("2026-01-01T00:{:02}:{:02}Z", index / 60, index % 60)],
+        ).unwrap();
+    }
+    db.execute(
+        "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES('other','job-b','failed','manual','2025-01-01T00:00:00Z')",
+        [],
+    ).unwrap();
+    for index in 0..80 {
+        db.execute(
+            "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES(?1,'job-b','failed','manual',?2)",
+            rusqlite::params![format!("other-{index:03}"), format!("2025-01-01T00:{:02}:{:02}Z", index / 60, index % 60)],
+        ).unwrap();
+    }
+    drop(db);
+
+    let response = client
+        .get(url("/api/maintenance/runs?jobId=job-a&limit=200"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let body: Value = response.json().await.unwrap();
+    let runs = body["runs"].as_array().unwrap();
+    assert_eq!(runs.len(), 150);
+    assert_eq!(runs[0]["id"], "run-149");
+    assert_eq!(runs[0]["output"], "stored output");
+
+    let response = client
+        .get(url("/api/maintenance/runs?jobId=&limit=200"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.json::<Value>().await.unwrap()["runs"]
+            .as_array()
+            .unwrap()
+            .len(),
+        200
+    );
+
+    for (query, expected) in [
+        ("", 50),
+        ("?limit=0", 50),
+        ("?limit=-1", 1),
+        ("?limit=999", 200),
+    ] {
+        let response = client
+            .get(url(&format!("/api/maintenance/runs{query}")))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(body["runs"].as_array().unwrap().len(), expected, "{query}");
+    }
+
+    let response = client
+        .get(url("/api/maintenance/runs/run-149"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let run: Value = response.json().await.unwrap();
+    assert_eq!(run["run"]["jobId"], "job-a");
+    assert_eq!(run["run"]["triggeredBy"], "maintenance");
+    assert_eq!(run["run"]["output"], "stored output");
+}
+
+#[tokio::test]
+async fn maintenance_existing_repository_fails_closed_without_shell_consent() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let registered: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registered["access_token"].as_str().unwrap();
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    db.execute(
+        "INSERT INTO automation_repositories(id,name,local_path,created_at,updated_at) VALUES('repo-a','test repo',?1,'2026-01-01','2026-01-01')",
+        [gateway.directory.to_str().unwrap()],
+    ).unwrap();
+    drop(db);
+
+    let response = client
+        .post(url("/api/maintenance/run"))
+        .bearer_auth(token)
+        .json(&json!({"repoId":"repo-a"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(
+        body["error"],
+        "Maintenance checks require shell consent, which is not available in the Rust gateway yet"
+    );
+
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    let count: i64 = db
+        .query_row("SELECT COUNT(*) FROM scheduled_job_runs", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(count, 0, "refused execution must not create a run");
+}
+
+#[tokio::test]
+async fn unavailable_integrations_are_authenticated_and_fail_closed_through_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    for path in ["/api/channels", "/api/plugins"] {
+        assert_eq!(client.get(url(path)).send().await.unwrap().status(), 401);
+    }
+    let registration = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(registration.status(), 200);
+    let body = registration.json::<Value>().await.unwrap();
+    let token = body["access_token"].as_str().unwrap();
+    for path in ["/api/channels", "/api/plugins"] {
+        let response = client
+            .get(url(path))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.json::<Value>().await.unwrap(), json!([]));
+    }
+    let response = client
+        .post(url("/api/plugins/scan"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    assert_eq!(
+        response.json::<Value>().await.unwrap()["message"],
+        "Plugins are not available in the Rust gateway yet"
+    );
+    let response = client
+        .post(url("/api/channels/telegram/start"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    assert_eq!(
+        response.json::<Value>().await.unwrap()["error"],
+        "No channel connectors are available in the Rust gateway yet"
+    );
+    for path in ["/hooks/wake", "/hooks/agent"] {
+        assert_eq!(client.post(url(path)).send().await.unwrap().status(), 401);
+        let response = client
+            .post(url(path))
+            .header("x-hook-token", "isolated-hook-secret")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 500);
+        assert_eq!(
+            response.json::<Value>().await.unwrap()["message"],
+            "Hook handling is not available in the Rust gateway yet"
+        );
+    }
 }

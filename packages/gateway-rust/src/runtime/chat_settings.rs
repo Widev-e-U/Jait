@@ -20,7 +20,11 @@ use crate::{
 };
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 const PROMPT: &str = "You are Jait, a coding and security workbench assistant. Be concise, distinguish observations from assumptions, and never claim tools ran without evidence.";
 
@@ -113,6 +117,7 @@ impl ChatFactory for SettingsChatFactory {
                 .run(move |db| Ok(UserService::new(db).get_settings(&id)?))
                 .await
                 .map_err(|e| e.to_string())?;
+            let disabled_tools: HashSet<String> = settings.disabled_tools.into_iter().collect();
             let api_keys: HashMap<String, String> = settings.api_keys.into_iter().collect();
             if api_keys.get("JAIT_CHAT_PROVIDER").map(String::as_str) == Some("acp") {
                 let config = self
@@ -125,11 +130,12 @@ impl ChatFactory for SettingsChatFactory {
                     .map(std::path::PathBuf::from)
                     .filter(|p| p.is_absolute())
                     .unwrap_or_else(|| self.project_root.clone());
-                let (tools, executor) = super::chat_tools::project_tools_with_questions(
+                let (tools, executor) = super::chat_tools::project_tools_with_policy(
                     &user.id,
                     &session.id,
                     self.consent.clone(),
                     self.questions.clone(),
+                    disabled_tools,
                 )?;
                 drop(tools);
                 return Ok(PreparedChat {
@@ -158,11 +164,12 @@ impl ChatFactory for SettingsChatFactory {
                 jait_backend: JaitBackend::parse(&settings.jait_backend),
                 strict_model: true,
             })?;
-            let (tools, executor) = super::chat_tools::project_tools_with_questions(
+            let (tools, executor) = super::chat_tools::project_tools_with_policy(
                 &user.id,
                 &session.id,
                 self.consent.clone(),
                 self.questions.clone(),
+                disabled_tools,
             )?;
             Ok(PreparedChat {
                 config: TurnConfig {

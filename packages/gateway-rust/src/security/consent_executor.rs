@@ -117,6 +117,7 @@ pub struct ConsentAwareExecutor {
     trust: Arc<dyn ToolTrust>,
     delegate: ToolDelegate,
     permits: Arc<Semaphore>,
+    disabled_tools: HashSet<String>,
 }
 impl ConsentAwareExecutor {
     pub fn new(
@@ -134,7 +135,12 @@ impl ConsentAwareExecutor {
             trust,
             delegate,
             permits,
+            disabled_tools: HashSet::new(),
         }
+    }
+    pub fn with_disabled_tools(mut self, disabled_tools: HashSet<String>) -> Self {
+        self.disabled_tools = disabled_tools;
+        self
     }
     pub fn session_approvals(&self) -> HashSet<String> {
         self.approvals.lock().unwrap().clone()
@@ -155,6 +161,12 @@ impl ConsentAwareExecutor {
         }
         if context.cancellation.is_cancelled() {
             return Ok(cancelled());
+        }
+        if crate::tools::tool_names::is_tool_disabled(name, &self.disabled_tools) {
+            return Ok(ToolResult::message(
+                false,
+                "Tool is disabled in user settings",
+            ));
         }
         // ToolParametersSchema.type is "object" in the shared tool contract.
         // Reject malformed model arguments before they can reach policy previews or a delegate.

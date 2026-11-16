@@ -294,3 +294,119 @@ async fn assistant_profiles_are_persistent_and_owner_scoped() {
         404
     );
 }
+
+#[tokio::test]
+async fn failed_default_changes_roll_back() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::new();
+    let owner = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    let token = owner["access_token"].as_str().unwrap();
+    let collection = format!("{}/api/assistants/profiles", gateway.base);
+    let first = client
+        .post(&collection)
+        .bearer_auth(token)
+        .json(&json!({"name":"First"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    let first_id = first["profile"]["id"].as_str().unwrap();
+    let second = client
+        .post(&collection)
+        .bearer_auth(token)
+        .json(&json!({"name":"Second"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    let second_id = second["profile"]["id"].as_str().unwrap();
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_profile_insert BEFORE INSERT ON assistant_profiles WHEN NEW.name = 'Fail' BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+    let response = client
+        .post(&collection)
+        .bearer_auth(token)
+        .json(&json!({"name":"Fail", "isDefault":true}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    let list = client
+        .get(&collection)
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert!(
+        list["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == first_id && p["isDefault"] == true),
+        "{list}"
+    );
+    db.execute_batch("DROP TRIGGER reject_profile_insert; CREATE TRIGGER reject_profile_default BEFORE UPDATE OF is_default ON assistant_profiles WHEN OLD.is_default = 0 AND NEW.is_default = 1 BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+    let response = client
+        .patch(format!("{collection}/{second_id}"))
+        .bearer_auth(token)
+        .json(&json!({"isDefault":true}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    let list = client
+        .get(&collection)
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert!(
+        list["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == first_id && p["isDefault"] == true),
+        "{list}"
+    );
+    let response = client
+        .delete(format!("{collection}/{first_id}"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 500);
+    let list = client
+        .get(&collection)
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert!(
+        list["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == first_id && p["isDefault"] == true),
+        "{list}"
+    );
+}

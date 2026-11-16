@@ -553,8 +553,23 @@ impl Application {
         let mut project_collection =
             crate::routes::projects::ProjectCollectionRoutes::new(auth.clone());
         project_collection.events = Some(repository_events.clone());
+        project_collection.project_events = Some({
+            let hub = repository_hub.clone();
+            Arc::new(move |owner, kind, payload| {
+                if let Ok(slot) = hub.lock()
+                    && let Some(hub) = slot.as_ref()
+                {
+                    hub.broadcast_user_event(owner, serde_json::json!({
+                        "type": kind,
+                        "sessionId": "",
+                        "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        "payload": payload,
+                    }));
+                }
+            })
+        });
         let mut repository_routes = RepositoryRoutes::new(auth.clone());
-        repository_routes.events = Some(repository_events);
+        repository_routes.events = Some(repository_events.clone());
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -589,7 +604,11 @@ impl Application {
                 }
                 .router(),
             )
-            .merge(PlanRoutes::new(auth.clone()).router())
+            .merge({
+                let mut plans = PlanRoutes::new(auth.clone());
+                plans.events = Some(repository_events.clone());
+                plans.router()
+            })
             .merge(super::team_chat_mount::TeamChatRoutes { auth: auth.clone() }.router())
             .merge(
                 composed_code_graph_routes(auth.clone(), &config.project_root, &state_dir)?
@@ -660,9 +679,28 @@ impl Application {
             .merge(super::channels_mount::screen_share_routes(&auth).router())
             .merge(super::channels_mount::github_app_routes(&auth).router())
             .merge({
-                // No registry of running agents exists yet, so a halt reports the stop as
-                // failed (a partial result) rather than claiming agents were stopped.
+                // Other agent runtimes remain unavailable, so halt still reports a partial stop.
                 let mut routes = crate::routes::agent_control::AgentControlRoutes::new(auth.clone());
+                let halt_chat = chat.clone();
+                routes.on_halt_persisted = Arc::new(move |owner| {
+                    if let Some(chat) = &halt_chat {
+                        chat.cancel_owner_threads(owner);
+                    }
+                });
+                let hub = repository_hub.clone();
+                routes.on_change = Arc::new(move |owner, state| {
+                    if let Ok(slot) = hub.lock()
+                        && let Some(hub) = slot.as_ref()
+                    {
+                        hub.broadcast_user_event(owner, serde_json::json!({
+                            "type": "agent.halted",
+                            "sessionId": "",
+                            "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                            "payload": state,
+                        }));
+                    }
+                    Ok(())
+                });
                 routes.stop_running = std::sync::Arc::new(|_| {
                     Box::pin(async {
                         Err("Stopping running agents is not available in the Rust gateway yet".to_string())

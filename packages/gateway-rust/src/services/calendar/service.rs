@@ -348,6 +348,8 @@ impl CalendarService {
         let input = input.clone();
         let now = iso((self.clock)()).map_err(fail)?;
         self.run(move|db|{
+            let tx = db.unchecked_transaction()?;
+            let db = &tx;
             let device=input["deviceId"].as_str().ok_or_else(||fail("deviceId must be a string"))?;
             let email=format!("device:{device}");let existing=find_account(db,user.as_deref(),"android",&email)?;
             let id=existing.as_ref().and_then(|r|r["id"].as_str()).map(String::from).unwrap_or_else(||uuidv7().to_string());
@@ -358,7 +360,9 @@ impl CalendarService {
             }else{db.execute("INSERT INTO calendar_accounts(id,user_id,provider,email,display_name,status,error,created_at,updated_at)VALUES(?,?,'android',?,?,'connected',NULL,?,?)",params![id,user,email,name,created,now])?;}
             let calendars=serde_json::to_string(&input["calendars"])?;let events=serde_json::to_string(&input["events"])?;
             db.execute("INSERT INTO device_calendar_snapshots(account_id,user_id,calendars,events,synced_at)VALUES(?,?,?,?,?) ON CONFLICT(account_id)DO UPDATE SET calendars=excluded.calendars,events=excluded.events,synced_at=excluded.synced_at",params![id,user,calendars,events,now])?;
-            Ok(json!({"id":id,"userId":user,"provider":"android","email":email,"displayName":name,"status":"connected","error":null,"createdAt":created,"updatedAt":now}))
+            let account = json!({"id":id,"userId":user,"provider":"android","email":email,"displayName":name,"status":"connected","error":null,"createdAt":created,"updatedAt":now});
+            tx.commit()?;
+            Ok(account)
         }).await
     }
     pub async fn disconnect(&self, user: Option<&str>, id: &str) -> Result<bool, Error> {

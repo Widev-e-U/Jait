@@ -479,6 +479,15 @@ impl<'a> ProjectService<'a> {
         )?;
         Ok(())
     }
+    /// Validate a new project against the owner's active hierarchy before adoption.
+    pub fn validate_new_parent(
+        &self,
+        parent: &str,
+        user: Option<&str>,
+    ) -> rusqlite::Result<Option<MoveRejection>> {
+        let rows = self.list(Some("active"), user, None)?;
+        Ok(validate_move(&rows, "__new__", Some(parent)))
+    }
     pub fn move_project(
         &self,
         id: &str,
@@ -592,6 +601,21 @@ impl<'a> ProjectService<'a> {
         user: Option<&str>,
     ) -> rusqlite::Result<Option<ProjectRecord>> {
         let transaction = self.db.unchecked_transaction()?;
+        let updated = self.assign_repository_in_transaction(id, repository, user)?;
+        if updated.is_some() {
+            transaction.commit()?;
+        }
+        Ok(updated)
+    }
+
+    /// The caller must hold a transaction covering authorization and this update.
+    pub(crate) fn assign_repository_in_transaction(
+        &self,
+        id: &str,
+        repository: &str,
+        user: Option<&str>,
+    ) -> rusqlite::Result<Option<ProjectRecord>> {
+        debug_assert!(!self.db.is_autocommit());
         let Some(project) = self.get(id, user)? else {
             return Ok(None);
         };
@@ -602,11 +626,7 @@ impl<'a> ProjectService<'a> {
             json!({"metadata":metadata}).as_object().expect("object"),
             user,
         )?;
-        let updated = self.get(id, user)?;
-        if updated.is_some() {
-            transaction.commit()?;
-        }
-        Ok(updated)
+        self.get(id, user)
     }
     pub fn clear_repository(
         &self,
