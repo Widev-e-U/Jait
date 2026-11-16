@@ -446,6 +446,7 @@ export class AcpProvider implements CliProviderAdapter {
   private replayableEvents: Array<{ event: ProviderEvent; emittedAt: number }> = [];
   private authLoginProcess: ChildProcess | null = null;
   private cachedModels: ProviderModelInfo[] | null = null;
+  private preferLatestPackage = false;
   private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
   private authProbeInFlight: Promise<ProviderAuthStatus> | null = null;
   private activeLoginAuthProbeInFlight: Promise<ProviderAuthStatus> | null = null;
@@ -552,6 +553,20 @@ export class AcpProvider implements CliProviderAdapter {
   resetModels(): void {
     this.cachedModels = null;
     this.cachedAuthStatus = null;
+    // The agent adapter bundles the model catalogue. An unpinned `npx -y pkg`
+    // keeps reusing its cached copy, so a refresh must resolve `@latest`.
+    this.preferLatestPackage = true;
+  }
+
+  /** Spawn args, with an unpinned npx package bumped to `@latest` after a refresh. */
+  private spawnArgs(): string[] {
+    const args = this.config.args;
+    if (!this.preferLatestPackage || !/^npx(\.cmd)?$/.test(this.config.command)) {
+      return args;
+    }
+    const index = args.findIndex((arg) => /^(@[\w.-]+\/)?[\w.-]+$/.test(arg) && !arg.startsWith("-"));
+    if (index < 0) return args;
+    return args.map((arg, i) => (i === index ? `${arg}@latest` : arg));
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
@@ -613,9 +628,9 @@ export class AcpProvider implements CliProviderAdapter {
       // Fallbacks are keyed by provider *type*: `this.id` is the account id
       // ("claude-code-01J…") for per-account providers, which matched nothing
       // and left the picker empty whenever the agent advertised no models.
-      this.cachedModels = models.length > 0
-        ? models
-        : getAcpFallbackModels(this.providerType);
+      // Fallbacks are not cached, so the next refresh re-probes the agent.
+      if (models.length === 0) return getAcpFallbackModels(this.providerType);
+      this.cachedModels = models;
       return this.cachedModels;
     } catch (error) {
       const message = extractErrorMessage(error, "ACP model discovery failed");
@@ -628,10 +643,7 @@ export class AcpProvider implements CliProviderAdapter {
       // CLI's well-known models are a better answer than an empty picker.
       if (!isAuthenticationRequiredMessage(message)) {
         const fallbackModels = getAcpFallbackModels(this.providerType);
-        if (fallbackModels.length > 0) {
-          this.cachedModels = fallbackModels;
-          return this.cachedModels;
-        }
+        if (fallbackModels.length > 0) return fallbackModels;
       }
       throw error instanceof Error ? error : new Error(message);
     } finally {
@@ -990,7 +1002,7 @@ export class AcpProvider implements CliProviderAdapter {
       }
     }
 
-    const child = spawn(this.config.command, this.config.args, {
+    const child = spawn(this.config.command, this.spawnArgs(), {
       cwd: options.workingDirectory,
       detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"],
@@ -1532,7 +1544,7 @@ export class AcpProvider implements CliProviderAdapter {
     initialized: InitializeResponse;
     authMethods: AuthMethod[];
   }> {
-    const child = spawn(this.config.command, this.config.args, {
+    const child = spawn(this.config.command, this.spawnArgs(), {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
       env: this.childEnv(),
