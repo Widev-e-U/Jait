@@ -200,3 +200,82 @@ test('mobile model list keeps rows separated, favorites visible and groups colla
     path: path.resolve(__dirname, `../../.jait/shots/provider-selector-model-list-390-reopen.png`),
   })
 })
+
+
+test('model and reasoning selection exposes supported choices and resets incompatible effort', async ({ page }) => {
+  const choices = [
+    { id: 'first', name: 'First model', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'ultra' }] },
+    { id: 'second', name: 'Second model', supportedReasoningEfforts: [{ reasoningEffort: 'high' }] },
+    { id: 'third', name: 'Third model' },
+  ]
+  await page.route(/\/api\/providers(?:\?|$)/, route => route.fulfill({ json: { providers, remoteProviders: [] } }))
+  await page.route('**/api/providers/*/models*', route => route.fulfill({ json: { models: choices } }))
+  await page.route(url => url.pathname === '/', async route => {
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replace('/src/main.tsx', '/src/e2e-fixtures/provider-selector-models-layout.tsx') })
+  })
+  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { access_token: 'layout-fixture-token' } }))
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { id: 'fixture', username: 'fixture' } }))
+  await page.route('**/api/settings', route => route.fulfill({ json: {} }))
+  await page.goto('/')
+  const trigger = page.getByRole('button', { name: /^Provider Jait/ })
+  await trigger.click()
+  await page.getByRole('option', { name: /First model/ }).click()
+  const effort = page.getByRole('combobox', { name: 'Reasoning effort' })
+  await expect(effort).toContainText('Default')
+  await effort.click()
+  await expect(page.getByRole('option', { name: 'Medium' })).toBeVisible()
+  await page.getByRole('option', { name: 'Ultra' }).click()
+  await expect(effort).toContainText('Ultra')
+  await trigger.click()
+  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Reasoning effort' })).toHaveCount(0)
+  await page.getByRole('option', { name: /Second model/ }).click()
+  await expect(effort).toContainText('Default')
+  await effort.click()
+  await expect(page.getByRole('option', { name: 'High' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Ultra' })).toHaveCount(0)
+  await page.getByRole('option', { name: 'High' }).click()
+  await trigger.click()
+  await page.getByRole('option', { name: /Third model/ }).click()
+  await expect(effort).toHaveCount(0)
+})
+
+
+test('mobile chat shows supported reasoning modes beside the provider', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const choices = [
+    { id: 'first', name: 'First model', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'ultra' }] },
+    { id: 'second', name: 'Second model', supportedReasoningEfforts: [{ reasoningEffort: 'high' }] },
+    { id: 'third', name: 'Third model' },
+  ]
+  await page.route(/\/api\/providers(?:\?|$)/, route => route.fulfill({ json: { providers, remoteProviders: [] } }))
+  await page.route('**/api/providers/*/models*', route => route.fulfill({ json: { models: choices } }))
+  await page.route(url => url.pathname === '/', async route => {
+    const response = await route.fetch()
+    await route.fulfill({ response, body: (await response.text()).replace('/src/main.tsx', '/src/e2e-fixtures/provider-selector-models-layout.tsx') })
+  })
+  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { access_token: 'layout-fixture-token' } }))
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { id: 'fixture', username: 'fixture' } }))
+  await page.route('**/api/settings', route => route.fulfill({ json: {} }))
+  await page.goto('/')
+  const trigger = page.getByRole('button', { name: /^Provider Jait/ })
+  await trigger.click()
+  await page.getByRole('option', { name: /First model/ }).click()
+  const effort = page.getByRole('combobox', { name: 'Reasoning effort' })
+  await expect(effort).toContainText('Default')
+  await expect(effort.locator('svg.lucide-brain')).toHaveCount(1)
+  await effort.click()
+  await page.getByRole('option', { name: 'Ultra' }).click()
+  await expect(effort).toContainText('Ultra')
+  await expect(effort.locator('svg.lucide-rocket')).toHaveCount(1)
+  await trigger.click()
+  await page.getByRole('option', { name: /Second model/ }).click()
+  await expect(effort).toContainText('Default')
+  await effort.click()
+  await expect(page.getByRole('option', { name: 'High' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Ultra' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await trigger.click()
+  await page.getByRole('option', { name: /Third model/ }).click()
+  await expect(effort).toHaveCount(0)
+})

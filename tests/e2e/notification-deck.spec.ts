@@ -13,6 +13,17 @@ test('notification deck expands and collapses and updates when dismissed', async
   await page.keyboard.press('Enter')
   await expect(page.getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true')
   await expect(cards.first()).toHaveAttribute('data-expanded', 'true')
+  await expect.poll(async () => cards.evaluateAll(elements => {
+    const boxes = elements.map(element => element.getBoundingClientRect())
+    return boxes.map((box, index) => ({
+      height: Math.round(box.height),
+      gap: index ? Math.round(box.top - boxes[index - 1].bottom) : 0,
+    }))
+  })).toEqual([{ height: 110, gap: 0 }, { height: 110, gap: 8 }, { height: 110, gap: 8 }])
+  const actions = cards.filter({ hasText: 'First notification' })
+  const cancelBox = await actions.getByRole('button', { name: 'Mark as read' }).boundingBox()
+  const openBox = await actions.getByRole('button', { name: 'Open' }).boundingBox()
+  expect(cancelBox!.x + cancelBox!.width).toBeLessThan(openBox!.x)
   await page.getByRole('button', { name: 'Show fewer' }).click()
   await page.mouse.move(0, 0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')

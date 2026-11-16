@@ -10,10 +10,10 @@ const base = { encrypted: false, unableToDecrypt: false, pending: false, failed:
  * page must group channels under their team and open channels with a
  * channel-flavoured header, while plain chats keep the normal transcript.
  */
-async function mount(page: Page, roomId = '!general:test', service = 'Slack') {
+async function mount(page: Page, roomId = '!general:test', service = 'Slack', earlier?: Promise<void>) {
   const calls: any[] = []
   const snapshot = {
-    status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: false,
+    status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: !!earlier,
     session: { homeserver: 'https://matrix.test', userId: '@alice:test', deviceId: 'A' },
     rooms: [
       { id: '!eng:test', name: 'Engineering', membership: 'join', unread: 0, encrypted: false, service, network: 'Acme', timestamp: 1, preview: 'Team', kind: 'team' },
@@ -36,7 +36,12 @@ async function mount(page: Page, roomId = '!general:test', service = 'Slack') {
   }
   await page.route('**/api/messenger**', async route => {
     const url = new URL(route.request().url())
-    if (url.pathname.endsWith('/command')) { calls.push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }) }
+    if (url.pathname.endsWith('/command')) {
+      const command = route.request().postDataJSON()
+      calls.push(command)
+      if (command.action === 'earlier' && earlier) await earlier
+      return route.fulfill({ json: { ok: true } })
+    }
     if (url.pathname.endsWith('/media')) return route.fulfill({ json: { data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII=' } })
     return route.fulfill({ json: { snapshot: { ...snapshot, messages: snapshot.messagesByRoom[roomId as '!general:test'] ?? [], selectedRoomId: roomId } } })
   })
@@ -97,4 +102,25 @@ test('Teams can be filtered separately from WhatsApp', async ({ page }) => {
   await expect(page.getByRole('group', { name: 'Conversation general' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Conversation Bob' })).toHaveCount(0)
   await expect(page.getByRole('combobox', { name: 'Filter by service' })).toHaveText('Teams')
+})
+
+
+test('loading earlier Teams messages keeps the conversation viewport stable', async ({ page }) => {
+  let finishLoading!: () => void
+  const earlier = new Promise<void>(resolve => { finishLoading = resolve })
+  await mount(page, '!general:test', 'Teams', earlier)
+  const viewport = page.locator('[data-conversation-viewport]')
+  const message = page.getByRole('log', { name: 'Messages' }).getByText('Deploy done', { exact: true })
+  await expect(message).toBeVisible()
+  const before = await viewport.boundingBox()
+  const messageBefore = await message.boundingBox()
+  await page.getByRole('button', { name: 'Load earlier messages' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages' })).toBeVisible()
+  const during = await viewport.boundingBox()
+  expect(during).toEqual(before)
+  expect(await message.boundingBox()).toEqual(messageBefore)
+  finishLoading()
+  await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages' })).toHaveCount(0)
+  expect(await viewport.boundingBox()).toEqual(before)
+  expect(await message.boundingBox()).toEqual(messageBefore)
 })

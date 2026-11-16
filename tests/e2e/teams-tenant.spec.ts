@@ -6,7 +6,7 @@ test('shows organizations under their account and starts the selected tenant log
   await page.route('**/api/messenger/bridge-status', route => route.fulfill({ json: {
     bridges: [{ platform: 'teams', label: 'Microsoft Teams', state: 'connected', checkedAt: new Date().toISOString(),
       accounts: [{ id: accountId, name: 'Account', state: 'connected', tenants: [
-        { id: tenantId, name: 'Example organization', connected: false },
+        { id: tenantId, name: 'Example organization', connected: false, state: 'expired' },
       ] }],
     }],
   } }))
@@ -18,7 +18,8 @@ test('shows organizations under their account and starts the selected tenant log
   await page.goto('/src/e2e-fixtures/teams-tenant.html')
   const list = page.getByRole('list', { name: 'Organizations for Account' })
   await expect(list).toContainText('Example organization')
-  await list.getByRole('button', { name: 'Sign in' }).click()
+  await expect(list).toContainText('Auth timed out')
+  await list.getByRole('button', { name: 'Sign in again' }).click()
   await expect(page.getByRole('dialog')).toContainText('Sign in to Example organization')
   await expect.poll(() => requested).toEqual({ accountId, tenantId })
 })
