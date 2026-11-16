@@ -140,8 +140,13 @@ export async function snapshotSource(root, target, { cacheManifest } = {}) {
   const files = sourceFiles(root);
   const before = await digestFiles(root, files);
   await fs.mkdir(target, { recursive: true });
-  for (const path of files) {
-    const from = resolve(root, path), to = contained(target, resolve(target, path));
+  // Bound parallel filesystem operations: snapshots contain thousands of independent files.
+  // Keep the input list and timestamp manifest in canonical order for reproducibility.
+  let nextFile = 0;
+  const copyFile = async () => {
+    while (nextFile < files.length) {
+      const path = files[nextFile++];
+      const from = resolve(root, path), to = contained(target, resolve(target, path));
     const stat = await fs.lstat(from);
     await fs.mkdir(dirname(to), { recursive: true });
     if (stat.isSymbolicLink()) {
@@ -165,14 +170,18 @@ export async function snapshotSource(root, target, { cacheManifest } = {}) {
         timestamps[path] = { kind: 'file', hash, mode, mtimeMs };
       }
     }
-  }
+    }
+  };
+  const copies = await Promise.allSettled(Array.from({ length: Math.min(16, files.length) }, copyFile));
+  const failedCopy = copies.find(result => result.status === 'rejected');
+  if (failedCopy) throw failedCopy.reason;
   if (sourceFiles(root).join('\0') !== files.join('\0') || await digestFiles(root, files) !== before || await digestFiles(target, files) !== before) {
     throw new Error('Source changed while taking the snapshot; retry after edits settle');
   }
   if (cacheManifest) {
     // A changed symlink can redirect a compiler input to an older file. Force fresh
     // timestamps in that case rather than trusting the target's previous timestamp.
-    const links = entries => Object.entries(entries).filter(([, entry]) => entry.kind === 'symlink').sort();
+    const links = entries => Object.entries(entries).filter(([, entry]) => entry.kind === 'symlink').sort(([a], [b]) => a.localeCompare(b));
     if (JSON.stringify(links(previous.files)) !== JSON.stringify(links(timestamps))) {
       const now = Date.now();
       for (const [path, entry] of Object.entries(timestamps)) if (entry.kind === 'file') {

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import io
 import os
 import sqlite3
 import unittest
@@ -21,16 +22,42 @@ class TenantApplyTest(unittest.TestCase):
         self.conn.execute('insert into user_login values (?, ?, ?, ?, ?)', ('bridge', a.MXID, self.account, 'parent', json.dumps({'refresh_token':'parent'})))
         self.payload = {'accountId': self.account, 'tenantId': self.tenant, 'token': 'x' * 120}
 
-    def test_groups_verified_tenant_login_without_hiding_unrelated_accounts(self):
-        child = '8:orgid:' + self.oid
-        other = '8:orgid:44444444-4444-4444-4444-444444444444'
-        accounts = [{'id': self.account}, {'id': child}, {'id': other}]
-        metadata = {child: {'tenant_id': self.tenant}, other: {'tenant_id': self.tenant}}
-        discovered = {self.account: [{'id': self.tenant, 'oid': self.oid, 'name': 'Example'}]}
-        self.assertEqual([x['id'] for x in a.group_accounts(accounts, metadata, discovered)], [self.account, other])
-        metadata[child]['tenant_id'] = 'wrong'
-        self.assertEqual(a.group_accounts(accounts, metadata, discovered), accounts)
-        self.assertEqual(a.group_accounts(accounts, metadata, {}), accounts)
+    def test_guest_home_is_the_issuer_tenant_only_for_guest_logins(self):
+        home = '55555555-5555-5555-5555-555555555555'
+        with patch.object(a, 'claims', return_value={'idp': 'https://sts.windows.net/' + home + '/'}):
+            self.assertEqual(a.guest_home({'tenant_id': self.tenant, 'auth_token': 'x'}), home)
+            self.assertEqual(a.guest_home({'tenant_id': home, 'auth_token': 'x'}), '')
+        with patch.object(a, 'claims', side_effect=ValueError):
+            self.assertEqual(a.guest_home({'tenant_id': self.tenant}), '')
+
+    def test_rejected_refresh_token_is_reported_as_expired(self):
+        error = a.urllib.error.HTTPError('https://login.test', 400, 'invalid_grant', {}, None)
+        with patch.object(a, 'exchange', side_effect=error):
+            with self.assertRaises(a.AuthExpired):
+                a.tenants({'refresh_token': 'dead', 'tenant_id': 'common'})
+        error = a.urllib.error.HTTPError('https://login.test', 503, 'unavailable', {}, None)
+        with patch.object(a, 'exchange', side_effect=error):
+            with self.assertRaises(a.urllib.error.HTTPError):
+                a.tenants({'refresh_token': 'ok', 'tenant_id': 'common'})
+
+    def test_tenant_checks_its_own_refresh_token(self):
+        entry = {'id': self.tenant, 'oid': self.oid, 'name': 'Example'}
+        login = '8:orgid:' + self.oid
+        existing = {(self.tenant, login)}
+        metadata = {login: {'refresh_token': 'guest'}}
+        with patch.object(a, 'exchange', return_value={'access_token': 'valid'}) as exchange:
+            self.assertEqual(a.tenant_status(entry, existing, metadata)['state'], 'connected')
+            exchange.assert_called_once_with('guest', self.tenant)
+        rejected = a.urllib.error.HTTPError('https://login.test', 400, 'error', {}, io.BytesIO(b'{"error":"invalid_grant"}'))
+        with patch.object(a, 'exchange', side_effect=rejected):
+            actual = a.tenant_status(entry, existing, metadata)
+            self.assertEqual(actual['state'], 'expired')
+            self.assertFalse(actual['connected'])
+        unavailable = a.urllib.error.HTTPError('https://login.test', 503, 'error', {}, io.BytesIO(b'{}'))
+        with patch.object(a, 'exchange', side_effect=unavailable):
+            self.assertEqual(a.tenant_status(entry, existing, metadata)['state'], 'unknown')
+        self.assertEqual(a.tenant_status(entry, existing, {})['state'], 'expired')
+        self.assertEqual(a.tenant_status(entry, set(), {})['state'], 'disconnected')
 
     def test_wrong_account_never_writes(self):
         with patch.object(a.sqlite3, 'connect', return_value=self.conn), patch.object(a, 'tenants', return_value=[{'id': self.tenant, 'oid': self.oid}]), patch.object(a, 'exchange', return_value={'id_token': 'id'}), patch.object(a, 'claims', return_value={'tid': self.tenant, 'oid': '44444444-4444-4444-4444-444444444444'}):

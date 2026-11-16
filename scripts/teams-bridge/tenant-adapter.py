@@ -11,6 +11,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -45,9 +46,18 @@ def claims(token):
     return json.loads(base64.urlsafe_b64decode(part + '=' * (-len(part) % 4)))
 
 
+class AuthExpired(Exception):
+    """The stored refresh token was rejected, so the user has to sign in again."""
+
+
 def tenants(meta):
     tenant = str(meta.get('tenant_id', '')).lower()
-    token = exchange(meta['refresh_token'], tenant)['access_token']
+    try:
+        token = exchange(meta['refresh_token'], tenant)['access_token']
+    except urllib.error.HTTPError as exc:
+        if exc.code in (400, 401):
+            raise AuthExpired() from exc
+        raise
     found = request('https://teams.microsoft.com/api/mt/part/emea-03/beta/users/tenants', headers={
         'Authorization': 'Bearer ' + token, 'Accept': 'application/json'})
     if not isinstance(found, list):
@@ -65,6 +75,41 @@ def require_configuration():
         raise ValueError('Bridge database and Matrix user must be configured')
 
 
+def guest_home(meta):
+    """Home tenant id when this login's token was issued for a guest tenant, else ''."""
+    try:
+        idp = str(claims(meta.get('auth_token') or '').get('idp', '')).lower()
+    except Exception:
+        return ''
+    m = re.search(r'sts\.windows\.net/([0-9a-f-]{36})', idp)
+    home = m.group(1) if m else ''
+    return home if home and home != str(meta.get('tenant_id', '')).lower() else ''
+
+
+def tenant_status(entry, existing, metadata):
+    login = '8:orgid:' + entry['oid']
+    state = 'disconnected'
+    if (entry['id'], login) in existing:
+        state = 'unknown'
+        meta = metadata.get(login, {})
+        token = meta.get('refresh_token')
+        if not token:
+            state = 'expired'
+        else:
+            try:
+                result = exchange(token, entry['id'])
+                state = 'connected' if result.get('access_token') else 'unknown'
+            except urllib.error.HTTPError as exc:
+                try:
+                    error = json.loads(exc.read(16384)).get('error')
+                except (ValueError, AttributeError):
+                    error = None
+                state = 'expired' if error in ('invalid_grant', 'interaction_required') else 'unknown'
+            except Exception:
+                state = 'unknown'
+    return {'id': entry['id'], 'name': entry['name'], 'state': state, 'connected': state == 'connected'}
+
+
 def status():
     require_configuration()
     base = subprocess.run(['python3', os.path.join(DIR, 'teams-status-base.py')], capture_output=True, text=True, timeout=12, check=True)
@@ -73,39 +118,33 @@ def status():
         rows = conn.execute('SELECT id, metadata FROM user_login WHERE user_mxid = ?', (MXID,)).fetchall()
     metadata = {row[0]: json.loads(row[1] or '{}') for row in rows}
     existing = {(str(m.get('tenant_id', '')).lower(), str(m.get('user_mri', '')).lower()) for m in metadata.values()}
-    discovered = {}
-    for account in result.get('accounts', []):
+    # A guest-tenant login (token issued by tenant X, identity from home tenant Y) is a tenant of
+    # the account whose home tenant is Y, not an account of its own.
+    by_home = {str(m.get('tenant_id', '')).lower(): lid for lid, m in metadata.items() if not guest_home(m)}
+    child_of = {}
+    for lid, m in metadata.items():
+        home = guest_home(m)
+        if home and by_home.get(home) not in (None, lid):
+            child_of[lid] = by_home[home]
+    accounts = [a for a in result.get('accounts', []) if a['id'] not in child_of]
+    for account in accounts:
         try:
             entries = tenants(metadata[account['id']])
-            discovered[account['id']] = entries
-            account['tenants'] = [{'id': e['id'], 'name': e['name'],
-                'connected': (e['id'], '8:orgid:' + e['oid']) in existing} for e in entries]
-        except Exception:
-            account['tenantError'] = 'Could not load organizations. Refresh or sign in again.'
-    result['accounts'] = group_accounts(result.get('accounts', []), metadata, discovered)
-    count = len(result['accounts'])
-    connected = sum(account.get('state') == 'connected' for account in result['accounts'])
-    result['detail'] = f'{count} Teams-Konten, {connected} verbunden.'
+            account['tenants'] = [tenant_status(e, existing, metadata) for e in entries]
+        except Exception as exc:
+            # Log only the failure class and HTTP status, never bodies or tokens.
+            reason = type(exc).__name__ + (' ' + str(exc.code) if isinstance(exc, urllib.error.HTTPError) else '')
+            print('Tenant discovery failed for ' + str(account.get('id')) + ': ' + reason, file=sys.stderr)
+            if isinstance(exc, AuthExpired):
+                account['state'] = 'expired'
+                account['tenantError'] = 'Sign-in expired. Sign in again to load organizations.'
+            else:
+                account['tenantError'] = 'Could not load organizations. Refresh or sign in again.'
+    if len(accounts) != len(result.get('accounts', [])):
+        result['accounts'] = accounts
+        result['detail'] = ('%d Teams-Konten, %d verbunden.' % (len(accounts), sum(1 for a in accounts if a['state'] == 'connected'))
+                            if len(accounts) != 1 else accounts[0]['detail'])
     print(json.dumps(result))
-
-
-def group_accounts(accounts, metadata, discovered):
-    # A verified organization membership identifies its bridge login by both
-    # tenant and user MRI. Keep independent accounts if discovery fails.
-    by_id = {str(a.get('id', '')).lower(): a for a in accounts}
-    hidden = set()
-    ordered = sorted(accounts, key=lambda a: -len(discovered.get(a.get('id'), [])))
-    for parent in ordered:
-        parent_id = str(parent.get('id', '')).lower()
-        if parent_id in hidden:
-            continue
-        for entry in discovered.get(parent.get('id'), []):
-            child_id = '8:orgid:' + entry['oid']
-            child = by_id.get(child_id)
-            child_meta = metadata.get(child.get('id'), {}) if child else {}
-            if child and child_id != parent_id and str(child_meta.get('tenant_id', '')).lower() == entry['id']:
-                hidden.add(child_id)
-    return [account for account in accounts if str(account.get('id', '')).lower() not in hidden]
 
 
 def apply(payload):
