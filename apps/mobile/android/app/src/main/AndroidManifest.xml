@@ -49,6 +49,8 @@
             </intent-filter>
         </service>
 
+        <receiver android:name=".ChatNotificationDismissReceiver" android:exported="false" />
+
         <receiver
             android:name=".AttentionActionReceiver"
             android:exported="false">
