@@ -25,6 +25,7 @@ impl Gateway {
         let mut child = Command::new(env!("CARGO_BIN_EXE_jait-gateway"))
             .env_clear()
             .env("HOME", &directory)
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("JAIT_RUST_APPLICATION", "1")
             .env("JAIT_RUST_PORT", "0")
             .env("JAIT_RUST_PROJECT_ROOT", &directory)
@@ -238,4 +239,79 @@ async fn repository_crud_and_strategy_are_owned_through_the_binary() {
     assert!(!list.to_string().contains(&id), "{list}");
     let (status, _) = call(M::DELETE, format!("/api/repos/{id}"), owner.clone(), None).await;
     assert_eq!(status, 404);
+}
+
+#[tokio::test]
+async fn stage_option_like_filename_does_not_stage_other_files() {
+    let gateway = Gateway::start();
+    let repo = gateway.directory.join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    assert!(
+        Command::new("git")
+            .arg("init")
+            .arg(&repo)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    std::fs::write(repo.join("-A"), "selected").unwrap();
+    std::fs::write(repo.join("other.txt"), "unselected").unwrap();
+    let client = reqwest::Client::new();
+    let registration: Value = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registration["access_token"].as_str().unwrap();
+    let project = client
+        .post(format!("{}/api/projects", gateway.base))
+        .bearer_auth(token)
+        .json(&json!({"title": "Git test", "rootPath": repo}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(project.status(), 201, "{}", project.text().await.unwrap());
+    let body = json!({"cwd": repo, "paths": ["-A"]});
+    let response = client
+        .post(format!("{}/api/git/stage", gateway.base))
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 401);
+    let response = client
+        .post(format!("{}/api/git/stage", gateway.base))
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200, "{}", response.text().await.unwrap());
+    let output = Command::new("git")
+        .args(["diff", "--cached", "--name-only"])
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "-A\n");
+    let response = client
+        .post(format!("{}/api/git/stage", gateway.base))
+        .bearer_auth(token)
+        .json(&json!({"cwd": repo, "paths": []}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200, "{}", response.text().await.unwrap());
+    let output = Command::new("git")
+        .args(["diff", "--cached", "--name-only"])
+        .current_dir(&repo)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "-A\nother.txt\n");
 }

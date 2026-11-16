@@ -2350,19 +2350,13 @@ async fn stage(State(state): State<GitRoutes>, request: Request) -> Response {
     let paths = paths_field(&body);
 
     let result = git_task(move || {
-        let mut args: Vec<&str> = vec!["add", "--"];
-        let refs: Vec<String> = if paths.is_empty() {
-            vec!["-A".to_string()]
+        if paths.is_empty() {
+            git_exec(&cwd, &["add", "-A"])?;
         } else {
-            paths
-        };
-        args = if refs.len() == 1 && refs[0] == "-A" {
-            vec!["add", "-A"]
-        } else {
-            args.extend(refs.iter().map(String::as_str));
-            args
-        };
-        git_exec(&cwd, &args)?;
+            let mut args: Vec<&str> = vec!["add", "--"];
+            args.extend(paths.iter().map(String::as_str));
+            git_exec(&cwd, &args)?;
+        }
         Ok(json!({ "ok": true }))
     })
     .await;
