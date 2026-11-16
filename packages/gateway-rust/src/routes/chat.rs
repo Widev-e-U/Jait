@@ -192,6 +192,13 @@ impl ChatRoutes {
             user_events: None,
         })
     }
+    pub(crate) fn turn_active(&self, session: &str) -> bool {
+        self.active
+            .turns
+            .lock()
+            .map_or(true, |turns| turns.contains_key(session))
+    }
+
     pub(crate) fn with_user_events(
         mut self,
         sink: super::repositories::RepositoryEventSink,

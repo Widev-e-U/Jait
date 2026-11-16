@@ -323,6 +323,27 @@ pub struct Application {
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
 }
 
+struct SessionRuntimeAdapter {
+    chat: Option<ChatRoutes>,
+    hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
+}
+
+impl crate::routes::sessions::SessionRuntime for SessionRuntimeAdapter {
+    fn turn_active(&self, session: &str) -> bool {
+        self.chat
+            .as_ref()
+            .is_some_and(|chat| chat.turn_active(session))
+    }
+
+    fn broadcast(&self, user: &str, event: serde_json::Value) {
+        if let Ok(slot) = self.hub.lock()
+            && let Some(hub) = slot.as_ref()
+        {
+            hub.broadcast_user_event(user, event);
+        }
+    }
+}
+
 impl Application {
     /// Registry of live browser view (noVNC) ports a caller may query; a host registers a port per owner.
     pub fn live_view_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
@@ -494,10 +515,14 @@ impl Application {
                 })
             })
             .transpose()?;
-        let sessions = SessionRoutes::new(
+        let mut sessions = SessionRoutes::new(
             auth.clone(),
             config.project_root.to_string_lossy().into_owned(),
         );
+        sessions.runtime = Arc::new(SessionRuntimeAdapter {
+            chat: chat.clone(),
+            hub: repository_hub.clone(),
+        });
         let health = HealthState::new(config.health, HealthSnapshot::default());
         let terminals = composed_terminal_routes(auth.clone(), &config.project_root);
         // Project roots come from the project records the same store confirms, so the
@@ -1160,6 +1185,17 @@ mod ownership_tests {
             .await
             .unwrap();
             let chat = app.chat.as_ref().unwrap().0.clone();
+            let runtime = SessionRuntimeAdapter {
+                chat: Some(chat.clone()),
+                hub: Arc::new(Mutex::new(None)),
+            };
+            use crate::routes::sessions::SessionRuntime;
+            assert!(!runtime.turn_active("test-session"));
+            let (lease, _) = chat.test_admit();
+            assert!(runtime.turn_active("test-session"));
+            assert!(!runtime.turn_active("other-session"));
+            drop(lease);
+            assert!(!runtime.turn_active("test-session"));
             assert!(!chat.is_closed());
             if poll {
                 let task = tokio::spawn(app.serve(std::future::pending()));

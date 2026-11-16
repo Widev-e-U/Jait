@@ -310,3 +310,145 @@ async fn state_trust_and_consent_routes_are_owned_through_the_binary() {
     let (status, _) = call(M::DELETE, "/api/repos/nope".into(), other.clone(), None).await;
     assert_eq!(status, 404);
 }
+
+/// Minimal WebSocket client over the gateway's own frame codec.
+struct WsClient(tokio::net::TcpStream);
+
+impl WsClient {
+    async fn connect(base: &str, token: &str) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let host = base.trim_start_matches("http://");
+        let mut stream = tokio::net::TcpStream::connect(host).await.unwrap();
+        let request = format!(
+            "GET /ws?token={token} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(stream.read_u8().await.unwrap());
+        }
+        assert!(String::from_utf8_lossy(&head).starts_with("HTTP/1.1 101"));
+        Self(stream)
+    }
+
+    /// Next text message, or None if nothing arrives within `wait`.
+    async fn next(&mut self, wait: Duration) -> Option<serde_json::Value> {
+        use jait_gateway::ws::{OpCode, read_frame, write_client_frame};
+        tokio::time::timeout(wait, async {
+            loop {
+                let frame = read_frame(&mut self.0, 1 << 20).await.unwrap()?;
+                match frame.opcode {
+                    OpCode::Text => return serde_json::from_str(frame.text()?).ok(),
+                    OpCode::Ping => {
+                        write_client_frame(&mut self.0, OpCode::Pong, &frame.payload, [1, 2, 3, 4])
+                            .await
+                            .unwrap()
+                    }
+                    OpCode::Pong => {}
+                    _ => return None,
+                }
+            }
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    async fn until(&mut self, kind: &str, wait: Duration) -> Option<serde_json::Value> {
+        let deadline = tokio::time::Instant::now() + wait;
+        while let Some(left) = deadline.checked_duration_since(tokio::time::Instant::now()) {
+            let message = self.next(left).await?;
+            if message["type"] == kind {
+                return Some(message);
+            }
+        }
+        None
+    }
+}
+
+#[tokio::test]
+async fn session_events_reach_only_the_owner_through_the_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let owner: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"event-owner","password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner = owner["access_token"].as_str().unwrap();
+    let invite: Value = client
+        .post(url("/api/auth/invitations"))
+        .bearer_auth(owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: Value = client.post(url("/api/auth/register"))
+        .json(&json!({"username":"event-other","password":"owner-pass-123","invitation":invite["invitation"]}))
+        .send().await.unwrap().json().await.unwrap();
+    let other = other["access_token"].as_str().unwrap();
+    let mut owner_socket = WsClient::connect(&gateway.base, owner).await;
+    let mut other_socket = WsClient::connect(&gateway.base, other).await;
+    // Consume the connection greeting before issuing mutations.
+    assert_eq!(
+        owner_socket.next(Duration::from_secs(5)).await.unwrap()["type"],
+        "session.created"
+    );
+    assert_eq!(
+        other_socket.next(Duration::from_secs(5)).await.unwrap()["type"],
+        "session.created"
+    );
+    let created: Value = client
+        .post(url("/api/sessions"))
+        .bearer_auth(owner)
+        .json(&json!({"name":"original"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().unwrap();
+    let event = owner_socket
+        .until("chat.created", Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(event["sessionId"], "");
+    assert_eq!(event["payload"]["session"]["id"], id);
+    let response = client
+        .patch(url(&format!("/api/sessions/{id}")))
+        .bearer_auth(owner)
+        .json(&json!({"name":"renamed"}))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+    let event = owner_socket
+        .until("chat.updated", Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(event["payload"]["session"]["name"], "renamed");
+    assert!(
+        other_socket
+            .until("chat.created", Duration::from_millis(300))
+            .await
+            .is_none()
+    );
+    assert!(
+        other_socket
+            .until("chat.updated", Duration::from_millis(300))
+            .await
+            .is_none()
+    );
+}

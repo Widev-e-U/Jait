@@ -1204,7 +1204,11 @@ impl WsHub {
     /// Divergence: the TS hub also skips `pairedNodeId` clients; the native hub
     /// has no paired-node concept yet, so only credential state gates delivery.
     pub fn broadcast_to_user(&self, user_id: &str, kind: &str, payload: Value) -> usize {
-        self.fan_out_scoped(envelope(kind, None, payload), |client| {
+        self.broadcast_user_event(user_id, envelope(kind, None, payload))
+    }
+
+    pub(crate) fn broadcast_user_event(&self, user_id: &str, event: Value) -> usize {
+        self.fan_out_scoped(event, |client| {
             client
                 .user_id
                 .as_deref()
