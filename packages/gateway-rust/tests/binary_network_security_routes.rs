@@ -225,6 +225,48 @@ async fn network_security_codegraph_through_the_binary() {
         "{b}"
     );
 
+    // The composed code-graph service resolves real, owner-scoped projects.
+    let project_directory = gateway.directory.join("project");
+    std::fs::create_dir(&project_directory).unwrap();
+    let root = project_directory.to_str().unwrap();
+    let (status, project) = call(
+        M::POST,
+        "/api/projects".into(),
+        o.clone(),
+        Some(json!({"title":"Code graph fixture", "rootPath":root})),
+    )
+    .await;
+    assert_eq!(status, 201, "{project}");
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("projectRoot", root)
+        .finish();
+    for (token, expected) in [(&o, 200), (&x, 404)] {
+        let response = client
+            .get(url(&format!("/api/code-graph?{query}")))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        let status = response.status().as_u16();
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(status, expected, "{body}");
+        if expected == 200 {
+            assert_eq!(body["index"]["status"], "missing", "{body}");
+            assert_eq!(body["index"]["projectRoot"], root, "{body}");
+        } else {
+            assert_eq!(body["error"], "Project not found", "{body}");
+        }
+    }
+    let response = client
+        .get(url(&format!("/api/code-graph/snapshot?{query}")))
+        .bearer_auth(&o)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 409);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["code"], "GRAPH_NOT_READY", "{body}");
+
     // Code graph requires a project root; unknown repos are 404 for repo-scoped routes.
     for (m, p) in [
         (M::GET, "/api/code-graph"),
