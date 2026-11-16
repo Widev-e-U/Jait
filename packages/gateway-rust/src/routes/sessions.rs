@@ -38,6 +38,9 @@ pub trait SessionRuntime: Send + Sync {
     fn turn_active(&self, _session: &str) -> bool {
         false
     }
+    fn device_change_lease(&self, session: &str) -> Option<Box<dyn Send>> {
+        (!self.turn_active(session)).then(|| Box::new(()) as Box<dyn Send>)
+    }
     fn nodes(&self) -> Vec<SessionNode> {
         vec![]
     }
@@ -349,12 +352,12 @@ fn dispatch(
                 ));
             }
             if body.get("nodeId").is_some() {
-                if state.runtime.turn_active(&id) {
+                let Some(_device_change) = state.runtime.device_change_lease(&id) else {
                     return Ok(response(
                         409,
                         json!({"error":"CHAT_BUSY","details":"Wait for the current turn to finish before changing devices"}),
                     ));
-                }
+                };
                 if truthy_id(session.project_id.as_deref()).is_some() {
                     return Ok(response(
                         400,

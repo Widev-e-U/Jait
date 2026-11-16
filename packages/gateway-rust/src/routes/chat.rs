@@ -31,7 +31,7 @@ use futures_util::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::Infallible,
     future::Future,
     num::NonZeroU16,
@@ -106,6 +106,7 @@ struct ActiveState {
     database_owner: Option<Arc<std::fs::File>>,
     snapshots: Mutex<HashMap<String, Weak<AtomicU64>>>,
     turns: Mutex<HashMap<String, ActiveTurn>>,
+    device_changes: Mutex<HashSet<String>>,
 }
 // Lease transitions and snapshot registration are serialized by `turns`.
 // The snapshots mutex is always acquired after `turns` when both are needed.
@@ -192,6 +193,21 @@ impl ChatRoutes {
             user_events: None,
         })
     }
+    pub(crate) fn device_change_lease(&self, session: &str) -> Option<Box<dyn Send>> {
+        let turns = self.active.turns.lock().ok()?;
+        if turns.contains_key(session) {
+            return None;
+        }
+        let mut changes = self.active.device_changes.lock().ok()?;
+        if !changes.insert(session.to_owned()) {
+            return None;
+        }
+        Some(Box::new(DeviceChangeLease {
+            state: self.active.clone(),
+            session: session.to_owned(),
+        }))
+    }
+
     pub(crate) fn turn_active(&self, session: &str) -> bool {
         self.active
             .turns
@@ -317,7 +333,9 @@ impl ChatRoutes {
         if self.active.closed.load(Ordering::Acquire) {
             return Err(Box::new(response(503, json!({"error":"CHAT_CLOSED"}))));
         }
-        if active.contains_key(session) {
+        if active.contains_key(session)
+            || self.active.device_changes.lock().unwrap().contains(session)
+        {
             return Err(Box::new(response(409, json!({"error":"CHAT_BUSY"}))));
         }
         if active.len() >= usize::from(self.limits.max_active.get()) {
@@ -342,6 +360,20 @@ impl ChatRoutes {
         })
     }
 }
+struct DeviceChangeLease {
+    state: Arc<ActiveState>,
+    session: String,
+}
+impl Drop for DeviceChangeLease {
+    fn drop(&mut self) {
+        self.state
+            .device_changes
+            .lock()
+            .unwrap()
+            .remove(&self.session);
+    }
+}
+
 struct TurnLease {
     state: Arc<ActiveState>,
     session: String,
@@ -476,17 +508,8 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     {
         return response(400, json!({"error":"INVALID_CHAT_REQUEST"}));
     }
-    let session = match owned_session(&state, &user.id, &input.session_id).await {
-        Ok(session) => session,
-        Err(error) => return *error,
-    };
-    let project_root = session
-        .project_path
-        .as_ref()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| state.project_root.clone());
-    if !project_root.is_absolute() {
-        return response(409, json!({"error":"SESSION_PROJECT_ROOT_INVALID"}));
+    if let Err(error) = owned_session(&state, &user.id, &input.session_id).await {
+        return *error;
     }
     let client_id = client_message_id(&input);
     if let Some(id) = client_id.clone() {
@@ -513,6 +536,18 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         Ok(lease) => lease,
         Err(error) => return *error,
     };
+    let session = match owned_session(&state, &user.id, &input.session_id).await {
+        Ok(session) => session,
+        Err(error) => return *error,
+    };
+    let project_root = session
+        .project_path
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| state.project_root.clone());
+    if !project_root.is_absolute() {
+        return response(409, json!({"error":"SESSION_PROJECT_ROOT_INVALID"}));
+    }
     let cancellation = lease.cancellation.clone();
     let prepared = tokio::select! {biased;
         _=cancellation.wait_cancelled()=>return response(409,json!({"error":"CHAT_CANCELLED"})),
@@ -854,10 +889,9 @@ async fn thread_turn(
     let Some(session_id) = session_id.filter(|s| valid_session(s)) else {
         return response(409, json!({"error":"Thread has no chat session"}));
     };
-    let session = match owned_session(&state, &user.id, &session_id).await {
-        Ok(session) => session,
-        Err(error) => return *error,
-    };
+    if let Err(error) = owned_session(&state, &user.id, &session_id).await {
+        return *error;
+    }
     if action == ThreadAction::Steer {
         // The chat turn has no mid-round injection point, so steering stops the active turn at
         // its next cancellation check and starts a new one on the same history with the message.
@@ -892,6 +926,14 @@ async fn thread_turn(
             );
         }
     }
+    let lease = match state.admit(&user.id, &session_id) {
+        Ok(lease) => lease,
+        Err(error) => return *error,
+    };
+    let session = match owned_session(&state, &user.id, &session_id).await {
+        Ok(session) => session,
+        Err(error) => return *error,
+    };
     let project_root = session
         .project_path
         .as_ref()
@@ -900,10 +942,6 @@ async fn thread_turn(
     if !project_root.is_absolute() {
         return response(409, json!({"error":"SESSION_PROJECT_ROOT_INVALID"}));
     }
-    let lease = match state.admit(&user.id, &session_id) {
-        Ok(lease) => lease,
-        Err(error) => return *error,
-    };
     let cancellation = lease.cancellation.clone();
     let prepared = tokio::select! {biased;
         _=cancellation.wait_cancelled()=>return response(409,json!({"error":"CHAT_CANCELLED"})),

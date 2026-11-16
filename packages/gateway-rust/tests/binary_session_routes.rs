@@ -305,3 +305,107 @@ async fn session_sub_routes_are_owned_through_the_binary() {
         assert!(kind.starts_with("text/event-stream"), "{tail} {kind}");
     }
 }
+
+#[tokio::test]
+async fn device_change_is_blocked_during_chat_through_the_binary() {
+    use std::sync::Arc;
+    use tokio::sync::Semaphore;
+
+    let entered = Arc::new(Semaphore::new(0));
+    let release = Arc::new(Semaphore::new(0));
+    let model = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post({
+            let entered = entered.clone();
+            let release = release.clone();
+            move || async move {
+                entered.add_permits(1);
+                release.acquire().await.unwrap().forget();
+                (
+                    [("content-type", "text/event-stream")],
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"done\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+                )
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let model_base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let model_task = tokio::spawn(async move { axum::serve(listener, model).await.unwrap() });
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let owner: Value = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = owner["access_token"].as_str().unwrap().to_owned();
+    let settings = client.patch(format!("{}/api/auth/settings", gateway.base))
+        .bearer_auth(&token)
+        .json(&json!({"api_keys":{"OPENAI_BASE_URL":model_base,"OPENAI_API_KEY":"test-key"}, "selected_model":"test-model"}))
+        .send().await.unwrap();
+    assert_eq!(settings.status(), 200);
+    let create = |client: reqwest::Client, base: String, token: String| async move {
+        let session: Value = client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(token)
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        session["id"].as_str().unwrap().to_owned()
+    };
+    let session = create(client.clone(), gateway.base.clone(), token.clone()).await;
+    let other = create(client.clone(), gateway.base.clone(), token.clone()).await;
+    let chat = tokio::spawn({
+        let client = client.clone();
+        let base = gateway.base.clone();
+        let token = token.clone();
+        let session = session.clone();
+        async move {
+            client
+                .post(format!("{base}/api/chat"))
+                .bearer_auth(token)
+                .json(&json!({"sessionId":session, "content":"hello"}))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(10), entered.acquire())
+        .await
+        .unwrap()
+        .unwrap()
+        .forget();
+    let change = |id: &str| {
+        client
+            .patch(format!("{}/api/sessions/{id}", gateway.base))
+            .bearer_auth(&token)
+            .json(&json!({"nodeId":"gateway"}))
+            .send()
+    };
+    let busy = change(&session).await.unwrap();
+    assert_eq!(busy.status(), 409);
+    assert_eq!(busy.json::<Value>().await.unwrap()["error"], "CHAT_BUSY");
+    assert_eq!(change(&other).await.unwrap().status(), 200);
+    release.add_permits(1);
+    let body = tokio::time::timeout(Duration::from_secs(10), chat)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(body.contains("\"type\":\"done\""), "{body}");
+    assert_eq!(change(&session).await.unwrap().status(), 200);
+    model_task.abort();
+}

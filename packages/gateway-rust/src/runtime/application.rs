@@ -335,6 +335,13 @@ impl crate::routes::sessions::SessionRuntime for SessionRuntimeAdapter {
             .is_some_and(|chat| chat.turn_active(session))
     }
 
+    fn device_change_lease(&self, session: &str) -> Option<Box<dyn Send>> {
+        match &self.chat {
+            Some(chat) => chat.device_change_lease(session),
+            None => Some(Box::new(())),
+        }
+    }
+
     fn broadcast(&self, user: &str, event: serde_json::Value) {
         if let Ok(slot) = self.hub.lock()
             && let Some(hub) = slot.as_ref()
@@ -1191,7 +1198,11 @@ mod ownership_tests {
             };
             use crate::routes::sessions::SessionRuntime;
             assert!(!runtime.turn_active("test-session"));
+            let device_change = runtime.device_change_lease("test-session").unwrap();
+            assert!(runtime.device_change_lease("test-session").is_none());
+            drop(device_change);
             let (lease, _) = chat.test_admit();
+            assert!(runtime.device_change_lease("test-session").is_none());
             assert!(runtime.turn_active("test-session"));
             assert!(!runtime.turn_active("other-session"));
             drop(lease);

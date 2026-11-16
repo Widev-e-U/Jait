@@ -1255,3 +1255,26 @@ async fn close_cancels_admitted_turn_and_rejects_new_turns() {
     fixture.server.await.unwrap().unwrap();
     fixture.auth.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn device_change_and_turn_admission_are_exclusive_per_session() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    let change = fixture.routes.device_change_lease("session").unwrap();
+    assert!(fixture.routes.device_change_lease("session").is_none());
+    let blocked = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(blocked.status(), 409);
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    let other = fixture.routes.admit("owner", "other-session").unwrap();
+    drop(other);
+    drop(change);
+    let turn = fixture.routes.admit("owner", "session").unwrap();
+    assert!(fixture.routes.device_change_lease("session").is_none());
+    drop(turn);
+    assert!(fixture.routes.device_change_lease("session").is_some());
+    fixture.finish().await;
+}
