@@ -401,6 +401,33 @@ export function listToolsForMcp(
   return tools;
 }
 
+/**
+ * Resolve the tool a client means by the name it was shown in `tools/list`.
+ *
+ * Advertising replaces `.` with `_`, which is lossy: `mcp.add_server` and
+ * `mcp.add.server` both become `mcp_add_server`. Turning every `_` back into
+ * `.` can therefore never reach a tool whose real name contains an underscore,
+ * such as every bridged `mcp.<server>.<tool>` or `project.assign_repository`.
+ *
+ * The exact and fully dotted lookups keep their historical precedence. Only
+ * when both miss are the names this endpoint advertises compared by their
+ * provider-safe form. A name two tools share is refused rather than guessed,
+ * because the guess could run a different, possibly high-risk, tool.
+ */
+function resolveMcpTool(
+  toolRegistry: ToolRegistry,
+  rawName: string,
+  dottedName: string,
+  toolSet: McpToolSet,
+): { tool?: ToolDefinition; ambiguousWith?: string[] } {
+  const direct = toolRegistry.get(dottedName) ?? toolRegistry.get(rawName);
+  if (direct) return { tool: direct };
+  const advertised = listToolsForMcp(toolRegistry, toolSet)
+    .filter((candidate) => candidate.name.replace(/\./g, "_") === rawName);
+  if (advertised.length === 1) return { tool: advertised[0] };
+  return advertised.length > 1 ? { ambiguousWith: advertised.map((candidate) => candidate.name) } : {};
+}
+
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
@@ -720,9 +747,8 @@ export async function handleMcpRequest(
       const toolName = rawToolName.replace(/_/g, ".");
       const args = params["arguments"] ?? {};
 
-      let tool = toolRegistry.get(toolName);
-      // Fallback: try the raw name as-is (in case a tool actually uses underscores)
-      if (!tool && toolName !== rawToolName) tool = toolRegistry.get(rawToolName);
+      const resolved = resolveMcpTool(toolRegistry, rawToolName, toolName, toolSet);
+      let tool = resolved.tool;
       if (tool) {
         const isCoreTool = MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name);
         if ((toolSet === "core" && !isCoreTool) || (toolSet === "deferred" && isCoreTool)) {
@@ -734,7 +760,12 @@ export async function handleMcpRequest(
           jsonrpc: "2.0",
           id: request.id ?? null,
           result: {
-            content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
+            content: [{
+              type: "text",
+              text: resolved.ambiguousWith
+                ? `Ambiguous tool name ${rawToolName}: it matches ${resolved.ambiguousWith.join(", ")}. Call the intended tool by its exact registered name.`
+                : `Unknown tool: ${toolName}`,
+            }],
             isError: true,
           },
         };
@@ -788,7 +819,7 @@ export async function handleMcpRequest(
         const result = toolExecutor
           ? await toolExecutor(tool.name, args, context)
           : await tool.execute(args, context);
-        onToolExecuted?.(toolName, result, context);
+        onToolExecuted?.(tool.name, result, context);
         return {
           jsonrpc: "2.0",
           id: request.id ?? null,

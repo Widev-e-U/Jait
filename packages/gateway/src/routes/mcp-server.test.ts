@@ -188,7 +188,7 @@ describe("mcp-server", () => {
     });
   });
 
-  it("exposes only non-core builtin tools and allowlisted core tools over MCP", async () => {
+  it("exposes non-core builtin, plugin and bridged MCP server tools plus allowlisted core tools over MCP", async () => {
     const registry = new ToolRegistry();
     registry.register({
       name: "read",
@@ -266,7 +266,12 @@ describe("mcp-server", () => {
       },
     });
 
-    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["jait.todos", "user.ask", "cron.add"]);
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual([
+      "jait.todos",
+      "user.ask",
+      "cron.add",
+      "mcp.github.create_issue",
+    ]);
 
     const response = await handleMcpRequest({
       jsonrpc: "2.0",
@@ -325,9 +330,167 @@ describe("mcp-server", () => {
               destructiveHint: true,
             },
           },
+          {
+            name: "mcp_github_create_issue",
+            description: "External MCP tool",
+            inputSchema: { type: "object", properties: {} },
+            annotations: {
+              destructiveHint: true,
+            },
+          },
         ],
       },
     });
+  });
+
+  it("calls tools by the provider-safe name clients are shown, even when the real name contains underscores", async () => {
+    const registry = new ToolRegistry();
+    const executed: string[] = [];
+    const register = (name: string, source: "builtin" | "mcp", tier: "core" | "standard" | "external" = "standard") =>
+      registry.register({
+        name,
+        description: name,
+        tier,
+        category: source === "mcp" ? "external" : "gateway",
+        source,
+        parameters: { type: "object", properties: {} },
+        async execute() {
+          executed.push(name);
+          return { ok: true, message: `ran ${name}` };
+        },
+      });
+    register("mcp.add_server", "builtin");
+    register("project.assign_repository", "builtin");
+    register("mcp.opengym.get_workout_history", "mcp", "external");
+    register("file.write", "builtin");
+    register("core.hidden_tool", "builtin", "core");
+
+    const call = (name: string) =>
+      handleMcpRequest(
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } },
+        registry,
+        "2025-03-26",
+        { sessionId: "session-1" },
+      );
+
+    const realNames = [
+      "mcp.add_server",
+      "project.assign_repository",
+      "mcp.opengym.get_workout_history",
+      "file.write",
+    ];
+    for (const realName of realNames) {
+      const advertised = realName.replace(/\./g, "_");
+      expect(await call(advertised)).toMatchObject({
+        result: { isError: false, content: [{ text: `ran ${realName}` }] },
+      });
+    }
+    expect(executed).toEqual(realNames);
+
+    // The underscore recovery only resolves names that tools/list advertises.
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).not.toContain("core.hidden_tool");
+    expect(await call("core_hidden_tool")).toMatchObject({
+      result: { isError: true, content: [{ text: "Unknown tool: core.hidden.tool" }] },
+    });
+    expect(executed).toEqual(realNames);
+  });
+
+  it("refuses to guess between tools that share a provider-safe name", async () => {
+    const registry = new ToolRegistry();
+    const executed: string[] = [];
+    for (const name of ["team.chat_room", "team_chat.room"]) {
+      registry.register({
+        name,
+        description: name,
+        tier: "standard",
+        category: "gateway",
+        source: "builtin",
+        parameters: { type: "object", properties: {} },
+        async execute() {
+          executed.push(name);
+          return { ok: true, message: `ran ${name}` };
+        },
+      });
+    }
+    const call = (name: string) =>
+      handleMcpRequest(
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } },
+        registry,
+        "2025-03-26",
+        { sessionId: "session-1" },
+      );
+
+    const ambiguous = await call("team_chat_room");
+    expect(ambiguous).toMatchObject({ result: { isError: true } });
+    expect(JSON.stringify(ambiguous)).toContain("Ambiguous tool name team_chat_room");
+    expect(JSON.stringify(ambiguous)).toContain("team.chat_room");
+    expect(JSON.stringify(ambiguous)).toContain("team_chat.room");
+    expect(executed).toEqual([]);
+
+    // The exact registered name is never ambiguous.
+    expect(await call("team.chat_room")).toMatchObject({ result: { isError: false } });
+    expect(executed).toEqual(["team.chat_room"]);
+  });
+
+  it("serves bridged MCP server tools in the deferred catalog and runs them through the tool executor under their real name", async () => {
+    const registry = new ToolRegistry();
+    const directExecute = vi.fn(async () => ({ ok: true, message: "direct execution" }));
+    registry.register({
+      name: "mcp.opengym.get_workout_history",
+      description: "[MCP: opengym] Get the user's workout history",
+      tier: "external",
+      category: "external",
+      source: "mcp",
+      parameters: { type: "object", properties: { days: { type: "number" } } },
+      execute: directExecute,
+    });
+    // The executor is the consent gate: it must be asked about the registered
+    // name, not about a name guessed from the provider-safe form.
+    const toolExecutor = vi.fn(async () => ({ ok: true, message: "gated execution" }));
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      toolExecutor,
+      config: { host: "127.0.0.1", port: 3000 } as any,
+    });
+
+    const listTools = async (toolSet: string) => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/mcp?toolSet=${toolSet}`,
+        payload: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      });
+      return response.json().result.tools.map((tool: { name: string }) => tool.name);
+    };
+    expect(await listTools("deferred")).toEqual(["mcp_opengym_get_workout_history"]);
+    expect(await listTools("core")).toEqual([]);
+
+    const call = (toolSet: string) =>
+      app.inject({
+        method: "POST",
+        url: `/mcp?toolSet=${toolSet}&sessionId=chat-1`,
+        payload: {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "mcp_opengym_get_workout_history", arguments: { days: 7 } },
+        },
+      });
+
+    expect((await call("deferred")).json()).toMatchObject({
+      result: { content: [{ text: "gated execution" }], isError: false },
+    });
+    expect(toolExecutor).toHaveBeenCalledWith(
+      "mcp.opengym.get_workout_history",
+      { days: 7 },
+      expect.objectContaining({ sessionId: "chat-1", requestedBy: "mcp-client" }),
+    );
+    expect(directExecute).not.toHaveBeenCalled();
+
+    // The core catalog never serves deferred tools.
+    expect((await call("core")).json()).toMatchObject({ result: { isError: true } });
+    expect(toolExecutor).toHaveBeenCalledTimes(1);
   });
 
   it("advertises human-friendly tool titles to MCP clients", async () => {

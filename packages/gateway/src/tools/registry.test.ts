@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry, type ToolRegistryDeps } from "./index.js";
+import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import { ToolRegistry } from "./registry.js";
 
 function context() {
@@ -223,7 +224,7 @@ describe("ToolRegistry discovery ranking", () => {
     expect(registry.search("deploy", { disabledTools: new Set(["deploy.preferred"]) })[0]?.name).toBe("deploy.basic");
   });
 
-  it("keeps critical helpers and discovery tools visible to MCP clients", () => {
+  it("exposes helpers, plugin tools and bridged MCP server tools to MCP clients but keeps other core tools internal", () => {
     const registry = new ToolRegistry();
     registerDiscoveryTool(registry, "todo", "Track multi-step work", { tier: "core" });
     registerDiscoveryTool(registry, "user.ask", "Ask the user for a decision", { tier: "core" });
@@ -234,6 +235,8 @@ describe("ToolRegistry discovery ranking", () => {
     registerDiscoveryTool(registry, "plugin.deploy", "Deploy through a plugin", { tier: "external", source: "plugin:deploy" });
     registerDiscoveryTool(registry, "mcp.github.issue", "Create a GitHub issue", { tier: "external", source: "mcp" });
 
+    // Every provider gets every tool the user connected to Jait, including
+    // servers added through `mcp.add_server` (source "mcp").
     expect(registry.listForMcp().map((tool) => tool.name)).toEqual([
       "todo",
       "user.ask",
@@ -241,7 +244,30 @@ describe("ToolRegistry discovery ranking", () => {
       "tools.search",
       "preview.open",
       "plugin.deploy",
+      "mcp.github.issue",
     ]);
+    // Bridged tools remain as disableable as any other tool.
+    expect(registry.listForMcp(new Set(["mcp.github.issue"])).map((tool) => tool.name)).not.toContain("mcp.github.issue");
+  });
+
+  it("lets MCP clients discover bridged server tools with tools.search and tools.list", async () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "mcp.opengym.get_workout_history", "Get the user's workout history", {
+      tier: "external",
+      source: "mcp",
+    });
+    registerDiscoveryTool(registry, "read", "Read project files", { tier: "core" });
+    const mcpContext = { ...context(), requestedBy: "mcp-client" };
+
+    const search = await createToolsSearchTool(registry).execute({ query: "workout history" }, mcpContext);
+    expect(search.data).toMatchObject({
+      matches: [{ name: "mcp.opengym.get_workout_history", openai_name: "mcp_opengym_get_workout_history" }],
+    });
+
+    // The bridged tool is listed; the internal core `read` tool still is not.
+    const list = await createToolsListTool(registry).execute({}, mcpContext);
+    expect(list.data).toMatchObject({ total: 1 });
+    expect((list.data as { catalogue: string }).catalogue).toContain("mcp.opengym.get_workout_history");
   });
 });
 

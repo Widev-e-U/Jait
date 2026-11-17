@@ -44,6 +44,8 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   /** Working directory for stdio servers */
   cwd?: string;
+  /** HTTP headers sent with every request (sse/streamable-http). May hold secrets. */
+  headers?: Record<string, string>;
   /** Whether the server is enabled (default true) */
   enabled?: boolean;
 }
@@ -94,13 +96,28 @@ function buildTransport(config: McpServerConfig) {
       if (!config.url) {
         throw new Error(`MCP server '${config.id}' (sse) requires a 'url'`);
       }
-      return new SSEClientTransport(new URL(config.url));
+      const headers = config.headers;
+      return new SSEClientTransport(
+        new URL(config.url),
+        headers
+          ? {
+              requestInit: { headers },
+              eventSourceInit: {
+                fetch: (input: string | URL | Request, init?: RequestInit) =>
+                  fetch(input, { ...init, headers: { ...(init?.headers as Record<string, string> | undefined), ...headers } }),
+              },
+            }
+          : undefined,
+      );
     }
     case "streamable-http": {
       if (!config.url) {
         throw new Error(`MCP server '${config.id}' (streamable-http) requires a 'url'`);
       }
-      return new StreamableHTTPClientTransport(new URL(config.url));
+      return new StreamableHTTPClientTransport(
+        new URL(config.url),
+        config.headers ? { requestInit: { headers: config.headers } } : undefined,
+      );
     }
     default: {
       const exhaustive: never = config.transport;

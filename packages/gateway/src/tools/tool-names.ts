@@ -60,6 +60,7 @@ export const ToolName = {
   // ── Skills & extensions management ──
   SkillsManage: "skills.manage",
   ExtensionsManage: "extensions.manage",
+  McpAddServer: "mcp.add_server",
 
   // ── Screen share ──
   ScreenShare: "screen.share",

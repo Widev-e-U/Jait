@@ -1173,6 +1173,22 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   for (const tool of createSkillDiscoveryTools(skillRegistry)) toolRegistry.register(tool);
   toolRegistry.register(createExtensionsManageTool({ pluginManager, clawhub: clawhubClient }));
 
+  // External MCP servers: agents add them via `mcp.add_server`; persisted ones reconnect at boot.
+  const { McpManager } = await import("./tools/mcp-bridge.js");
+  const { createMcpAddServerTool, loadMcpServerConfigs } = await import("./tools/mcp-server-tools.js");
+  const mcpManager = new McpManager(toolRegistry);
+  toolRegistry.register(createMcpAddServerTool({ manager: mcpManager }));
+  try {
+    for (const cfg of await loadMcpServerConfigs()) mcpManager.addServer(cfg);
+    void mcpManager.connectAll().then((conns) => {
+      for (const c of conns) {
+        console.log(`MCP server '${c.serverId}': ${c.status}${c.status === "connected" ? ` (${c.tools.length} tools)` : ""}`);
+      }
+    });
+  } catch (err) {
+    console.warn("Failed to load MCP server config:", err instanceof Error ? err.message : err);
+  }
+
   // Voice assistant (OpenAI Realtime — global session, not project-scoped)
   const voiceAssistantService = new VoiceAssistantService({
     config,

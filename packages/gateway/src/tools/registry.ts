@@ -429,13 +429,23 @@ export class ToolRegistry {
     });
   }
 
-  /** Tools intentionally exposed to external MCP clients. */
+  /**
+   * Tools intentionally exposed to external MCP clients (Claude Code, Codex, ...).
+   *
+   * Every provider gets every tool the user has connected to Jait, so tools
+   * bridged from external MCP servers (`source: "mcp"`, named
+   * `mcp.<server>.<tool>`) are listed on the same footing as plugin tools.
+   * Listing does not widen what a call may do: both kinds default to high risk
+   * with "dangerous" consent and run through the same consent executor no
+   * matter which provider asks. Only the simplified core tools that duplicate a
+   * client's own file/shell tools stay internal.
+   */
   listForMcp(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((tool) => {
       if (isToolDisabled(tool.name, disabledTools)) return false;
       const source = tool.source ?? "builtin";
       const tier = tool.tier ?? "standard";
-      if (source.startsWith("plugin:")) return true;
+      if (source === "mcp" || source.startsWith("plugin:")) return true;
       if (MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name)) return true;
       return source === "builtin" && tier !== "core";
     });
