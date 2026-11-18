@@ -699,7 +699,7 @@
         "internal.sourcereview.messenger-command-forwarding",
         "internal.sourcereview.messenger-command-denials"
       ],
-      "review": "All seven tool names, risk/consent policy and required fields checked; connect rejects secret/unknown fields, malformed URL and invalid types, allows the exact 512-character username, and returns private sign-in link without bridge calls. Six command wrappers use the actual shared schema, force their own action, retain defaults/normalization and user/signal forwarding to a spy. No real room is read or messaged.",
+      "review": "All eight tool names, risk/consent policy and required fields checked; connect rejects secret/unknown fields, malformed URL and invalid types, allows the exact 512-character username, and returns private sign-in link without bridge calls. Six command wrappers use the actual shared schema, force their own action, retain defaults/normalization and user/signal forwarding to a spy. No real room is read or messaged.",
       "mutation": {
         "find": "risk: write ? \"medium\" : \"low\"",
         "replace": "risk: write ? \"low\" : \"medium\"",
@@ -2885,26 +2885,6 @@
       ]
     },
     {
-      "module": "reusedTeamChatRoutes",
-      "path": "packages/gateway/src/routes/team-chat.ts",
-      "case_ids": [
-        "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_83_3",
-        "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_96_3",
-        "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_261_3",
-        "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_273_3"
-      ],
-      "review": "Partial review of the retained Rust-owned reference cases; other cases were withdrawn pending independent verification. No full-source coverage is claimed.",
-      "mutation": {
-        "find": "return reply.status(201).send({ message });",
-        "replace": "return reply.status(200).send({ message });",
-        "case_id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_96_3"
-      },
-      "evidence_files": [
-        "packages/gateway/src/routes/team-chat.test.ts",
-        "tests/contract/drivers/tailstatic/fixture-gateway-src-routes-team-chat-test-7e419143.ts"
-      ]
-    },
-    {
       "module": "homeassistant",
       "path": "packages/gateway/src/tools/homeassistant-tools.ts",
       "case_ids": [
@@ -3149,37 +3129,6 @@
       "evidence_files": [
         "packages/gateway/src/tools/skill-tools.test.ts",
         "tests/contract/drivers/tailstatic/fixture-gateway-src-tools-skill-tools-test-2356445c.ts"
-      ]
-    },
-    {
-      "module": "reusedEmailService",
-      "path": "packages/gateway/src/services/email/service.ts",
-      "case_ids": [
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_32_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_38_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_44_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_49_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_60_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_64_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_81_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_99_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_108_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_119_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_131_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_140_3",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_155_1",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_163_1",
-        "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_184_1"
-      ],
-      "review": "Reuses all 15 independently reviewed Rust-owned original email-service declarations: credential configuration/fallback, PKCE authorization URL and unknown state, owner-scoped account/token deletion and multi-account selection, signature isolation/HTML escaping/opt-outs, verified encrypted IMAP credentials and failure preservation, send validation before provider dispatch, callback expiry without another start, exact ten-minute cutoff and state consumption/replay after failure. SQLite is in-memory, credentials are synthetic and all exercised provider calls are spies. Successful OAuth exchange/profile persistence, token refresh and malformed secrets, untested mailbox forwarding operations, credential clearing and broader failure/concurrency paths remain explicit gaps.",
-      "mutation": {
-        "find": "if (!pending || pending.createdAt < Date.now() - 10 * 60_000)",
-        "replace": "if (!pending)",
-        "case_id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_163_1"
-      },
-      "evidence_files": [
-        "packages/gateway/src/services/email/service.test.ts",
-        "tests/contract/drivers/tailstatic/fixture-gateway-src-services-email-service-test-c73809a4.ts"
       ]
     },
     {
@@ -3743,25 +3692,6 @@
       "evidence_files": [
         "packages/gateway/src/services/preview-runner.test.ts",
         "tests/contract/drivers/tailstatic/fixture-gateway-src-services-preview-runner-test-53dc014a.ts"
-      ]
-    },
-    {
-      "module": "reusedElevatedTools",
-      "path": "packages/gateway/src/tools/elevated-tools.ts",
-      "case_ids": [
-        "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_78_3",
-        "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_122_3",
-        "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_136_3"
-      ],
-      "review": "Partial review of the retained Rust-owned reference cases; other cases were withdrawn pending independent verification. No full-source coverage is claimed.",
-      "mutation": {
-        "find": "[\"-S\", \"-k\", \"-p\", \"\", \"--\", \"sh\", \"-lc\", input.command]",
-        "replace": "[\"-S\", \"-p\", \"\", \"--\", \"sh\", \"-lc\", input.command]",
-        "case_id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_78_3"
-      },
-      "evidence_files": [
-        "packages/gateway/src/tools/elevated-tools.test.ts",
-        "tests/contract/drivers/tailstatic/fixture-gateway-src-tools-elevated-tools-test-ddb5848e.ts"
       ]
     },
     {

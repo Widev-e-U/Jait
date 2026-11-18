@@ -1,8 +1,8 @@
 {
   "format": 1,
   "inventory": "tests/contract/coverage.json",
-  "inventory_total": 388,
-  "inventory_total_note": "Original 370 components plus 18 later additions; implementation and human review tracked per component.",
+  "inventory_total": 405,
+  "inventory_total_note": "Original 370 components plus subsequent inventory changes (including removed references); implementation and human review tracked per component.",
   "metric": "Equal weight per inventoried gateway source component with native implementation and reviewed focused contracts; not an estimate of effort or cutover readiness.",
   "components": [
     {
@@ -511,7 +511,7 @@
     {
       "reference": "packages/gateway/src/db/uuidv7.ts",
       "reference_sha256": "78406d61c0f4953e4582b69c6577299cd2691251ba39bd82e13dae4fbe061875",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/db/identifiers.rs"
       ],
@@ -525,7 +525,7 @@
       "review": "Exact UUID bytes under deterministic timestamp/entropy and UUIDv7 random uniqueness/layout.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/evaluation/agent-eval.ts",
@@ -1109,7 +1109,7 @@
     {
       "reference": "packages/gateway/src/providers/acp-binary-launcher.ts",
       "reference_sha256": "b5698365c3e246dfdfeabf9cd055456eb95aaf05c3345156f5a97aa4544aa70f",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/providers/acp_binary_launcher.rs",
         "packages/gateway-rust/src/bin/jait-acp-binary-launcher.rs"
@@ -1125,7 +1125,7 @@
       "review": "Full native installer and standalone process, real owned HTTPS/ZIP/child/signals, 22 component checks plus four transport checks and one bounded-reader test. Five reproduced parity/lifecycle/output fixes and two restored differential mutations. POSIX, malformed-error and activation limits in native-acp-binary-launcher.md. Full source-bound gate controls checkpoint credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/providers/acp-provider.ts",
@@ -1234,7 +1234,7 @@
     {
       "reference": "packages/gateway/src/providers/contracts.ts",
       "reference_sha256": "1807cec881724a7267f77185e702d1d77ab39340b7e76b68c9dba6d78b6f6f8a",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/providers/contracts.rs"
       ],
@@ -1251,7 +1251,7 @@
         "native file hashes re-verified on 2026-11-02 (1 file): packages/gateway-rust/src/providers/contracts.rs",
         "Native library test filter (run by test --lib): providers::contracts::tests"
       ],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/providers/index.ts",
@@ -1298,7 +1298,7 @@
     {
       "reference": "packages/gateway/src/providers/jait-provider.ts",
       "reference_sha256": "579f720ce9856cee3bf756010b39958477653c6ecb3b3455799c53cf3fb54af9",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/providers/jait_provider.rs"
       ],
@@ -1311,12 +1311,12 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Built-in provider session lifecycle composed with the canonical native turn\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_data_evidence_b call jait_gateway directly through 3 focused checks in module(s) jait_provider; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-data.json. Worker note: 'Invalid session capacity' bounds, 'Authenticated owner and session are required' guard, and foreign/unknown session ids refusing cancel/stop.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/providers/model-fetchers.ts",
       "reference_sha256": "3790bfbb91d0c81735da2edb94b2830dded53061cfa922b8850c165b2f8b1a1d",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/providers/model_fetchers.rs",
         "packages/gateway-rust/src/providers/acp_registry.rs",
@@ -1334,7 +1334,7 @@
       "review": "Host component checks and source compiler/differential evidence pass. Native boundaries, mutation/reproduction evidence and activation limits are documented in native-model-fetchers.md. Full source-bound gate controls checkpoint credit; declarations earn no duplicate engine credit. reconciled 2026-02-14: providers/model_fetchers.rs keeps OpenRouter per-1M-token pricing with prefix parse, Infinity and negative handling matching the upstream change.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/providers/opencode-credentials.ts",
@@ -1487,7 +1487,7 @@
     {
       "reference": "packages/gateway/src/providers/steering-dispatcher.ts",
       "reference_sha256": "42be0b05a3620f5a5a6c7febde8554ac08811e5864b1589583c5ac76abffeef6",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/providers/steering_dispatcher.rs"
       ],
@@ -1502,7 +1502,7 @@
       "review": "Actual dispatcher and controller compared in 23 deterministic action scripts: deferred single delivery, FIFO acknowledgements, rejected/error fallback, pause/start races and captured ack waits, disposal/unsubscribe, suppressed late transcript markers, exact object consumption after drains, Unicode and queue metadata. Two native lifetime checks cover dropped polled/unpolled tasks and explicit restart after uncertain delivery. All 13 isolated native/reference regressions caught; restored suite passes 11 checks. Host owns authorized session queue, provider transport, supervised scheduler and effect budgets; no full agent-loop, provider or production integration credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/providers/todo-result.ts",
@@ -1666,7 +1666,7 @@
       "targets": [
         "gateway_rust_profiles"
       ],
-      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and failed-write partial effects; three restored mutations. See native-profiles.md.",
+      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and explicit failed-write behavior (native rolls back default changes and the reference retains them); three restored mutations. See native-profiles.md.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
@@ -1674,7 +1674,7 @@
     {
       "reference": "packages/gateway/src/routes/auth.ts",
       "reference_sha256": "4705ba74452535f06c52c5c1f781663f8c2f9fb77e2d2a40175f21b7be7ed1cf",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/routes/auth.rs",
         "packages/gateway-rust/src/db/worker.rs",
@@ -1690,7 +1690,7 @@
       "review": "All account route families over real HTTP: login/register/refresh/logout cookies, owner-only invitations, expiry and one-time use, settings filtering/nulls/model limits, tool locks, environment status, archived cleanup, session binding, deleted users and origin denials. Explicit database/secret configuration; production startup remains gated.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/routes/browser-devtools.ts",
@@ -1728,7 +1728,7 @@
       "targets": [
         "gateway_rust_calendar_http"
       ],
-      "review": "Explicit native calendar HTTP API with real Fastify/native loopback comparisons, authenticated account isolation, credential and snapshot validation, callback HTML, OAuth and provider failures, persisted effects, parseInt coercion, fail-then-pass NaN regression and three restored mutations. Focused compatibility boundaries documented.",
+      "review": "Explicit native calendar HTTP API with real Fastify/native loopback comparisons, authenticated account isolation, credential and snapshot validation, callback HTML, OAuth and provider failures, persisted effects including native account rollback on snapshot write failure, parseInt coercion, fail-then-pass NaN regression and three restored mutations. Focused compatibility boundaries documented.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
@@ -1817,7 +1817,7 @@
     {
       "reference": "packages/gateway/src/routes/email.ts",
       "reference_sha256": "98d9ca8163af1e050ccc554ac456ddf440fae7e9ac6a8ebd895cfcac081ad9cd",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/routes/email.rs"
       ],
@@ -1830,7 +1830,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Explicitly mounted email API. Runtime composition and disconnect supervision\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_routes_evidence call jait_gateway directly through 8 focused checks in module(s) email; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-routes.json. Worker note: 8 contract tests in mod email drive the native router over a real axum server; every id passed in the final full run (exit 0, 97 passed / 0 failed).",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/routes/environment.ts",
@@ -2003,7 +2003,7 @@
     {
       "reference": "packages/gateway/src/routes/mcp-server.ts",
       "reference_sha256": "07d066c8183ff2043e1b765eed57f80806c00819d8b3b250be02db3a466656f6",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/routes/mcp_server.rs",
         "packages/gateway-rust/src/runtime/server.rs"
@@ -2017,7 +2017,7 @@
       "review": "MCP server endpoints: tool listing, invocation and image results over an injected tool registry with the existing authentication and permission checks. Mounted through `with_mcp_server`. | Native contract target(s) gateway_rust_routes_evidence call jait_gateway directly through 5 focused checks in module(s) mcp_server; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-routes.json. Worker note: 5 contract tests in mod mcp_server drive the native router over a real axum server; every id passed in the final full run (exit 0, 97 passed / 0 failed).",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/routes/messenger.ts",
@@ -2072,7 +2072,7 @@
     {
       "reference": "packages/gateway/src/routes/plans.ts",
       "reference_sha256": "6a44648f68b871be072a2bbf41a119c5d32a0d459eff240ed85ca178e14256c1",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/routes/plans.rs"
       ],
@@ -2085,7 +2085,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Plan lifecycle REST API; thread creation remains a browser responsibility.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_routes_evidence call jait_gateway directly through 6 focused checks in module(s) plans; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-routes.json. Worker note: 6 contract tests in mod plans drive the native router over a real axum server; every id passed in the final full run (exit 0, 97 passed / 0 failed).",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/routes/plugins.ts",
@@ -2712,7 +2712,7 @@
     {
       "reference": "packages/gateway/src/security/consent-executor.ts",
       "reference_sha256": "c4b28b93c73c42cd13bc313023abc5a4943d882e1004e30219c3e030ebb49837",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/security/consent_executor.rs"
       ],
@@ -2727,7 +2727,7 @@
       "review": "Consent wrapper with policy/command checks before overrides, dryrun, trust and once retention, irreversible reapproval, owner/session binding, bounded admission and cancelled-wait cleanup. Forty-five actual-source scenarios, durable captured-audit/context forwarding and bounded-process integration; seven caught/restored mutations. Registered argument object validation is deliberately stricter for malformed inputs; Unicode scalar and lower registry/node/sandbox limits are documented in native-consent-executor.md. Audit remains owned by the execution adapter. Full source-bound gate controls checkpoint credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/security/consent-manager.ts",
@@ -2855,7 +2855,7 @@
     {
       "reference": "packages/gateway/src/security/path-guard.ts",
       "reference_sha256": "e19dd0063837e95c28739cd49c0d267115465344fb7ddb9e58d2065db305d31e",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/security/path_guard.rs"
       ],
@@ -2870,7 +2870,7 @@
       "review": "Linux path normalization, traversal, denied paths and final-entry symlink behavior including error metadata.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/security/preview-token.ts",
@@ -3159,7 +3159,7 @@
       "targets": [
         "gateway_rust_diagrams"
       ],
-      "review": "Real file-first storage, SQLite fallback/ownership, update identity and partial effects from failed file/database writes.",
+      "review": "Real file-first storage, SQLite fallback/ownership, update identity and partial effects from failed file/database writes. Native rejects a directory at the diagram path and the reference falls back to SQLite.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
@@ -3179,7 +3179,7 @@
       "targets": [
         "gateway_rust_profiles"
       ],
-      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and failed-write partial effects; three restored mutations. See native-profiles.md.",
+      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and explicit failed-write behavior (native rolls back default changes and the reference retains them); three restored mutations. See native-profiles.md.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
@@ -3274,6 +3274,42 @@
       "reviewed_at": null,
       "evidence": [],
       "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
+    },
+    {
+      "reference": "packages/gateway/src/services/bridge-reauth.ts",
+      "reference_sha256": "f25b14e81f8439c84b0b8bc2087de5b06af8cfab92dbbdf3c1f05b7a99072897",
+      "status": "partial",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Inventory rebaseline: newly inventoried bridge service; native implementation and parity have not been audited.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Audit the current source and native behavior and run differential contracts before claiming verification."
+    },
+    {
+      "reference": "packages/gateway/src/services/bridge-status.ts",
+      "reference_sha256": "91c801a6b3ea8caa0fee6f8968e4076ba3d78aebc542e29724efa1223c5d922a",
+      "status": "partial",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Inventory rebaseline: newly inventoried bridge service; native implementation and parity have not been audited.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Audit the current source and native behavior and run differential contracts before claiming verification."
+    },
+    {
+      "reference": "packages/gateway/src/services/browser-fast-click.ts",
+      "reference_sha256": "9c67dfb7d352d28b530c58700f3e989aaa196f8e33ef31685a1c45340ea4e91e",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Added 2026-11-16 when the TypeScript inventory was recaptured; not yet reviewed. A name search of packages/gateway-rust/src found no native counterpart.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Not reviewed; no native implementation found by name search. Component remains unported."
     },
     {
       "reference": "packages/gateway/src/services/browser-intelligence.ts",
@@ -3864,7 +3900,7 @@
     {
       "reference": "packages/gateway/src/services/email/service.ts",
       "reference_sha256": "943784b35994d8244b376c69d0d6db45f51ba725038e57609b03ac6c18e3d074",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/email/service.rs",
         "packages/gateway-rust/src/services/email/connection.rs",
@@ -3879,7 +3915,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Owned account orchestration on the canonical bounded SQLite worker and secret store.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_data_evidence call jait_gateway directly through 4 focused checks in module(s) mailbox_validators; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-data.json. Worker note: Send-path preconditions: 'A recipient or reply message is required', header CR/LF injection refused, 2 MiB body cap (2*1024*1024 ok / +1 rejected), signature 10000 cap, 'Invalid mailbox credentials' for blank user/password. Network send itself is out of scope (no credentials).",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/services/email/types.ts",
@@ -4018,7 +4054,7 @@
     {
       "reference": "packages/gateway/src/services/jait-models.ts",
       "reference_sha256": "9b8a22cc99c8309558b4c6d67fdddb98913e61ce426fff03c759d479ec88054a",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/services/jait_models.rs"
       ],
@@ -4033,7 +4069,7 @@
       "review": "Host native/differential component checks pass, two restored mutations caught; typed dependency boundaries and activation limits documented in native-jait-models.md. Full source-bound gate controls actual checkpoint credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/services/live-view-manager.ts",
@@ -4093,7 +4129,7 @@
     {
       "reference": "packages/gateway/src/services/messenger-bridge.ts",
       "reference_sha256": "0e5b54ce8efcdec92fadc58241ef69294dfdf1c2b419c0b57b7ed9a6ab32ca3c",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/messenger_bridge.rs"
       ],
@@ -4108,7 +4144,7 @@
       "review": "Strict shared commands and complete owner-bound dispatch lifecycle; seven real TypeScript comparisons, five native lifetime/timer/output/cancellation checks, three caught/restored mutations, and fail/pass synchronous-send/deep-JSON regressions. No live messages or external services. Full gate controls credit; authenticated WS registration and native Matrix handler activation remain separate.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/services/messenger-history.ts",
@@ -4158,7 +4194,7 @@
     {
       "reference": "packages/gateway/src/services/mobile-push.ts",
       "reference_sha256": "58d283382346a4972cda90387809925bca60d9d91f51e9cae204c22a0d70b8bc",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/mobile_push.rs"
       ],
@@ -4171,7 +4207,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Firebase mobile notification service. Explicit account/DB/clock/lane inputs;\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_services_evidence call jait_gateway directly through 3 focused checks in module(s) mobile_push; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-services.json. Worker note: attention_revoke_targets drops exactly the resolving device (keeps all on None/unknown resolver, preserves order); FirebaseServiceAccount parsing requires the Firebase snake_case keys project_id/client_email/private_key, rejects blanks/partial/camelCase/invalid JSON and trims padding. Note: camelCase keys are rejected on both sides because TS reads snake_case too.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/services/network-resources.ts",
@@ -4210,7 +4246,7 @@
       "targets": [
         "gateway_rust_state"
       ],
-      "review": "Memory and SQLite ownership/binding, foreign claims, random credential shape, SHA256-only storage, rejection of unknown tokens, per-node revocation, reopen and owner revalidation; missing-node database behavior is retained. No native node transport is exposed yet.",
+      "review": "Memory and SQLite ownership/binding, foreign claims, random credential shape, SHA256-only storage, rejection of unknown tokens, per-node revocation, reopen and owner revalidation; The native database binding rejects unregistered nodes, while the reference reports success without creating a binding. No native node transport is exposed yet.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
@@ -4218,7 +4254,7 @@
     {
       "reference": "packages/gateway/src/services/node-permissions.ts",
       "reference_sha256": "6b9f2c544ba1b60906ff6290972dfce05b42043297110fac36f348a3a49067ca",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/services/node_permissions.rs",
         "packages/gateway-rust/src/services/storage.rs"
@@ -4233,12 +4269,12 @@
       "review": "Production SQLite comparison of deny-all registration, identity preservation on repeat hello, exact capability names, explicit integer grants, unknown-key rejection, best-effort partial writes, absent/broken database failures, audit records and transactional forget rollback. Native transport and route-level node ownership enforcement remain unported; callers must authorize grant changes.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/services/node-state-manager.ts",
       "reference_sha256": "d5a4f8e76e5cb9a25cc341a0771a6ded2dbc7d4a1aad5adc0dfac2be10536221",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/services/node_state_manager.rs"
       ],
@@ -4253,7 +4289,7 @@
       "review": "Complete typed in-memory registry: partial/nullish capabilities, ownership, protocol defaults, insertion order, reconnects, snapshots and compiled ICU collation. Eight differential tests, five native tests and four restored mutations caught by both suites. Locale/data-version matching and immutable native ownership are explicit review boundaries; production node routing remains external.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/services/notifications.ts",
@@ -4399,7 +4435,7 @@
     {
       "reference": "packages/gateway/src/services/primary-link.ts",
       "reference_sha256": "5f771c59bdf73aa9108dd3e4370391ea929b8cb8e08cb868ef4f6ca74afa8aa5",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/services/primary_link.rs"
       ],
@@ -4412,7 +4448,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Primary-link node service — native port of\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_services_evidence call jait_gateway directly through 5 focused checks in module(s) primary_link; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-services.json. Worker note: https->wss/http->ws/bare-host->ws scheme rewrite with slash trimming and encodeURIComponent token, redact_token rewriting only the first non-empty token param, credential path = sha256(gatewayUrl) truncated to 24 hex under <state>/node-pairings, JS-unreserved encodeURIComponent set, Node platform-name mapping.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/services/project-repositories.ts",
@@ -4808,7 +4844,7 @@
     {
       "reference": "packages/gateway/src/services/sessions.ts",
       "reference_sha256": "f7e0684329a85a9741bd1eb400abb51a0169cba9b82b7ee8d62657c81ee9f4cb",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/services/sessions.rs"
       ],
@@ -4823,7 +4859,7 @@
       "review": "Session CRUD, nullable updates, optional owner filters, project and personal scopes, list limits, monotonic activity, observed viewed acknowledgements, metadata/error UTF-16 handling, immutable history forks and transactional rollback compared against disposable production SQLite. Library operations require caller authorization; session HTTP and streaming remain unported. Legacy malformed metadata and UTF-16 truncation retain reference behavior. Nullable legacy name/status columns and invalid activity errors are covered. Reference refresh 2026-10-22: question forks delete loop metadata without changing the parent. Failing-before/passing-after regression and existing session contracts pass. See tests/contract/reviews/native-session-freshness.md.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/services/static-asset-cache.ts",
@@ -5105,7 +5141,7 @@
     {
       "reference": "packages/gateway/src/services/users.ts",
       "reference_sha256": "ff344fbadd79bfa17a66581d7156a1fba6de61d494d43297cc01906320d7146d",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/users.rs",
         "packages/gateway-rust/src/db/mod.rs",
@@ -5123,7 +5159,7 @@
       "review": "User lookup, Unicode normalization, fixed scrypt parameters and TS reopen of Rust credentials, malformed stored hashes rejected in both backends after a reproduced reference fix, owner-only hashed expiring/single-use invitations, settings defaults/malformed JSON/null patches/user isolation, last selection, internal session binding and owned archive cleanup. Internal binding must receive route-level authorization before any route is enabled. Foundation review 2026-10-18: reference binding now uses an atomic conditional UPDATE; native SQL matches. Focused repository contract verifies unowned claim, foreign-owner denial and same-owner idempotence; auth HTTP foreign-binding case also passed. No new component credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/sessions/contracts.ts",
@@ -5250,7 +5286,7 @@
     {
       "reference": "packages/gateway/src/surfaces/filesystem.ts",
       "reference_sha256": "3e3d85aed823f3764c257db8bc0cf351e40e894d78fdb824fd8ae6d1c4b4e02d",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/surfaces/filesystem.rs",
         "packages/gateway-rust/src/security/path_guard.rs",
@@ -5267,7 +5303,7 @@
       "review": "tests/contract/reviews/native-filesystem-surface.md: real TypeScript/native filesystem effects, complete lifecycle and operation API, backup retention/null/missing/restore, substitutions, byte/text decoding, path/secondary-endpoint denials, symlink policy, copy aliases/self/descendant rejection, OS errors and callback order. Twelve focused tests and five caught/restored source mutants. Linux fixture evidence; platform/resource/race acceptance and production mount remain separate.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/surfaces/index.ts",
@@ -5534,7 +5570,7 @@
     {
       "reference": "packages/gateway/src/tools/agent-tools.ts",
       "reference_sha256": "9245fb63f1d9a41ef114117070ade8f6184f17fb9d01ef921aa15a17cf2c1574",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/tools/agent_tools.rs"
       ],
@@ -5556,7 +5592,7 @@
         "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/agent_tools.rs: pinned=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 live=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 (superseded 2026-11-02 note: old pin 56dc7f6191ae… vs then-live e7341bc6a147…; focused tools::agent_tools::tests = 16 passed / 0 failed on current source)",
         "Native library test filter (run by test --lib): tools::agent_tools::tests::"
       ],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/tools/architecture-tools.ts",
@@ -5691,6 +5727,18 @@
       "remaining": null
     },
     {
+      "reference": "packages/gateway/src/tools/chat-control-tool.ts",
+      "reference_sha256": "f52fab99ab764a9ab4966238a17dda7958054551d712474e3a92fa70394c5bc6",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Added 2026-11-16 when the TypeScript inventory was recaptured; not yet reviewed. A name search of packages/gateway-rust/src found no native counterpart.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Not reviewed; no native implementation found by name search. Component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/tools/chat-modes.ts",
       "reference_sha256": "9ca75d9dbdc7a0bd8c6dbf3157b80d01a5a3d3ce9f5e87a2b005adc6990ef90d",
       "status": "partial",
@@ -5819,7 +5867,7 @@
     {
       "reference": "packages/gateway/src/tools/contracts.ts",
       "reference_sha256": "4a362b7e4c418096e45a88714342b6d5d47805e0cce67c177e11e47b1bceecf6",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/contracts.rs"
       ],
@@ -5836,7 +5884,7 @@
         "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/contracts.rs: pinned=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 live=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 (superseded 2026-11-02 note: old pin f7d38a790271… vs then-live 9ed1797899c6…; focused tools::contracts = 16 passed / 0 failed on current source)",
         "Native library test filter (run by test --lib): tools::contracts::tests"
       ],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/core/agent.ts",
@@ -6126,24 +6174,6 @@
       "remaining": null
     },
     {
-      "reference": "packages/gateway/src/tools/elevated-tools.ts",
-      "reference_sha256": "31cbbb89e8b866b2c6958b013cf4fc66f23b7baf5d149890d2d8ce2ef66a9d3a",
-      "status": "verified",
-      "native": [
-        "packages/gateway-rust/src/tools/elevated_tools.rs"
-      ],
-      "contracts": [
-        "tests/contract/tests/gateway_rust_tools_evidence_e.rs"
-      ],
-      "targets": [
-        "gateway_rust_tools_evidence_e"
-      ],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/elevated-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_tools_evidence_e call jait_gateway directly through 5 focused checks in module(s) elevated_tools; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins elevated.run metadata (only `command` required), schema pass-through with null for unknown tools, platform detection, the windows_uac_spawn powershell argv (4 args, 30s timeout, hidden window, base64 command encoding), and that windows credential spawn exposes credentials only via env.",
-      "reviewed_at": "2026-11-03T07:42:02Z",
-      "evidence": [],
-      "remaining": null
-    },
-    {
       "reference": "packages/gateway/src/tools/email-tools.ts",
       "reference_sha256": "a0bfc120c39c5ab1d79e933f8aa3ab0606d81cda426e840007a9f54b35a7d1ae",
       "status": "partial",
@@ -6164,7 +6194,7 @@
     {
       "reference": "packages/gateway/src/tools/file-tools.ts",
       "reference_sha256": "2839809dc82640514fd30d9f5d80b60c31e2b18f223cf7000d562a83132dd247",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/file_tools.rs",
         "packages/gateway-rust/src/tools/file-tools-metadata.json"
@@ -6180,12 +6210,12 @@
       "review": "tests/contract/reviews/native-file-tools.md: actual TypeScript comparisons, metadata/arguments/call ordering, error boundaries and caught/restored mutations. Full frozen validation controls credit; service/transport authorization and production activation remain separate.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/gateway-tools.ts",
       "reference_sha256": "410155b8e7f6d3d054c333d5023e7a82000d7c9cd9138edb8be283579cc4a7a5",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/runtime_tools.rs",
         "packages/gateway-rust/src/tools/runtime-tools-metadata.json"
@@ -6201,7 +6231,7 @@
       "review": "Metadata and gateway status aggregation with optional services, uptime, enabled filtering and failure ordering.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/homeassistant-tools.ts",
@@ -6335,7 +6365,7 @@
     {
       "reference": "packages/gateway/src/tools/mcp-bridge.ts",
       "reference_sha256": "bf45a8b532bcd5df932881e2ed9990861c757f14399a3cae9d9db50702ad141a",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/tools/mcp_bridge.rs"
       ],
@@ -6352,7 +6382,7 @@
         "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/mcp_bridge.rs: pinned=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 live=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 (superseded 2026-11-02 note: old pin c8b6c3383608… vs then-live eb40a40d957e…; live advanced since audit eb40a40d957e… -> 0a28fba3c306…; focused tools::mcp_bridge::tests = 18 passed / 0 failed on current source)",
         "Native library test filter (run by test --lib): tools::mcp_bridge::tests"
       ],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/tools/memory-tools.ts",
@@ -6378,7 +6408,7 @@
     {
       "reference": "packages/gateway/src/tools/messenger-tools.ts",
       "reference_sha256": "34cb1aec379fbf61e78f438ca5551bac2cce587325218f9911fe067937428ae5",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/messenger.rs",
         "packages/gateway-rust/src/tools/messenger-tools-metadata.json"
@@ -6395,7 +6425,7 @@
       "review": "Seven factories with complete metadata, 384 actual TypeScript comparisons for shared-schema validation/defaults/strict fields, private URL normalization, owner/signal forwarding and bridge failures. Concrete native bridge binding checked. Eight isolated regressions caught and restored. See tests/contract/reviews/native-messenger-tools.md.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/meta-tools.ts",
@@ -6557,6 +6587,18 @@
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
       "remaining": "The cited preview source-review case is absent; parity requires review and passing evidence. PreviewTools delegates to a preview.service host, but no production host implementation or PreviewTools construction was found in Rust source; the preview service also lacks its scoped browser-operation adapter."
+    },
+    {
+      "reference": "packages/gateway/src/tools/project-chat-tool.ts",
+      "reference_sha256": "f32544b6526dfd7bc5adbce6acc7bdb74f2d58420d85b94976f3ad4e28c23e4e",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Added 2026-11-16 when the TypeScript inventory was recaptured; not yet reviewed. A name search of packages/gateway-rust/src found no native counterpart.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Not reviewed; no native implementation found by name search. Component remains unported."
     },
     {
       "reference": "packages/gateway/src/tools/project-editor-tools.ts",
@@ -6993,7 +7035,7 @@
     {
       "reference": "packages/gateway/src/tools/registry.ts",
       "reference_sha256": "c43b8165bea53f70ec9c4830aa3f7fe3da4459d79e761966977a1b01ea3fc83c",
-      "status": "verified",
+      "status": "implemented",
       "native": [
         "packages/gateway-rust/src/tools/registry.rs"
       ],
@@ -7008,7 +7050,7 @@
       "review": "tests/contract/reviews/native-registry.md: actual TypeScript comparisons, complete metadata/results, ordered calls and error boundaries, caught/restored mutations. Full frozen validation controls credit; caller scope/consent, transport activation and production replacement remain separate. 2026-10-24 tool UX refresh: Compatibility-only registrations execute through validation/audit but stay out of discovery; old/new disable rules are equivalent and compared against TypeScript.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "The TypeScript reference changed after the recorded review. Revalidate native parity against current behavior before restoring verified status."
     },
     {
       "reference": "packages/gateway/src/tools/remote-executor.ts",
@@ -7095,7 +7137,7 @@
     {
       "reference": "packages/gateway/src/tools/screen-share-tools.ts",
       "reference_sha256": "26845c11f6aa792fae61e021bd995d565ce6f9cdf05ace6e6498ec7d4d45c525",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/screen_share_tools.rs"
       ],
@@ -7108,7 +7150,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/screen-share-tools.ts`\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. reconciled 2026-02-14: tools/screen_share_tools.rs sets initiated_by_agent/require_consent, matching upstream agent-initiated sharing. | Native contract target(s) gateway_rust_tools_evidence_c call jait_gateway directly through 3 focused checks in module(s) screen_share_tools; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins screen-share tool metadata/definitions, required arguments and property typing as declared by the TS schemas.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/screenshot-tools.ts",
@@ -7278,7 +7320,7 @@
     {
       "reference": "packages/gateway/src/tools/ssh-tools.ts",
       "reference_sha256": "c1e27ccc5689ce5524c3853bfdbf3af09c1cf6c624df6d380f972670981aab0f",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/ssh_tools.rs"
       ],
@@ -7291,7 +7333,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Port of `packages/gateway/src/tools/ssh-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_tools_evidence call jait_gateway directly through 11 focused checks in module(s) ssh_tools; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins openssh argv assembly for key vs password auth, known-hosts override, sudo prefix only when a user is set, JS `trim`, ANSI/CSI+OSC stripping, echoed-command-marker and probe-line filtering (session + one-shot variants), oversized-output tail retention, single-quote escaping, target-part validation messages, and the password secret-key format `user@host:port`.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/surface-tools.ts",
@@ -7521,6 +7563,24 @@
       "remaining": null
     },
     {
+      "reference": "packages/gateway/src/tools/windows-elevation.ts",
+      "reference_sha256": "f8d1c0f296dc2c9c4a8196a6117e1b229ef64d0867360334e4df41cabd398aea",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/tools/elevated_tools.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_tools_evidence_e.rs"
+      ],
+      "targets": [
+        "gateway_rust_tools_evidence_e"
+      ],
+      "review": "Inventory rebaseline: the former elevated-tools.ts reference was removed; the native elevated_tools module contains Windows elevation helpers. Prior evidence was for the removed reference and does not establish parity with windows-elevation.ts.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Audit the current source and native behavior and run differential contracts before claiming verification."
+    },
+    {
       "reference": "packages/gateway/src/voice-assistant/router.ts",
       "reference_sha256": "da4bf51e0a8cd9fe44d121f0ee3e1345430d98ebbc15f0a2ef1cd27d63a4b00e",
       "status": "absent",
@@ -7625,5 +7685,5 @@
       "remaining": "No native implementation; component remains unported."
     }
   ],
-  "updated_at": "2026-11-03T07:42:44Z"
+  "updated_at": "2026-11-16T14:58:24Z"
 }
