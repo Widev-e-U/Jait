@@ -3,7 +3,7 @@
  * limits. Deterministic and free of I/O. Invalid plans never reach the scheduler.
  */
 import { ORCHESTRATION_LIMITS } from "@jait/shared";
-import type { VerificationCheck, VerificationGate } from "@jait/shared/types";
+import type { TaskWorker, VerificationCheck, VerificationGate } from "@jait/shared/types";
 import { isGlobKey, isNamedResourceKey, normalizeResourceKey, PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
 
 export type PlanGraphIssueCode =
@@ -26,6 +26,7 @@ export type PlanGraphIssueCode =
   | "missing_verification"
   | "invalid_verification"
   | "invalid_workers"
+  | "invalid_worker"
   | "task_not_approved"
   | "workspace_required";
 
@@ -41,6 +42,7 @@ export interface NormalizedPlanTask {
   description: string;
   dependsOn: string[];
   claims: ResourceClaims;
+  worker: TaskWorker;
   maxAttempts: number;
   timeoutSeconds: number;
   priority: number;
@@ -239,6 +241,32 @@ function readGates(issues: Issues, taskId: string, raw: unknown): VerificationGa
   return gates;
 }
 
+const JAIT_WORKER: TaskWorker = { kind: "jait" };
+const WORKER_PROVIDER_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * Absent `worker` means the in-process Jait worker. An ACP worker needs declared
+ * writes, so its changes always land in an isolated worktree and pass the scope gate.
+ */
+function readWorker(issues: Issues, taskId: string, raw: unknown, claims: ResourceClaims): TaskWorker {
+  if (raw === undefined) return JAIT_WORKER;
+  const invalid = (reason: string): TaskWorker => {
+    addIssue(issues, "invalid_worker", taskId, `worker ${reason}`);
+    return JAIT_WORKER;
+  };
+  if (!isRecord(raw)) return invalid("must be an object with a kind");
+  if (raw.kind === "jait") return JAIT_WORKER;
+  if (raw.kind !== "acp") return invalid('kind must be "jait" or "acp"');
+  const providerId = typeof raw.providerId === "string" ? raw.providerId : "";
+  if (!WORKER_PROVIDER_ID.test(providerId)) {
+    return invalid('providerId must be an ACP provider id of letters, digits, ".", "_" or "-" (max 64)');
+  }
+  if (claims.writes.length === 0) {
+    return invalid("acp needs declared writes, so the agent works in an isolated worktree");
+  }
+  return { kind: "acp", providerId };
+}
+
 function findCycle(tasks: readonly NormalizedPlanTask[], done: ReadonlySet<string>): string[] {
   const dependsOn = new Map(tasks.map((task) => [task.id, task.dependsOn] as const));
   const stack: string[] = [];
@@ -324,12 +352,14 @@ export function validatePlanGraph(input: unknown): PlanGraphResult {
     if (description.length > MAX_DESCRIPTION) {
       addIssue(issues, "invalid_description", id, `description must be at most ${MAX_DESCRIPTION} characters`);
     }
+    const claims = readClaims(issues, id, raw.resources);
     tasks.push({
       id,
       title,
       description,
       dependsOn: readDependencies(issues, id, raw.dependsOn),
-      claims: readClaims(issues, id, raw.resources),
+      claims,
+      worker: readWorker(issues, id, raw.worker, claims),
       maxAttempts: readInteger(
         issues, id, raw.maxAttempts, ORCHESTRATION_LIMITS.defaultAttempts,
         { min: ORCHESTRATION_LIMITS.minAttempts, max: ORCHESTRATION_LIMITS.maxAttempts }, "invalid_attempts", "maxAttempts",

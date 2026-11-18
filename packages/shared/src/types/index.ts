@@ -168,6 +168,7 @@ export type {
   OrchestrationTaskState,
   OrchestrationTaskView,
   TaskResources,
+  TaskWorker,
   VerificationCheck,
   VerificationGate,
   VerificationOutcome,

@@ -66,9 +66,19 @@ export interface VerificationGate {
   check: VerificationCheck;
 }
 
+/**
+ * Who carries out a task. `jait` (the default) is the owner's in-process Jait
+ * provider. `acp` runs an ACP coding agent, such as Claude Code or Codex, in the
+ * task's own worktree. An ACP task must declare writes, and every tool approval
+ * it asks for goes through consent on the run's workflow session.
+ */
+export type TaskWorker = { kind: "jait" } | { kind: "acp"; providerId: string };
+
 /** Execution settings a plan task adds to its definition. */
 export interface OrchestrationTaskSpec {
   resources?: TaskResources;
+  /** Who runs the task. Absent means the in-process Jait worker. */
+  worker?: TaskWorker;
   /** Attempts including repair attempts. Default 2, max 5. */
   maxAttempts?: number;
   timeoutSeconds?: number;

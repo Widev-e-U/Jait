@@ -100,6 +100,8 @@ import { AgentControlService, type AgentStopResult } from "./services/agent-cont
 import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestration/executor.js";
 import { createWorkflowVerifier } from "./services/orchestration/command-verifier.js";
 import { createInProcessWorkflowWorker } from "./services/orchestration/in-process-worker.js";
+import { createAcpWorkflowWorker } from "./services/orchestration/acp-worker.js";
+import { routeWorkers } from "./services/orchestration/worker-router.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
 import { createPlanRunTools } from "./tools/plan-run-tools.js";
 import { WorkflowWorkspaces } from "./services/orchestration/workspace.js";
@@ -335,10 +337,18 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   const workflowWorker = deps.userService && deps.toolRegistry
     ? createInProcessWorkflowWorker(config, deps.userService, deps.toolRegistry, deps.toolExecutor)
     : undefined;
+  // ACP tasks run a coding agent in their worktree, supervised, with every approval on the workflow's consent path.
+  const acpWorker = deps.providerRegistry && deps.consentManager
+    ? createAcpWorkflowWorker({
+      config: { host: config.host, port: config.port },
+      providerRegistry: deps.providerRegistry,
+      consentManager: deps.consentManager,
+    })
+    : undefined;
   const orchestration: OrchestrationService | undefined = deps.db && agentControl
     ? new OrchestrationService({
       db: deps.db,
-      executor: new SubAgentTaskExecutor(workflowWorker ?? unboundSubAgentRunner),
+      executor: new SubAgentTaskExecutor(routeWorkers({ jait: workflowWorker ?? unboundSubAgentRunner, acp: acpWorker })),
       verifier: deps.repoService
         ? createWorkflowVerifier({ repositories: deps.repoService, toolExecutor: deps.toolExecutor })
         : undefined,

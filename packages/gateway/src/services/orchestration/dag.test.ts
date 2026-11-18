@@ -119,4 +119,28 @@ describe("validatePlanGraph", () => {
     expect(codesOf([task("A", { timeoutSeconds: 0 })])).toEqual(["invalid_timeout"]);
     expect(codesOf([task("A", { priority: 11 })])).toEqual(["invalid_priority"]);
   });
+
+  it("defaults to the in-process worker and accepts an ACP worker that declares writes", () => {
+    const plain = validatePlanGraph([task("A", { resources: { writes: ["src"] } })]);
+    expect(plain.ok && plain.tasks[0]?.worker).toEqual({ kind: "jait" });
+    const acp = validatePlanGraph([
+      task("A", { resources: { writes: ["src"] }, worker: { kind: "acp", providerId: "claude-code" } }),
+    ]);
+    expect(acp.ok && acp.tasks[0]?.worker).toEqual({ kind: "acp", providerId: "claude-code" });
+  });
+
+  it("refuses an ACP worker that cannot write inside an isolated worktree", () => {
+    const worker = { kind: "acp", providerId: "codex" };
+    expect(codesOf([task("A", { resources: { reads: ["."] }, worker })])).toEqual(["invalid_worker"]);
+    expect(codesOf([task("A", { resources: {}, worker })])).toEqual(["invalid_worker"]);
+    // Absent resources claim the whole project for writing, which is a write claim.
+    expect(codesOf([task("A", { worker })])).toEqual([]);
+  });
+
+  it("refuses unknown worker kinds and malformed provider ids", () => {
+    const writes = { writes: ["src"] };
+    expect(codesOf([task("A", { resources: writes, worker: { kind: "shell" } })])).toEqual(["invalid_worker"]);
+    expect(codesOf([task("A", { resources: writes, worker: { kind: "acp", providerId: "../escape" } })])).toEqual(["invalid_worker"]);
+    expect(codesOf([task("A", { resources: writes, worker: "acp" })])).toEqual(["invalid_worker"]);
+  });
 });

@@ -14,6 +14,8 @@ The engine is general-purpose. It has no built-in knowledge of Rust, TypeScript 
 | `orchestrator.ts` | `OrchestrationService`: create, dispatch, attempts, gates, integration, resume, retry, cancel, halt, restart recovery. |
 | `executor.ts` | Prompt and report contract. `SubAgentTaskExecutor` runs one attempt through an injected runner. |
 | `in-process-worker.ts` | Real worker: the owner's in-process Jait provider through `agent.spawn`, with tools limited by workspace mode. |
+| `acp-worker.ts` | ACP coding-agent worker: one supervised turn of an ACP provider in the task's worktree, with each approval on the workflow's consent path. |
+| `worker-router.ts` | Picks the runner from the task's `worker` kind. A kind whose runner is not bound fails closed. |
 | `workflow-tool-guard.ts` | Deterministic check of each worker tool call against its workspace and claims, before consent. |
 | `workspace.ts` | Git worktrees for the run: integration branch, task branches, scope check, commit, sync and integration merge. Reuses `GitService.createWorktree` and `gitExecArgs`. |
 | `command-verifier.ts` | Gate runners. Command gates use the consent-aware executor. `createWorkflowVerifier` dispatches artifact and command gates. |
@@ -31,7 +33,7 @@ What JAIT already had when this work started, and what was decided about it.
 | --- | --- |
 | `PlanTask.dependsOn`, `automation_plans` | Kept as the plan definition. Execution settings (`resources`, `verification`, limits) extend `PlanTask`, and plans are edited as before. No second plan model. |
 | `agent.spawn` in-process sub-agents | Reused as the worker path. `agent.spawn` gained one optional executor hook that only workflow workers pass, so ordinary chats and sub-agents behave as before. The worker's sub-agent id is stored on the attempt. |
-| ACP coding agents (Codex, Claude Code) | Not bound yet. `SubAgentRunner` is the seam, and an ACP runner would reuse the same prompt, report contract and gates. |
+| ACP coding agents (Codex, Claude Code) | Bound as an optional worker for tasks that declare `worker: { kind: "acp", providerId }`. It reuses `runAcpSpecialistTurn`, the same prompt, report contract and gates. See [ACP workers](#acp-workers). |
 | `GitService.createWorktree`, `gitExecArgs` | Reused for task and integration worktrees. No new git layer, and no push, merge into `main` or destructive command. |
 | Consent executor, tool profiles, audit | Every worker tool call and every command gate goes through it. Workflow requests never run in full-access mode. |
 | `AgentControlService` halt | Honored at dispatch and for running attempts. Un-halting restarts nothing. |
@@ -128,7 +130,7 @@ The engine does not know what a test is, so the plan says which paths a writer m
 
 ## Scheduling
 
-- `selectDispatch` starts ready tasks by priority, then definition order. It respects `maxWorkers` per run, a process-wide cap, a per-owner cap and a per-owner, per-provider cap (`perProviderMaxWorkers`, default 2). The provider is the owner's worker backend, which is the in-process Jait provider today. Only workflow attempts count toward it, so ordinary chats are not throttled.
+- `selectDispatch` starts ready tasks by priority, then definition order. It respects `maxWorkers` per run, a process-wide cap and a per-owner cap. A per-owner, per-provider cap (`perProviderMaxWorkers`, default 2) applies to each task's provider: the owner's in-process Jait provider for in-process tasks, and each ACP provider for ACP tasks. A ready task whose provider is at its cap waits and does not hold a slot. Only workflow attempts count, so ordinary chats are not throttled.
 - Resource claims: `writes` conflicts with any overlapping `reads` or `writes`. `reads` never conflict with each other. Paths overlap by segment (`src` covers `src/lib.rs`, not `srcx`). `name:<id>` resources match exactly.
 - A task without a `resources` field claims the whole project for writing and therefore runs alone. `resources: {}` declares no claims.
 - `protects` is a restriction, not a claim. It never conflicts with other tasks, so two tasks can protect the same tests.
@@ -158,6 +160,19 @@ Writing tasks never touch the user's checkout or branch.
 - A worker that cannot start, or is aborted, leaves its outcome unknown, so the attempt becomes `interrupted`.
 - Ordinary chat and sub-agents keep their previous behaviour. `agent.spawn` only takes an optional executor, which workflow workers alone pass.
 
+## ACP workers
+
+A task with `"worker": { "kind": "acp", "providerId": "claude-code" }` runs its attempt as one turn of an ACP coding agent, in the task's own worktree. Tasks without `worker` keep the in-process worker.
+
+- The task must declare writes. Its changes then always land in an isolated worktree and pass the scope gate. A task without writes is refused at creation (`invalid_worker`).
+- The provider must offer supervised mode. A provider that only offers full access is never started.
+- Jait's own MCP tools are not offered to the agent, so the agent's tools are only its own. Each of them that needs approval asks first.
+- Each approval is a consent request on the run's workflow session (`workflow:<runId>`), where the owner answers it. A refusal reaches the agent. A stopped attempt denies its pending requests at once.
+- Only a finished turn is an answer. A timeout, a stop, a failed start or a transport error leaves the outcome unknown, so the attempt is `interrupted`.
+- The attempt records its worker as `acp:<providerId>:<attemptId>`.
+- Each ACP provider has its own per-owner concurrency cap, so a coding agent never takes an in-process worker's slot.
+- After a restart, an ACP attempt is interrupted like any other. The workflow does not reattach to the agent's session.
+
 ## Persistence and recovery
 
 - Migration 79 (`plan_orchestration_runs`) holds `orchestration_runs`, `orchestration_task_runs` and `orchestration_attempts`. No new migration was added, because the Rust gateway's reviewed contract corpus pins migration 79. Workspace identity is deterministic (run id and task id), so the existing `worktree_ref` columns hold the path and git holds the branches.
@@ -186,7 +201,9 @@ The same service backs these tools. They are offered only when the HTTP controls
 | `plan.run.list`, `plan.run.status`, `plan.run.attempts` | Read runs, tasks, workers, errors and pending approvals. |
 | `plan.run.cancel` | Stop a run. Stopping is the safe direction. |
 
-Consent: the tools are not in the reviewed permission profiles (`tool-profiles.ts`), so the security profile treats every call as dangerous and asks each time. That includes the read tools. Listing them in the profiles would change a pinned source-review contract (`profile-minimal`, `profile-coding`, `profile-full`), so it needs a reviewed update, together with the Rust side. Until then, the prompts are the safe default and the read tools are slower to use than they need to be.
+Consent: the tools are not in the reviewed permission profiles (`tool-profiles.ts`), so the security profile treats every call as dangerous and asks each time. That includes the read tools.
+
+Review of the read tools (`plan.run.list`, `plan.run.status`, `plan.run.attempts`): each one only reads runs the caller owns, so each is a candidate for consent `none` in all three profiles. The profiles are pinned by exact membership and order (`tests/contract/source-reviews.json`, cases `profile-minimal`, `profile-coding`, `profile-full`). Adding the reads therefore needs a reviewed contract update, together with the Rust side. `plan.run.start`, `plan.run.cancel` and `plan.run.resume` change state and should stay out of any read-only grant. Until that review lands, every call asks, which is the safe default.
 
 Every tool is scoped to the calling owner. A refusal from the service comes back as a failed result, not an exception.
 
@@ -199,7 +216,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 | `maxAttempts` per task | 1–5 | 2 (plus one operator retry) |
 | `timeoutSeconds` per attempt | 1–86400 | 1800 |
 | `priority` | −10…10 | 0 |
-| Concurrent attempts per owner and provider | service option (`perProviderMaxWorkers`) | 2 |
+| Concurrent attempts per owner and provider (each ACP provider counts separately) | service option (`perProviderMaxWorkers`) | 2 |
 | Verification gates per task | 1–20 (at least one required) | — |
 | Protected entries per task | max 50 | — |
 | Changed paths per attempt | max 5000 | — |
@@ -207,7 +224,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 ## Security boundaries
 
 - Owner isolation: runs, repositories and worktrees are owner-scoped. A worker never runs in another owner's context.
-- Consent: every tool call and every command gate passes through the consent-aware executor. Irreversible commands always re-ask. Workflow requests never run in full-access mode, and the `scheduler` bypass does not apply to them.
+- Consent: every in-process tool call and every command gate passes through the consent-aware executor. Each approval an ACP agent asks for is a consent request on the same workflow session, through the same consent manager. Irreversible commands always re-ask. Workflow requests never run in full-access mode, and the `scheduler` bypass does not apply to them.
 - Halt: a global halt blocks new runs and new starts. Running attempts are interrupted, and nothing is integrated after a halt.
 - Paths: workers cannot read or write outside their workspace, and the scope gate catches changes that escape their declared writes.
 - A worktree is not a sandbox. It isolates git state, not processes. Command gates and worker tools still run with the gateway's permissions, subject to consent.
@@ -215,7 +232,6 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 ## Not built yet
 
 - **UI panel for plan runs.** The chat tools and HTTP routes are the surfaces. No panel exists in the web app.
-- **Workspace-aware ACP workers.** The in-process adapter is the only worker. ACP is not yet bound to worktrees.
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
 - **Automatic worktree cleanup.** Worktrees are retained for review.
 - **Post-integration verification.** Gates run in the writer's workspace before integration. The integration head is verified only when a later task runs its gates on it.
@@ -231,4 +247,4 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 
 - `WorkspaceProvider` (`workspace.ts`) can be swapped for another isolation strategy.
 - `VerificationRunner` (`orchestrator.ts`) can take new check kinds without touching the state machine.
-- `SubAgentRunner` (`executor.ts`) can route tasks to another worker kind, such as ACP, and keep the same report contract.
+- `routeWorkers` (`worker-router.ts`) picks the `SubAgentRunner` per worker kind. A new kind needs a runner that keeps the same report contract, as the ACP runner does.

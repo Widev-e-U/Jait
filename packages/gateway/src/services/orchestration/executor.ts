@@ -8,7 +8,7 @@
  * belongs where those dependencies live, so this module carries no provider,
  * tool or consent code.
  */
-import type { VerificationGate, VerificationOutcome } from "@jait/shared/types";
+import type { TaskWorker, VerificationGate, VerificationOutcome } from "@jait/shared/types";
 import { boundText, redactSecrets } from "./agent-report.js";
 import type { TaskExecutionInput, TaskExecutor, TaskWorkspace } from "./orchestrator.js";
 import { PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
@@ -28,6 +28,8 @@ export interface SubAgentRunRequest {
   attemptId: string;
   prompt: string;
   claims: ResourceClaims;
+  /** Which worker carries the attempt. The router picks the runner from it. */
+  worker: TaskWorker;
   /** Isolated workspace for the attempt, or null when the task declares no resources. */
   workspace: TaskWorkspace | null;
   timeoutMs: number;
@@ -102,6 +104,7 @@ export class SubAgentTaskExecutor implements TaskExecutor {
       attemptId: input.attemptId,
       prompt: buildTaskPrompt(input),
       claims: input.claims,
+      worker: input.worker,
       workspace: input.workspace,
       timeoutMs: input.timeoutSeconds * 1000,
       signal: input.signal,

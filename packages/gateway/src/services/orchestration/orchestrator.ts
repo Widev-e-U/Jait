@@ -15,6 +15,7 @@ import type {
   VerificationCheck,
   VerificationGate,
   OrchestrationPendingApproval,
+  TaskWorker,
   VerificationOutcome,
 } from "@jait/shared/types";
 import { eq } from "drizzle-orm";
@@ -55,6 +56,8 @@ export interface TaskExecutionInput {
   title: string;
   description: string;
   claims: ResourceClaims;
+  /** Which worker carries the attempt. */
+  worker: TaskWorker;
   /** Success criteria. The agent can read them; only the orchestrator runs them. */
   verification: VerificationGate[];
   /** Validated results of the passed dependencies. */
@@ -224,7 +227,19 @@ export function workflowSessionId(runId: string): string {
 }
 
 function parseDefinition(raw: string): RunDefinition {
-  return JSON.parse(raw) as RunDefinition;
+  const parsed = JSON.parse(raw) as Omit<RunDefinition, "tasks"> & {
+    tasks: Array<Omit<NormalizedPlanTask, "worker"> & { worker?: TaskWorker }>;
+  };
+  // Runs stored before ACP workers existed have no worker field and ran in-process.
+  return {
+    ...parsed,
+    tasks: parsed.tasks.map((task) => ({ ...task, worker: task.worker ?? { kind: "jait" } })),
+  };
+}
+
+/** In-process tasks share the owner's provider key. Each ACP provider has its own, so its cap is separate. */
+function workerProviderKey(worker: TaskWorker, ownerKey: string): string {
+  return worker.kind === "acp" ? `acp:${worker.providerId}` : ownerKey;
 }
 
 function parseStored<T>(raw: string | null): T | null {
@@ -521,9 +536,13 @@ export class OrchestrationService {
     const current = changes.length > 0 ? this.store.getTasks(runId) : rows;
     const inFlight = this.inFlightTaskIds(runId);
     const tasks: SchedulableTask[] = [];
+    const ownerProviderKey = this.providerKeyFor(run.userId);
     for (const row of current) {
       const def = defs.get(row.taskId);
       if (!def) continue;
+      const inFlightTask = inFlight.has(row.taskId);
+      // A ready task whose provider is at its cap is left out, so it cannot hold a slot another task could use.
+      if (!inFlightTask && this.providerIsFull(run.userId, workerProviderKey(def.worker, ownerProviderKey))) continue;
       tasks.push({
         taskId: row.taskId,
         state: row.state as OrchestrationTaskState,
@@ -533,11 +552,10 @@ export class OrchestrationService {
         inFlight: inFlight.has(row.taskId),
       });
     }
-    const providerKey = this.providerKeyFor(run.userId);
+    // Provider caps are applied per task, so an ACP provider never uses the in-process provider's slots.
     const externalCapacity = Math.min(
       this.globalMaxWorkers - this.active.size,
       this.perUserMaxWorkers - this.activeCountForUser(run.userId),
-      this.perProviderMaxWorkers - this.activeCountForProvider(run.userId, providerKey),
     );
     const decision = selectDispatch({
       tasks,
@@ -547,7 +565,11 @@ export class OrchestrationService {
     });
     for (const taskId of decision.start) {
       const def = defs.get(taskId);
-      if (def) this.startAttempt(runId, run.userId, providerKey, def);
+      if (!def) continue;
+      const providerKey = workerProviderKey(def.worker, ownerProviderKey);
+      // Starts earlier in this pump count too, so a provider's cap holds within one pass.
+      if (this.providerIsFull(run.userId, providerKey)) continue;
+      this.startAttempt(runId, run.userId, providerKey, def);
     }
   }
 
@@ -947,6 +969,7 @@ export class OrchestrationService {
       title: def.title,
       description: def.description,
       claims: def.claims,
+      worker: def.worker,
       verification: def.verification,
       dependencyResults,
       previousAttempt,
@@ -1066,6 +1089,11 @@ export class OrchestrationService {
       if (attempt.userId === userId && attempt.providerKey === providerKey) count += 1;
     }
     return count;
+  }
+
+  /** Whether the owner already runs as many attempts on this provider as it may. */
+  private providerIsFull(userId: string, providerKey: string): boolean {
+    return this.activeCountForProvider(userId, providerKey) >= this.perProviderMaxWorkers;
   }
 
   private nowIso(): string {

@@ -137,6 +137,12 @@ export interface AcpSpecialistTurnOptions {
   projectRoot: string;
   runtimeMode?: string;
   model?: string;
+  /**
+   * Whether the agent also gets Jait's own MCP tools. Defaults to true. Workflow
+   * workers pass false, so their only tools are the agent's own, and each one is
+   * approved on the workflow's consent path.
+   */
+  jaitMcpTools?: boolean;
   prompt: string;
   abortSignal?: AbortSignal;
   /** Defaults to 8 minutes — specialist turns can involve real tool work. */
@@ -189,11 +195,13 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
 
   const runtimeMode = resolveRuntimeMode(provider, opts.runtimeMode);
   const subThreadId = `${opts.sessionId}:sub:${opts.subAgentId}`;
-  const mcpServers = opts.providerRegistry.buildJaitMcpServerRefs(opts.config, undefined, {
-    sessionId: subThreadId,
-    projectRoot: opts.projectRoot,
-    runtimeMode,
-  });
+  const mcpServers = opts.jaitMcpTools === false
+    ? []
+    : opts.providerRegistry.buildJaitMcpServerRefs(opts.config, undefined, {
+      sessionId: subThreadId,
+      projectRoot: opts.projectRoot,
+      runtimeMode,
+    });
 
   let session;
   try {
@@ -306,10 +314,12 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
       const content = chunks.join("").trim();
       const { performative, content: cleanContent } = parsePerformative(content);
       const ok = isSuccessfulPerformative(performative);
+      // turnCompleted is set only when the agent finished its turn. Timeouts, aborts
+      // and failures leave it unset, so a caller can tell an answer from an unknown outcome.
       result = withData(
         cleanContent || (ok ? "(specialist produced no output)" : `Sub-agent ${performative}: no details given`),
         ok,
-        { performative },
+        { performative, turnCompleted: true },
       );
     }
   } catch (err) {
