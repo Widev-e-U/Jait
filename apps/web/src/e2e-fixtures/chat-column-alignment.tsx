@@ -39,7 +39,7 @@ function Harness() {
       </div>
       <div data-testid="fixture-composer-boundary" className={getChatComposerBoundaryClassName(window.innerWidth < 768)}>
         <div data-testid="fixture-composer-column" className={getChatColumnClassName()}>
-          <PromptInput projectName={new URLSearchParams(window.location.search).has('chatId') ? 'Clipboard test' : undefined} chatId={new URLSearchParams(window.location.search).get('chatId') ?? undefined} value={value} onChange={setValue} onSubmit={() => {}} placeholder="Message Jait" />
+          <PromptInput variant={new URLSearchParams(window.location.search).has('messenger') ? 'messenger' : 'assistant'} projectName={new URLSearchParams(window.location.search).has('chatId') ? 'Clipboard test' : undefined} chatId={new URLSearchParams(window.location.search).get('chatId') ?? undefined} value={value} onChange={setValue} onSubmit={() => {}} placeholder="Message Jait" />
         </div>
       </div>
     </div>

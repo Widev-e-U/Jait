@@ -1095,6 +1095,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 }: PromptInputProps, ref) {
   const rootRef = useRef<HTMLDivElement>(null)
   const editableRef = useRef<HTMLDivElement>(null)
+  const savedSelectionRef = useRef<Range | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
   const isMessenger = variant === 'messenger'
@@ -1294,6 +1295,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null }
     const el = editableRef.current
     if (!el) return
+    savedSelectionRef.current = null
     buildEditableContent(el, [], '', handleRemoveChip)
     draftSegmentsRef.current = []
     lastAppliedDraftSignatureRef.current = getPromptDraftSignature('', [])
@@ -1489,10 +1491,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el || isSyncing.current) return
 
-    const hasRenderedContent = el.childNodes.length > 0
-      && (((el.textContent ?? '').length > 0) || hasChipRefs(el))
+    const localText = getTextFromEditable(el)
+    const hasRenderedContent = localText.length > 0 || hasChipRefs(el)
 
-    if (hasRenderedContent && !shouldSyncComposerDraft(lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current)) {
+    // Compare against the same plain text emitted by onChange. The segments
+    // also include the browser's trailing <br> used to display a blank line.
+    if (hasRenderedContent && !shouldSyncComposerDraft(
+      lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current, localText,
+    )) {
       lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
       return
     }
@@ -1500,6 +1506,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = true
     // Attachments are editor content, so a rebuild keeps any the segments do not already place.
     const restoredSegments = mergeAttachmentsIntoSegments(segments?.length ? segments : [{ type: 'text', text: value }], attachmentsRef.current)
+    savedSelectionRef.current = null
     buildEditableContent(el, restoredSegments, value, handleRemoveChip)
     draftSegmentsRef.current = syncComposerSegments(el)
     setIsEmpty(isTextEmpty(value) && !hasChipRefs(editableRef.current))
@@ -2383,11 +2390,27 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
   }, [variant, onChange, handleRemoveChip, addFilesAsAttachments, syncComposerSegments])
 
+  // The picker takes focus for search, which can reset the editor's selection.
+  const saveComposerSelection = useCallback(() => {
+    const el = editableRef.current
+    const selection = window.getSelection()
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null
+    savedSelectionRef.current = range && el?.contains(range.commonAncestorContainer) ? range.cloneRange() : null
+  }, [])
+
   // Insert an emoji from the composer picker at the caret and keep the draft in sync.
   const insertEmoji = useCallback((emoji: string) => {
     const el = editableRef.current
     if (!el) return
+    const range = savedSelectionRef.current
     el.focus()
+    const selection = window.getSelection()
+    if (selection && range && el.contains(range.commonAncestorContainer)) {
+      selection.removeAllRanges()
+      selection.addRange(range)
+    } else {
+      moveCursorToEnd(el)
+    }
     insertTextAtCursor(el, emoji)
     draftSegmentsRef.current = syncComposerSegments(el)
     isSyncing.current = true
@@ -2677,6 +2700,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             aria-multiline
             suppressContentEditableWarning
             onKeyDown={handleKeyDown}
+            onBlur={saveComposerSelection}
             onPaste={handlePaste}
             onCopy={handleCopy}
             onCut={handleCopy}

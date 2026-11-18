@@ -26,6 +26,7 @@ describe('shouldSyncComposerDraft', () => {
       '',
       undefined,
       localSegments,
+      ' explain this',
     )).toBe(false)
   })
 
@@ -40,6 +41,7 @@ describe('shouldSyncComposerDraft', () => {
       'check ',
       nextSegments,
       [],
+      '',
     )).toBe(true)
   })
 
@@ -51,6 +53,7 @@ describe('shouldSyncComposerDraft', () => {
       'new draft',
       undefined,
       localSegments,
+      'old draft',
     )).toBe(true)
   })
 
@@ -62,6 +65,7 @@ describe('shouldSyncComposerDraft', () => {
       'current draft',
       undefined,
       localSegments,
+      'current draft',
     )).toBe(false)
   })
 })
@@ -147,6 +151,7 @@ describe('shouldSyncComposerDraft with folder drops', () => {
       ' ',
       undefined,
       localSegments,
+      ' ',
     )).toBe(false)
   })
 
@@ -161,6 +166,7 @@ describe('shouldSyncComposerDraft with folder drops', () => {
       ' explain this folder',
       undefined,
       localSegments,
+      ' explain this folder',
     )).toBe(false)
   })
 })

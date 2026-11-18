@@ -29,6 +29,7 @@ export default defineConfig({
     'screen-share-media.spec.ts',
     'browser-handoff.spec.ts',
     'composer-prompts.spec.ts',
+    'composer-caret.spec.ts',
     'messenger-tools.spec.ts',
     'messenger-list.spec.ts',
     'messenger-teams.spec.ts',

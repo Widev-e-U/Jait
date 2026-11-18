@@ -1,4 +1,4 @@
-import { normalizeUserMessageSegments, userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
+import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 
 export function getPromptDraftSignature(value: string, segments: UserMessageSegment[] | undefined): string {
   return JSON.stringify({
@@ -12,6 +12,7 @@ export function shouldSyncComposerDraft(
   nextValue: string,
   nextSegments: UserMessageSegment[] | undefined,
   localSegments: UserMessageSegment[],
+  localText: string,
 ): boolean {
   const nextSignature = getPromptDraftSignature(nextValue, nextSegments)
   if (previousSignature === nextSignature) return false
@@ -21,9 +22,5 @@ export function shouldSyncComposerDraft(
     return JSON.stringify(localSegments) !== JSON.stringify(normalizedNextSegments)
   }
 
-  if (localSegments.length === 0) {
-    return nextValue.length > 0
-  }
-
-  return userMessageTextFromSegments(localSegments) !== nextValue
+  return localText !== nextValue
 }
