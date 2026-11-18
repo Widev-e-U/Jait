@@ -54,6 +54,7 @@ Run status is derived from task states: any active task → `running`; any `inte
 - Resource claims: `writes` conflicts with any overlapping `reads` or `writes`; `reads` never conflict with each other. Paths overlap by segment (`src` covers `src/lib.rs`, not `srcx`). `name:<id>` resources match exactly.
 - A task without a `resources` field claims the whole project for writing and therefore runs alone. `resources: {}` declares no claims.
 - Tasks occupying a worker keep their claims until their executor actually settles, even if the stored state says `interrupted`.
+- Claims are scheduling constraints, not enforcement. The agent is told its write access in the prompt, but nothing stops it from writing elsewhere until worktree isolation or sandboxing exists.
 
 ## Limits
 
@@ -78,12 +79,13 @@ Migration 79 (`plan_orchestration_runs`) adds three tables: `orchestration_runs`
 - `services/orchestration/state-machine.ts`: transitions and run status derivation.
 - `services/orchestration/scheduler.ts`: dispatch selection and dependency propagation.
 - `services/orchestration/agent-report.ts`: report validation, redaction, bounds.
+- `services/orchestration/executor.ts`: prompt and report contract, answer parsing, `SubAgentTaskExecutor` over an injected `SubAgentRunner`.
 - `services/orchestration/store.ts`: transactional, fenced persistence.
 - `services/orchestration/orchestrator.ts`: `OrchestrationService` (create, dispatch, attempts, verification, resume, retry, cancel, halt, recovery).
 
 ## Not yet built
 
-- **Executor adapter.** `TaskExecutor` is the seam. Nothing yet calls `agent.spawn` or the ACP runner through it.
+- **Runner binding.** `SubAgentTaskExecutor` builds the prompt and parses the answer, but the `SubAgentRunner` that calls the existing `agent.spawn` / ACP path is not bound. The composition root must provide it, and until then no task can run. The runner must pass only the sub-agent's final answer, never its transcript.
 - **Verification runner.** The default fails closed. Command gates must go through the existing consent and terminal path. Agent-proposed commands must never run.
 - **Startup wiring.** `recoverAfterRestart()` must run at gateway boot, before any dispatch. It is not wired yet.
 - **Halt wiring.** `stopForUser` must be registered as an `AgentControlService` stop hook.
