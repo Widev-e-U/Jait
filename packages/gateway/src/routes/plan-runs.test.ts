@@ -1,4 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Fastify from "fastify";
+import { createFileListTool, createFilePatchTool, createFileReadTool, createFileWriteTool } from "../tools/file-tools.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlanTask } from "@jait/shared";
 import { loadConfig } from "../config.js";
@@ -188,6 +193,87 @@ describe("gateway workflow composition", () => {
       await app?.close();
       vi.unstubAllGlobals();
       database.sqlite.close();
+    }
+  });
+
+  it("offers a writing task only the file tools for its worktree, and runs it there", async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), "jait-state-"));
+    const repoDir = await mkdtemp(join(tmpdir(), "jait-repo-"));
+    const previousStateDir = process.env["JAIT_STATE_DIR"];
+    process.env["JAIT_STATE_DIR"] = stateDir;
+    const database = await openDatabase(":memory:");
+    migrateDatabase(database.sqlite);
+    let app: Awaited<ReturnType<typeof createServer>> | undefined;
+    try {
+      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repoDir });
+      await writeFile(join(repoDir, "README.md"), "project\n");
+      execFileSync("git", ["add", "README.md"], { cwd: repoDir });
+      execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-q", "-m", "base"], { cwd: repoDir });
+
+      const repoService = new RepositoryService(database.db);
+      const planService = new PlanService(database.db);
+      const repo = repoService.create({ userId: owner, name: "repo", localPath: repoDir });
+      const plan = planService.create({ userId: owner, repoId: repo.id, title: "Writer plan", tasks: [{
+        ...task,
+        resources: { writes: ["docs/writer.md"] },
+        verification: [{ id: "readme", label: "README exists", check: { kind: "artifact", path: "README.md" } }],
+      }] });
+      const workerFetch = vi.fn(async (_url: string, init: RequestInit) => {
+        const { messages } = JSON.parse(String(init.body));
+        const prompt: string = messages.find((message: { role: string }) => message.role === "user").content;
+        const contract = prompt.split("\n").find((line) => line.startsWith('{"taskId":'));
+        const report = { ...JSON.parse(contract!), summary: "Writer answered without changes" };
+        return new Response([
+          `data: ${JSON.stringify({ choices: [{ delta: { content: `[INFORM] ${JSON.stringify(report)}` } }] })}\n\n`,
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join(""), { headers: { "Content-Type": "text/event-stream" } });
+      });
+      const userService = {
+        findById: (id: string) => id === owner ? { id } : undefined,
+        getSettings: () => ({
+          chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
+          apiKeys: { OPENAI_API_KEY: "fixture-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
+        }),
+      } as unknown as UserService;
+      // The real file tools, registered the way the gateway registers them. Their surface registry is only used when a tool runs.
+      const toolRegistry = new ToolRegistry();
+      const surfaces = {} as never;
+      for (const tool of [createFileReadTool(surfaces), createFileListTool(surfaces), createFileWriteTool(surfaces), createFilePatchTool(surfaces)]) {
+        toolRegistry.register(tool);
+      }
+      vi.stubGlobal("fetch", workerFetch);
+      const toolExecutor = vi.fn(async () => ({ ok: false, message: "not used by this fixture" }));
+      const gateway = await createServer(config, {
+        db: database.db, repoService, planService, userService, toolRegistry, toolExecutor,
+      });
+      app = gateway;
+      const headers = await auth(owner);
+      const start = await gateway.inject({ method: "POST", url: `/api/plans/${plan.id}/runs`, headers, payload: {} });
+      expect(start.statusCode, start.body).toBe(201);
+      const url = `/api/plan-runs/${start.json().run.id}`;
+      await expect.poll(async () => (await gateway.inject({ url, headers })).json().run.status).toBe("passed");
+
+      // The model was offered exactly the four write tools, under their provider-safe names (dots become underscores).
+      expect(workerFetch).toHaveBeenCalledTimes(1);
+      const offered = JSON.parse(String(workerFetch.mock.calls[0]?.[1]?.body)).tools as Array<{ function: { name: string } }>;
+      expect(offered.map((tool) => tool.function.name).sort()).toEqual(["file_list", "file_patch", "file_read", "file_write"]);
+
+      const history = await gateway.inject({ url: `${url}/tasks/${task.id}/attempts`, headers });
+      expect(history.json().attempts).toMatchObject([{
+        attemptNo: 1,
+        state: "passed",
+        agentRef: expect.any(String),
+        worktreeRef: expect.stringContaining(join(stateDir, "worktrees", "workflows")),
+      }]);
+    } finally {
+      await app?.close();
+      vi.unstubAllGlobals();
+      database.sqlite.close();
+      if (previousStateDir === undefined) delete process.env["JAIT_STATE_DIR"];
+      else process.env["JAIT_STATE_DIR"] = previousStateDir;
+      await rm(stateDir, { recursive: true, force: true });
+      await rm(repoDir, { recursive: true, force: true });
     }
   });
 });
