@@ -19,6 +19,10 @@ elif [[ "${JAIT_E2E_HEADED:-}" == 1 ]]; then
 else
   "$playwright" install --only-shell chromium
 fi
+if [[ "$(uname -s)" == Linux ]]; then
+  source "$repo_root/scripts/setup-e2e-linux.sh"
+  prepare_e2e_linux
+fi
 if [[ "${JAIT_E2E_NO_STUB_PROVIDER_CLI:-}" != 1 ]]; then
   mkdir -p "$repo_root/.jait/artifacts"
   stub_dir="$(mktemp -d "$repo_root/.jait/artifacts/e2e-provider-stubs.XXXXXXXX")"
