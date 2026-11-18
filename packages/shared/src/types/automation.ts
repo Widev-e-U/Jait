@@ -1,4 +1,5 @@
 import type { AgentThread, ProviderId, RuntimeMode } from "./thread.js";
+import type { OrchestrationTaskSpec } from "./orchestration.js";
 
 export interface AutomationRepo {
   id: string;
@@ -39,7 +40,11 @@ export interface UpdateRepoRequest {
 export type PlanStatus = "draft" | "active" | "completed" | "archived";
 export type PlanTaskStatus = "proposed" | "approved" | "running" | "completed" | "skipped";
 
-export interface PlanTask {
+/**
+ * A plan task. `status` is the human approval/UX state; per-run execution state
+ * lives in orchestration runs (see OrchestrationTaskState in ./orchestration.ts).
+ */
+export interface PlanTask extends OrchestrationTaskSpec {
   id: string;
   title: string;
   description: string;

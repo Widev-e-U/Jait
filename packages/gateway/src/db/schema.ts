@@ -595,6 +595,71 @@ export const automationPlans = sqliteTable(
   ],
 );
 
+// ─── Plan Orchestration (run state; plan definitions stay in automation_plans) ───
+export const orchestrationRuns = sqliteTable(
+  "orchestration_runs",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    planId: text("plan_id"),
+    userId: text("user_id").notNull(),
+    repoId: text("repo_id"),
+    title: text("title").notNull(),
+    status: text("status").notNull(), // running | interrupted | passed | failed | cancelled
+    paused: integer("paused", { mode: "boolean" }).notNull().default(false),
+    maxWorkers: integer("max_workers").notNull(),
+    definition: text("definition").notNull(), // JSON snapshot: validated tasks + topological order
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [index("idx_orchestration_runs_owner").on(table.userId, table.createdAt)],
+);
+
+export const orchestrationTaskRuns = sqliteTable(
+  "orchestration_task_runs",
+  {
+    runId: text("run_id").notNull(),
+    taskId: text("task_id").notNull(),
+    state: text("state").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    currentAttemptId: text("current_attempt_id"), // only this attempt may report or finish the task
+    lastError: text("last_error"),
+    result: text("result"), // JSON: last accepted agent report
+    verification: text("verification"), // JSON: last gate outcomes
+    agentRef: text("agent_ref"),
+    worktreeRef: text("worktree_ref"),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.runId, table.taskId] }),
+    index("idx_orchestration_task_runs_state").on(table.runId, table.state),
+  ],
+);
+
+export const orchestrationAttempts = sqliteTable(
+  "orchestration_attempts",
+  {
+    id: text("id").primaryKey(), // UUIDv7, also the attempt's lease token
+    runId: text("run_id").notNull(),
+    taskId: text("task_id").notNull(),
+    attemptNo: integer("attempt_no").notNull(),
+    state: text("state").notNull(), // running | verifying | passed | failed | interrupted | cancelled
+    agentRef: text("agent_ref"),
+    worktreeRef: text("worktree_ref"),
+    outcome: text("outcome"), // JSON: report and verification outcomes
+    error: text("error"),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [
+    uniqueIndex("idx_orchestration_attempts_no").on(table.runId, table.taskId, table.attemptNo),
+    index("idx_orchestration_attempts_run").on(table.runId),
+  ],
+);
+
 // ─── Automation Repo Proposals ───────────────────────────────────────
 export const automationRepoProposals = sqliteTable(
   "automation_repo_proposals",

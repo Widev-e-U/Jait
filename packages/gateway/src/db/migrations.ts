@@ -1763,4 +1763,18 @@ export const migrations: Migration[] = [
       try { db.exec("ALTER TABLE user_settings ADD COLUMN navigation_order TEXT"); } catch { /* exists */ }
     },
   },
+  {
+    id: 79, name: "plan_orchestration_runs",
+    run(db) {
+      // Execution state for plan runs. Plan definitions stay in automation_plans;
+      // each run freezes its own validated snapshot so attempts are never rewritten.
+      db.exec("CREATE TABLE IF NOT EXISTS orchestration_runs (id TEXT PRIMARY KEY, plan_id TEXT, user_id TEXT NOT NULL, repo_id TEXT, title TEXT NOT NULL, status TEXT NOT NULL, paused INTEGER NOT NULL DEFAULT 0, max_workers INTEGER NOT NULL, definition TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_orchestration_runs_owner ON orchestration_runs(user_id, created_at)");
+      db.exec("CREATE TABLE IF NOT EXISTS orchestration_task_runs (run_id TEXT NOT NULL, task_id TEXT NOT NULL, state TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, current_attempt_id TEXT, last_error TEXT, result TEXT, verification TEXT, agent_ref TEXT, worktree_ref TEXT, started_at TEXT, finished_at TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, task_id))");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_orchestration_task_runs_state ON orchestration_task_runs(run_id, state)");
+      db.exec("CREATE TABLE IF NOT EXISTS orchestration_attempts (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, task_id TEXT NOT NULL, attempt_no INTEGER NOT NULL, state TEXT NOT NULL, agent_ref TEXT, worktree_ref TEXT, outcome TEXT, error TEXT, started_at TEXT NOT NULL, finished_at TEXT)");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_orchestration_attempts_no ON orchestration_attempts(run_id, task_id, attempt_no)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_orchestration_attempts_run ON orchestration_attempts(run_id)");
+    },
+  },
 ];

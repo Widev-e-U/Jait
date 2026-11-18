@@ -152,6 +152,25 @@ export type {
   CreateUserSecretRequest,
 } from "./automation.js";
 
+export {
+  ORCHESTRATION_LIMITS,
+  ORCHESTRATION_RUN_STATES,
+  ORCHESTRATION_TASK_STATES,
+} from "./orchestration.js";
+export type {
+  AgentReportStatus,
+  AgentTaskReport,
+  OrchestrationRunState,
+  OrchestrationRunView,
+  OrchestrationTaskSpec,
+  OrchestrationTaskState,
+  OrchestrationTaskView,
+  TaskResources,
+  VerificationCheck,
+  VerificationGate,
+  VerificationOutcome,
+} from "./orchestration.js";
+
 export type {
   PullRequestListState,
   PullRequestState,
