@@ -6,6 +6,12 @@ import type { ToolContext } from "../../tools/contracts.js";
 import type { RepositoryService } from "../repositories.js";
 import { createCommandVerifier, createWorkflowVerifier, type ToolExecutorFn } from "./command-verifier.js";
 import type { VerificationRunInput } from "./orchestrator.js";
+import type { ToolDefinition } from "../../tools/contracts.js";
+import { ToolRegistry } from "../../tools/registry.js";
+import { ConsentAwareExecutor } from "../../security/consent-executor.js";
+import { ConsentManager } from "../../security/consent-manager.js";
+import type { ToolPermission } from "../../security/tool-permissions.js";
+import { TrustEngine } from "../../security/trust-engine.js";
 
 const OWNED_REPO = { id: "repo-1", userId: "owner", localPath: "/repos/app", deviceId: null };
 const repositories = {
@@ -112,5 +118,77 @@ describe("workflow verifier", () => {
     expect(await verifier.run(input({ check: { kind: "artifact", path: "docs/a.md" }, workspacePath: dir }))).toMatchObject({ passed: true });
     expect(await verifier.run(input({ check: { kind: "artifact", path: "docs/missing.md" }, workspacePath: dir }))).toMatchObject({ passed: false });
     expect(await verifier.run(input({ check: { kind: "command", command: "true" } }))).toMatchObject({ passed: false });
+  });
+});
+
+describe("command gates through the real consent path", () => {
+  async function until(condition: () => boolean, timeoutMs = 3_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error("condition not reached in time");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  function setup() {
+    const ran: Array<{ command: string; cwd: string }> = [];
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "terminal.run",
+      description: "Run a command in the terminal",
+      parameters: {
+        type: "object",
+        properties: { command: { type: "string" }, timeout: { type: "number" } },
+        required: ["command"],
+      },
+      execute: async (toolInput: { command: string }, context: { projectRoot: string }) => {
+        ran.push({ command: toolInput.command, cwd: context.projectRoot });
+        return { ok: true, message: "exit 0" };
+      },
+    } as unknown as ToolDefinition);
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5_000 });
+    // The consent level that applies to terminal commands: every run asks the owner.
+    const permissions = new Map<string, ToolPermission>([
+      ["terminal.run", { consentLevel: "always", risk: "high", description: "Run a terminal command", knownTool: true, source: "profile" } as unknown as ToolPermission],
+    ]);
+    const executor = new ConsentAwareExecutor({
+      toolRegistry: registry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions,
+      sessionApprovals: new Set<string>(),
+    });
+    const toolExecutor: ToolExecutorFn = (name, toolInput, context, options) => executor.execute(name, toolInput, context, options);
+    return { ran, consentManager, toolExecutor };
+  }
+
+  it("waits for the owner's approval before running the command, and runs it in the workspace once approved", async () => {
+    const { ran, consentManager, toolExecutor } = setup();
+    const verifier = createCommandVerifier({ repositories, toolExecutor });
+    const verdict = verifier.run(input({ workspacePath: "/workspaces/A" }));
+
+    await until(() => consentManager.listPending("workflow:run-1").length === 1);
+    expect(ran).toHaveLength(0);
+    const [request] = consentManager.listPending("workflow:run-1");
+    expect(request?.toolName).toBe("terminal.run");
+    expect(consentManager.approve(request!.id, "click")).toBe(true);
+
+    await expect(verdict).resolves.toMatchObject({ passed: true });
+    expect(ran).toEqual([{ command: "npm test", cwd: "/workspaces/A" }]);
+  });
+
+  it("fails the gate without running the command when the owner rejects it", async () => {
+    const { ran, consentManager, toolExecutor } = setup();
+    const verifier = createCommandVerifier({ repositories, toolExecutor });
+    const verdict = verifier.run(input());
+
+    await until(() => consentManager.listPending("workflow:run-1").length === 1);
+    const [request] = consentManager.listPending("workflow:run-1");
+    expect(consentManager.reject(request!.id, "click", "not now")).toBe(true);
+
+    const outcome = await verdict;
+    expect(outcome.passed).toBe(false);
+    expect(outcome.detail).toContain("rejected");
+    expect(ran).toHaveLength(0);
   });
 });
