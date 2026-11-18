@@ -4,7 +4,7 @@
  */
 import { ORCHESTRATION_LIMITS } from "@jait/shared";
 import type { VerificationCheck, VerificationGate } from "@jait/shared/types";
-import { isNamedResourceKey, normalizeResourceKey, PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
+import { isGlobKey, isNamedResourceKey, normalizeResourceKey, PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
 
 export type PlanGraphIssueCode =
   | "invalid_shape"
@@ -55,6 +55,7 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 const MAX_TITLE = 200;
 const MAX_DESCRIPTION = 4000;
 const MAX_RESOURCE_ENTRIES = 100;
+const MAX_PROTECT_ENTRIES = 50;
 const MAX_GATES = 20;
 const MAX_COMMAND = 2000;
 const MAX_GATE_TIMEOUT_SECONDS = 3600;
@@ -119,6 +120,44 @@ function readKeys(issues: Issues, taskId: string, raw: unknown, field: "reads" |
   return [...new Set(keys)];
 }
 
+/**
+ * Paths inside `writes` the task must leave untouched. Entries are paths or globs,
+ * never named resources. Declaring protections without any write path, or a plain
+ * path that covers a whole write entry, would leave the task unable to write, so
+ * both are rejected as contradictory.
+ */
+function readProtects(issues: Issues, taskId: string, raw: unknown, writes: readonly string[]): string[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_PROTECT_ENTRIES) {
+    addIssue(issues, "invalid_resource", taskId, `resources.protects must be an array of at most ${MAX_PROTECT_ENTRIES} entries`);
+    return [];
+  }
+  const keys: string[] = [];
+  for (const entry of raw) {
+    const key = normalizeResourceKey(entry);
+    if (key === null || isNamedResourceKey(key)) {
+      addIssue(issues, "invalid_resource", taskId, `resources.protects entry ${describeEntry(entry)} is not a safe project path or glob`);
+    } else {
+      keys.push(key);
+    }
+  }
+  const protects = [...new Set(keys)];
+  if (protects.length === 0) return [];
+  const writePaths = writes.filter((write) => !isNamedResourceKey(write));
+  if (writePaths.length === 0) {
+    addIssue(issues, "contradictory_resource", taskId, "resources.protects needs at least one path under resources.writes");
+    return [];
+  }
+  for (const key of protects) {
+    if (isGlobKey(key)) continue;
+    const covered = writePaths.find((write) => key === PROJECT_ROOT_KEY || write === key || write.startsWith(`${key}/`));
+    if (covered !== undefined) {
+      addIssue(issues, "contradictory_resource", taskId, `${covered} lies inside protected ${key}, so the task could never write it`);
+    }
+  }
+  return protects;
+}
+
 /** Absent resources claim the whole project for writing; `{}` declares no claims. */
 function readClaims(issues: Issues, taskId: string, raw: unknown): ResourceClaims {
   if (raw === undefined) return { reads: [], writes: [PROJECT_ROOT_KEY] };
@@ -133,7 +172,8 @@ function readClaims(issues: Issues, taskId: string, raw: unknown): ResourceClaim
       addIssue(issues, "contradictory_resource", taskId, `${key} is listed as both read and write; declare it under writes only`);
     }
   }
-  return { reads, writes };
+  const protects = readProtects(issues, taskId, raw.protects, writes);
+  return protects.length > 0 ? { reads, writes, protects } : { reads, writes };
 }
 
 function readCheck(issues: Issues, taskId: string, gateId: string, raw: unknown): VerificationCheck | null {

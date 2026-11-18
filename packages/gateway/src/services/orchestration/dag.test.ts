@@ -71,6 +71,41 @@ describe("validatePlanGraph", () => {
     expect(codesOf([task("A", { resources: { reads: ["src"], writes: ["src"] } })])).toContain("contradictory_resource");
   });
 
+  it("normalizes protected paths and leaves them out when none are declared", () => {
+    const result = validatePlanGraph([
+      task("A", { resources: { writes: ["src"], protects: ["./src/tests/", "**/*.test.ts", "src/tests"] } }),
+      task("B", { resources: { writes: ["docs"] } }),
+      task("C", { resources: { writes: ["docs"], protects: [] } }),
+    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.tasks[0]?.claims).toEqual({ reads: [], writes: ["src"], protects: ["src/tests", "**/*.test.ts"] });
+    expect(result.tasks[1]?.claims).toEqual({ reads: [], writes: ["docs"] });
+    expect(result.tasks[2]?.claims).toEqual({ reads: [], writes: ["docs"] });
+  });
+
+  it("rejects protected paths that are unsafe, named or leave the task unable to write", () => {
+    const withProtects = (resources: Record<string, unknown>) => codesOf([task("A", { resources })]);
+    expect(withProtects({ writes: ["src"], protects: ["../x"] })).toContain("invalid_resource");
+    expect(withProtects({ writes: ["src"], protects: ["/etc"] })).toContain("invalid_resource");
+    expect(withProtects({ writes: ["src"], protects: ["name:db"] })).toContain("invalid_resource");
+    expect(withProtects({ writes: ["src"], protects: ["tests", 7] })).toContain("invalid_resource");
+    expect(withProtects({ writes: ["src"], protects: "tests" })).toContain("invalid_resource");
+    expect(withProtects({ reads: ["src"], protects: ["src/tests"] })).toContain("contradictory_resource");
+    expect(withProtects({ writes: ["name:db"], protects: ["src/tests"] })).toContain("contradictory_resource");
+    expect(withProtects({ writes: ["src/tests"], protects: ["src"] })).toContain("contradictory_resource");
+    expect(withProtects({ writes: ["src"], protects: ["."] })).toContain("contradictory_resource");
+    expect(withProtects({ writes: ["src"], protects: Array.from({ length: 51 }, (_, index) => `t${index}`) })).toContain(
+      "invalid_resource",
+    );
+  });
+
+  it("accepts a protected path inside a write, and a glob that may match anywhere", () => {
+    expect(codesOf([task("A", { resources: { writes: ["src"], protects: ["src/tests"] } })])).toEqual([]);
+    expect(codesOf([task("A", { resources: { writes: ["src"], protects: ["**/*.test.ts"] } })])).toEqual([]);
+    expect(codesOf([task("A", { resources: { writes: ["."], protects: ["tests", "**/*.snap"] } })])).toEqual([]);
+  });
+
   it("requires at least one well-formed verification gate per task", () => {
     expect(codesOf([task("A", { verification: [] })])).toEqual(["missing_verification"]);
     const unknownKind = { id: "g", label: "x", check: { kind: "shell" } };

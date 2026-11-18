@@ -6,7 +6,7 @@
  */
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { existsSync, realpathSync } from "node:fs";
-import { isNamedResourceKey, PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
+import { isNamedResourceKey, pathIsProtected, PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
 
 export type WorkspaceMode = "read" | "write";
 
@@ -47,6 +47,9 @@ export function authorizeWorkflowToolCall(call: WorkflowToolCall): ToolAuthoriza
   const declared = mutating ? call.claims.writes : [...call.claims.reads, ...call.claims.writes];
   if (!covers(declared, relativePath)) {
     return deny(`path ${relativePath} is outside the declared ${mutating ? "writes" : "reads and writes"} of this task`);
+  }
+  if (mutating && pathIsProtected(relativePath, call.claims.protects)) {
+    return deny(`path ${relativePath} is protected for this task: nothing there may be created, changed or deleted`);
   }
   return { ok: true };
 }

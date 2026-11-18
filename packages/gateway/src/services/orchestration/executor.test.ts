@@ -56,6 +56,17 @@ describe("buildTaskPrompt", () => {
     expect(readOnly).toContain("Write access: none. Do not change any files for this task.");
   });
 
+  it("names protected paths up front and forbids weakening checks", () => {
+    const prompt = buildTaskPrompt(input({ claims: { reads: [], writes: ["src"], protects: ["src/tests", "**/*.test.ts"] } }));
+    expect(prompt).toContain("Protected paths: src/tests, **/*.test.ts.");
+    expect(prompt).toContain("create, change or delete nothing there");
+    expect(prompt).toContain("Do not remove, skip or weaken existing tests or checks to make a check pass.");
+    // A task without protections still gets the general rule, but no protected-path line.
+    const plain = buildTaskPrompt(input());
+    expect(plain).not.toContain("Protected paths");
+    expect(plain).toContain("Do not remove, skip or weaken existing tests or checks");
+  });
+
   it("presents dependency notes as redacted data", () => {
     const prompt = buildTaskPrompt(
       input({

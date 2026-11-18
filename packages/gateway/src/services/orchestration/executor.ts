@@ -59,11 +59,13 @@ export function buildTaskPrompt(input: TaskExecutionInput): string {
     input.description.trim() || "(no description given)",
     "",
     describeWrites(input.claims),
+    ...describeProtects(input.claims),
     describeReads(input.claims),
     describeWorkspace(input.workspace),
     "",
     "Success checks. The orchestrator runs these after you report. You cannot change, skip or claim them:",
     ...input.verification.map(describeGate),
+    'Do not remove, skip or weaken existing tests or checks to make a check pass. If a test or check is wrong, report "blocked" and say why.',
     ...describeDependencies(input),
     ...describePreviousAttempt(input.previousAttempt),
     ...describeReportContract(input),
@@ -124,6 +126,15 @@ function displayKey(key: string): string {
 function describeWrites(claims: ResourceClaims): string {
   if (claims.writes.length === 0) return "Write access: none. Do not change any files for this task.";
   return `Write access: ${claims.writes.map(displayKey).join(", ")}. Other tasks may run in parallel, so change nothing outside this access.`;
+}
+
+/** Protected paths are enforced by the tool guard and the scope gate; the prompt only says so up front. */
+function describeProtects(claims: ResourceClaims): string[] {
+  const protects = claims.protects ?? [];
+  if (protects.length === 0) return [];
+  return [
+    `Protected paths: ${protects.join(", ")}. Even inside your write access, create, change or delete nothing there. If a protected file looks wrong, report "blocked" and say why.`,
+  ];
 }
 
 function describeReads(claims: ResourceClaims): string {

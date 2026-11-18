@@ -93,6 +93,92 @@ describe("workflow workspaces (real git)", () => {
     expect(whole.ok).toBe(true);
   });
 
+  /** Commits existing project files, so a worktree has tracked files a task could change or delete. */
+  async function seed(files: Record<string, string>): Promise<void> {
+    for (const [file, content] of Object.entries(files)) await writeIn(repo, file, content);
+    git(repo, "add", ...Object.keys(files));
+    git(repo, "commit", "-q", "-m", "seed");
+  }
+
+  it("treats any change to a protected path as a scope violation, even inside the declared writes", async () => {
+    await seed({ "tests/keep.test.ts": "it('works', () => {});\n", "tests/gone.test.ts": "it('gone', () => {});\n", "src/lib.ts": "export {};\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+
+    // Allowed: ordinary code changes.
+    await writeIn(location.path, "src/lib.ts", "export const lib = 1;\n");
+    expect(await workspaces.checkScope(location.path, ["."], ["tests"])).toMatchObject({ ok: true, protectedPaths: [] });
+
+    // Weakening an existing test, deleting one and adding a file under a protected path all count.
+    await writeIn(location.path, "tests/keep.test.ts", "it.skip('works', () => {});\n");
+    await rm(join(location.path, "tests/gone.test.ts"));
+    await writeIn(location.path, "tests/extra.test.ts", "it('extra', () => {});\n");
+    const scope = await workspaces.checkScope(location.path, ["."], ["tests"]);
+    expect(scope.ok).toBe(false);
+    expect(scope.outside).toEqual([]);
+    expect(scope.protectedPaths).toEqual(["tests/extra.test.ts", "tests/gone.test.ts", "tests/keep.test.ts"]);
+    expect(scope.deleted).toEqual(["tests/gone.test.ts"]);
+
+    // Without the protection the same changes are in scope.
+    expect((await workspaces.checkScope(location.path, ["."])).ok).toBe(true);
+  });
+
+  it("applies protected paths by glob, and reports outside-scope and protected paths separately", async () => {
+    await seed({ "src/a.test.ts": "a\n", "src/a.ts": "a\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["src"], ["**/*.test.ts"]);
+    await writeIn(location.path, "src/a.test.ts", "weakened\n");
+    await writeIn(location.path, "src/a.ts", "changed\n");
+    await writeIn(location.path, "docs/stray.md", "outside\n");
+
+    const scope = await workspaces.checkScope(location.path, ["src"], ["**/*.test.ts"]);
+    expect(scope.ok).toBe(false);
+    expect(scope.outside).toEqual(["docs/stray.md"]);
+    expect(scope.protectedPaths).toEqual(["src/a.test.ts"]);
+  });
+
+  it("lists deleted files even when the scope holds", async () => {
+    await seed({ "docs/old.md": "old\n", "docs/keep.md": "keep\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["docs"]);
+    await rm(join(location.path, "docs/old.md"));
+    await writeIn(location.path, "docs/new.md", "new\n");
+
+    const scope = await workspaces.checkScope(location.path, ["docs"]);
+    expect(scope.ok).toBe(true);
+    expect(scope.deleted).toEqual(["docs/old.md"]);
+    expect(scope.changed).toEqual(["docs/new.md", "docs/old.md"]);
+  });
+
+  it("refuses to integrate protected changes and leaves the integration branch as it was", async () => {
+    await seed({ "tests/keep.test.ts": "it('works', () => {});\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+    await writeIn(location.path, "src/impl.ts", "export {};\n");
+    await writeIn(location.path, "tests/keep.test.ts", "// weakened\n");
+
+    const before = git(workspaces.integrationPath(RUN), "rev-parse", "HEAD");
+    const attempt = workspaces.integrate(ref("A"), ["."], "integrate A", ["tests"]);
+    await expect(attempt).rejects.toBeInstanceOf(WorkspaceError);
+    await attempt.catch((error: unknown) => {
+      expect((error as Error).message).toContain("tests/keep.test.ts");
+      expect((error as Error).message).toContain("protected");
+    });
+    expect(git(workspaces.integrationPath(RUN), "rev-parse", "HEAD")).toBe(before);
+    expect(existsSync(join(workspaces.integrationPath(RUN), "src/impl.ts"))).toBe(false);
+  });
+
+  it("refuses a retry whose workspace still holds protected changes instead of committing them", async () => {
+    await seed({ "tests/keep.test.ts": "it('works', () => {});\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+    await writeIn(location.path, "tests/keep.test.ts", "// weakened\n");
+
+    const retry = workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+    await expect(retry).rejects.toBeInstanceOf(WorkspaceError);
+    await retry.catch((error: unknown) => {
+      expect((error as Error).message).toContain("protected paths (tests/keep.test.ts)");
+    });
+    // The weakened test was not checkpointed into the branch.
+    expect(git(location.path, "log", "--format=%s", "-1")).not.toContain("wip");
+    expect(git(location.path, "status", "--porcelain")).toContain("tests/keep.test.ts");
+  });
+
   it("integrates verified work into the integration branch and never into main", async () => {
     const location = await workspaces.prepareWrite(ref("A"), ["docs"]);
     await writeIn(location.path, "docs/a.md", "from A\n");

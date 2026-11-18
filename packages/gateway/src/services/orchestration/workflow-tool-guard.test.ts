@@ -48,6 +48,22 @@ describe("workflow tool guard", () => {
     expect(verdict.ok === false && verdict.reason).toMatch(/outside the declared writes/);
   });
 
+  it("refuses changes to protected paths inside the declared writes, and still allows reading them", () => {
+    const protectedClaims = { reads: [], writes: ["docs", "src"], protects: ["docs/a.md", "**/*.test.ts"] };
+    const write = (path: string) => call("file.write", { path, content: "x" }, "write", protectedClaims);
+
+    const protectedFile = write("docs/a.md");
+    expect(protectedFile.ok).toBe(false);
+    expect(protectedFile.ok === false && protectedFile.reason).toMatch(/protected/);
+    expect(call("file.patch", { path: "docs/a.md", search: "a", replace: "b" }, "write", protectedClaims).ok).toBe(false);
+    expect(write("src/deep/lib.test.ts").ok).toBe(false);
+
+    // A new file next to a protected one is fine when it is not itself protected.
+    expect(write("docs/new.md")).toEqual({ ok: true });
+    expect(write("src/lib.ts")).toEqual({ ok: true });
+    expect(call("file.read", { path: "docs/a.md" }, "write", protectedClaims)).toEqual({ ok: true });
+  });
+
   it("allows reads of declared reads and writes, and refuses anything else", () => {
     expect(call("file.read", { path: "src/lib.ts" })).toEqual({ ok: true });
     expect(call("file.read", { path: "docs/a.md" })).toEqual({ ok: true });

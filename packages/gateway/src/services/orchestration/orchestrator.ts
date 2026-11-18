@@ -28,6 +28,7 @@ import type { ResourceClaims } from "./resources.js";
 import { computeDependencyChanges, type SchedulableTask, selectDispatch } from "./scheduler.js";
 import { type AttemptOutcome, type NewTask, OrchestrationStore, type RunRow, type TaskRow } from "./store.js";
 import {
+  type ScopeResult,
   WorkflowWorkspaces,
   type WorkspaceProvider,
   WorkspaceConflictError,
@@ -191,6 +192,27 @@ const RESTART_REASON = "gateway restarted before the attempt finished; outcome u
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+const MAX_LISTED_PATHS = 20;
+
+function listPaths(paths: readonly string[]): string {
+  const shown = paths.slice(0, MAX_LISTED_PATHS).join(", ");
+  return paths.length > MAX_LISTED_PATHS ? `${shown} (+${paths.length - MAX_LISTED_PATHS} more)` : shown;
+}
+
+/** Deleted files for the scope evidence, or an empty string when nothing was deleted. */
+function listDeleted(deleted: readonly string[] | undefined): string {
+  return deleted && deleted.length > 0 ? `; deleted: ${listPaths(deleted)}` : "";
+}
+
+/** Why a scope check failed: paths outside the writes and changes to protected paths. */
+function describeScopeFailure(scope: ScopeResult): string {
+  const parts: string[] = [];
+  if (scope.outside.length > 0) parts.push(`outside scope: ${listPaths(scope.outside)}`);
+  const protectedPaths = scope.protectedPaths ?? [];
+  if (protectedPaths.length > 0) parts.push(`protected paths changed: ${listPaths(protectedPaths)}`);
+  return parts.join("; ");
 }
 
 /**
@@ -654,12 +676,12 @@ export class OrchestrationService {
     }
     const outcomes: VerificationOutcome[] = [];
     if (workspace?.mode === "write") {
-      // Deterministic scope gate: a writer may only change what its claims declare.
-      const scope = await this.checkScopeGate(workspace.path, def.claims.writes);
+      // Deterministic scope gate: a writer may only change what its claims declare, and nothing it must leave untouched.
+      const scope = await this.checkScopeGate(workspace.path, def.claims);
       if (attempt.controller.signal.aborted) return;
       outcomes.push(scope);
       if (!scope.passed) {
-        this.failAttempt(attempt, def, "verification failed: changes stay inside the declared writes", report, outcomes);
+        this.failAttempt(attempt, def, `verification failed: ${scope.label}`, report, outcomes);
         return;
       }
     }
@@ -729,7 +751,7 @@ export class OrchestrationService {
         const location = await this.workspaces.prepareRead(ref);
         return { path: location.path, mode: "read" };
       }
-      const location = await this.workspaces.prepareWrite(ref, writes);
+      const location = await this.workspaces.prepareWrite(ref, writes, def.claims.protects);
       if (!this.store.recordWorkspace(attempt, location.path)) {
         throw new WorkspaceError("workflow attempt no longer owns its task");
       }
@@ -737,14 +759,22 @@ export class OrchestrationService {
     });
   }
 
-  /** The scope gate's outcome. A changed path outside the declared writes fails it. */
-  private async checkScopeGate(path: string, writes: readonly string[]): Promise<VerificationOutcome> {
-    const label = "changes stay inside the declared writes";
+  /**
+   * The scope gate's outcome. A changed path outside the declared writes fails it,
+   * and so does any change to a protected path. Deleted files are always listed, so
+   * a removed file is visible in the evidence even when the gate passes.
+   */
+  private async checkScopeGate(path: string, claims: ResourceClaims): Promise<VerificationOutcome> {
+    const protects = claims.protects ?? [];
+    const label =
+      protects.length > 0
+        ? "changes stay inside the declared writes and leave protected paths untouched"
+        : "changes stay inside the declared writes";
     try {
-      const scope = await this.workspaces.checkScope(path, writes);
+      const scope = await this.workspaces.checkScope(path, claims.writes, protects);
       const detail = scope.ok
-        ? `${scope.changed.length} changed file(s) inside scope`
-        : `outside scope: ${scope.outside.slice(0, 20).join(", ")}`;
+        ? `${scope.changed.length} changed file(s) inside scope${listDeleted(scope.deleted)}`
+        : describeScopeFailure(scope);
       return { gateId: "system:scope", label, required: true, passed: scope.ok, detail: boundText(redactSecrets(detail), MAX_DETAIL) };
     } catch (error) {
       return {
@@ -774,7 +804,7 @@ export class OrchestrationService {
     try {
       const result = await this.serialize(attempt.runId, () => {
         if (attempt.controller.signal.aborted) throw new WorkspaceError("stopped before integration");
-        return this.workspaces.integrate(ref, def.claims.writes, `workflow ${attempt.runId}: ${def.id}`);
+        return this.workspaces.integrate(ref, def.claims.writes, `workflow ${attempt.runId}: ${def.id}`, def.claims.protects);
       });
       outcomes.push({
         gateId: "system:integration",
@@ -964,6 +994,7 @@ export class OrchestrationService {
       title: def.title,
       state: row.state as OrchestrationTaskState,
       dependsOn: def.dependsOn,
+      resources: { reads: def.claims.reads, writes: def.claims.writes, protects: def.claims.protects ?? [] },
       attemptCount: row.attemptCount,
       maxAttempts: def.maxAttempts,
       currentAttemptId: row.currentAttemptId,

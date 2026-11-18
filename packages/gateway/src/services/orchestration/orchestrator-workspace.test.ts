@@ -70,15 +70,17 @@ interface PlanTaskInput {
   dependsOn?: string[];
   reads?: string[];
   writes?: string[];
+  protects?: string[];
   verification: VerificationGate[];
   maxAttempts?: number;
 }
 
 /** A human-approved plan task. Resources are declared only where given. */
 function approvedTask(input: PlanTaskInput) {
-  const resources: { reads?: string[]; writes?: string[] } = {};
+  const resources: { reads?: string[]; writes?: string[]; protects?: string[] } = {};
   if (input.reads) resources.reads = input.reads;
   if (input.writes) resources.writes = input.writes;
+  if (input.protects) resources.protects = input.protects;
   return {
     id: input.id,
     title: `Task ${input.id}`,
@@ -241,6 +243,13 @@ describe("plan runs over real worktrees", () => {
       ["C", ["A"]],
       ["D", ["B", "C"]],
     ]);
+    // So are the resources each task owns, which is what lets B and C run side by side.
+    expect(final.tasks.map((task) => [task.taskId, task.resources])).toEqual([
+      ["A", { reads: ["."], writes: [], protects: [] }],
+      ["B", { reads: [], writes: ["docs/guide.md"], protects: [] }],
+      ["C", { reads: [], writes: ["docs/notes.md"], protects: [] }],
+      ["D", { reads: [], writes: ["docs/summary.md"], protects: [] }],
+    ]);
     expect(maxRunning).toBe(2);
     // Dependencies gate starts: A ends before B and C start, and D starts only after B and C end.
     expect(events.indexOf("end:A")).toBeLessThan(events.indexOf("start:B"));
@@ -314,6 +323,98 @@ describe("plan runs over real worktrees", () => {
     const integration = workspaces.integrationPath(run.id);
     expect(existsSync(join(integration, "docs/w.md"))).toBe(false);
     expect(existsSync(join(integration, "src/rogue.ts"))).toBe(false);
+  });
+
+  /** Existing project files committed before the run starts, so writers have tracked files to change or delete. */
+  async function seedProject(files: Record<string, string>): Promise<void> {
+    for (const [file, content] of Object.entries(files)) await writeIn(repo, file, content);
+    git(repo, "add", ...Object.keys(files));
+    git(repo, "commit", "-q", "-m", "seed");
+  }
+
+  it("fails a writer that weakens a protected test, and integrates nothing", async () => {
+    await seedProject({ "tests/keep.test.ts": "it('works', () => {});\n", "src/lib.ts": "export {};\n" });
+    const planId = createPlan([
+      approvedTask({
+        id: "W",
+        writes: ["."],
+        protects: ["tests"],
+        maxAttempts: 1,
+        verification: [artifactGate("impl", "src/impl.ts")],
+      }),
+      approvedTask({ id: "J", dependsOn: ["W"], writes: ["docs/j.md"], verification: [artifactGate("j", "docs/j.md")] }),
+    ]);
+    const seen: Array<string[] | undefined> = [];
+    const executor: TaskExecutor = {
+      async execute(input) {
+        seen.push(input.claims.protects);
+        if (input.taskId === "W") {
+          await writeIn(input.workspace!.path, "src/impl.ts", "export const impl = 1;\n");
+          // The agent makes the failing check pass by skipping the test.
+          await writeIn(input.workspace!.path, "tests/keep.test.ts", "it.skip('works', () => {});\n");
+          return reportFor(input, ["src/impl.ts", "tests/keep.test.ts"]);
+        }
+        return reportFor(input);
+      },
+    };
+    const { service, workspaces } = makeService(executor);
+    const run = service.createRun(OWNER, { planId, maxWorkers: 2 });
+    await service.settle();
+
+    const final = service.getRun(OWNER, run.id);
+    expect(final.status).toBe("failed");
+    const writer = final.tasks.find((task) => task.taskId === "W");
+    expect(writer?.state).toBe("failed");
+    expect(writer?.resources).toEqual({ reads: [], writes: ["."], protects: ["tests"] });
+    expect(writer?.verification?.[0]).toMatchObject({ gateId: "system:scope", passed: false });
+    expect(writer?.verification?.[0]?.label).toContain("protected paths untouched");
+    expect(writer?.verification?.[0]?.detail).toBe("protected paths changed: tests/keep.test.ts");
+    expect(writer?.lastError).toContain("verification failed");
+    // The plan's own gates never ran, so the weakened test cannot make the task look successful.
+    expect(writer?.verification?.map((outcome) => outcome.gateId)).toEqual(["system:scope"]);
+    expect(final.tasks.find((task) => task.taskId === "J")?.state).toBe("blocked");
+    expect(seen[0]).toEqual(["tests"]);
+
+    const integration = workspaces.integrationPath(run.id);
+    expect(existsSync(join(integration, "src/impl.ts"))).toBe(false);
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("it('works', () => {});\n");
+  });
+
+  it("lets a writer add tests and delete a file it does not protect, and records the deletion", async () => {
+    await seedProject({
+      "tests/keep.test.ts": "it('works', () => {});\n",
+      "src/old.ts": "export const old = 1;\n",
+    });
+    const planId = createPlan([
+      approvedTask({
+        id: "W",
+        writes: ["src", "tests"],
+        protects: ["tests/keep.test.ts"],
+        verification: [artifactGate("impl", "src/impl.ts"), commandGate("new-test", "test -s tests/new.test.ts")],
+      }),
+    ]);
+    const executor: TaskExecutor = {
+      async execute(input) {
+        await writeIn(input.workspace!.path, "src/impl.ts", "export const impl = 1;\n");
+        await writeIn(input.workspace!.path, "tests/new.test.ts", "it('new', () => {});\n");
+        await rm(join(input.workspace!.path, "src/old.ts"));
+        return reportFor(input, ["src/impl.ts", "tests/new.test.ts", "src/old.ts"]);
+      },
+    };
+    const { service, workspaces } = makeService(executor);
+    const run = service.createRun(OWNER, { planId });
+    await service.settle();
+
+    const final = service.getRun(OWNER, run.id);
+    expect(final.status).toBe("passed");
+    const scope = final.tasks[0]?.verification?.find((outcome) => outcome.gateId === "system:scope");
+    expect(scope).toMatchObject({ passed: true });
+    expect(scope?.detail).toBe("3 changed file(s) inside scope; deleted: src/old.ts");
+
+    const integration = workspaces.integrationPath(run.id);
+    expect(existsSync(join(integration, "tests/new.test.ts"))).toBe(true);
+    expect(existsSync(join(integration, "src/old.ts"))).toBe(false);
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("it('works', () => {});\n");
   });
 
   it("holds a writer when a command gate fails, and keeps its evidence", async () => {

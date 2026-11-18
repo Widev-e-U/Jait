@@ -17,7 +17,7 @@ import { isAbsolute, join } from "node:path";
 import { getStateDirectory } from "../../state-directory.js";
 import { GitService, gitExecArgs } from "../git.js";
 import type { RepositoryService } from "../repositories.js";
-import { isNamedResourceKey, PROJECT_ROOT_KEY } from "./resources.js";
+import { isNamedResourceKey, pathIsProtected, PROJECT_ROOT_KEY } from "./resources.js";
 
 /** Deterministic failure before any agent work or integration (bad repo, dirty scope, ...). */
 export class WorkspaceError extends Error {
@@ -66,6 +66,15 @@ export function pathCoveredByWrites(path: string, writes: readonly string[]): bo
 
 function splitNul(output: string): string[] {
   return output.split("\0").filter((entry) => entry.length > 0);
+}
+
+/** The scope violations in the words errors use, or an empty string when the scope holds. */
+function describeScopeViolations(scope: ScopeResult): string {
+  const parts: string[] = [];
+  if (scope.outside.length > 0) parts.push(`outside the declared writes (${scope.outside.slice(0, 10).join(", ")})`);
+  const protectedPaths = scope.protectedPaths ?? [];
+  if (protectedPaths.length > 0) parts.push(`in protected paths (${protectedPaths.slice(0, 10).join(", ")})`);
+  return parts.join(" and ");
 }
 
 async function git(cwd: string, args: string[], timeout = 120_000): Promise<string> {
@@ -127,15 +136,26 @@ export interface WorkspaceProvider {
   /** Throws WorkspaceError when runs for this owner and repository cannot host isolated workspaces. */
   assertRunHost(userId: string, repoId: string | null): void;
   prepareRead(ref: WorkspaceRef): Promise<WorkspaceLocation>;
-  prepareWrite(ref: WorkspaceRef, writes: readonly string[]): Promise<WorkspaceLocation>;
-  checkScope(path: string, writes: readonly string[]): Promise<ScopeResult>;
-  integrate(ref: WorkspaceRef, writes: readonly string[], message: string): Promise<IntegrationResult>;
+  /** `protects` are paths inside `writes` the task must leave untouched. */
+  prepareWrite(ref: WorkspaceRef, writes: readonly string[], protects?: readonly string[]): Promise<WorkspaceLocation>;
+  checkScope(path: string, writes: readonly string[], protects?: readonly string[]): Promise<ScopeResult>;
+  integrate(
+    ref: WorkspaceRef,
+    writes: readonly string[],
+    message: string,
+    protects?: readonly string[],
+  ): Promise<IntegrationResult>;
 }
 
 export interface ScopeResult {
+  /** False when a changed path is outside the declared writes or touches a protected path. */
   ok: boolean;
   outside: string[];
   changed: string[];
+  /** Changed paths inside the declared writes that match a protected entry. */
+  protectedPaths?: string[];
+  /** Tracked files the task deleted, so a deletion is always visible in the evidence. */
+  deleted?: string[];
 }
 
 export interface IntegrationResult {
@@ -192,7 +212,11 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
    * dependent sees its predecessors' integrated changes. An existing worktree keeps
    * its earlier in-scope work, which is checkpointed before the sync merge.
    */
-  async prepareWrite(ref: WorkspaceRef, writes: readonly string[]): Promise<WorkspaceLocation> {
+  async prepareWrite(
+    ref: WorkspaceRef,
+    writes: readonly string[],
+    protects: readonly string[] = [],
+  ): Promise<WorkspaceLocation> {
     const repoPath = this.repoPath(ref.userId, ref.repoId);
     const { runId, taskId } = ref;
     const integration = await this.ensureIntegration(repoPath, runId);
@@ -202,11 +226,10 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     await ensureWorktree(repoPath, path, branch, head);
     await clearLeftoverMerge(path);
 
-    const scope = await this.checkScope(path, writes);
+    // Leftovers are committed below, so protected or out-of-scope changes must stop here, uncommitted, for an operator to inspect.
+    const scope = await this.checkScope(path, writes, protects);
     if (!scope.ok) {
-      throw new WorkspaceError(
-        `workspace has changes outside the declared writes (${scope.outside.slice(0, 10).join(", ")}); inspect ${path}`,
-      );
+      throw new WorkspaceError(`workspace has changes ${describeScopeViolations(scope)}; inspect ${path}`);
     }
     if (scope.changed.length > 0) {
       await this.commitInScope(path, scope.changed, `wip: earlier attempt of ${taskId}`);
@@ -215,11 +238,16 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     return { path, branch };
   }
 
-  /** Changed paths against HEAD, untracked files included, checked against declared writes. */
-  async checkScope(path: string, writes: readonly string[]): Promise<ScopeResult> {
-    const changed = await this.changedPaths(path);
+  /**
+   * Changed paths against HEAD, untracked files included, checked against the declared
+   * writes and the protected paths. A protected path may not be created, changed or
+   * deleted, even though it lies inside the writes.
+   */
+  async checkScope(path: string, writes: readonly string[], protects: readonly string[] = []): Promise<ScopeResult> {
+    const { changed, deleted } = await this.changedPaths(path);
     const outside = changed.filter((file) => !pathCoveredByWrites(file, writes));
-    return { ok: outside.length === 0, outside, changed };
+    const protectedPaths = changed.filter((file) => pathCoveredByWrites(file, writes) && pathIsProtected(file, protects));
+    return { ok: outside.length === 0 && protectedPaths.length === 0, outside, changed, protectedPaths, deleted };
   }
 
   /**
@@ -227,13 +255,18 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
    * the integration branch. A conflict aborts the merge and throws, leaving the
    * integration branch as it was.
    */
-  async integrate(ref: WorkspaceRef, writes: readonly string[], message: string): Promise<IntegrationResult> {
+  async integrate(
+    ref: WorkspaceRef,
+    writes: readonly string[],
+    message: string,
+    protects: readonly string[] = [],
+  ): Promise<IntegrationResult> {
     const repoPath = this.repoPath(ref.userId, ref.repoId);
     const integration = await this.ensureIntegration(repoPath, ref.runId);
     const task = await this.existingTask(repoPath, ref.runId, ref.taskId);
-    const scope = await this.checkScope(task.path, writes);
+    const scope = await this.checkScope(task.path, writes, protects);
     if (!scope.ok) {
-      throw new WorkspaceError(`changes outside the declared writes block integration: ${scope.outside.slice(0, 10).join(", ")}`);
+      throw new WorkspaceError(`changes ${describeScopeViolations(scope)} block integration`);
     }
     if (scope.changed.length > 0) await this.commitInScope(task.path, scope.changed, message);
     const before = await headCommit(integration.path);
@@ -259,12 +292,21 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     return { path, branch };
   }
 
-  private async changedPaths(path: string): Promise<string[]> {
-    const tracked = splitNul(await git(path, ["--literal-pathspecs", "diff", "--no-renames", "--name-only", "-z", "HEAD"]));
+  /** Changed paths against HEAD (tracked and untracked), and which of them are tracked files the task deleted. */
+  private async changedPaths(path: string): Promise<{ changed: string[]; deleted: string[] }> {
+    // With --no-renames and -z, --name-status prints a status code and a path, each NUL-terminated.
+    const status = splitNul(await git(path, ["--literal-pathspecs", "diff", "--no-renames", "--name-status", "-z", "HEAD"]));
+    const tracked: string[] = [];
+    const deleted: string[] = [];
+    for (let index = 0; index + 1 < status.length; index += 2) {
+      const file = status[index + 1] as string;
+      tracked.push(file);
+      if (status[index] === "D") deleted.push(file);
+    }
     const untracked = splitNul(await git(path, ["ls-files", "--others", "--exclude-standard", "-z"]));
-    const unique = [...new Set([...tracked, ...untracked])].sort();
-    if (unique.length > MAX_PATHS) throw new WorkspaceError(`too many changed paths (${unique.length}); limit is ${MAX_PATHS}`);
-    return unique;
+    const changed = [...new Set([...tracked, ...untracked])].sort();
+    if (changed.length > MAX_PATHS) throw new WorkspaceError(`too many changed paths (${changed.length}); limit is ${MAX_PATHS}`);
+    return { changed, deleted: [...new Set(deleted)].sort() };
   }
 
   /** Stages exactly the given paths and commits them. Returns the new commit, or null when nothing was staged. */

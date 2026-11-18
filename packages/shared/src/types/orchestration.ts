@@ -42,6 +42,15 @@ export const ORCHESTRATION_LIMITS = {
 export interface TaskResources {
   reads?: string[];
   writes?: string[];
+  /**
+   * Restriction inside `writes`, not a claim: nothing under these paths may be
+   * created, changed or deleted, so a task cannot make a check pass by editing
+   * or removing the tests. Entries are project-relative paths, or globs where `*`
+   * and `?` stay inside one path segment and a `**` segment spans any number of
+   * segments. An entry that names a directory protects everything below it.
+   * Globs apply here only; `reads` and `writes` are literal paths.
+   */
+  protects?: string[];
 }
 
 export type VerificationCheck =
@@ -99,6 +108,12 @@ export interface OrchestrationTaskView {
   title: string;
   state: OrchestrationTaskState;
   dependsOn: string[];
+  /**
+   * What the task owns while it runs: paths it may read and write, and paths inside its
+   * writes it must leave untouched. A task that declared no resources shows writes ["."],
+   * which is why it runs alone.
+   */
+  resources: { reads: string[]; writes: string[]; protects: string[] };
   attemptCount: number;
   maxAttempts: number;
   currentAttemptId: string | null;

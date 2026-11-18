@@ -10,7 +10,7 @@ The engine is general-purpose. It has no built-in knowledge of Rust, TypeScript 
 | --- | --- |
 | `dag.ts` | Plan validation: ids, duplicates, dependencies, cycles, resource claims, gates, approval. Deterministic, no LLM. |
 | `state-machine.ts` | Task transitions and run status derivation. |
-| `scheduler.ts`, `resources.ts` | Bounded dispatch and resource-claim conflicts. |
+| `scheduler.ts`, `resources.ts` | Bounded dispatch, resource-claim conflicts and protected-path matching. |
 | `orchestrator.ts` | `OrchestrationService`: create, dispatch, attempts, gates, integration, resume, retry, cancel, halt, restart recovery. |
 | `executor.ts` | Prompt and report contract. `SubAgentTaskExecutor` runs one attempt through an injected runner. |
 | `in-process-worker.ts` | Real worker: the owner's in-process Jait provider through `agent.spawn`, with tools limited by workspace mode. |
@@ -22,6 +22,26 @@ The engine is general-purpose. It has no built-in knowledge of Rust, TypeScript 
 | `store.ts` | Transactional, fenced persistence (compare-and-set on the attempt id). |
 | `routes/plan-runs.ts` | HTTP surface. |
 | `tools/plan-run-tools.ts` | Chat tools `plan.run.*` over the same service as the HTTP surface. |
+
+## Inventory and decisions
+
+What JAIT already had when this work started, and what was decided about it.
+
+| Existing | Decision |
+| --- | --- |
+| `PlanTask.dependsOn`, `automation_plans` | Kept as the plan definition. Execution settings (`resources`, `verification`, limits) extend `PlanTask`, and plans are edited as before. No second plan model. |
+| `agent.spawn` in-process sub-agents | Reused as the worker path. `agent.spawn` gained one optional executor hook that only workflow workers pass, so ordinary chats and sub-agents behave as before. The worker's sub-agent id is stored on the attempt. |
+| ACP coding agents (Codex, Claude Code) | Not bound yet. `SubAgentRunner` is the seam, and an ACP runner would reuse the same prompt, report contract and gates. |
+| `GitService.createWorktree`, `gitExecArgs` | Reused for task and integration worktrees. No new git layer, and no push, merge into `main` or destructive command. |
+| Consent executor, tool profiles, audit | Every worker tool call and every command gate goes through it. Workflow requests never run in full-access mode. |
+| `AgentControlService` halt | Honored at dispatch and for running attempts. Un-halting restarts nothing. |
+| SQLite migration 79 | Holds the run, task and attempt tables. No further migration, because the Rust gateway's reviewed contract corpus pins 79. |
+| Code graph | Not used by the engine. Explicit tasks and dependencies work without it, and a plan author may use the graph to draft them. |
+| Tool parallelism in `agent-loop.ts` | Untouched. Workflows have their own resource-aware scheduler, so ordinary chats cannot regress. |
+
+Missing, and built here: dependency-ordered runs, bounded resource-aware dispatch, validated agent reports, deterministic gates before advancement, scoped worktrees with reviewable integration, restart recovery that never re-runs blind, and owner-scoped HTTP and chat controls.
+
+Risks that shaped the design: a worktree isolates git state but is not a sandbox, so consent and path checks still apply; the Rust migration pins migration 79 and the reviewed tool profiles, so neither was changed here and nothing in this work claims that migration is done; and one gateway process per database is assumed.
 
 ## Model
 
@@ -68,12 +88,13 @@ Run status is derived from task states: any active task → `running`; any `inte
 - **Failing gates retry** while the attempt budget lasts. The next attempt receives the previous error and gate outcomes as data.
 - **Halts pause.** Halting an owner stops their attempts as `interrupted` and pauses their runs. Un-halting does not restart anything.
 - **Fail closed.** Without a verification runner, no gate can pass. Without a consent-aware executor, command gates cannot pass.
+- **Protected paths.** A writer cannot create, change or delete anything under its `protects`, even inside its writes. The tool guard refuses the call before consent, and the scope gate catches anything else, such as a file a gate command rewrote. See [Protecting tests](#protecting-tests).
 
 ## Verification gates
 
 Gates run in this order before a task can advance:
 
-1. **Scope gate** (writers only, `system:scope`). Every changed path, untracked files included, must fall under the task's declared writes. Otherwise the attempt fails, and the detail lists the paths.
+1. **Scope gate** (writers only, `system:scope`). Every changed path, untracked files included, must fall under the task's declared writes and must not touch a protected path. Otherwise the attempt fails, and the detail lists the paths. Deleted files are listed in the detail either way, so a removal is always visible in the evidence.
 2. **Plan gates.** Each gate runs in the attempt's workspace. Artifact gates check that a regular file exists inside it. Command gates run through the consent-aware executor (`terminal.run`, `requestedBy: "workflow"`, never full-access). The command comes only from the approved plan snapshot. An agent cannot propose or change it.
 3. **Integration** (writers only, `system:integration`). Only after all required gates pass, see below.
 
@@ -85,13 +106,32 @@ A required gate that fails fails the attempt. Optional gates are recorded but do
 
 **Approvals of a stopped attempt are denied.** A workflow approval still pending when its attempt stops is denied at once and its prompt disappears. Ordinary chat approvals are unchanged.
 
-Command gates can write files too. The scope check runs again at integration, so an unignored file outside the declared writes that a command leaves behind blocks integration and holds the task. Build outputs that git ignores do not count.
+Command gates can write files too. The scope check runs again at integration, so an unignored file outside the declared writes, or a change a command makes to a protected path, blocks integration and holds the task. Build outputs that git ignores do not count.
+
+## Protecting tests
+
+The engine does not know what a test is, so the plan says which paths a writer must leave alone. List them under `resources.protects`:
+
+```json
+{
+  "id": "fix-parser",
+  "resources": { "writes": ["src"], "protects": ["src/**/*.test.ts", "tests"] },
+  "verification": [{ "id": "unit", "label": "Unit tests", "check": { "kind": "command", "command": "npm test" } }]
+}
+```
+
+- An entry is a project-relative path or a glob. `*` and `?` stay inside one path segment, and a `**` segment spans any number of segments. A directory entry protects everything below it. Globs apply to `protects` only; `reads` and `writes` stay literal paths.
+- Protected means untouchable: nothing there may be created, changed or deleted. To let a task add new tests, protect the existing files or a narrower pattern instead of the whole directory.
+- A plan is refused when `protects` is not a list of at most 50 safe paths or globs, when the task has no write path, or when a plain path covers a whole `writes` entry, because the task could then never write it.
+- Three checks enforce it. The prompt names the protected paths. The tool guard refuses a worker's write there before consent is asked. The scope gate fails the attempt when git shows a protected path changed, and integration checks again.
+- A violation leaves the writer's worktree as it is. The next attempt stops at those leftover changes (`workspace has changes in protected paths`), so the task ends `failed` until an operator cleans the worktree and retries. The weakened test is never committed or integrated.
 
 ## Scheduling
 
 - `selectDispatch` starts ready tasks by priority, then definition order. It respects `maxWorkers` per run, a process-wide cap, a per-owner cap and a per-owner, per-provider cap (`perProviderMaxWorkers`, default 2). The provider is the owner's worker backend, which is the in-process Jait provider today. Only workflow attempts count toward it, so ordinary chats are not throttled.
 - Resource claims: `writes` conflicts with any overlapping `reads` or `writes`. `reads` never conflict with each other. Paths overlap by segment (`src` covers `src/lib.rs`, not `srcx`). `name:<id>` resources match exactly.
 - A task without a `resources` field claims the whole project for writing and therefore runs alone. `resources: {}` declares no claims.
+- `protects` is a restriction, not a claim. It never conflicts with other tasks, so two tasks can protect the same tests.
 - Tasks holding a worker keep their claims until their executor actually settles, even if the stored state says `interrupted`.
 
 ## Workspaces and integration
@@ -113,8 +153,8 @@ Writing tasks never touch the user's checkout or branch.
   - no resources: no tools;
   - reads only: `file.read`, `file.list`;
   - writes: `file.read`, `file.list`, `file.write`, `file.patch`.
-- The prompt states the task, its access and its checks, the completed dependencies as data, and the previous failure if this is a repair attempt. It also states the exact report contract.
-- Each tool call is checked deterministically first (`workflow-tool-guard.ts`). The path must resolve inside the workspace, must not escape through a symlink, and must fall under the declared reads or writes. Only then does the call go to the consent-aware executor, which applies the usual approvals. A refused call returns a tool error to the agent.
+- The prompt states the task, its access and its checks, the completed dependencies as data, and the previous failure if this is a repair attempt. It names any protected paths and says that existing tests and checks must not be removed, skipped or weakened to make a check pass. It also states the exact report contract.
+- Each tool call is checked deterministically first (`workflow-tool-guard.ts`). The path must resolve inside the workspace, must not escape through a symlink, and must fall under the declared reads or writes. A write must not touch a protected path. Only then does the call go to the consent-aware executor, which applies the usual approvals. A refused call returns a tool error to the agent.
 - A worker that cannot start, or is aborted, leaves its outcome unknown, so the attempt becomes `interrupted`.
 - Ordinary chat and sub-agents keep their previous behaviour. `agent.spawn` only takes an optional executor, which workflow workers alone pass.
 
@@ -129,7 +169,7 @@ Writing tasks never touch the user's checkout or branch.
 
 - `POST /api/plans/:id/runs` starts the approved plan snapshot. Send `{}` for defaults, or `maxWorkers`.
 - `GET /api/plan-runs` lists the owner's runs.
-- `GET /api/plan-runs/:runId` returns task states, dependencies, worker IDs, workspace references and results.
+- `GET /api/plan-runs/:runId` returns task states, dependencies, the resources each task owns (`reads`, `writes`, `protects`), worker IDs, workspace references and results.
 - `GET /api/plan-runs/:runId/tasks/:taskId/attempts` returns the attempt history, with worker IDs, workspace paths, reports and gate outcomes.
 - `POST /api/plan-runs/:runId/cancel` cancels the run. Running attempts are signalled, and their late reports are ignored.
 - `POST /api/plan-runs/:runId/resume` takes `decisions` for interrupted tasks: `taskId`, `decision` (`retry` or `fail`) and an inspection `note`.
@@ -161,6 +201,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 | `priority` | −10…10 | 0 |
 | Concurrent attempts per owner and provider | service option (`perProviderMaxWorkers`) | 2 |
 | Verification gates per task | 1–20 (at least one required) | — |
+| Protected entries per task | max 50 | — |
 | Changed paths per attempt | max 5000 | — |
 
 ## Security boundaries
@@ -181,7 +222,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 - **Consent visibility.** Consent prompts for workers still appear under the session `workflow:<runId>`, not under the chat that started the run. The run view and `plan.run.status` name that session and list the pending prompts, but the starting chat does not show them.
 - **Process-level limits.** A zombie executor that ignores abort keeps its slot until it settles or the gateway restarts. Command gates stop their terminal, but worker tools that spawn processes outside a gate are not covered. The in-process worker has no such tool.
 - **Provider limits beyond concurrency.** The cap counts attempts. Quota windows reported by provider accounts are not read, and the in-process Jait backend reports none.
-- **Tests that agents weaken.** Command gates come from the approved plan, so an agent cannot swap them. The scope gate limits what a writer may change to its declared writes, but it does not tell a weakened test from a fixed one. A writer that declares a test file can still edit it, so review changed tests in the integration branch.
+- **Tests that agents weaken, beyond what the plan protects.** Command gates come from the approved plan, so an agent cannot swap them, and `resources.protects` makes named tests untouchable. The engine still cannot tell a weakened test from a fixed one by itself, so a test inside a writer's `writes` that the plan did not protect can be edited or removed. Deletions are listed in the scope evidence. Files that change which tests run, such as a test runner's config, are protected only when the plan lists them. Review changed tests in the integration branch.
 - **Interface manifest.** `tests/contract/interfaces.json` was last captured at v0.1.973 and has drifted since, in files this work did not touch. Migration 79 itself is unchanged: its `db_migration` fingerprint matches the pin. Recapturing is a reviewed baseline change. It must wait until unrelated working-tree edits are committed, or the baseline would include them.
 - **Single writer assumption.** One gateway process per database. Recovery is not safe against a second live process.
 - **Pre-existing:** ordinary sub-agents still call the tool registry directly and do not pass through the consent executor. This change does not alter that path.
