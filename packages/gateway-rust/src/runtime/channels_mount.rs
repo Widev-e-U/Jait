@@ -330,6 +330,7 @@ impl crate::routes::mcp_server::McpAuthenticator for McpBearerAuth {
 /// as chat, so consent, path confinement and cancellation are unchanged. Execution needs a
 /// caller-owned session; there is no default session and no caller-chosen root.
 struct ProjectMcpTools {
+    project_root: std::path::PathBuf,
     auth: crate::routes::auth::AuthState,
     consent: crate::security::consent_manager::ConsentManager,
     descriptors: Vec<crate::routes::mcp_server::McpToolDescriptor>,
@@ -356,6 +357,7 @@ impl ProjectMcpTools {
     fn new(
         auth: crate::routes::auth::AuthState,
         consent: crate::security::consent_manager::ConsentManager,
+        project_root: std::path::PathBuf,
     ) -> Result<Self, String> {
         let descriptors = super::chat_tools::project_tool_definitions()?
             .iter()
@@ -378,6 +380,7 @@ impl ProjectMcpTools {
             })
             .collect();
         Ok(Self {
+            project_root,
             auth,
             consent,
             descriptors,
@@ -422,18 +425,46 @@ impl crate::routes::mcp_server::McpToolSource for ProjectMcpTools {
             else {
                 return Err("An owned session is required (x-jait-session-id)".into());
             };
+            // MCP requests can target a remote project whose path also exists on
+            // this host. Resolve the owned session again at execution admission.
+            let (owner, lookup) = (user_id.clone(), session_id.clone());
+            let local = self
+                .auth
+                .with_database(move |db| {
+                    let session = crate::services::sessions::SessionService::new(db)
+                        .get(&lookup, Some(&owner))?
+                        .filter(|session| session.status.as_deref() == Some("active"));
+                    match session {
+                        Some(session) => Ok(crate::services::projects::local_execution_allowed(
+                            db,
+                            &owner,
+                            session.project_id.as_deref(),
+                        )?),
+                        None => Ok(false),
+                    }
+                })
+                .await
+                .map_err(|_| "Could not verify project execution authority".to_string())?;
+            if !local {
+                return Err("Project execution node is not available".into());
+            }
             let project_root = std::path::PathBuf::from(root);
             if !project_root.is_absolute() {
                 return Err("Session project root is invalid".into());
             }
             let disabled_tools = self.disabled_tools(&user_id).await?;
-            let (_, executor) = super::chat_tools::project_tools_with_policy(
+            let (_, mut executor) = super::chat_tools::project_tools_with_policy(
                 &user_id,
                 &session_id,
                 self.consent.clone(),
                 None,
                 disabled_tools,
             )?;
+            super::chat_tools::enforce_session_authority(
+                &mut executor,
+                self.auth.clone(),
+                self.project_root.clone(),
+            );
             let context = crate::security::consent_executor::ToolExecutionContext {
                 user_id,
                 session_id,
@@ -472,6 +503,7 @@ pub fn mcp_routes(
             .with_tools(std::sync::Arc::new(ProjectMcpTools::new(
                 auth.clone(),
                 consent,
+                project_root.clone(),
             )?))
             .with_auth(std::sync::Arc::new(McpBearerAuth {
                 auth: auth.clone(),

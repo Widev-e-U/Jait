@@ -1580,7 +1580,118 @@
           "name": "network_security_codegraph_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "tests": [
+        {
+          "file": "tests/binary_web_ui.rs",
+          "name": "composed_binary_serves_the_built_ui_and_keeps_api_paths_json"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat",
+      "tests": [
+        {
+          "file": "tests/binary_agent_tool_policy.rs",
+          "name": "reenabled_tool_is_advertised_and_executed_in_new_chat"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/archived",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "permanent_archive_deletion_is_atomic_and_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/archived",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/maintenance/runs",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "maintenance_reads_persisted_runs_with_node_filter_and_limit"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/maintenance/runs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "maintenance_reads_persisted_runs_with_node_filter_and_limit"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/calendars",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
     }
   ],
-  "ws": []
+  "ws": [
+    {
+      "direction": "client-to-server-candidate",
+      "type": "subscribe",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "resource.subscribe",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "resource.unsubscribe",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    }
+  ]
 }

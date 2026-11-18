@@ -36,9 +36,9 @@ impl BrowseError {
 /// Query values retain arrays from repeated parameters just like Fastify.
 pub trait FilesystemNodes: Send + Sync {
     fn register_gateway(&self, node: Value);
-    fn nodes(&self) -> Value;
-    fn roots<'a>(&'a self, node: Value) -> BrowseFuture<'a>;
-    fn browse<'a>(&'a self, node: Value, path: Value) -> BrowseFuture<'a>;
+    fn nodes(&self, user_id: &str) -> Value;
+    fn roots<'a>(&'a self, user_id: &'a str, node: Value) -> BrowseFuture<'a>;
+    fn browse<'a>(&'a self, user_id: &'a str, node: Value, path: Value) -> BrowseFuture<'a>;
 }
 #[derive(Clone)]
 pub struct BrowseEnvironment {
@@ -112,29 +112,34 @@ fn truthy(v: &Value) -> bool {
     }
 }
 async fn handle(State(state): State<FilesystemRoutes>, request: Request) -> Response {
-    if let Err(error) = auth::require_user(&state.auth, request.headers()).await {
-        return *error;
-    }
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
     let path = request.uri().path();
     let query = query(request.uri().query().unwrap_or(""));
     if path.ends_with("/nodes") {
         return response(
             200,
-            json!({"nodes":state.nodes.as_ref().map(|n|n.nodes()).unwrap_or(json!([]))}),
+            json!({"nodes":state.nodes.as_ref().map(|n|n.nodes(&user.id)).unwrap_or(json!([]))}),
         );
     }
-    if truthy(&query["nodeId"])
-        && query["nodeId"] != "gateway"
-        && let Some(nodes) = &state.nodes
-    {
+    if truthy(&query["nodeId"]) && query["nodeId"] != "gateway" {
+        let Some(nodes) = &state.nodes else {
+            return response(
+                502,
+                json!({"error":"NODE_BROWSE_FAILED","message":"Remote filesystem node is unavailable"}),
+            );
+        };
         let result = if path.ends_with("/roots") {
             nodes
-                .roots(query["nodeId"].clone())
+                .roots(&user.id, query["nodeId"].clone())
                 .await
                 .map(|roots| json!({"roots":roots}))
         } else {
             nodes
                 .browse(
+                    &user.id,
                     query["nodeId"].clone(),
                     if truthy(&query["path"]) {
                         query["path"].clone()
@@ -233,11 +238,10 @@ fn local_browse(env: &BrowseEnvironment, path: &Value) -> Response {
             json!({"error":"BROWSE_FAILED","message":FileSystemError::io(error,syscall,Some(&target),None).to_string()}),
         )
     };
+    // The reference reports the Node `stat` syscall label on every platform.
     let metadata = match fs::metadata(&target) {
         Ok(v) => v,
-        Err(e) => {
-            return failure(e, "stat");
-        }
+        Err(e) => return failure(e, "stat"),
     };
     if !metadata.is_dir() {
         return response(

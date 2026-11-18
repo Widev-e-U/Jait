@@ -19,7 +19,12 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     routes::auth::{self, AuthState, response},
-    services::{json_state::ProjectStateService, projects::ProjectService},
+    services::{
+        json_state::{ProjectStateService, SessionStateService},
+        projects::ProjectService,
+        sessions::SessionService,
+    },
+    surfaces::registry::{SurfaceRegistry, SurfaceStartInput, SurfaceState},
 };
 
 type Res<T> = Result<T, Box<Response>>;
@@ -125,36 +130,78 @@ pub struct ProjectRoutes {
     pub root: std::sync::Arc<PathBuf>,
     filesystem: crate::runtime::blocking::BlockingLane,
     scoped: crate::services::project_search::scoped::ScopedProjectSearch,
+    surfaces: crate::surfaces::registry::SurfaceRegistry,
     /// Original content (None = file did not exist) captured before the first write.
     backups: Backups,
+    open_locks: OpenLocks,
+}
+
+// Weak entries avoid retaining a mutex for every historical session. The map
+// lock is never held across an await; each request holds its session lock for
+// the entire open operation, including validation and later lifecycle effects.
+type OpenLocks =
+    std::sync::Arc<std::sync::Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>>;
+
+fn session_open_lock(
+    locks: &OpenLocks,
+    session_id: &str,
+) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    let mut entries = locks.lock().expect("project open locks");
+    entries.retain(|_, lock| lock.strong_count() > 0);
+    if let Some(lock) = entries.get(session_id).and_then(std::sync::Weak::upgrade) {
+        return lock;
+    }
+    let lock = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+    entries.insert(session_id.to_owned(), std::sync::Arc::downgrade(&lock));
+    lock
 }
 
 type Backups = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<PathBuf, Option<String>>>>;
+
+/// Makes the gateway-local filesystem surface kind available on `surfaces`.
+/// Registration is atomic, so a factory the caller already supplied wins.
+fn register_filesystem_factory(
+    surfaces: &SurfaceRegistry,
+    lane: crate::runtime::blocking::BlockingLane,
+) {
+    surfaces.register_if_absent(std::sync::Arc::new(
+        crate::surfaces::filesystem::FileSystemSurfaceFactory::new(
+            crate::surfaces::filesystem::GuardOptions::default(),
+            lane,
+        ),
+    ));
+}
 
 impl ProjectRoutes {
     pub fn new(auth: AuthState) -> Self {
         let filesystem = crate::runtime::blocking::BlockingLane::new(
             std::num::NonZeroU16::new(4).expect("fixed filesystem capacity"),
         );
+        let surfaces = SurfaceRegistry::default();
+        register_filesystem_factory(&surfaces, filesystem.clone());
         Self {
             scoped: crate::services::project_search::scoped::ScopedProjectSearch::new(
                 auth.worker(),
-                crate::surfaces::registry::SurfaceRegistry::default(),
+                surfaces.clone(),
                 filesystem.clone(),
             ),
             auth,
+            surfaces,
             root: std::sync::Arc::new(PathBuf::new()),
             filesystem,
             backups: Backups::default(),
+            open_locks: OpenLocks::default(),
         }
     }
 
     /// Search surfaces from the registry that owns the running surfaces, so a
     /// `surfaceId` resolves only to a live surface recorded for the caller.
-    pub fn with_surfaces(mut self, surfaces: crate::surfaces::registry::SurfaceRegistry) -> Self {
+    pub fn with_surfaces(mut self, surfaces: SurfaceRegistry) -> Self {
+        register_filesystem_factory(&surfaces, self.filesystem.clone());
+        self.surfaces = surfaces;
         self.scoped = crate::services::project_search::scoped::ScopedProjectSearch::new(
             self.auth.worker(),
-            surfaces,
+            self.surfaces.clone(),
             self.filesystem.clone(),
         );
         self
@@ -231,12 +278,147 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
         _ => Value::Null,
     };
 
+    // The web client opens a path in a session. Validate its required fields
+    // before project resolution; the legacy projectId form remains supported.
+    if route == "open"
+        && method == axum::http::Method::POST
+        && (body.get("projectId").is_none()
+            || body.get("path").is_some()
+            || body.get("sessionId").is_some())
+    {
+        if body
+            .get("path")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+        {
+            return fail(400, "VALIDATION_ERROR", "path is required");
+        }
+        if body
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+        {
+            return fail(400, "VALIDATION_ERROR", "sessionId is required");
+        }
+        let session_id = body["sessionId"].as_str().unwrap().to_owned();
+        let project_path = body["path"].as_str().unwrap().to_owned();
+        // Do not let a foreign user queue work on an owned session's lock.
+        let lookup_id = session_id.clone();
+        let owner_id = uid.clone();
+        match state
+            .auth
+            .with_database(move |db| {
+                Ok(SessionService::new(db)
+                    .get(&lookup_id, Some(&owner_id))?
+                    .is_some())
+            })
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => return fail(404, "NOT_FOUND", "Session not found"),
+            Err(error) => return auth::database_failure(&error),
+        }
+        let open_lock = session_open_lock(&state.open_locks, &session_id);
+        let open_guard = open_lock.lock_owned().await;
+        // Ownership may have changed while waiting for the preceding open.
+        let lookup_id = session_id.clone();
+        let owner_id = uid.clone();
+        let owned = state
+            .auth
+            .with_database(move |db| {
+                let owned = SessionService::new(db)
+                    .get(&lookup_id, Some(&owner_id))?
+                    .is_some();
+                Ok((owned, open_guard))
+            })
+            .await;
+        let open_guard = match owned {
+            Ok((true, guard)) => guard,
+            Ok((false, _)) => return fail(404, "NOT_FOUND", "Session not found"),
+            Err(error) => return auth::database_failure(&error),
+        };
+        // Reject malformed node identifiers before inspecting a local path.
+        // An absent or null node selects the gateway; other types must not
+        // silently redirect a remote request to the gateway filesystem.
+        let node = match body.get("nodeId") {
+            None | Some(Value::Null) => "gateway",
+            Some(Value::String(node)) => node.as_str(),
+            Some(_) => return fail(400, "VALIDATION_ERROR", "nodeId must be a string"),
+        };
+        // No remote filesystem transport exists in this gateway yet. Refuse before
+        // any stat, so a remote path is never checked against gateway-local files.
+        if !node.is_empty() && node != "gateway" {
+            return fail(
+                501,
+                "NOT_IMPLEMENTED",
+                "Remote filesystem surfaces are unavailable on this gateway",
+            );
+        }
+        let stat_path = PathBuf::from(&project_path);
+        let _open_guard = match state
+            .filesystem
+            .run(move || (std::fs::metadata(stat_path), open_guard))
+            .await
+        {
+            Ok((Ok(metadata), guard)) if metadata.is_dir() => guard,
+            Ok((Ok(_), _guard)) => {
+                return fail(
+                    400,
+                    "NOT_A_DIRECTORY",
+                    "The specified path is not a directory",
+                );
+            }
+            Ok((Err(_), _guard)) => {
+                return fail(400, "PATH_NOT_FOUND", "The specified path does not exist");
+            }
+            Err(_) => return fail(503, "FILESYSTEM_UNAVAILABLE", "Filesystem is unavailable"),
+        };
+        let explicit_panel_open = body.get("openPanel").and_then(Value::as_bool);
+        // The session lock is held until the surface lifecycle has finished.
+        return open_session_path(
+            &state,
+            &uid,
+            &session_id,
+            &project_path,
+            explicit_panel_open,
+        )
+        .await;
+    }
+
     // Resolve the project this request operates on (body or query `projectId`).
     let project_id = js_text(body.get("projectId")).or_else(|| query.get("projectId").cloned());
-    let ctx = match resolve(&state, &uid, project_id).await {
-        Ok(ctx) => ctx,
-        Err(response) => return *response,
+    // An explicit surface names the root for this request, as the web client
+    // does after opening a path. Search keeps its own surface check.
+    let surface_id = query
+        .get("surfaceId")
+        .cloned()
+        .or_else(|| js_text(body.get("surfaceId")))
+        .filter(|id| !id.is_empty());
+    let ctx = match surface_id.as_deref() {
+        Some(id) if !matches!(route, "info" | "search" | "open") => {
+            match owned_surface_root(&state, &uid, id).await {
+                Ok(root) => Ctx {
+                    root: Some(root),
+                    search_local: true,
+                },
+                Err(response) => return *response,
+            }
+        }
+        _ => match resolve(&state, &uid, project_id).await {
+            Ok(ctx) => ctx,
+            Err(response) => return *response,
+        },
     };
+
+    // A remote root is meaningful only on its owning node. Until remote
+    // filesystem dispatch is available, never interpret it on the gateway.
+    // Explicit surface searches have their own owner and node checks; they do
+    // not operate on the project root selected above.
+    let surface_search =
+        route == "search" && query.get("surfaceId").is_some_and(|id| !id.is_empty());
+    if ctx.root.is_some() && !ctx.search_local && route != "info" && !surface_search {
+        return fail(400, "NODE_OFFLINE", "Remote filesystem is unavailable");
+    }
 
     match (route, method.as_str()) {
         ("info", "GET") => match &ctx.root {
@@ -248,23 +430,38 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
                     "projectId": js_text(body.get("projectId")),
                 }),
             ),
-            None => fail(404, "NO_PROJECT", "No project is open"),
+            None => fail(404, "NO_PROJECT", "No filesystem surface is running"),
         },
         ("open", "POST") => {
             let Some(root) = ctx.root.clone() else {
                 return fail(404, "NO_PROJECT", "No project is open");
             };
-            if !root.is_dir() {
-                return fail(404, "NO_PROJECT", "Project root does not exist");
+            // Filesystem metadata can block on slow mounts; keep it off the
+            // async runtime and apply the same bounded lane as path-based opens.
+            let check_root = root.clone();
+            match state.filesystem.run(move || check_root.is_dir()).await {
+                Ok(true) => {}
+                Ok(false) => return fail(404, "NO_PROJECT", "Project root does not exist"),
+                Err(_) => return fail(503, "FILESYSTEM_UNAVAILABLE", "Filesystem is unavailable"),
             }
-            let ui = json!({ "ui": { "panel": { "open": true } } });
-            let mut entries = Map::new();
-            entries.insert("project.ui".to_string(), ui["ui"].clone());
             let project_id = js_text(body.get("projectId")).unwrap_or_default();
             return run(&state.auth, move |db| {
-                ProjectStateService::new(db)
-                    .set(&project_id, &entries)
-                    .map_err(db_err)?;
+                let store = ProjectStateService::new(db);
+                let mut ui = store
+                    .get(&project_id, Some(&["project.ui".to_owned()]))
+                    .map_err(db_err)?
+                    .remove("project.ui")
+                    .and_then(|value| value.as_object().cloned())
+                    .unwrap_or_default();
+                let mut panel = ui
+                    .remove("panel")
+                    .and_then(|value| value.as_object().cloned())
+                    .unwrap_or_default();
+                panel.insert("open".to_string(), Value::Bool(true));
+                ui.insert("panel".to_string(), Value::Object(panel));
+                let mut entries = Map::new();
+                entries.insert("project.ui".to_string(), Value::Object(ui));
+                store.set(&project_id, &entries).map_err(db_err)?;
                 Ok(response(
                     200,
                     json!({ "ok": true, "root": root.to_string_lossy() }),
@@ -278,46 +475,61 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
                 return fail(404, "NO_PROJECT", "No project is open");
             };
             let relative = query.get("path").cloned().unwrap_or_default();
-            let Some(target) = confine(&root, &relative) else {
-                return fail(400, "INVALID_PATH", "Path is outside the project root");
-            };
-            let mut entries = Vec::new();
-            let Ok(read_dir) = std::fs::read_dir(&target) else {
-                return fail(400, "LIST_FAILED", "Unable to list directory");
-            };
-            for entry in read_dir.flatten() {
-                let metadata = entry.metadata().ok();
-                entries.push(json!({
-                    "name": entry.file_name().to_string_lossy(),
-                    "path": entry
-                        .path()
-                        .strip_prefix(&root)
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_default(),
-                    "isDirectory": metadata.as_ref().is_some_and(|m| m.is_dir()),
-                    "size": metadata.as_ref().map(|m| m.len()).unwrap_or(0),
-                }));
-            }
-            entries.sort_by(|a, b| {
-                a["name"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .cmp(b["name"].as_str().unwrap_or_default())
-            });
-            response(200, json!({ "entries": entries }))
+            state
+                .filesystem
+                .run(move || {
+                    let Some(target) = confine(&root, &relative) else {
+                        return fail(400, "INVALID_PATH", "Path is outside the project root");
+                    };
+                    let Ok(read_dir) = std::fs::read_dir(&target) else {
+                        return fail(400, "LIST_FAILED", "Unable to list directory");
+                    };
+                    let mut entries = Vec::new();
+                    for entry in read_dir.flatten() {
+                        let metadata = entry.metadata().ok();
+                        entries.push(json!({
+                            "name": entry.file_name().to_string_lossy(),
+                            "path": entry.path().strip_prefix(&root)
+                                .map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+                            "isDirectory": metadata.as_ref().is_some_and(|m| m.is_dir()),
+                            "size": metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+                        }));
+                    }
+                    entries.sort_by(|a, b| {
+                        a["name"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .cmp(b["name"].as_str().unwrap_or_default())
+                    });
+                    response(200, json!({ "entries": entries }))
+                })
+                .await
+                .unwrap_or_else(|_| {
+                    fail(503, "FILESYSTEM_UNAVAILABLE", "Filesystem is unavailable")
+                })
         }
         ("read", "GET") => {
             let Some(root) = ctx.root.clone() else {
                 return fail(404, "NO_PROJECT", "No project is open");
             };
             let relative = query.get("path").cloned().unwrap_or_default();
-            let Some(target) = confine(&root, &relative) else {
-                return fail(400, "INVALID_PATH", "Path is outside the project root");
-            };
-            match std::fs::read_to_string(&target) {
-                Ok(content) => response(200, json!({ "content": content, "path": relative })),
-                Err(_) => fail(404, "NOT_FOUND", "File not found"),
-            }
+            state
+                .filesystem
+                .run(move || {
+                    let Some(target) = confine(&root, &relative) else {
+                        return fail(400, "INVALID_PATH", "Path is outside the project root");
+                    };
+                    match std::fs::read_to_string(&target) {
+                        Ok(content) => {
+                            response(200, json!({ "content": content, "path": relative }))
+                        }
+                        Err(_) => fail(404, "NOT_FOUND", "File not found"),
+                    }
+                })
+                .await
+                .unwrap_or_else(|_| {
+                    fail(503, "FILESYSTEM_UNAVAILABLE", "Filesystem is unavailable")
+                })
         }
         ("download", "GET") => {
             const LIMIT: u64 = 50 * 1024 * 1024;
@@ -639,6 +851,199 @@ fn restore_backup(backups: &Backups, target: &Path) -> std::io::Result<bool> {
     }
     backups.lock().unwrap().remove(target);
     Ok(true)
+}
+
+/// Starts the session's gateway-local filesystem surface for a path, following
+/// the TS `doProjectOpen`: the surface replaces the session's running filesystem
+/// surfaces, the panel state is recorded for the session, and the owning
+/// project's UI state is refreshed. The caller holds the session's open lock.
+async fn open_session_path(
+    state: &ProjectRoutes,
+    uid: &str,
+    session_id: &str,
+    project_path: &str,
+    explicit_panel_open: Option<bool>,
+) -> Response {
+    let (lookup_id, owner_id) = (session_id.to_owned(), uid.to_owned());
+    let context = state
+        .auth
+        .with_database(move |db| {
+            let project_id = SessionService::new(db)
+                .get(&lookup_id, Some(&owner_id))?
+                .and_then(|session| session.project_id);
+            let saved_open = match project_id.as_deref() {
+                Some(project) => ProjectStateService::new(db)
+                    .get(project, Some(&["project.ui".to_owned()]))?
+                    .get("project.ui")
+                    .and_then(|ui| ui.get("panel"))
+                    .and_then(|panel| panel.get("open"))
+                    .and_then(Value::as_bool),
+                None => None,
+            };
+            Ok((project_id, saved_open))
+        })
+        .await;
+    let (project_id, saved_open) = match context {
+        Ok(context) => context,
+        Err(error) => return auth::database_failure(&error),
+    };
+    // An explicit request wins, then the saved preference; the default is closed.
+    let panel_open = explicit_panel_open.or(saved_open).unwrap_or(false);
+
+    // The session's previous filesystem surfaces stop before the new one starts.
+    for surface in state.surfaces.by_session(session_id) {
+        if !matches!(surface.kind(), "filesystem" | "remote-filesystem")
+            || surface.state() != SurfaceState::Running
+        {
+            continue;
+        }
+        let id = surface.id().to_owned();
+        if state
+            .surfaces
+            .stop_surface_instance(&id, surface, Some("replaced".into()))
+            .await
+            .is_err()
+        {
+            return fail(
+                500,
+                "SURFACE_STOP_FAILED",
+                "Failed to stop the previous filesystem surface",
+            );
+        }
+    }
+
+    let surface_id = format!("filesystem-{}", crate::db::identifiers::uuidv7());
+    let mut input = SurfaceStartInput {
+        session_id: session_id.to_owned(),
+        project_root: project_path.to_owned(),
+        node_id: None,
+        properties: Map::new(),
+    };
+    input
+        .properties
+        .insert("panelOpen".into(), Value::Bool(panel_open));
+    // The owner scopes every later lookup of this surface to its caller.
+    input
+        .properties
+        .insert("userId".into(), Value::String(uid.to_owned()));
+    if state
+        .surfaces
+        .start_surface("filesystem", &surface_id, input)
+        .await
+        .is_err()
+    {
+        return fail(
+            500,
+            "SURFACE_START_FAILED",
+            "Failed to start filesystem surface",
+        );
+    }
+
+    let panel_state = json!({
+        "open": panel_open,
+        "remotePath": project_path,
+        "surfaceId": surface_id,
+        "nodeId": "gateway",
+    });
+    let (lookup_id, owner_id) = (session_id.to_owned(), uid.to_owned());
+    let (update_path, project_for_db) = (project_path.to_owned(), project_id.clone());
+    let panel_for_db = panel_state;
+    let persisted = state
+        .auth
+        .with_database(move |db| {
+            if let Some(project) = project_for_db.as_deref() {
+                // Best effort, as in TS: the surface is already running.
+                let patch =
+                    Map::from_iter([("projectPath".to_owned(), Value::String(update_path))]);
+                let _ = SessionService::new(db).update(&lookup_id, &patch, Some(&owner_id));
+                let _ = ProjectService::new(db).touch(project);
+            }
+            SessionStateService::new(db).set(
+                &lookup_id,
+                &Map::from_iter([("project.panel".to_owned(), panel_for_db.clone())]),
+            )?;
+            if let Some(project) = project_for_db.as_deref() {
+                let store = ProjectStateService::new(db);
+                let existing = store
+                    .get(project, Some(&["project.ui".to_owned()]))?
+                    .remove("project.ui");
+                // Tabs, layout, terminal and preview survive an open; only the panel changes.
+                let kept = |key: &str| {
+                    existing
+                        .as_ref()
+                        .and_then(|ui| ui.get(key))
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                };
+                let ui = json!({
+                    "panel": panel_for_db,
+                    "tabs": kept("tabs"),
+                    "layout": kept("layout"),
+                    "terminal": kept("terminal"),
+                    "preview": kept("preview"),
+                });
+                store.set(project, &Map::from_iter([("project.ui".to_owned(), ui)]))?;
+            }
+            Ok(())
+        })
+        .await;
+    if let Err(error) = persisted {
+        return auth::database_failure(&error);
+    }
+    response(
+        200,
+        json!({
+            "surfaceId": surface_id,
+            "projectRoot": project_path,
+            "nodeId": "gateway",
+            "projectId": project_id,
+            "panelOpen": panel_open,
+        }),
+    )
+}
+
+/// Root of a running, gateway-local filesystem surface that `uid` owns and whose
+/// session `uid` still owns. Every other surface reads as missing, so foreign
+/// surfaces cannot be probed by ID.
+async fn owned_surface_root(state: &ProjectRoutes, uid: &str, surface_id: &str) -> Res<PathBuf> {
+    let missing = || Box::new(fail(404, "NO_PROJECT", "No filesystem surface is running"));
+    let Some((surface, owner)) = state.surfaces.surface_with_owner(surface_id) else {
+        return Err(missing());
+    };
+    if owner.as_deref() != Some(uid)
+        || surface.kind() != "filesystem"
+        || surface.state() != SurfaceState::Running
+    {
+        return Err(missing());
+    }
+    let Some(session_id) = surface.session_id() else {
+        return Err(missing());
+    };
+    let owner_id = uid.to_owned();
+    match state
+        .auth
+        .with_database(move |db| {
+            Ok(SessionService::new(db)
+                .get(&session_id, Some(&owner_id))?
+                .is_some())
+        })
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => return Err(missing()),
+        Err(error) => return Err(Box::new(auth::database_failure(&error))),
+    }
+    surface
+        .snapshot()
+        .ok()
+        .and_then(|snapshot| {
+            snapshot
+                .metadata
+                .get("projectRoot")
+                .and_then(Value::as_str)
+                .map(PathBuf::from)
+        })
+        .ok_or_else(missing)
 }
 
 /// Resolves the project for this request and its effective root.
@@ -1011,10 +1416,10 @@ mod search_tests {
             request(&state, &foreign, "query=x").await.0,
             StatusCode::NOT_FOUND
         );
-        assert_eq!(
-            request(&state, &remote_child, "query=x").await.0,
-            StatusCode::NOT_IMPLEMENTED
-        );
+        // An inherited root on another node refuses locally as NODE_OFFLINE, before search runs.
+        let (status, body) = request(&state, &remote_child, "query=x").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(body["error"], "NODE_OFFLINE", "{body}");
         assert_eq!(
             request(&state, &own, "query=x&surfaceId=arbitrary").await.0,
             StatusCode::NOT_FOUND
@@ -1026,20 +1431,59 @@ mod search_tests {
         state.auth.shutdown().await.unwrap();
     }
     #[tokio::test]
-    async fn surface_search_serves_only_running_surfaces_owned_by_the_caller() {
-        use crate::surfaces::{
-            filesystem::{FileSystemSurfaceFactory, GuardOptions},
-            registry::{SurfaceRegistry, SurfaceStartInput},
-        };
+    async fn project_open_rejects_foreign_session_before_inspecting_path() {
         let fixture = Fixture::new();
-        let (state, own, _, _) = setup(&fixture.0);
+        let (state, _, _, _) = setup(&fixture.0);
+        let session_id = state
+            .auth
+            .with_database(|db| {
+                Ok(crate::services::sessions::SessionService::new(db)
+                    .create(crate::services::sessions::CreateSession {
+                        user_id: Some("other".into()),
+                        ..Default::default()
+                    })?
+                    .id)
+            })
+            .await
+            .unwrap();
+        let token = http_auth::sign_auth_token(
+            &AuthUser {
+                id: "owner".into(),
+                username: "owner".into(),
+            },
+            "project-search-fixture-secret",
+        )
+        .unwrap();
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/project/open")
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({"sessionId": session_id, "path": fixture.0.join("missing")}).to_string(),
+            ))
+            .unwrap();
+        let result = dispatch(State(state.clone()), request).await;
+        assert_eq!(result.status(), StatusCode::NOT_FOUND);
+        let body = to_bytes(result.into_body(), 1024 * 1024).await.unwrap();
+        let body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["message"], "Session not found");
+        state.auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn surface_search_serves_only_running_surfaces_owned_by_the_caller() {
+        use crate::surfaces::registry::{SurfaceRegistry, SurfaceStartInput};
+        let fixture = Fixture::new();
+        let (state, own, _, remote_project) = setup(&fixture.0);
         std::fs::write(fixture.0.join("needle.txt"), "needle\n").unwrap();
         let registry = SurfaceRegistry::default();
-        registry.register(std::sync::Arc::new(FileSystemSurfaceFactory::new(
-            GuardOptions::default(),
-            state.filesystem.clone(),
-        )));
         let state = state.with_surfaces(registry.clone());
+        assert!(
+            registry
+                .registered_types()
+                .iter()
+                .any(|kind| kind == "filesystem")
+        );
         let (owner_session, other_session) = state
             .auth
             .with_database(|db| {
@@ -1077,6 +1521,16 @@ mod search_tests {
         let (status, body) = request(&state, &own, "query=needle&surfaceId=fs-own").await;
         assert_eq!(status, StatusCode::OK, "{body}");
         assert!(!body["files"].as_array().unwrap().is_empty(), "{body}");
+        let (status, body) =
+            request(&state, &remote_project, "query=needle&surfaceId=fs-own").await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert!(!body["files"].as_array().unwrap().is_empty(), "{body}");
+        assert_eq!(
+            request(&state, &remote_project, "query=needle&surfaceId=fs-foreign")
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
         assert_eq!(
             request(&state, &own, "query=needle&surfaceId=fs-foreign")
                 .await
@@ -1108,5 +1562,95 @@ mod search_tests {
         assert_eq!(result.0, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(result.1["error"], "SEARCH_BUSY");
         state.auth.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod project_open_lock_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cancelling_waiter_does_not_release_active_session_lock() {
+        let locks = OpenLocks::default();
+        let first = session_open_lock(&locks, "one");
+        let guard = first.lock().await;
+        let waiting = session_open_lock(&locks, "one");
+        let (entered, ready) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _ = entered.send(());
+            let _guard = waiting.lock().await;
+        });
+        ready.await.unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        let next = session_open_lock(&locks, "one");
+        assert!(next.try_lock().is_err());
+        drop(guard);
+        assert!(next.try_lock().is_ok());
+    }
+
+    #[tokio::test]
+    async fn cancelling_active_open_releases_lock_for_waiter() {
+        let locks = OpenLocks::default();
+        let active = session_open_lock(&locks, "one");
+        let waiting = session_open_lock(&locks, "one");
+        let (entered, ready) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _guard = active.lock().await;
+            let _ = entered.send(());
+            std::future::pending::<()>().await;
+        });
+        ready.await.unwrap();
+        assert!(waiting.try_lock().is_err());
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(waiting.try_lock().is_ok());
+    }
+
+    #[tokio::test]
+    async fn cancelled_request_keeps_lock_until_blocking_validation_finishes() {
+        let locks = OpenLocks::default();
+        let active = session_open_lock(&locks, "one");
+        let waiting = session_open_lock(&locks, "one");
+        let lane =
+            crate::runtime::blocking::BlockingLane::new(std::num::NonZeroU16::new(1).unwrap());
+        let (entered, ready) = tokio::sync::oneshot::channel();
+        let (release, resume) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            let guard = active.lock_owned().await;
+            lane.run(move || {
+                let _ = entered.send(());
+                resume.recv().unwrap();
+                guard
+            })
+            .await
+            .unwrap()
+        });
+        ready.await.unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(waiting.try_lock().is_err());
+        release.send(()).unwrap();
+        let _guard = tokio::time::timeout(std::time::Duration::from_secs(5), waiting.lock())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn session_open_locks_serialize_without_blocking_other_sessions() {
+        let locks = OpenLocks::default();
+        let first = session_open_lock(&locks, "one");
+        let same = session_open_lock(&locks, "one");
+        let other = session_open_lock(&locks, "two");
+        let guard = first.lock().await;
+        assert!(same.try_lock().is_err());
+        assert!(other.try_lock().is_ok());
+        drop(guard);
+        assert!(same.try_lock().is_ok());
+        drop(first);
+        drop(same);
+        drop(other);
+        let _new = session_open_lock(&locks, "three");
+        assert_eq!(locks.lock().unwrap().len(), 1);
     }
 }

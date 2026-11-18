@@ -104,6 +104,34 @@ impl Drop for FactoryCreation {
         }
     }
 }
+// Remove only this attempt's publication when its start future is dropped before settling.
+struct StartupPublication {
+    registry: SurfaceRegistry,
+    id: String,
+    surface: SurfaceRef,
+    active: bool,
+}
+impl Drop for StartupPublication {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        let mut state = self.registry.inner.lock().expect("surface registry");
+        let removed = if state
+            .surfaces
+            .get(&self.id)
+            .is_some_and(|current| Arc::ptr_eq(current, &self.surface))
+        {
+            state.owners.remove(&self.id);
+            state.surface_order.retain(|key| key != &self.id);
+            state.surfaces.remove(&self.id)
+        } else {
+            None
+        };
+        drop(state);
+        drop(removed);
+    }
+}
 struct FrozenSnapshot {
     surface: SurfaceRef,
     snapshot: SurfaceSnapshot,
@@ -164,6 +192,13 @@ impl SurfaceRegistry {
         {
             return false;
         }
+        // A pending instance may have disappeared after the caller inspected it.
+        // Never publish an owner without the instance it was reserved for.
+        if !cleanup && !state.surfaces.contains_key(id) {
+            state.reservations.remove(id);
+            state.owners.remove(id);
+            return false;
+        }
         state.reservations.remove(id);
         let removed = if cleanup {
             state.owners.remove(id);
@@ -211,6 +246,26 @@ impl SurfaceRegistry {
         };
         // The last factory reference can run arbitrary Drop code.
         drop(displaced);
+    }
+    /// Register a default without replacing a factory installed by another caller.
+    pub fn register_if_absent(&self, factory: Arc<dyn SurfaceFactory>) -> bool {
+        let kind = factory.kind().to_owned();
+        let mut factory = Some(factory);
+        let inserted = {
+            let mut state = self.inner.lock().expect("surface registry");
+            if state.factories.contains_key(&kind) {
+                false
+            } else {
+                state.factory_order.push(kind.clone());
+                state
+                    .factories
+                    .insert(kind, factory.take().expect("factory present"));
+                true
+            }
+        };
+        // A rejected factory can execute arbitrary Drop code; drop it outside the lock.
+        drop(factory);
+        inserted
     }
     pub fn register_instance(&self, id: &str, surface: SurfaceRef) {
         let mut state = self.inner.lock().expect("surface registry");
@@ -291,7 +346,18 @@ impl SurfaceRegistry {
             displaced
         };
         drop(displaced);
-        surface.start(input).await?;
+        let mut publication = StartupPublication {
+            registry: self.clone(),
+            id: id.into(),
+            surface: surface.clone(),
+            active: true,
+        };
+        // Reference parity: a start that returns an error keeps its instance and owner
+        // registered, so the failed surface stays inspectable and shutdown still stops it.
+        // Only a start abandoned mid-flight (its future dropped) removes its publication.
+        let started = surface.start(input).await;
+        publication.active = false;
+        started?;
         let callback = self
             .inner
             .lock()
@@ -361,6 +427,19 @@ impl SurfaceRegistry {
             .get(id)
             .cloned()
     }
+    /// Read a pending instance only while the caller still owns its reservation.
+    pub fn reserved_surface(&self, id: &str, token: &Arc<()>) -> Option<SurfaceRef> {
+        let state = self.inner.lock().expect("surface registry");
+        if !state
+            .reservations
+            .get(id)
+            .is_some_and(|current| Arc::ptr_eq(current, token))
+        {
+            return None;
+        }
+        state.surfaces.get(id).cloned()
+    }
+
     /// Capture an instance and its recorded owner in the same registry state.
     pub fn surface_with_owner(&self, id: &str) -> Option<(SurfaceRef, Option<String>)> {
         let state = self.inner.lock().expect("surface registry");
@@ -535,6 +614,175 @@ mod tests {
         fn create(&self, _: &str) -> SurfaceResult<SurfaceRef> {
             Ok(Arc::new(TestSurface))
         }
+    }
+
+    struct PendingSurface {
+        fail: bool,
+    }
+    impl Surface for PendingSurface {
+        fn id(&self) -> &str {
+            "same"
+        }
+        fn kind(&self) -> &str {
+            "filesystem"
+        }
+        fn state(&self) -> SurfaceState {
+            SurfaceState::Starting
+        }
+        fn session_id(&self) -> Option<String> {
+            Some("session".into())
+        }
+        fn start(&self, _: SurfaceStartInput) -> SurfaceFuture<'_, ()> {
+            Box::pin(async move {
+                if self.fail {
+                    Err("startup failed".into())
+                } else {
+                    std::future::pending().await
+                }
+            })
+        }
+        fn stop(&self, _: Option<String>) -> SurfaceFuture<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
+        fn snapshot(&self) -> SurfaceResult<SurfaceSnapshot> {
+            TestSurface.snapshot()
+        }
+    }
+    struct PendingFactory(bool);
+    impl SurfaceFactory for PendingFactory {
+        fn kind(&self) -> &str {
+            "filesystem"
+        }
+        fn create(&self, _: &str) -> SurfaceResult<SurfaceRef> {
+            Ok(Arc::new(PendingSurface { fail: self.0 }))
+        }
+    }
+    fn startup_input() -> SurfaceStartInput {
+        let mut properties = Map::new();
+        properties.insert("userId".into(), "alice".into());
+        SurfaceStartInput {
+            session_id: "session".into(),
+            project_root: "/".into(),
+            node_id: None,
+            properties,
+        }
+    }
+    #[tokio::test]
+    async fn failed_start_retains_publication_and_owner_like_reference() {
+        let registry = SurfaceRegistry::default();
+        registry.register(Arc::new(PendingFactory(true)));
+        assert!(
+            registry
+                .start_surface("filesystem", "same", startup_input())
+                .await
+                .is_err()
+        );
+        assert!(registry.surface("same").is_some());
+        assert_eq!(registry.owner("same").as_deref(), Some("alice"));
+    }
+    #[tokio::test]
+    async fn cancelled_start_removes_only_its_own_publication() {
+        let registry = SurfaceRegistry::default();
+        registry.register(Arc::new(PendingFactory(false)));
+        let mut start = Box::pin(registry.start_surface("filesystem", "same", startup_input()));
+        std::future::poll_fn(|cx| {
+            assert!(start.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        assert!(registry.surface("same").is_some());
+        drop(start);
+        assert!(registry.surface("same").is_none());
+        assert!(registry.owner("same").is_none());
+        let mut start = Box::pin(registry.start_surface("filesystem", "same", startup_input()));
+        std::future::poll_fn(|cx| {
+            assert!(start.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        let replacement: SurfaceRef = Arc::new(TestSurface);
+        registry.register_instance("same", replacement.clone());
+        registry.set_owner("same", "bob");
+        drop(start);
+        assert!(Arc::ptr_eq(
+            &registry.surface("same").unwrap(),
+            &replacement
+        ));
+        assert_eq!(registry.owner("same").as_deref(), Some("bob"));
+    }
+
+    #[test]
+    fn default_factory_registration_is_atomic_and_preserves_existing() {
+        let registry = SurfaceRegistry::default();
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        let workers: Vec<_> = (0..2)
+            .map(|_| {
+                let registry = registry.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    registry.register_if_absent(Arc::new(TestFactory))
+                })
+            })
+            .collect();
+        barrier.wait();
+        let inserted = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .filter(|inserted| *inserted)
+            .count();
+        assert_eq!(inserted, 1);
+        assert_eq!(registry.registered_types(), vec!["filesystem"]);
+        assert!(!registry.register_if_absent(Arc::new(TestFactory)));
+    }
+
+    #[tokio::test]
+    async fn default_factory_registration_keeps_existing_factory_behavior() {
+        let registry = SurfaceRegistry::default();
+        registry.register(Arc::new(PendingFactory(true)));
+        assert!(!registry.register_if_absent(Arc::new(TestFactory)));
+        let error = match registry
+            .start_surface("filesystem", "same", startup_input())
+            .await
+        {
+            Ok(_) => panic!("the existing failing factory was replaced"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "startup failed");
+        // Reference parity: the failed start keeps the instance and owner registered.
+        assert!(registry.surface("same").is_some());
+        assert_eq!(registry.owner("same").as_deref(), Some("alice"));
+    }
+
+    #[test]
+    fn rejected_default_factory_drops_outside_registry_lock() {
+        struct ReentrantDrop(SurfaceRegistry);
+        impl SurfaceFactory for ReentrantDrop {
+            fn kind(&self) -> &str {
+                "filesystem"
+            }
+            fn create(&self, _: &str) -> SurfaceResult<SurfaceRef> {
+                Err("unused".into())
+            }
+        }
+        impl Drop for ReentrantDrop {
+            fn drop(&mut self) {
+                let _ = self.0.registered_types();
+            }
+        }
+        let registry = SurfaceRegistry::default();
+        registry.register(Arc::new(TestFactory));
+        let other = registry.clone();
+        let (done, received) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            done.send(other.register_if_absent(Arc::new(ReentrantDrop(other.clone()))))
+                .unwrap();
+        });
+        assert!(
+            !received
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("registration deadlocked")
+        );
     }
 
     #[test]
@@ -760,6 +1008,30 @@ mod tests {
         assert!(registry.finish_reservation("other", &token, true));
         assert!(registry.surface_with_owner("other").is_none());
         assert!(registry.owner("other").is_none());
+    }
+
+    #[test]
+    fn reserved_lookup_rejects_displaced_reservation() {
+        let registry = SurfaceRegistry::default();
+        let token = registry.reserve_owner("same", "alice").unwrap();
+        let pending: SurfaceRef = Arc::new(TestSurface);
+        assert!(registry.register_reserved_instance("same", &token, pending.clone()));
+        assert!(Arc::ptr_eq(
+            &registry.reserved_surface("same", &token).unwrap(),
+            &pending
+        ));
+        let replacement: SurfaceRef = Arc::new(TestSurface);
+        registry.register_instance("same", replacement);
+        assert!(registry.reserved_surface("same", &token).is_none());
+    }
+
+    #[test]
+    fn committing_empty_reservation_releases_owner() {
+        let registry = SurfaceRegistry::default();
+        let token = registry.reserve_owner("same", "alice").unwrap();
+        assert!(!registry.finish_reservation("same", &token, false));
+        assert!(registry.owner("same").is_none());
+        assert!(registry.reserve_owner("same", "bob").is_some());
     }
 
     #[test]

@@ -173,15 +173,35 @@ pub fn gateway_status(
         })
         .count();
     let events = sources.hook_event_types()?.unwrap_or_default();
-    let uptime = (((clock.unwrap_or_else(default_clock))() as f64 - started_at) / 1000.0).floor();
-    let uptime = if uptime.is_finite() && uptime >= i64::MIN as f64 && uptime < i64::MAX as f64 {
-        json!(uptime as i64)
+    let uptime_seconds =
+        (((clock.unwrap_or_else(default_clock))() as f64 - started_at) / 1000.0).floor();
+    // Same floored arithmetic as the reference, including its negative-clock output.
+    let hours = (uptime_seconds / 3600.0).floor();
+    let minutes = ((uptime_seconds % 3600.0) / 60.0).floor();
+    let uptime_text = if hours > 0.0 {
+        format!("{hours}h {minutes}m")
+    } else if minutes > 0.0 {
+        format!("{minutes}m {}s", uptime_seconds % 60.0)
     } else {
-        json!(uptime)
+        format!("{uptime_seconds}s")
+    };
+    let uptime = if uptime_seconds.is_finite()
+        && uptime_seconds >= i64::MIN as f64
+        && uptime_seconds < i64::MAX as f64
+    {
+        json!(uptime_seconds as i64)
+    } else {
+        json!(uptime_seconds)
     };
     let listeners = sources.hook_listener_count()?.unwrap_or(0);
+    let message = format!(
+        "Gateway healthy — up {uptime_text}, {sessions} active session(s), {surfaces} surface(s), \
+         {devices} device(s), {enabled_jobs}/{} cron job(s) enabled, {} hook event type(s).",
+        jobs.len(),
+        events.len()
+    );
     Ok(
-        json!({"ok":true,"message":"Gateway status","data":{"healthy":true,"uptime":uptime,"sessions":sessions,"surfaces":surfaces,"devices":devices,
+        json!({"ok":true,"message":message,"data":{"healthy":true,"uptime":uptime,"sessions":sessions,"surfaces":surfaces,"devices":devices,
         "activeServices":["ws-control-plane","scheduler","consent-manager","hooks"],"scheduler":{"totalJobs":jobs.len(),"enabledJobs":enabled_jobs},
         "hooks":{"registeredEventTypes":events,"listeners":listeners}}}),
     )

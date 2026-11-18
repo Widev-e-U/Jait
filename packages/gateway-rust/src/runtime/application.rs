@@ -246,7 +246,7 @@ impl crate::routes::filesystem::FilesystemNodes for GatewayFilesystemNodes {
     fn register_gateway(&self, node: serde_json::Value) {
         *self.0.lock().expect("filesystem nodes") = Some(node);
     }
-    fn nodes(&self) -> serde_json::Value {
+    fn nodes(&self, _user_id: &str) -> serde_json::Value {
         serde_json::Value::Array(
             self.0
                 .lock()
@@ -258,6 +258,7 @@ impl crate::routes::filesystem::FilesystemNodes for GatewayFilesystemNodes {
     }
     fn roots<'a>(
         &'a self,
+        _user_id: &'a str,
         _node: serde_json::Value,
     ) -> crate::routes::filesystem::BrowseFuture<'a> {
         Box::pin(async {
@@ -268,6 +269,7 @@ impl crate::routes::filesystem::FilesystemNodes for GatewayFilesystemNodes {
     }
     fn browse<'a>(
         &'a self,
+        _user_id: &'a str,
         _node: serde_json::Value,
         _path: serde_json::Value,
     ) -> crate::routes::filesystem::BrowseFuture<'a> {

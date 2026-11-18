@@ -75,6 +75,10 @@ pub type ToolDelegate = Arc<
         + Send
         + Sync,
 >;
+pub type EffectAuthority = Arc<
+    dyn for<'a> Fn(&'a ToolExecutionContext) -> BoxFuture<'a, Result<(), String>> + Send + Sync,
+>;
+
 pub trait ToolTrust: Send + Sync {
     fn level<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<f64, String>>;
     fn record_approval<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), String>>;
@@ -116,6 +120,7 @@ pub struct ConsentAwareExecutor {
     consent: ConsentManager,
     trust: Arc<dyn ToolTrust>,
     delegate: ToolDelegate,
+    authority: Option<EffectAuthority>,
     permits: Arc<Semaphore>,
     disabled_tools: HashSet<String>,
 }
@@ -134,6 +139,7 @@ impl ConsentAwareExecutor {
             consent,
             trust,
             delegate,
+            authority: None,
             permits,
             disabled_tools: HashSet::new(),
         }
@@ -141,6 +147,9 @@ impl ConsentAwareExecutor {
     pub fn with_disabled_tools(mut self, disabled_tools: HashSet<String>) -> Self {
         self.disabled_tools = disabled_tools;
         self
+    }
+    pub fn set_effect_authority(&mut self, authority: EffectAuthority) {
+        self.authority = Some(authority);
     }
     pub fn session_approvals(&self) -> HashSet<String> {
         self.approvals.lock().unwrap().clone()
@@ -321,7 +330,57 @@ impl ConsentAwareExecutor {
         if context.cancellation.is_cancelled() {
             return Ok(cancelled());
         }
-        (self.delegate)(name, input, context, permit.clone()).await
+        if let Some(authority) = &self.authority
+            && let Err(reason) = authority(context).await
+        {
+            return Ok(ToolResult::message(false, reason));
+        }
+        if context.cancellation.is_cancelled() {
+            return Ok(cancelled());
+        }
+        let Some(authority) = self.authority.clone() else {
+            return (self.delegate)(name, input, context, permit).await;
+        };
+        // The effect gets its own token, so revoked project authority stops this effect alone
+        // and is reported as a refusal rather than as a user cancellation.
+        let effect = ProcessCancellation::default();
+        let mut effect_context = context.clone();
+        effect_context.cancellation = effect.clone();
+        let mut running = (self.delegate)(name, input, &effect_context, permit);
+        let revoked = tokio::select! {
+            biased;
+            result = &mut running => return result,
+            reason = watch_project_authority(&authority, context) => reason,
+        };
+        effect.cancel();
+        match (running.await, revoked) {
+            (Ok(result), _) => Ok(result),
+            (Err(_), Some(reason)) => Ok(ToolResult::message(false, reason)),
+            (Err(_), None) if context.cancellation.is_cancelled() => Ok(cancelled()),
+            (Err(error), None) => Err(error),
+        }
+    }
+}
+
+/// Recheck period for project authority while an admitted effect runs. A revoked effect therefore
+/// stops within one period, without a per-tool wake-up or a separate registry of running effects.
+const EFFECT_AUTHORITY_RECHECK: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Returns the revocation reason once project authority fails, or `None` if the caller cancels
+/// first. It never completes otherwise, so the caller's `select!` keeps waiting on the effect.
+async fn watch_project_authority(
+    authority: &EffectAuthority,
+    context: &ToolExecutionContext,
+) -> Option<String> {
+    loop {
+        tokio::select! {
+            biased;
+            _ = context.cancellation.wait_cancelled() => return None,
+            _ = tokio::time::sleep(EFFECT_AUTHORITY_RECHECK) => {}
+        }
+        if let Err(reason) = authority(context).await {
+            return Some(reason);
+        }
     }
 }
 struct PendingConsent {

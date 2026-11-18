@@ -1,5 +1,5 @@
 //! Reference path policy. Run filesystem checks on a bounded blocking worker.
-//! Like the reference, the optional symlink check examines the final entry only.
+//! Like the reference, the optional symlink check resolves every existing component.
 use std::{
     fmt, fs, io,
     path::{Component, Path, PathBuf},
@@ -113,30 +113,42 @@ impl PathGuard {
         if !self.check_symlinks {
             return Ok(norm);
         }
-        let check = || -> Result<(), PathError> {
-            if fs::symlink_metadata(&norm)?.file_type().is_symlink() {
-                let real = fs::canonicalize(&norm)?;
-                if escapes(&self.root, &real) {
-                    return Err(self.error(
-                        target,
-                        format!(
-                            "Symlink escapes project boundary: {target} -> {}",
-                            real.display()
-                        ),
-                    ));
-                }
-            }
-            Ok(())
+        let Ok(relative_path) = norm.strip_prefix(&self.root) else {
+            return Ok(norm);
         };
-        match check() {
-            Err(e)
-                if e.downcast_ref::<io::Error>()
-                    .is_some_and(|e| e.kind() == io::ErrorKind::NotFound) =>
-            {
-                Ok(norm)
+        // Mirror the reference: every existing component is resolved, not only the final
+        // entry, so an intermediate symlink cannot redirect a later write outside the root.
+        let real_root = match fs::canonicalize(&self.root) {
+            Ok(real) => real,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => self.root.clone(),
+            Err(error) => return Err(error.into()),
+        };
+        let mut current = self.root.clone();
+        for part in relative_path.components() {
+            current.push(part);
+            let info = match fs::symlink_metadata(&current) {
+                Ok(info) => info,
+                // A missing component ends the walk: no later component can exist.
+                Err(error) if error.kind() == io::ErrorKind::NotFound => break,
+                Err(error) => return Err(error.into()),
+            };
+            if !info.file_type().is_symlink() {
+                continue;
             }
-            Err(e) => Err(e),
-            Ok(()) => Ok(norm),
+            // A dangling symlink fails here with NotFound: a later write could follow it.
+            let real = fs::canonicalize(&current)?;
+            let Ok(inside) = real.strip_prefix(&real_root) else {
+                return Err(self.error(
+                    target,
+                    format!(
+                        "Symlink escapes project boundary: {target} -> {}",
+                        real.display()
+                    ),
+                ));
+            };
+            // A symlink must not reach paths explicitly denied inside the project.
+            self.validate(&self.root.join(inside).to_string_lossy())?;
         }
+        Ok(norm)
     }
 }

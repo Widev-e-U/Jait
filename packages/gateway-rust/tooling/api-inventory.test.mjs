@@ -14,7 +14,7 @@ test('inventory does not turn path references into tested parity claims', () => 
   const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
   assert.deepEqual(inventory.summary, summary, 'regenerate the checked-in inventory');
   assert.equal(summary.nativeTested, [...inventory.http, ...inventory.ws].filter((entry) => entry.status === 'native-tested').length);
-  assert.equal(summary.nativeTestedDenominator, inventory.http.length + inventory.ws.length);
+  assert.equal(summary.nativeTestedDenominator, inventory.http.length + inventory.ws.length + inventory.services.length);
   assert.equal(summary.nativeTestedPct, +(100 * summary.nativeTested / summary.nativeTestedDenominator).toFixed(2));
   assert.ok([...inventory.http, ...inventory.ws].every((entry) => Array.isArray(entry.binaryTests)));
   assert.ok(inventory.http.some((route) => route.status === 'native-untested' && route.testPathReference));
@@ -52,8 +52,8 @@ test('inventory includes all-method proxy routes and typed registrations', () =>
   }
 });
 
-test('legacy inventory includes typed registrations and labels WS matches as heuristic', () => {
-  const inventory = readFileSync(join(here, '..', 'API-INVENTORY.md'), 'utf8');
+test('generated markdown includes typed registrations and labels WS matches as heuristic', () => {
+  const inventory = readFileSync(join(here, '..', 'docs', 'api-inventory.md'), 'utf8');
   for (const [method, path] of [
     ['PATCH', '/api/plugins/:id/config'],
     ['PATCH', '/api/channels/:id/config'],
@@ -61,7 +61,7 @@ test('legacy inventory includes typed registrations and labels WS matches as heu
   ]) {
     assert.ok(inventory.includes(`| ${method} | \`${path}\` |`), `missing typed route ${method} ${path}`);
   }
-  assert.match(inventory, /message-and-test-reference/);
+  assert.match(inventory, /## WS message candidates \(heuristic\)/);
   assert.doesNotMatch(inventory, /native-and-tested/);
 });
 

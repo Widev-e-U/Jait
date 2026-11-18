@@ -12,7 +12,7 @@ use crate::{
         consent_executor::{ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext},
         consent_manager::ConsentManager,
     },
-    services::{sessions::SessionService, users::UserService},
+    services::{projects::local_execution_allowed, sessions::SessionService, users::UserService},
 };
 use axum::{
     Router,
@@ -82,7 +82,10 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
         Ok(bytes) => bytes,
         Err(_) => return auth::response(413, json!({"error": "PAYLOAD_TOO_LARGE"})),
     };
-    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    let body = match auth::parse_body(axum::body::Body::from(bytes), &parts.headers).await {
+        Ok(body) => body,
+        Err(response) => return *response,
+    };
     let tool = body["tool"].as_str().unwrap_or_default().to_owned();
     if tool.is_empty() {
         return auth::response(
@@ -110,13 +113,24 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
     let session = match state
         .auth
         .with_database(move |db| {
-            Ok(SessionService::new(db)
+            let session = SessionService::new(db)
                 .get(&lookup, Some(&owner))?
-                .filter(|s| s.status.as_deref() == Some("active")))
+                .filter(|s| s.status.as_deref() == Some("active"));
+            let Some(session) = session else {
+                return Ok(None);
+            };
+            let local = local_execution_allowed(db, &owner, session.project_id.as_deref())?;
+            Ok(Some((session, local)))
         })
         .await
     {
-        Ok(Some(session)) => session,
+        Ok(Some((session, true))) => session,
+        Ok(Some((_, false))) => {
+            return auth::response(
+                503,
+                json!({"error": "REMOTE_NODE_UNAVAILABLE", "details": "Project execution node is not available"}),
+            );
+        }
         Ok(None) => return auth::response(404, json!({"error": "Resource not found"})),
         Err(_) => return auth::internal_error(),
     };
@@ -137,7 +151,7 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
         Ok(disabled_tools) => disabled_tools.into_iter().collect(),
         Err(_) => return auth::internal_error(),
     };
-    let (_, executor) = match chat_tools::project_tools_with_policy(
+    let (_, mut executor) = match chat_tools::project_tools_with_policy(
         &user.id,
         &session_id,
         state.consent.clone(),
@@ -147,6 +161,11 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
         Ok(pair) => pair,
         Err(_) => return auth::internal_error(),
     };
+    chat_tools::enforce_session_authority(
+        &mut executor,
+        state.auth.clone(),
+        state.project_root.clone(),
+    );
     let context = ToolExecutionContext {
         user_id: user.id,
         session_id,
@@ -161,7 +180,11 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
         dry_run: body["dryRun"].as_bool() == Some(true),
         consent_timeout_ms: body["consentTimeoutMs"].as_f64(),
     };
-    let input = body.get("input").cloned().unwrap_or_else(|| json!({}));
+    let input = body
+        .get("input")
+        .filter(|value| !value.is_null())
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     match executor.execute(&tool, &input, &context, options).await {
         Ok(result) => auth::response(200, serde_json::to_value(result).unwrap_or(Value::Null)),
         Err(_) => auth::internal_error(),

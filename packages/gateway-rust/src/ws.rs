@@ -983,6 +983,7 @@ impl Default for WsHubConfig {
 }
 
 struct ClientEntry {
+    node: Option<(String, crate::services::node_credentials::NodeIdentity)>,
     id: String,
     user_id: Option<String>,
     session_id: Option<String>,
@@ -1226,8 +1227,6 @@ impl WsHub {
     /// Mirror of `broadcastToUser`: every authorized client of one user,
     /// regardless of which session that client subscribed to.
     ///
-    /// Divergence: the TS hub also skips `pairedNodeId` clients; the native hub
-    /// has no paired-node concept yet, so only credential state gates delivery.
     pub fn broadcast_to_user(&self, user_id: &str, kind: &str, payload: Value) -> usize {
         self.broadcast_user_event(user_id, envelope(kind, None, payload))
     }
@@ -1266,11 +1265,10 @@ impl WsHub {
     ///
     /// `broadcastAll` additionally applies `canAccessSession` when the event
     /// names a session; this envelope carries no session, so that filter is
-    /// trivially satisfied. Paired-node exclusion is not modeled (see
-    /// [`Self::broadcast_to_user`]).
+    /// trivially satisfied. Paired-node sockets do not receive user broadcasts.
     pub fn broadcast_all(&self, kind: &str, payload: Value) -> usize {
         self.fan_out_scoped(envelope(kind, None, payload), |client| {
-            Some(DeliveryScope::Unscoped {
+            client.node.is_none().then_some(DeliveryScope::Unscoped {
                 generation: client.generation,
                 requires_auth: true,
             })
@@ -1667,6 +1665,7 @@ impl WsHub {
         let mut inner = self.inner.lock().expect("hub state");
         let client = inner.clients.get_mut(client_id)?;
         client.generation = client.generation.wrapping_add(1);
+        client.node = None;
         client.authenticated = Self::identity_current(&identity);
         client.expires_at = identity.expires_at;
         client.session_id = None;
@@ -1694,6 +1693,7 @@ impl WsHub {
                 return false;
             };
             client.generation = client.generation.wrapping_add(1);
+            client.node = None;
             client.authenticated = false;
             client.expires_at = 0;
             client.user_id = None;
@@ -1740,12 +1740,66 @@ impl WsHub {
         }
     }
 
+    async fn admit_node(&self, client_id: &str, token: &str) -> Option<String> {
+        if token.is_empty() {
+            return None;
+        }
+        let authority = self.config.session_authority.as_ref()?;
+        let (generation, sender) = {
+            let mut inner = self.inner.lock().expect("hub state");
+            let client = inner.clients.get_mut(client_id)?;
+            client.generation = client.generation.wrapping_add(1);
+            client.node = None;
+            client.authenticated = false;
+            client.expires_at = 0;
+            client.user_id = None;
+            client.session_id = None;
+            client.subscriptions.clear();
+            client.terminals.clear();
+            (client.generation, client.outbound.clone())
+        };
+        let identity = authority.resolve_node(token).await?;
+        let mut inner = self.inner.lock().expect("hub state");
+        let client = inner.clients.get_mut(client_id)?;
+        if client.generation != generation || !client.outbound.same_channel(&sender) {
+            return None;
+        }
+        let user_id = identity.user_id.clone();
+        client.node = Some((token.to_owned(), identity));
+        client.authenticated = true;
+        client.expires_at = u64::MAX;
+        Some(user_id)
+    }
+
+    async fn current_node(&self, client_id: &str) -> Option<bool> {
+        let (token, identity, generation, sender) = {
+            let inner = self.inner.lock().expect("hub state");
+            let client = inner.clients.get(client_id)?;
+            let (token, identity) = client.node.clone()?;
+            (token, identity, client.generation, client.outbound.clone())
+        };
+        let resolved = match &self.config.session_authority {
+            Some(authority) => authority.resolve_node(&token).await,
+            None => None,
+        };
+        let inner = self.inner.lock().expect("hub state");
+        Some(inner.clients.get(client_id).is_some_and(|client| {
+            client.generation == generation
+                && client.outbound.same_channel(&sender)
+                && client.node.as_ref() == Some(&(token, identity.clone()))
+                && resolved.as_ref() == Some(&identity)
+        }))
+    }
+
     /// Recheck the live identity before protected work.
     ///
     /// A revoked user, a failed lookup, a replaced connection or an expired
     /// credential all deny. Delivery that was already queued is blocked by the
     /// cleared credential, not by cancelling the queue.
     async fn revalidate_identity(&self, client_id: &str) -> bool {
+        if let Some(current) = self.current_node(client_id).await {
+            return current;
+        }
         match self.config.user_authority.clone() {
             Some(authority) => self.current_user(client_id, authority.as_ref()).await,
             None => self.has_authority(client_id),
@@ -1766,6 +1820,7 @@ impl WsHub {
             if force_generation || client.authenticated {
                 client.generation = client.generation.wrapping_add(1);
             }
+            client.node = None;
             client.authenticated = false;
             client.expires_at = 0;
             client.user_id = None;
@@ -1799,6 +1854,7 @@ impl WsHub {
         inner.clients.insert(
             id.to_string(),
             ClientEntry {
+                node: None,
                 id: id.to_string(),
                 user_id: None,
                 session_id: None,
@@ -1898,7 +1954,15 @@ impl WsHub {
             id: client_id.clone(),
         };
 
-        if token.is_some() && identity.is_none() {
+        let node_admitted = if identity.is_none() {
+            match token.as_deref() {
+                Some(token) => self.admit_node(&client_id, token).await.is_some(),
+                None => false,
+            }
+        } else {
+            false
+        };
+        if token.is_some() && identity.is_none() && !node_admitted {
             let response = error_envelope(Some(""), "UNAUTHORIZED", "Authentication failed");
             let text = serde_json::to_string(&response).unwrap_or_else(|_| "{}".into());
             let sent = tokio::select! {
@@ -1950,7 +2014,7 @@ impl WsHub {
                 envelope(
                     "session.created",
                     Some(""),
-                    json!({ "clientId": client_id, "authenticated": false }),
+                    json!({ "clientId": client_id, "authenticated": node_admitted }),
                 ),
             );
         }
@@ -2204,7 +2268,14 @@ async fn handle_message(
                     Err("unauthorized".into())
                 }
             }
-            Err(error) => Err(error),
+            Err(error) => match hub.admit_node(client_id, token).await {
+                Some(user_id) => Ok(WsIdentity {
+                    user_id,
+                    session_id: None,
+                    expires_at: u64::MAX,
+                }),
+                None => Err(error),
+            },
         };
         return Ok(match admitted {
             Ok(identity) => {
@@ -2280,6 +2351,16 @@ async fn handle_message(
         let _ = hub.send_to_client(
             client_id,
             error_envelope(bound.as_deref(), "UNAUTHORIZED", denial),
+        );
+        return Ok(Disposition::Continue);
+    }
+
+    // A paired node is not a user socket. Until node transport is wired,
+    // deny all control messages; it must never enter user dispatch.
+    if hub.current_node(client_id).await.is_some() {
+        let _ = hub.send_to_client(
+            client_id,
+            error_envelope(None, "FORBIDDEN", "Node message not supported"),
         );
         return Ok(Disposition::Continue);
     }
@@ -2674,6 +2755,82 @@ impl WsControlPlane for WsHub {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn paired_node_control_is_denied_and_revocation_is_rechecked() {
+        use std::num::NonZeroU16;
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE users(id TEXT PRIMARY KEY); INSERT INTO users VALUES('alice'); CREATE TABLE nodes(node_id TEXT PRIMARY KEY, user_id TEXT); INSERT INTO nodes VALUES('node', 'alice'); CREATE TABLE node_credentials(token_hash TEXT PRIMARY KEY, node_id TEXT, user_id TEXT, created_at TEXT);").unwrap();
+        let token = crate::services::node_credentials::NodeCredentialsService::new(Some(&db))
+            .issue("node", "alice")
+            .unwrap()
+            .unwrap();
+        let worker =
+            crate::db::worker::DatabaseWorker::new(db, NonZeroU16::new(1).unwrap()).unwrap();
+        let authority =
+            crate::ws_user_authority::WsUserAuthority::new(worker.clone(), Duration::from_secs(1));
+        let hub = Arc::new(WsHub::new(WsHubConfig {
+            session_authority: Some(Arc::new(authority)),
+            ..Default::default()
+        }));
+        let (tx, mut rx) = mpsc::channel(8);
+        let _disconnect = hub.register("node-client", tx);
+        assert_eq!(
+            hub.admit_node("node-client", &token).await.as_deref(),
+            Some("alice")
+        );
+        handle_message(&hub, "node-client", r#"{"type":"subscribe"}"#)
+            .await
+            .unwrap();
+        let denied = rx.recv().await.unwrap();
+        assert_eq!(denied.value["payload"]["code"], "FORBIDDEN");
+        worker
+            .run(|db| {
+                db.execute("DELETE FROM node_credentials", [])?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        handle_message(&hub, "node-client", r#"{"type":"subscribe"}"#)
+            .await
+            .unwrap();
+        let denied = rx.recv().await.unwrap();
+        assert_eq!(denied.value["payload"]["code"], "UNAUTHORIZED");
+    }
+
+    #[test]
+    fn global_and_user_broadcasts_exclude_paired_nodes() {
+        let hub = WsHub::new(WsHubConfig::default());
+        let (user_tx, mut user_rx) = mpsc::channel(8);
+        let (node_tx, mut node_rx) = mpsc::channel(8);
+        let _user_disconnect = hub.register("user", user_tx);
+        let _node_disconnect = hub.register("node", node_tx);
+        hub.authenticate_client(
+            "user",
+            WsIdentity {
+                user_id: "alice".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        );
+        {
+            let mut inner = hub.inner.lock().unwrap();
+            let node = inner.clients.get_mut("node").unwrap();
+            node.authenticated = true;
+            node.node = Some((
+                "credential".into(),
+                crate::services::node_credentials::NodeIdentity {
+                    node_id: "node".into(),
+                    user_id: "alice".into(),
+                },
+            ));
+        }
+        assert_eq!(hub.broadcast_all("event", json!({})), 1);
+        assert_eq!(hub.broadcast_to_user("alice", "event", json!({})), 1);
+        assert!(user_rx.try_recv().is_ok());
+        assert!(user_rx.try_recv().is_ok());
+        assert!(node_rx.try_recv().is_err());
+    }
 
     #[tokio::test]
     async fn consent_snapshot_filters_sessions_and_revalidates_identity() {

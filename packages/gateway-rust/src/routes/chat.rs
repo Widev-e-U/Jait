@@ -14,7 +14,10 @@ use crate::{
         consent_executor::{ExecutionOrigin, RuntimeMode, ToolExecutionContext},
         http_auth::AuthUser,
     },
-    services::sessions::{SessionFilter, SessionRecord, SessionService},
+    services::{
+        projects::local_execution_allowed,
+        sessions::{SessionFilter, SessionRecord, SessionService},
+    },
 };
 use axum::{
     Router,
@@ -466,6 +469,41 @@ pub(crate) async fn owned_session(
         Err(_) => Err(Box::new(auth::internal_error())),
     }
 }
+// Check session ownership and project authority together on the database worker.
+// A later project change is not synchronized with an already running turn.
+async fn local_turn_session(
+    state: &ChatRoutes,
+    owner: &str,
+    session: &str,
+) -> Result<SessionRecord, Box<Response>> {
+    let owner = owner.to_owned();
+    let session = session.to_owned();
+    match state
+        .auth
+        .with_database(move |db| {
+            let session = SessionService::new(db)
+                .get(&session, Some(&owner))?
+                .filter(|session| session.status.as_deref() == Some("active"));
+            let Some(session) = session else {
+                return Ok(None);
+            };
+            let local = local_execution_allowed(db, &owner, session.project_id.as_deref())?;
+            Ok(Some((session, local)))
+        })
+        .await
+    {
+        Ok(Some((session, true))) => Ok(session),
+        Ok(Some((_, false))) => Err(Box::new(response(
+            503,
+            json!({"error":"REMOTE_NODE_UNAVAILABLE"}),
+        ))),
+        Ok(None) => Err(Box::new(response(
+            404,
+            json!({"error":"SESSION_NOT_FOUND"}),
+        ))),
+        Err(_) => Err(Box::new(auth::internal_error())),
+    }
+}
 // These fields carry semantics that the native turn does not yet implement.
 // Reject their presence, including null or empty values: omission can select a
 // server default while an explicit value can express provider or security intent.
@@ -547,7 +585,7 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         Ok(lease) => lease,
         Err(error) => return *error,
     };
-    let session = match owned_session(&state, &user.id, &input.session_id).await {
+    let session = match local_turn_session(&state, &user.id, &input.session_id).await {
         Ok(session) => session,
         Err(error) => return *error,
     };
@@ -986,7 +1024,7 @@ async fn thread_turn(
     if let Err(error) = check_thread_halt(&state, &user.id, action).await {
         return *error;
     }
-    let session = match owned_session(&state, &user.id, &session_id).await {
+    let session = match local_turn_session(&state, &user.id, &session_id).await {
         Ok(session) => session,
         Err(error) => return *error,
     };

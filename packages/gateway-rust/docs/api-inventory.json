@@ -1,24 +1,39 @@
 {
   "summary": {
-    "httpTotal": 433,
-    "missing": 25,
-    "mounted-fail-closed": 103,
-    "native-untested": 140,
-    "native-tested": 158,
+    "httpTotal": 437,
+    "missing": 29,
+    "mounted-fail-closed": 104,
+    "native-untested": 131,
+    "native-tested": 166,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 68.8,
-    "nativeTested": 158,
-    "nativeTestedDenominator": 505,
-    "nativeTestedPct": 31.29,
-    "wsTotal": 72,
-    "wsInbound": 37,
-    "wsOutboundCandidates": 35,
-    "wsWithoutDirectionalRustReference": 63,
-    "clientPathCandidates": 255,
+    "nativeRouteReferencePct": 68,
+    "nativeTested": 169,
+    "nativeTestedDenominator": 519,
+    "nativeTestedPct": 32.56,
+    "wsTotal": 74,
+    "wsInbound": 38,
+    "wsOutboundCandidates": 36,
+    "wsWithoutDirectionalRustReference": 65,
+    "clientPathCandidates": 258,
     "clientCandidatesWithoutServerPathReference": 30,
     "rustOnlyRoutes": 13,
     "backgroundServices": 8,
-    "backgroundServicesMissing": 0
+    "backgroundServicesMissing": 8,
+    "httpRustStatus": {
+      "native-tested": 166,
+      "native-untested": 131,
+      "missing": 140
+    },
+    "wsRustStatus": {
+      "native-tested": 3,
+      "native-untested": 0,
+      "missing": 71
+    },
+    "serviceRustStatus": {
+      "native-tested": 0,
+      "native-untested": 0,
+      "missing": 8
+    }
   },
   "http": [
     {
@@ -29,7 +44,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "ALL",
@@ -39,7 +55,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "ALL",
@@ -49,7 +66,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "ALL",
@@ -59,7 +77,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -70,7 +89,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -81,7 +101,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/assistant_profiles.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -97,7 +118,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -113,7 +135,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -124,7 +147,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -135,7 +159,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -151,7 +176,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -167,7 +193,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -177,7 +204,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -187,7 +215,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -197,7 +226,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -208,7 +238,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -219,7 +250,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/node_credentials.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -235,7 +267,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -251,7 +284,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -262,7 +296,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -273,7 +308,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/browser_devtools.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -289,7 +325,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -297,10 +334,16 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "permanent_archive_deletion_is_atomic_and_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -311,7 +354,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -322,7 +366,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -333,7 +378,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -349,7 +395,8 @@
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -365,7 +412,8 @@
           "file": "tests/binary_secrets_routes.rs",
           "name": "secrets_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -376,7 +424,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -392,7 +441,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -403,7 +453,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/store.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "DELETE",
@@ -419,7 +470,8 @@
           "file": "tests/binary_terminal.rs",
           "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -435,7 +487,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -446,7 +499,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -454,10 +508,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "runtime/application.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_web_ui.rs",
+          "name": "composed_binary_serves_the_built_ui_and_keeps_api_paths_json"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -468,7 +528,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_control.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -479,7 +540,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -490,7 +552,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -501,7 +564,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/architecture.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -512,7 +576,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/assistant_profiles.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -523,7 +588,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/assistant_profiles.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -539,7 +605,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -555,7 +622,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -571,7 +639,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -587,7 +656,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -598,7 +668,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/browser_screenshot.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -614,7 +685,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -622,10 +694,16 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/calendar.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -641,7 +719,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -652,7 +731,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/calendar.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -663,7 +743,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/calendar.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -679,7 +760,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -690,7 +772,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -701,7 +784,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -712,7 +796,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -723,7 +808,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -734,7 +820,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -750,7 +837,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -766,7 +854,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -782,7 +871,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -793,7 +883,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -804,7 +895,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -820,7 +912,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -831,7 +924,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -842,7 +936,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -853,7 +948,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -864,7 +960,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -875,7 +972,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -886,7 +984,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -897,7 +996,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -908,7 +1008,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -919,7 +1020,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -930,7 +1032,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -941,7 +1044,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/environment.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -957,7 +1061,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -973,7 +1078,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -989,7 +1095,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1000,7 +1107,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1011,7 +1119,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1027,7 +1136,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1043,7 +1153,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1059,7 +1170,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1075,7 +1187,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1086,7 +1199,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview_proxy.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1094,10 +1208,16 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/maintenance.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "maintenance_reads_persisted_runs_with_node_filter_and_limit"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1105,10 +1225,16 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/maintenance.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "maintenance_reads_persisted_runs_with_node_filter_and_limit"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1118,7 +1244,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1128,7 +1255,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1138,7 +1266,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1148,7 +1277,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1158,7 +1288,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1169,7 +1300,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/update.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1185,7 +1317,8 @@
           "file": "tests/binary_mobile_routes.rs",
           "name": "mobile_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1201,7 +1334,8 @@
           "file": "tests/binary_mobile_routes.rs",
           "name": "mobile_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1217,7 +1351,8 @@
           "file": "tests/binary_mobile.rs",
           "name": "mobile_device_flow_runs_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1228,7 +1363,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1239,7 +1375,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1250,7 +1387,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1266,7 +1404,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1282,7 +1421,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1298,7 +1438,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1314,7 +1455,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1330,7 +1472,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1346,7 +1489,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1362,7 +1506,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1373,7 +1518,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1384,7 +1530,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1395,7 +1542,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1406,7 +1554,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1417,7 +1566,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1428,7 +1578,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1439,7 +1590,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1455,7 +1607,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1471,7 +1624,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1487,7 +1641,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1503,7 +1658,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1519,7 +1675,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1535,7 +1692,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1551,7 +1709,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1567,7 +1726,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1583,7 +1743,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1599,7 +1760,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1615,7 +1777,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1626,7 +1789,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1634,10 +1798,16 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1648,7 +1818,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1664,7 +1835,8 @@
           "file": "tests/binary_move_trust.rs",
           "name": "session_move_trust_and_project_search_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1680,7 +1852,8 @@
           "file": "tests/binary_providers_routes.rs",
           "name": "provider_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1696,7 +1869,8 @@
           "file": "tests/binary_providers_routes.rs",
           "name": "provider_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1712,7 +1886,8 @@
           "file": "tests/binary_providers_routes.rs",
           "name": "provider_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1728,7 +1903,8 @@
           "file": "tests/binary_providers_routes.rs",
           "name": "provider_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1739,7 +1915,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1750,7 +1927,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1761,7 +1939,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/reminders.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1777,7 +1956,8 @@
           "file": "tests/binary_reminders.rs",
           "name": "reminders_are_isolated_by_owner_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1793,7 +1973,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1809,7 +1990,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1820,7 +2002,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1831,7 +2014,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1842,7 +2026,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1853,7 +2038,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1869,7 +2055,8 @@
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1880,7 +2067,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1891,7 +2079,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1902,7 +2091,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": false,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1913,7 +2103,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1929,7 +2120,8 @@
           "file": "tests/binary_secrets_routes.rs",
           "name": "secrets_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1945,7 +2137,8 @@
           "file": "tests/binary_secrets_routes.rs",
           "name": "secrets_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1961,7 +2154,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1972,7 +2166,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/security_assessments.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -1983,7 +2178,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -1994,7 +2190,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2005,7 +2202,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2016,7 +2214,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2027,7 +2226,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2043,7 +2243,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2059,7 +2260,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2075,7 +2277,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2091,7 +2294,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2107,7 +2311,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2118,7 +2323,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2134,7 +2340,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2150,7 +2357,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2166,7 +2374,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2182,7 +2391,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2193,7 +2403,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2209,7 +2420,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2225,7 +2437,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2241,7 +2454,19 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/unread-count",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2257,7 +2482,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2268,7 +2494,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/store.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2279,7 +2506,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/store.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2290,7 +2518,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/store.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2306,7 +2535,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2317,7 +2547,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "runtime/team_chat_mount.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2328,7 +2559,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "runtime/team_chat_mount.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2344,7 +2576,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2360,7 +2593,8 @@
           "file": "tests/binary_terminal.rs",
           "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2376,7 +2610,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2392,7 +2627,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2408,7 +2644,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2424,7 +2661,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2440,7 +2678,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2451,7 +2690,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "runtime/tools_mount.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2467,7 +2707,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2483,7 +2724,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2499,7 +2741,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2515,7 +2758,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2531,7 +2775,8 @@
           "file": "tests/binary_move_trust.rs",
           "name": "session_move_trust_and_project_search_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2542,7 +2787,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/update.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2553,7 +2799,19 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/update.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "method": "GET",
+      "path": "/api/update/nodes",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2569,7 +2827,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2585,7 +2844,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2601,7 +2861,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2609,10 +2870,16 @@
       "nodeFiles": [
         "routes/health.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "runtime/application.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2623,7 +2890,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2634,7 +2902,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2645,7 +2914,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/browser_devtools.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2656,7 +2926,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2667,7 +2938,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2678,7 +2950,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview_proxy.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PATCH",
@@ -2689,7 +2962,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/assistant_profiles.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2705,7 +2979,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2721,7 +2996,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2732,7 +3008,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PATCH",
@@ -2743,7 +3020,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PATCH",
@@ -2759,7 +3037,8 @@
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2775,7 +3054,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2791,7 +3071,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2802,7 +3083,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PATCH",
@@ -2818,7 +3100,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2829,7 +3112,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2840,7 +3124,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2856,7 +3141,8 @@
           "file": "tests/binary_reminders.rs",
           "name": "reminders_are_isolated_by_owner_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2867,7 +3153,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2883,7 +3170,8 @@
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2894,7 +3182,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2910,7 +3199,8 @@
           "file": "tests/binary_sessions_projects.rs",
           "name": "sessions_and_projects_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2921,7 +3211,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2932,7 +3223,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/skills.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -2948,7 +3240,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -2964,7 +3257,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -2975,7 +3269,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_control.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -2986,7 +3281,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_control.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -2997,7 +3293,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3008,7 +3305,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3019,7 +3317,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3030,7 +3329,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3041,7 +3341,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3052,7 +3353,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/assistant_profiles.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3068,7 +3370,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3084,7 +3387,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3100,7 +3404,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3116,7 +3421,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3132,7 +3438,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3148,7 +3455,8 @@
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3164,7 +3472,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3180,7 +3489,8 @@
           "file": "tests/binary_calendar_routes.rs",
           "name": "calendar_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3191,7 +3501,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3202,7 +3513,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3213,7 +3525,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/channels.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3221,10 +3534,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [
+        {
+          "file": "tests/binary_agent_tool_policy.rs",
+          "name": "reenabled_tool_is_advertised_and_executed_in_new_chat"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3235,7 +3554,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3246,7 +3566,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3257,7 +3578,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3268,7 +3590,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3279,7 +3602,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3295,7 +3619,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3306,7 +3631,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3322,7 +3648,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3333,7 +3660,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3344,7 +3672,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3355,7 +3684,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3366,7 +3696,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3377,7 +3708,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3388,7 +3720,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3399,7 +3732,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/email.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3410,7 +3744,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3421,7 +3756,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3432,7 +3768,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3443,7 +3780,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3454,7 +3792,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3465,7 +3804,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3476,7 +3816,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3487,7 +3828,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3498,7 +3840,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3509,7 +3852,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3520,7 +3864,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3531,7 +3876,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3542,7 +3888,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3553,7 +3900,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3564,7 +3912,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3575,7 +3924,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3586,7 +3936,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3597,7 +3948,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3608,7 +3960,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3619,7 +3972,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3629,7 +3983,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3640,7 +3995,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3651,7 +4007,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3662,7 +4019,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3673,7 +4031,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3684,7 +4043,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3700,7 +4060,8 @@
           "file": "tests/binary_jobs_routes.rs",
           "name": "jobs_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3711,7 +4072,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/jobs.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3719,10 +4081,11 @@
       "nodeFiles": [
         "routes/maintenance.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/maintenance.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3732,7 +4095,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3742,7 +4106,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3752,7 +4117,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3762,7 +4128,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3772,7 +4139,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3782,7 +4150,19 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/notification-avatar",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3791,8 +4171,9 @@
         "routes/messenger.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
-      "binaryTests": []
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3803,7 +4184,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3814,7 +4196,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3830,7 +4213,8 @@
           "file": "tests/binary_mobile_routes.rs",
           "name": "mobile_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3841,7 +4225,8 @@
       "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3852,7 +4237,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3862,7 +4248,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3878,7 +4265,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3889,7 +4277,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/network.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3905,7 +4294,8 @@
           "file": "tests/binary_network_security_routes.rs",
           "name": "network_security_codegraph_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3915,7 +4305,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3926,7 +4317,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/node_credentials.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3937,7 +4329,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/plans.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -3953,7 +4346,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3969,7 +4363,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3980,7 +4375,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -3991,7 +4387,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4002,7 +4399,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plugins.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4013,7 +4411,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview_proxy.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4024,7 +4423,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/browser_devtools.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4035,7 +4435,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4046,7 +4447,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4057,7 +4459,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4068,7 +4471,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4079,7 +4483,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": false,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4090,7 +4495,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4101,7 +4507,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4112,7 +4519,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/preview.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4128,7 +4536,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4144,7 +4553,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4160,7 +4570,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4176,7 +4587,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4192,7 +4604,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4208,7 +4621,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4224,7 +4638,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4240,7 +4655,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4256,7 +4672,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4272,7 +4689,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4288,7 +4706,8 @@
           "file": "tests/binary_project_files.rs",
           "name": "project_files_are_confined_and_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4304,7 +4723,8 @@
           "file": "tests/binary_reminders.rs",
           "name": "reminder_projects_use_owned_live_project_data"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4315,7 +4735,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4326,7 +4747,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4337,7 +4759,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4353,7 +4776,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4364,7 +4788,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4375,7 +4800,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4386,7 +4812,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4397,7 +4824,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4408,7 +4836,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4419,7 +4848,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4430,7 +4860,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4441,7 +4872,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4452,7 +4884,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4463,7 +4896,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4474,7 +4908,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4485,7 +4920,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4501,7 +4937,8 @@
           "file": "tests/binary_reminders.rs",
           "name": "reminders_are_isolated_by_owner_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4517,7 +4954,8 @@
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4533,7 +4971,8 @@
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4544,7 +4983,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4555,7 +4995,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4566,7 +5007,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4577,7 +5019,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4588,7 +5031,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/pull_requests.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4599,7 +5043,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repositories.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4610,7 +5055,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4621,7 +5067,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4632,7 +5079,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4643,7 +5091,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4653,7 +5102,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4664,7 +5114,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": false,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4675,7 +5126,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4686,7 +5138,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4697,7 +5150,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4708,7 +5162,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": false,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4719,7 +5174,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4730,7 +5186,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4741,7 +5198,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/screen_share.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4757,7 +5215,8 @@
           "file": "tests/binary_secrets_routes.rs",
           "name": "secrets_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4768,7 +5227,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4779,7 +5239,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4790,7 +5251,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/security_assessments.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4801,7 +5263,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/security_assessments.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4812,7 +5275,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4823,7 +5287,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4834,7 +5299,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4845,7 +5311,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4856,7 +5323,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4867,7 +5335,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/security_workbench.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -4878,7 +5347,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/security_assessments.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4894,7 +5364,8 @@
           "file": "tests/binary_tool_policy.rs",
           "name": "direct_execution_tracks_live_disabled_tool_settings"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4910,7 +5381,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4926,7 +5398,8 @@
           "file": "tests/binary_state_consent.rs",
           "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4942,7 +5415,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4958,7 +5432,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4969,7 +5444,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -4985,7 +5461,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5001,7 +5478,8 @@
           "file": "tests/binary_move_trust.rs",
           "name": "session_move_trust_and_project_search_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5012,7 +5490,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5023,7 +5502,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5034,7 +5514,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5045,7 +5526,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5061,7 +5543,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5077,7 +5560,8 @@
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5088,7 +5572,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/skills.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5099,7 +5584,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/store.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5110,7 +5596,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "runtime/team_chat_mount.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5121,7 +5608,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "runtime/team_chat_mount.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5137,7 +5625,8 @@
           "file": "tests/binary_terminal.rs",
           "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5153,7 +5642,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5169,7 +5659,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5185,7 +5676,8 @@
           "file": "tests/binary_terminals_routes.rs",
           "name": "terminal_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5201,7 +5693,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5212,7 +5705,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5222,7 +5716,8 @@
       ],
       "status": "missing",
       "testPathReference": true,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5233,7 +5728,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/threads.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5244,7 +5740,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5255,7 +5752,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5266,7 +5764,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5277,7 +5776,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5288,7 +5788,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/threads.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5304,7 +5805,8 @@
           "file": "tests/binary_tool_policy.rs",
           "name": "direct_execution_tracks_live_disabled_tool_settings"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5320,7 +5822,8 @@
           "file": "tests/binary_move_trust.rs",
           "name": "session_move_trust_and_project_search_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5331,7 +5834,19 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/update.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "method": "POST",
+      "path": "/api/update/nodes/:nodeId/apply",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5342,7 +5857,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/user_questions.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5353,7 +5869,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/user_questions.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -5369,7 +5886,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5385,7 +5903,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5401,7 +5920,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5417,7 +5937,8 @@
           "file": "tests/binary_voice_routes.rs",
           "name": "voice_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5428,7 +5949,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/hooks.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5439,7 +5961,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/hooks.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5450,7 +5973,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5461,7 +5985,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": false,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5472,7 +5997,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mcp_server.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PUT",
@@ -5483,7 +6009,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/agent_github_apps.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PUT",
@@ -5494,7 +6021,8 @@
       "status": "native-untested",
       "testPathReference": true,
       "rustFile": "routes/architecture.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "method": "PUT",
@@ -5504,7 +6032,8 @@
       ],
       "status": "missing",
       "testPathReference": false,
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PUT",
@@ -5515,7 +6044,8 @@
       "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": []
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "PUT",
@@ -5531,7 +6061,8 @@
           "file": "tests/binary_thread_routes.rs",
           "name": "thread_routes_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PUT",
@@ -5547,7 +6078,8 @@
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
         }
-      ]
+      ],
+      "rustStatus": "native-tested"
     }
   ],
   "ws": [
@@ -5555,475 +6087,658 @@
       "type": "architecture.render-result",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "authenticate",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "consent.approve",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "consent.reject",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.browse-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.op-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.register-node",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.roots-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "messenger.register",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "messenger.result",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "node.hello",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "node.update-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "nodes.forget",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "nodes.get",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "nodes.list",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "nodes.update-permissions",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "notification.read",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "provider.event",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "provider.op-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "resource.subscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "resource.unsubscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "screen-share:answer",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:ice-candidate",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:offer",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:start-request",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:stop-request",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "subscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "terminal.exit",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.input",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.op-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.output",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.resize",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.subscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.unsubscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "tool.background-complete",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "tool.op-output",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "tool.op-response",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "ui.state",
       "direction": "client-to-server-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "agent.halted",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "browser.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "consent.pending-snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "error",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.browse-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.node-disconnected",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.node-registered",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.op-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "fs.roots-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "messenger.request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "node.credential",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "node.disconnected",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "node.registry",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "node.update-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "node.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "nodes.permissions",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "notification",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "notification.cleared",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "notification.snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "provider.op-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:control-handoff",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:start-error",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:start-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "screen-share:state-update",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "session-wait.snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "session.created",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "session.streaming-snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "surface.connected",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "surface.registry",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.execution",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.op-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "terminal.output",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "thread.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "tool.op-request",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "ui.command",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "user-question.pending-snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "binaryTests": []
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     }
   ],
   "services": [
     {
       "name": "scheduler",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "threadReviewSync",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "databaseRetention",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "diskJanitor",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "primaryLink",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "terminalReaper",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "browserReaper",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     },
     {
       "name": "wsHub",
       "nodeStart": true,
-      "rustStatus": "rust-reference-untested"
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
     }
   ],
   "clientCandidates": [
@@ -7633,6 +8348,13 @@
       "serverPathReference": false
     },
     {
+      "path": "/api/sessions/unread-count",
+      "files": [
+        "apps/web/src/hooks/useUnreadChatCount.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
       "path": "/api/skills",
       "files": [
         "apps/web/src/components/automation/ThreadSkillPicker.tsx",
@@ -7816,6 +8538,7 @@
     {
       "path": "/api/update/apply",
       "files": [
+        "apps/web/src/components/network/jait-nodes-panel.tsx",
         "apps/web/src/hooks/useUpdateChecker.ts"
       ],
       "serverPathReference": true
@@ -7830,7 +8553,22 @@
     {
       "path": "/api/update/check",
       "files": [
+        "apps/web/src/components/network/jait-nodes-panel.tsx",
         "apps/web/src/hooks/useUpdateChecker.ts"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/update/nodes",
+      "files": [
+        "apps/web/src/components/network/jait-nodes-panel.tsx"
+      ],
+      "serverPathReference": true
+    },
+    {
+      "path": "/api/update/nodes/{}/apply",
+      "files": [
+        "apps/web/src/components/network/jait-nodes-panel.tsx"
       ],
       "serverPathReference": true
     },

@@ -223,6 +223,35 @@ pub struct ProjectService<'a> {
     db: &'a Connection,
     time: Option<&'a str>,
 }
+/// True only when the owned project ancestry can execute on the gateway.
+/// Missing or malformed ancestry fails closed. This is a point-in-time check.
+pub(crate) fn local_execution_allowed(
+    db: &Connection,
+    owner: &str,
+    project_id: Option<&str>,
+) -> rusqlite::Result<bool> {
+    let projects = ProjectService::new(db);
+    let mut next = project_id.filter(|id| !id.is_empty()).map(str::to_owned);
+    let mut seen = HashSet::new();
+    while let Some(id) = next {
+        if seen.len() >= 64 || !seen.insert(id.clone()) {
+            return Ok(false);
+        }
+        let Some(project) = projects.get(&id, Some(owner))? else {
+            return Ok(false);
+        };
+        if project
+            .node_id
+            .as_deref()
+            .is_some_and(|node| node != "gateway")
+        {
+            return Ok(false);
+        }
+        next = project.parent_id.filter(|id| !id.is_empty());
+    }
+    Ok(true)
+}
+
 impl<'a> ProjectService<'a> {
     pub fn new(db: &'a Connection) -> Self {
         Self { db, time: None }

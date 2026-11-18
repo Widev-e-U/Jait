@@ -72,6 +72,8 @@ const FAIL_CLOSED_ROUTES = new Set([
   'POST /api/git/fetch', 'POST /api/git/pull', 'POST /api/git/create-worktree', 'POST /api/git/remove-worktree',
   // The composed mobile router has no push or scheduler adapter.
   'DELETE /api/mobile/push-devices/{}', 'POST /api/mobile/push-devices/test', 'PUT /api/mobile/routines/{}',
+  // The production maintenance authority (ReadOnlyAuthority) refuses every repository, so no run starts.
+  'POST /api/maintenance/run',
 ]);
 // Mounted endpoints with a working subset and missing production collaborators. An empty
 // success is not evidence that the omitted backend has no data. Keys use normalized paths.
@@ -188,6 +190,17 @@ const wsEntries = websocketCandidates(
   readFileSync(join(nodeSrc, 'ws.ts'), 'utf8'),
   readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
 );
+// The only Rust evidence for a WS type is a lexical handler arm or emitted type in the Rust hub:
+// native-untested until a reviewed binary test is mapped in binary-test-evidence.json.
+// The composed runtime clears config.terminals and config.consent (runtime/application.rs), so these
+// handlers are inert there and terminal output never reaches a subscriber. Their fail-closed contract
+// is pinned by tests/binary_ws_messages.rs; they are not native until the controls are supervised and mounted.
+const WS_FAIL_CLOSED = new Set([
+  'client-to-server-candidate terminal.subscribe', 'client-to-server-candidate terminal.unsubscribe',
+  'client-to-server-candidate terminal.input', 'client-to-server-candidate terminal.resize',
+  'client-to-server-candidate consent.approve', 'client-to-server-candidate consent.reject',
+]);
+for (const w of wsEntries) w.status = w.rustReference && !WS_FAIL_CLOSED.has(`${w.direction} ${w.type}`) ? 'native-untested' : 'missing';
 
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
@@ -231,7 +244,15 @@ const clientCandidates = [...clientPaths.entries()].sort(([a], [b]) => a.localeC
 const extraRust = [...rustRoutes].filter((k) => !nodeRoutes.has(k)).sort();
 const manifest = JSON.parse(readFileSync(join(here, 'binary-test-evidence.json'), 'utf8'));
 const evidence = applyBinaryEvidence(entries, wsEntries, manifest, (file) => readFileSync(join(here, '..', file), 'utf8'));
+// A fail-closed WS control must never count as native, even if a manifest entry names a test for it.
+const mappedFailClosed = wsEntries.filter((w) => WS_FAIL_CLOSED.has(`${w.direction} ${w.type}`) && w.status === 'native-tested');
+if (mappedFailClosed.length) throw new Error(`fail-closed WS controls cannot be native-tested: ${mappedFailClosed.map((w) => w.type).join(', ')}`);
 const counts = entries.reduce((a, e) => ((a[e.status] = (a[e.status] ?? 0) + 1), a), {});
+// Three-way Rust status for the parity checklist. Unmounted, fail-closed and incomplete routers do not
+// implement the feature natively, so they are reported as missing; `status` keeps the detail.
+const threeWay = (status) => (status === 'native-tested' || status === 'native-untested' ? status : 'missing');
+for (const e of entries) e.rustStatus = threeWay(e.status);
+for (const w of wsEntries) w.rustStatus = threeWay(w.status);
 
 const summary = {
   httpTotal: entries.length,
@@ -262,40 +283,64 @@ const SERVICE_SPECS = [
 ];
 const indexSrc = readFileSync(join(nodeSrc, 'index.ts'), 'utf8');
 const rustAll = walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n');
+// A keyword hit in Rust source is only a hint. A service is native only once the composed binary starts it
+// and a reviewed binary test covers it; no such evidence is recorded yet, so every service is missing.
 const services = SERVICE_SPECS.map(([name, nodeRe, rustRe]) => ({
   name,
   nodeStart: nodeRe.test(indexSrc),
-  rustStatus: rustRe.test(rustAll) ? 'rust-reference-untested' : 'missing',
+  rustKeywordHint: rustRe.test(rustAll),
+  rustStatus: 'missing',
 }));
+const rustStatusCounts = (items) => {
+  const out = { 'native-tested': 0, 'native-untested': 0, missing: 0 };
+  for (const item of items) out[item.rustStatus] += 1;
+  return out;
+};
 summary.backgroundServices = services.length;
 summary.backgroundServicesMissing = services.filter((s) => s.rustStatus === 'missing').length;
+summary.httpRustStatus = rustStatusCounts(entries);
+summary.wsRustStatus = rustStatusCounts(wsEntries);
+summary.serviceRustStatus = rustStatusCounts(services);
+// The completion measure covers every inventory entry: HTTP routes, WS message types and background services.
+summary.nativeTested += summary.serviceRustStatus['native-tested'];
+summary.nativeTestedDenominator = entries.length + wsEntries.length + services.length;
+summary.nativeTestedPct = +((100 * summary.nativeTested) / summary.nativeTestedDenominator).toFixed(2);
 const result = { summary, http: entries, ws: wsEntries, services, clientCandidates, rustOnly: extraRust };
+const json = JSON.stringify(result, null, 2) + '\n';
+if (process.argv.includes('--check')) {
+  const committedPath = join(here, '..', 'docs', 'api-inventory.json');
+  const committed = existsSync(committedPath) ? readFileSync(committedPath, 'utf8') : '';
+  if (committed !== json) {
+    console.error('docs/api-inventory.json is stale; run: node tooling/api-inventory.mjs --write');
+    process.exit(1);
+  }
+}
 console.log(JSON.stringify(summary, null, 2));
 
 if (process.argv.includes('--write')) {
   const out = join(here, '..', 'docs');
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, 'api-inventory.json'), JSON.stringify(result, null, 2) + '\n');
+  writeFileSync(join(out, 'api-inventory.json'), json);
   const md = [
     '# Gateway API inventory (generated by tooling/api-inventory.mjs)',
     '',
-    'Mounted-incomplete routes serve a subset but lack production collaborators. Mounted-fail-closed routes refuse the unavailable effect. Neither status counts as native-tested.',
+    'rustStatus is the parity value: native-tested (a reviewed black-box test is mapped and exists), native-untested (a Rust router or handler reference exists but no mapped test), or missing (no verified native implementation: unmounted, fail-closed, incomplete, or absent). Detail keeps the source status. Mounted-incomplete routes serve a subset but lack production collaborators; mounted-fail-closed routes refuse the unavailable effect. Neither counts as native.',
     '',
-    'HTTP routes and WS messages are heuristic candidates, not a complete parity inventory. nativeTestedPct counts HTTP and directional WS candidates mapped in tooling/binary-test-evidence.json, divided by all HTTP and WS candidates. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Background services and unenumerated API entries are excluded.',
+    'HTTP routes, WS messages and background services are heuristic candidates, not a complete parity inventory: the WS and service lists are lexical and can miss entries. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.',
     '',
     '```json',
     JSON.stringify(summary, null, 2),
     '```',
     '',
-    '| Method | Path | Status | Binary tests | Node source |',
-    '|---|---|---|---|---|',
-    ...entries.map((e) => `| ${e.method} | \`${e.path}\` | ${e.status} | ${e.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ')} | ${e.nodeFiles.join(', ')} |`),
+    '| Method | Path | Rust status | Detail | Binary tests | Node source |',
+    '|---|---|---|---|---|---|',
+    ...entries.map((e) => `| ${e.method} | \`${e.path}\` | ${e.rustStatus} | ${e.status} | ${e.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ')} | ${e.nodeFiles.join(', ')} |`),
     '',
     '## Background services (heuristic)',
     '',
-    'Services started from the Node composition root. `rust-reference-untested` is only a lexical match in Rust source; it does not show the service is wired in or tested.',
+    'Services started from the Node composition root. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.',
     '',
-    ...services.map((s) => `- \`${s.name}\` — ${s.rustStatus}${s.nodeStart ? '' : ' (Node start pattern not found)'}`),
+    ...services.map((s) => `- \`${s.name}\` — ${s.rustStatus}; Rust keyword hint ${s.rustKeywordHint ? 'present' : 'absent'}${s.nodeStart ? '' : '; Node start pattern not found'}`),
     '',
     '## Client path candidates (heuristic)',
     '',
@@ -307,7 +352,7 @@ if (process.argv.includes('--write')) {
     '',
     'Client-to-server candidates come from all case arms in the Node hub; server-to-client candidates come from literal type properties there. Both can include unrelated switches or objects, and events emitted elsewhere or dynamic types are omitted. A directional Rust reference is only a lexical match in the Rust hub; it does not establish mounting, behavior, coverage, or parity.',
     '',
-    ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.status ?? (w.rustReference ? 'Rust reference (untested)' : 'no Rust reference')} — ${w.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ') || 'no binary test'}`),
+    ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.rustStatus} — ${w.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ') || 'no binary test'}`),
     '',
   ].join('\n');
   writeFileSync(join(out, 'api-inventory.md'), md);

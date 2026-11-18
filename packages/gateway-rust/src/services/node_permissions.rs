@@ -16,8 +16,9 @@ pub enum NodeCapability {
     Camera,
     Network,
     Agent,
+    Update,
 }
-pub const NODE_CAPABILITIES: [NodeCapability; 9] = [
+pub const NODE_CAPABILITIES: [NodeCapability; 10] = [
     NodeCapability::Terminal,
     NodeCapability::Filesystem,
     NodeCapability::Screen,
@@ -27,6 +28,7 @@ pub const NODE_CAPABILITIES: [NodeCapability; 9] = [
     NodeCapability::Camera,
     NodeCapability::Network,
     NodeCapability::Agent,
+    NodeCapability::Update,
 ];
 impl NodeCapability {
     pub fn as_str(self) -> &'static str {
@@ -40,6 +42,7 @@ impl NodeCapability {
             Self::Camera => "camera",
             Self::Network => "network",
             Self::Agent => "agent",
+            Self::Update => "update",
         }
     }
     pub fn parse(value: &str) -> Option<Self> {
@@ -97,35 +100,33 @@ impl<'a> NodePermissionsService<'a> {
             }),
         }
     }
-    pub fn ensure_node_seen(&self, hello: &NodeHello, now: Option<&str>) {
-        let Some(storage) = &self.storage else { return };
-        let _ = (|| -> rusqlite::Result<()> {
-            let now = now
-                .map(String::from)
-                .map(Ok)
-                .unwrap_or_else(|| storage.now())?;
-            let exists = storage
-                .db
-                .query_row(
-                    "SELECT node_id FROM nodes WHERE node_id=?",
-                    [&hello.id],
-                    |r| r.get::<_, String>(0),
-                )
-                .optional()?
-                .is_some();
-            if !exists {
-                storage.db.execute("INSERT INTO nodes(node_id,name,platform,role,first_seen_at,last_seen_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",params![hello.id,hello.name,hello.platform,hello.role.as_deref().unwrap_or("remote"),now,now,now,now])?;
-                for capability in NODE_CAPABILITIES {
-                    let _=storage.db.execute("INSERT INTO node_permissions(node_id,capability,granted,updated_at) VALUES(?,?,0,?)",params![hello.id,capability.as_str(),now]);
-                }
-            } else {
-                storage.db.execute(
-                    "UPDATE nodes SET last_seen_at=?,updated_at=? WHERE node_id=?",
-                    params![now, now, hello.id],
-                )?;
+    pub fn ensure_node_seen(&self, hello: &NodeHello, now: Option<&str>) -> rusqlite::Result<()> {
+        let storage = self.storage.as_ref().ok_or(rusqlite::Error::InvalidQuery)?;
+        let now = now
+            .map(String::from)
+            .map(Ok)
+            .unwrap_or_else(|| storage.now())?;
+        let transaction = storage.db.unchecked_transaction()?;
+        let exists = transaction
+            .query_row(
+                "SELECT node_id FROM nodes WHERE node_id=?",
+                [&hello.id],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?
+            .is_some();
+        if !exists {
+            transaction.execute("INSERT INTO nodes(node_id,name,platform,role,first_seen_at,last_seen_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", params![hello.id,hello.name,hello.platform,hello.role.as_deref().unwrap_or("remote"),now,now,now,now])?;
+            for capability in NODE_CAPABILITIES {
+                transaction.execute("INSERT INTO node_permissions(node_id,capability,granted,updated_at) VALUES(?,?,0,?)", params![hello.id,capability.as_str(),now])?;
             }
-            Ok(())
-        })();
+        } else {
+            transaction.execute(
+                "UPDATE nodes SET last_seen_at=?,updated_at=? WHERE node_id=?",
+                params![now, now, hello.id],
+            )?;
+        }
+        transaction.commit()
     }
     pub fn is_granted(&self, node: &str, capability: NodeCapability) -> bool {
         self.storage.as_ref().and_then(|s| {
@@ -215,5 +216,45 @@ impl<'a> NodePermissionsService<'a> {
             let _=storage.db.execute("INSERT INTO consent_log(id,action_id,tool_name,decision,decided_at,decided_via) VALUES(?,?,?,'rejected',?,'auto')",params![crate::db::identifiers::uuidv7().to_string(),format!("node-permission:{node}:{}",capability.as_str()),format!("node.{}",capability.as_str()),now]);
         }
         eprintln!("[node-permissions] {detail}");
+    }
+}
+
+#[cfg(test)]
+mod registration_tests {
+    use super::*;
+
+    #[test]
+    fn node_creation_rolls_back_when_default_grants_fail() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE nodes(node_id TEXT PRIMARY KEY, name TEXT, platform TEXT, role TEXT, first_seen_at TEXT, last_seen_at TEXT, created_at TEXT, updated_at TEXT); CREATE TABLE node_permissions(node_id TEXT, capability TEXT, granted INTEGER, updated_at TEXT); CREATE TRIGGER fail_grant BEFORE INSERT ON node_permissions BEGIN SELECT RAISE(ABORT, 'failure'); END;").unwrap();
+        let hello = NodeHello {
+            id: "n".into(),
+            name: None,
+            platform: None,
+            role: None,
+        };
+        assert!(
+            NodePermissionsService::new(Some(&db))
+                .ensure_node_seen(&hello, Some("now"))
+                .is_err()
+        );
+        assert_eq!(
+            db.query_row("SELECT COUNT(*) FROM nodes", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        db.execute_batch("DROP TRIGGER fail_grant").unwrap();
+        NodePermissionsService::new(Some(&db))
+            .ensure_node_seen(&hello, Some("now"))
+            .unwrap();
+        assert_eq!(
+            db.query_row(
+                "SELECT COUNT(*) FROM node_permissions WHERE granted=0",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            NODE_CAPABILITIES.len() as i64
+        );
     }
 }

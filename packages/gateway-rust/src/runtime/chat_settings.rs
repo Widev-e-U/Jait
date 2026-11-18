@@ -130,13 +130,18 @@ impl ChatFactory for SettingsChatFactory {
                     .map(std::path::PathBuf::from)
                     .filter(|p| p.is_absolute())
                     .unwrap_or_else(|| self.project_root.clone());
-                let (tools, executor) = super::chat_tools::project_tools_with_policy(
+                let (tools, mut executor) = super::chat_tools::project_tools_with_policy(
                     &user.id,
                     &session.id,
                     self.consent.clone(),
                     self.questions.clone(),
                     disabled_tools,
                 )?;
+                super::chat_tools::enforce_session_authority(
+                    &mut executor,
+                    self.auth.clone(),
+                    self.project_root.clone(),
+                );
                 drop(tools);
                 return Ok(PreparedChat {
                     config: TurnConfig {
@@ -164,13 +169,18 @@ impl ChatFactory for SettingsChatFactory {
                 jait_backend: JaitBackend::parse(&settings.jait_backend),
                 strict_model: true,
             })?;
-            let (tools, executor) = super::chat_tools::project_tools_with_policy(
+            let (tools, mut executor) = super::chat_tools::project_tools_with_policy(
                 &user.id,
                 &session.id,
                 self.consent.clone(),
                 self.questions.clone(),
                 disabled_tools,
             )?;
+            super::chat_tools::enforce_session_authority(
+                &mut executor,
+                self.auth.clone(),
+                self.project_root.clone(),
+            );
             Ok(PreparedChat {
                 config: TurnConfig {
                     model: resolved.openai_model.clone(),

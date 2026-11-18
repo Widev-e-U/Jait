@@ -30,6 +30,7 @@ impl Gateway {
             .env("JAIT_RUST_PROJECT_ROOT", &directory)
             .env("JAIT_RUST_DB", directory.join("gateway.sqlite"))
             .env("JWT_SECRET", "isolated-state-consent-secret")
+            .env("HOOK_SECRET", "isolated-hook-secret")
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -451,4 +452,68 @@ async fn session_events_reach_only_the_owner_through_the_binary() {
             .await
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn email_and_hooks_enforce_composed_runtime_boundaries() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let response = client.get(url("/api/email/accounts")).send().await.unwrap();
+    assert_eq!(response.status(), 401);
+    let token = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap()["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let response = client
+        .get(url("/api/email/accounts"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.json::<Value>().await.unwrap()["accounts"],
+        json!([])
+    );
+    let response = client
+        .post(url("/api/email/accounts"))
+        .bearer_auth(&token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    for path in ["/hooks/wake", "/hooks/agent"] {
+        let response = client
+            .post(url(path))
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 401);
+        let response = client
+            .post(url(path))
+            .header("x-hook-token", "isolated-hook-secret")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 500);
+        assert_eq!(
+            response.json::<Value>().await.unwrap()["message"],
+            "Hook handling is not available in the Rust gateway yet"
+        );
+    }
 }

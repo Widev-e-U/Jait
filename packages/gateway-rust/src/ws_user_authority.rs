@@ -24,6 +24,29 @@ impl WsUserAuthority {
         Self { database, timeout }
     }
 
+    /// Resolve a paired-node credential against current ownership and user existence.
+    pub async fn resolve_node(
+        &self,
+        token: &str,
+    ) -> Option<crate::services::node_credentials::NodeIdentity> {
+        if token.is_empty() || self.timeout.is_zero() {
+            return None;
+        }
+        let token = token.to_owned();
+        tokio::time::timeout(
+            self.timeout,
+            self.database.run(move |db| {
+                Ok(
+                    crate::services::node_credentials::NodeCredentialsService::new(Some(db))
+                        .resolve_active(&token)?,
+                )
+            }),
+        )
+        .await
+        .ok()?
+        .ok()?
+    }
+
     /// Check current ownership through the same sessions table used by HTTP routes.
     pub async fn session_owned(&self, user_id: &str, session_id: &str) -> bool {
         if user_id.is_empty() || session_id.is_empty() || self.timeout.is_zero() {
@@ -104,6 +127,81 @@ mod tests {
         assert!(!authority.user_exists("alice").await);
         db.shutdown().await.unwrap();
         assert!(!authority.user_exists("alice").await);
+    }
+
+    #[tokio::test]
+    async fn node_identity_requires_live_user_owner_and_credential() {
+        let db = worker(true);
+        let token = db.run(|db| {
+            db.execute_batch("CREATE TABLE nodes(node_id TEXT PRIMARY KEY, user_id TEXT); CREATE TABLE node_credentials(token_hash TEXT PRIMARY KEY, node_id TEXT, user_id TEXT, created_at TEXT); INSERT INTO nodes VALUES('n','alice');")?;
+            Ok(crate::services::node_credentials::NodeCredentialsService::new(Some(db))
+                .issue("n", "alice")?.unwrap())
+        }).await.unwrap();
+        let authority = WsUserAuthority::new(db.clone(), Duration::from_secs(2));
+        assert_eq!(authority.resolve_node(&token).await.unwrap().node_id, "n");
+        db.run(|db| {
+            db.execute("UPDATE nodes SET user_id='other'", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(authority.resolve_node(&token).await.is_none());
+        db.run(|db| {
+            db.execute("UPDATE nodes SET user_id='alice'", [])?;
+            db.execute("DELETE FROM users WHERE id='alice'", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(authority.resolve_node(&token).await.is_none());
+        db.run(|db| {
+            db.execute("INSERT INTO users VALUES('alice')", [])?;
+            db.execute("DELETE FROM node_credentials", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(authority.resolve_node(&token).await.is_none());
+        db.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn node_resolution_timeout_and_database_failure_deny() {
+        let db = worker(true);
+        let token = db.run(|db| {
+            db.execute_batch("CREATE TABLE nodes(node_id TEXT PRIMARY KEY, user_id TEXT); CREATE TABLE node_credentials(token_hash TEXT PRIMARY KEY, node_id TEXT, user_id TEXT, created_at TEXT); INSERT INTO nodes VALUES('n','alice');")?;
+            Ok(crate::services::node_credentials::NodeCredentialsService::new(Some(db))
+                .issue("n", "alice")?.unwrap())
+        }).await.unwrap();
+        let (started_tx, started_rx) = oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let blocking_db = db.clone();
+        let blocking = tokio::spawn(async move {
+            blocking_db
+                .run(move |db| {
+                    let _ = started_tx.send(());
+                    release_rx.recv_timeout(Duration::from_secs(5))?;
+                    db.execute("DELETE FROM node_credentials", [])?;
+                    Ok(())
+                })
+                .await
+        });
+        started_rx.await.unwrap();
+        let short = WsUserAuthority::new(db.clone(), Duration::from_millis(25));
+        assert!(short.resolve_node(&token).await.is_none());
+        release_tx.send(()).unwrap();
+        blocking.await.unwrap().unwrap();
+        let authority = WsUserAuthority::new(db.clone(), Duration::from_secs(2));
+        assert!(authority.resolve_node(&token).await.is_none());
+        db.run(|db| {
+            db.execute("DROP TABLE users", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(authority.resolve_node(&token).await.is_none());
+        db.shutdown().await.unwrap();
+        assert!(authority.resolve_node(&token).await.is_none());
     }
 
     #[tokio::test]

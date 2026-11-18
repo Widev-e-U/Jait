@@ -16,13 +16,18 @@ struct Gateway {
 
 impl Gateway {
     fn start() -> Self {
+        Self::start_with_acp(None)
+    }
+
+    fn start_with_acp(script: Option<&str>) -> Self {
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.jait/artifacts/binary-thread-routes-tests")
             .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory).unwrap();
         let directory = directory.canonicalize().unwrap();
         std::fs::write(directory.join("notes.txt"), "binary-policy-marker").unwrap();
-        let mut child = Command::new(env!("CARGO_BIN_EXE_jait-gateway"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_jait-gateway"));
+        command
             .env_clear()
             .env("HOME", &directory)
             .env("JAIT_RUST_APPLICATION", "1")
@@ -31,9 +36,12 @@ impl Gateway {
             .env("JAIT_RUST_DB", directory.join("gateway.sqlite"))
             .env("JWT_SECRET", "isolated-repos-secret")
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap();
+            .stderr(Stdio::inherit());
+        if let Some(script) = script {
+            command.env("JAIT_ACP_COMMAND", "/bin/sh");
+            command.env("JAIT_ACP_ARGS", json!(["-c", script]).to_string());
+        }
+        let mut child = command.spawn().unwrap();
         let stdout = child.stdout.take().unwrap();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
@@ -536,4 +544,161 @@ async fn thread_creation_rechecks_halt_after_body_wait() {
         .await
         .unwrap();
     assert_eq!(created.status(), 201);
+}
+
+#[tokio::test]
+async fn halt_interrupts_running_acp_thread_through_binary() {
+    let script = r#"read a; printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}'
+read b; printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"agent"}}'
+read c
+printf "started\n" >> "$HOME/provider-started"
+read keep"#;
+    let gateway = Gateway::start_with_acp(Some(script));
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let registered: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner","password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registered["access_token"].as_str().unwrap();
+    assert_eq!(
+        client
+            .patch(url("/api/auth/settings"))
+            .bearer_auth(token)
+            .json(&json!({"api_keys":{"JAIT_CHAT_PROVIDER":"acp"}}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let providers: Value = client
+        .get(url("/api/providers"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let provider = providers["providers"]
+        .as_array()
+        .or(providers.as_array())
+        .unwrap()[0]["id"]
+        .as_str()
+        .unwrap();
+    let session: Value = client
+        .post(url("/api/sessions"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let response = client
+        .post(url("/api/threads"))
+        .bearer_auth(token)
+        .json(&json!({"title":"halt test","providerId":provider,"sessionId":session["id"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    let thread: Value = response.json().await.unwrap();
+    let id = thread["id"].as_str().unwrap();
+    let start = client
+        .post(url(&format!("/api/threads/{id}/start")))
+        .bearer_auth(token)
+        .json(&json!({"message":"start"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(start.status(), 200, "{}", start.text().await.unwrap());
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !gateway.directory.join("provider-started").exists() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("ACP provider did not start");
+    let halted = client
+        .post(url("/api/agent-control/halt"))
+        .bearer_auth(token)
+        .json(&json!({"reason":"test"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(halted.status(), 200);
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let thread: Value = client
+                .get(url(&format!("/api/threads/{id}")))
+                .bearer_auth(token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if thread["status"] == "interrupted" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("halt did not interrupt the running ACP thread");
+    let rejected = client
+        .post(url(&format!("/api/threads/{id}/resume")))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rejected.status(), 409);
+    let body: Value = rejected.json().await.unwrap();
+    assert_eq!(body["code"], "agent_halted");
+
+    let resumed = client
+        .post(url("/api/agent-control/resume"))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resumed.status(), 200);
+    let restarted = client
+        .post(url(&format!("/api/threads/{id}/resume")))
+        .bearer_auth(token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        restarted.status(),
+        200,
+        "{}",
+        restarted.text().await.unwrap()
+    );
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let starts = std::fs::read_to_string(gateway.directory.join("provider-started"))
+                .unwrap_or_default();
+            if starts.lines().count() >= 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("resumed thread did not start a new ACP turn");
 }

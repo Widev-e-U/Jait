@@ -2595,9 +2595,10 @@ async fn projects_are_created_archived_restored_and_purged_for_their_owner() {
         .send()
         .await
         .unwrap();
-    assert_eq!(archived.status(), 200);
-    let body: serde_json::Value = archived.json().await.unwrap();
-    assert_eq!(body["archived"], serde_json::json!([id]), "{body}");
+    // Node answers 204 with no body, and the web client accepts any 2xx.
+    // The archived listing below verifies the archive itself.
+    assert_eq!(archived.status(), 204);
+    assert!(archived.bytes().await.unwrap().is_empty());
 
     let list: serde_json::Value = client
         .get(format!("{base}/api/projects/archived"))

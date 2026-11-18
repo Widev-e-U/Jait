@@ -143,8 +143,32 @@ fn host_port() -> HostPort<Ctx> {
     })
 }
 
-/// One-shot `sh -c` in the project root: bounded output, hard timeout, killed on drop. There is
-/// no persistent terminal behind the chat tool, so a command that outlives its timeout is killed.
+/// Kills a one-shot command's process group unless the command completed normally. The shell
+/// leads that group, so cancellation and timeout also stop the commands it started.
+struct ProcessGroupGuard(Option<u32>);
+
+impl ProcessGroupGuard {
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for ProcessGroupGuard {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        {
+            if let Some(pid) = self.0.take().and_then(|pid| i32::try_from(pid).ok()) {
+                // SAFETY: `pid` is the leader this command spawned with `process_group(0)`, so
+                // it names the group the guard owns; SIGKILL affects no memory in this process.
+                unsafe { libc::killpg(pid, libc::SIGKILL) };
+            }
+        }
+    }
+}
+
+/// One-shot `sh -c` in the project root: bounded output, hard timeout, and cancellation through
+/// the effect token. There is no persistent terminal behind the chat tool, so a command that
+/// is cancelled or outlives its timeout is stopped with its process group.
 fn terminal_port() -> JaitPort<Ctx> {
     Arc::new(|method, args, ctx| {
         Box::pin(async move {
@@ -162,24 +186,39 @@ fn terminal_port() -> JaitPort<Ctx> {
                 spec["timeoutMs"].as_u64().unwrap_or(60_000).min(120_000),
             );
             let root = ctx.capabilities.execution().project_root.clone();
-            let mut child = tokio::process::Command::new("sh");
-            child
+            let cancellation = ctx.capabilities.execution().cancellation.clone();
+            let mut process = tokio::process::Command::new("sh");
+            process
                 .arg("-c")
                 .arg(&command)
                 .current_dir(&root)
                 .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
-            let run = async {
-                let out = child.output().await;
-                out.map(|o| {
-                    let mut text = String::from_utf8_lossy(&o.stdout).into_owned();
-                    text.push_str(&String::from_utf8_lossy(&o.stderr));
-                    (text, o.status.code())
-                })
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                process.as_std_mut().process_group(0);
+            }
+            let child = process
+                .spawn()
+                .map_err(|e| HostError::Error(format!("Cannot run command: {e}")))?;
+            let mut group = ProcessGroupGuard(child.id());
+            let run = child.wait_with_output();
+            let outcome = tokio::select! {
+                biased;
+                _ = cancellation.wait_cancelled() => {
+                    return Err(HostError::Error("Command was cancelled".into()));
+                }
+                outcome = tokio::time::timeout(timeout, run) => outcome,
             };
-            Ok(Some(match tokio::time::timeout(timeout, run).await {
-                Ok(Ok((output, code))) => {
-                    json!({"output": output, "exitCode": code, "timedOut": false})
+            Ok(Some(match outcome {
+                Ok(Ok(output)) => {
+                    group.disarm();
+                    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+                    text.push_str(&String::from_utf8_lossy(&output.stderr));
+                    json!({"output": text, "exitCode": output.status.code(), "timedOut": false})
                 }
                 Ok(Err(e)) => return Err(HostError::Error(format!("Cannot run command: {e}"))),
                 Err(_) => {
@@ -236,6 +275,55 @@ pub fn project_tool_definitions() -> Result<Vec<Value>, String> {
         .ok_or("file.patch definition missing")?
         .clone();
     Ok(vec![read, write, terminal, list, patch])
+}
+
+/// Recheck session and project authority after consent, immediately before dispatch.
+/// This does not serialize project changes with the effect itself.
+pub(crate) fn enforce_session_authority(
+    executor: &mut Arc<ConsentAwareExecutor>,
+    auth: crate::routes::auth::AuthState,
+    default_root: std::path::PathBuf,
+) {
+    Arc::get_mut(executor)
+        .expect("new executor must be uniquely owned")
+        .set_effect_authority(Arc::new(move |ctx| {
+            let auth = auth.clone();
+            let owner = ctx.user_id.clone();
+            let id = ctx.session_id.clone();
+            let root = ctx.project_root.clone();
+            let default_root = default_root.clone();
+            Box::pin(async move {
+                let allowed = auth
+                    .with_database(move |db| {
+                        let session = crate::services::sessions::SessionService::new(db)
+                            .get(&id, Some(&owner))?
+                            .filter(|session| session.status.as_deref() == Some("active"));
+                        let Some(session) = session else {
+                            return Ok(false);
+                        };
+                        let current_root = session
+                            .project_path
+                            .as_deref()
+                            .map(std::path::Path::new)
+                            .unwrap_or(default_root.as_path());
+                        if current_root != root {
+                            return Ok(false);
+                        }
+                        Ok(crate::services::projects::local_execution_allowed(
+                            db,
+                            &owner,
+                            session.project_id.as_deref(),
+                        )?)
+                    })
+                    .await
+                    .map_err(|_| "Could not verify project execution authority".to_string())?;
+                if allowed {
+                    Ok(())
+                } else {
+                    Err("Project execution authority is no longer available".into())
+                }
+            })
+        }));
 }
 
 /// Tool definitions offered to the model, and the consent executor that runs them.
@@ -561,5 +649,66 @@ mod question_integration_tests {
             .unwrap();
         assert!(result.ok, "{}", result.message);
         assert_eq!(result.data.unwrap()["answers"]["q"]["selected"][0], "yes");
+    }
+}
+
+#[cfg(test)]
+mod terminal_cancellation_tests {
+    use super::*;
+    use crate::{
+        execution::process_runner::ProcessCancellation,
+        security::consent_executor::{
+            ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext,
+        },
+    };
+    use std::time::{Duration, Instant};
+
+    #[tokio::test]
+    async fn cancelled_chat_terminal_command_is_stopped_with_its_process_group() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/chat-terminal-cancellation-tests")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&root).unwrap();
+        let consent = ConsentManager::default();
+        consent.enable_approve_all_for_session("session").unwrap();
+        let (_tools, executor) = project_tools("owner", "session", consent).unwrap();
+        let cancellation = ProcessCancellation::default();
+        let context = ToolExecutionContext {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            action_id: "action".into(),
+            project_root: root.clone(),
+            origin: ExecutionOrigin::Agent,
+            runtime_mode: RuntimeMode::Guarded,
+            cancellation: cancellation.clone(),
+            on_output: None,
+        };
+        let input = json!({"command": "touch started && sleep 3 && touch finished"});
+        let task = tokio::spawn(async move {
+            executor
+                .execute("terminal.run", &input, &context, ExecuteOptions::default())
+                .await
+        });
+        let started = Instant::now();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !root.join("started").exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("command must start");
+        cancellation.cancel();
+        let outcome = tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .expect("cancelled execution must return promptly")
+            .unwrap();
+        assert!(
+            !matches!(outcome, Ok(ref result) if result.ok),
+            "{outcome:?}"
+        );
+        // Wait past the command's own sleep: a surviving shell or child would create `finished`.
+        tokio::time::sleep(Duration::from_secs(5).saturating_sub(started.elapsed())).await;
+        assert!(!root.join("finished").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

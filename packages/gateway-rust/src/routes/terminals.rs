@@ -511,7 +511,7 @@ async fn create_terminal(
         );
     }
 
-    let surface = state.registry.surface(&term_id);
+    let surface = state.registry.reserved_surface(&term_id, &reservation);
     let snapshot = match surface.as_ref().map(|surface| surface.snapshot()) {
         Some(Ok(snapshot)) => snapshot,
         Some(Err(error)) => {
@@ -524,12 +524,17 @@ async fn create_terminal(
             );
         }
         None => {
-            state
+            let cleaned = state
                 .registry
                 .finish_reservation(&term_id, &reservation, true);
+            let details = if cleaned {
+                "Failed to create terminal"
+            } else {
+                "Terminal registration was replaced"
+            };
             return auth::response(
                 500,
-                json!({ "error": "TERMINAL_ERROR", "details": "Failed to create terminal" }),
+                json!({ "error": "TERMINAL_ERROR", "details": details }),
             );
         }
     };

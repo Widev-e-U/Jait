@@ -95,7 +95,24 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
                 .to_owned()
         }
     };
+    // Health reflects the real database without requiring authentication.
+    let health = client.get(url("/health")).send().await.unwrap();
+    assert_eq!(health.status(), 200);
+    let health: Value = health.json().await.unwrap();
+    assert_eq!(health["healthy"], true);
+    assert_eq!(health["hasUsers"], false);
+    assert_eq!(health["sessions"], 0);
+    assert!(health["schemaVersion"].as_u64().unwrap() > 0);
     let owner = register("owner", None).await;
+    let health: Value = client
+        .get(url("/health"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(health["hasUsers"], true);
     let invite = client
         .post(url("/api/auth/invitations"))
         .bearer_auth(&owner)
@@ -126,6 +143,121 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     };
     use reqwest::Method as M;
 
+    // Profile CRUD must remain scoped to the authenticated owner through the binary.
+    let unauthenticated = client
+        .get(url("/api/assistants/profiles"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthenticated.status(), 401);
+    let (status, created) = call(
+        M::POST,
+        "/api/assistants/profiles".into(),
+        owner.clone(),
+        Some(json!({"name":"Binary assistant", "systemPrompt":"Help", "enabledSkills":["one"]})),
+    )
+    .await;
+    assert_eq!(status, 201, "{created}");
+    let profile_id = created["profile"]["id"].as_str().unwrap();
+    let path = format!("/api/assistants/profiles/{profile_id}");
+    let (status, _) = call(M::GET, path.clone(), other.clone(), None).await;
+    assert_eq!(status, 404);
+    let (status, _) = call(
+        M::PATCH,
+        path.clone(),
+        other.clone(),
+        Some(json!({"name":"Stolen"})),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, updated) = call(
+        M::PATCH,
+        path.clone(),
+        owner.clone(),
+        Some(json!({"name":"Updated"})),
+    )
+    .await;
+    assert_eq!(status, 200, "{updated}");
+    assert_eq!(updated["profile"]["name"], "Updated");
+    let (_, profiles) = call(
+        M::GET,
+        "/api/assistants/profiles".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert!(
+        profiles["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == profile_id)
+    );
+    let (status, _) = call(M::DELETE, path.clone(), other.clone(), None).await;
+    assert_eq!(status, 404);
+    let (status, _) = call(M::DELETE, path.clone(), owner.clone(), None).await;
+    assert_eq!(status, 204);
+    let (status, _) = call(M::GET, path, owner.clone(), None).await;
+    assert_eq!(status, 404);
+
+    // Architecture reads and writes the actual isolated project file.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let project_root = gateway.directory.join("architecture-project");
+        std::fs::create_dir(&project_root).unwrap();
+        std::fs::set_permissions(&project_root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let root = project_root.to_str().unwrap();
+        // A group-writable project must not permit the architecture file write.
+        std::fs::set_permissions(&project_root, std::fs::Permissions::from_mode(0o770)).unwrap();
+        let (status, _) = call(
+            M::PUT,
+            "/api/architecture".into(),
+            owner.clone(),
+            Some(json!({"projectRoot":root, "diagram":"graph TD; A-->B"})),
+        )
+        .await;
+        assert_eq!(status, 500);
+        assert!(!project_root.join(".jait/architecture.mmd").exists());
+        std::fs::set_permissions(&project_root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let (status, invalid) = call(
+            M::PUT,
+            "/api/architecture".into(),
+            owner.clone(),
+            Some(json!({"projectRoot":root, "diagram":"  "})),
+        )
+        .await;
+        assert_eq!(status, 400, "{invalid}");
+        let (status, saved) = call(
+            M::PUT,
+            "/api/architecture".into(),
+            owner.clone(),
+            Some(json!({"projectRoot":root, "diagram":" graph TD; A-->B "})),
+        )
+        .await;
+        assert_eq!(status, 200, "{saved}");
+        assert_eq!(saved["diagram"]["diagram"], "graph TD; A-->B");
+        assert_eq!(
+            std::fs::read_to_string(project_root.join(".jait/architecture.mmd")).unwrap(),
+            "graph TD; A-->B\n"
+        );
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("projectRoot", root)
+            .finish();
+        let architecture_url = format!("{}?{query}", url("/api/architecture"));
+        let fetched = client
+            .get(&architecture_url)
+            .bearer_auth(&owner)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(fetched.status(), 200);
+        let fetched: Value = fetched.json().await.unwrap();
+        assert_eq!(fetched["diagram"]["diagram"], "graph TD; A-->B");
+        let unauthenticated = client.get(&architecture_url).send().await.unwrap();
+        assert_eq!(unauthenticated.status(), 401);
+    }
+
     // Sessions: create, list, get, patch, archive, delete, all owner-scoped.
     let (status, session) = call(
         M::POST,
@@ -136,6 +268,15 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     .await;
     assert_eq!(status, 201, "{session}");
     let id = session["id"].as_str().unwrap().to_owned();
+    let health: Value = client
+        .get(url("/health"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(health["sessions"], 1);
     let (status, list) = call(M::GET, "/api/sessions".into(), owner.clone(), None).await;
     assert_eq!(status, 200, "{list}");
     assert!(list.to_string().contains(&id), "{list}");
@@ -440,6 +581,32 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     assert_eq!(status, 200, "{patched}");
     let (_, got) = call(M::GET, format!("/api/projects/{pid}"), owner.clone(), None).await;
     assert!(got.to_string().contains("Beta"), "{got}");
+    // The subtree endpoint must expose only the authenticated owner's hierarchy.
+    let (status, subtree) = call(
+        M::GET,
+        format!("/api/projects/{pid}/subtree"),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{subtree}");
+    assert_eq!(subtree["projectId"], pid);
+    assert_eq!(subtree["descendantCount"], 5);
+    assert!(
+        subtree["descendantIds"]
+            .as_array()
+            .unwrap()
+            .contains(&json!(root_id))
+    );
+    assert_eq!(subtree["sessionCount"], 0);
+    let (status, _) = call(
+        M::GET,
+        format!("/api/projects/{pid}/subtree"),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 404);
     let (status, _) = call(
         M::DELETE,
         format!("/api/projects/{pid}"),
@@ -460,6 +627,74 @@ async fn sessions_and_projects_are_owned_through_the_binary() {
     assert!(
         !list.to_string().contains("Beta") || list.to_string().contains("deleted"),
         "{list}"
+    );
+    let (status, archived) =
+        call(M::GET, "/api/projects/archived".into(), owner.clone(), None).await;
+    assert_eq!(status, 200, "{archived}");
+    assert!(
+        archived["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == pid)
+    );
+    let (status, removed) = call(
+        M::DELETE,
+        "/api/projects/archived".into(),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{removed}");
+    assert_eq!(removed["removed"], 0);
+    let (status, foreign_project) = call(
+        M::POST,
+        "/api/projects".into(),
+        other.clone(),
+        Some(json!({"title":"Foreign archive"})),
+    )
+    .await;
+    assert_eq!(status, 201, "{foreign_project}");
+    let foreign_id = foreign_project["id"].as_str().unwrap();
+    let (status, _) = call(
+        M::DELETE,
+        format!("/api/projects/{foreign_id}"),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 204);
+    let (_, archived) = call(M::GET, "/api/projects/archived".into(), owner.clone(), None).await;
+    assert!(
+        archived["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == pid)
+    );
+    let (status, removed) = call(
+        M::DELETE,
+        "/api/projects/archived".into(),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{removed}");
+    assert!(removed["removed"].as_u64().unwrap() >= 1);
+    let (status, deleted) = call(M::GET, format!("/api/projects/{pid}"), owner.clone(), None).await;
+    assert_eq!(status, 200, "{deleted}");
+    assert_eq!(deleted["status"], "deleted");
+    let (_, archived) = call(M::GET, "/api/projects/archived".into(), owner.clone(), None).await;
+    assert!(archived["projects"].as_array().unwrap().is_empty());
+    let (status, foreign_archived) =
+        call(M::GET, "/api/projects/archived".into(), other.clone(), None).await;
+    assert_eq!(status, 200, "{foreign_archived}");
+    assert!(
+        foreign_archived["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == foreign_id)
     );
 }
 

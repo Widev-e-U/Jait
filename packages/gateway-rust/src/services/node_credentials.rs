@@ -43,32 +43,41 @@ impl<'a> NodeCredentialsService<'a> {
         }
     }
     pub fn bind(&mut self, node_id: &str, user_id: &str) -> rusqlite::Result<bool> {
+        if node_id.is_empty() || user_id.is_empty() {
+            return Ok(false);
+        }
+        if let Some(db) = self.db {
+            // Claim only an existing, unowned node or one already owned by this user.
+            // A single conditional update prevents concurrent claims from overwriting
+            // each other between an ownership read and the write.
+            return Ok(db.execute(
+                "UPDATE nodes SET user_id=? WHERE node_id=? AND (user_id IS NULL OR user_id='' OR user_id=?)",
+                params![user_id, node_id, user_id],
+            )? == 1);
+        }
         if let Some(owner) = self.owner(node_id)?.filter(|v| !v.is_empty())
             && owner != user_id
         {
             return Ok(false);
         }
-        if let Some(db) = self.db {
-            db.execute(
-                "UPDATE nodes SET user_id=? WHERE node_id=?",
-                params![user_id, node_id],
-            )?;
-        }
         self.owners.insert(node_id.into(), user_id.into());
         Ok(true)
     }
     pub fn issue(&mut self, node_id: &str, user_id: &str) -> Result<Option<String>, Error> {
+        if node_id.is_empty() || user_id.is_empty() {
+            return Ok(None);
+        }
         let mut bytes = [0; 32];
         getrandom::fill(&mut bytes)?;
         let token = format!("jait-node-{}", URL_SAFE_NO_PAD.encode(bytes));
         let hash = digest(&token);
         if let Some(db) = self.db {
-            // The owner check and insert must share one write-locked transaction:
+            // The live-user and owner checks and insert share one write-locked transaction:
             // another connection may otherwise transfer the node between them.
             let tx =
                 rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;
             let owned: bool = tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM nodes WHERE node_id=? AND user_id=?)",
+                "SELECT EXISTS(SELECT 1 FROM nodes n JOIN users u ON u.id=n.user_id WHERE n.node_id=? AND n.user_id=?)",
                 params![node_id, user_id],
                 |row| row.get(0),
             )?;
@@ -100,7 +109,7 @@ impl<'a> NodeCredentialsService<'a> {
                 .query_row(
                     "SELECT c.user_id,c.node_id FROM node_credentials c \
                      JOIN nodes n ON n.node_id=c.node_id AND n.user_id=c.user_id \
-                     WHERE c.token_hash=?",
+                     WHERE c.token_hash=? AND c.user_id <> '' AND c.node_id <> ''",
                     [hash],
                     |r| {
                         Ok(NodeIdentity {
@@ -118,7 +127,29 @@ impl<'a> NodeCredentialsService<'a> {
         }
     }
 
+    /// Resolve a credential, current node owner, and live user in one SQLite snapshot.
+    pub fn resolve_active(&self, token: &str) -> rusqlite::Result<Option<NodeIdentity>> {
+        let Some(db) = self.db else { return Ok(None) };
+        db.query_row(
+            "SELECT c.user_id,c.node_id FROM node_credentials c \
+             JOIN nodes n ON n.node_id=c.node_id AND n.user_id=c.user_id \
+             JOIN users u ON u.id=c.user_id \
+             WHERE c.token_hash=? AND c.user_id <> '' AND c.node_id <> ''",
+            [digest(token)],
+            |r| {
+                Ok(NodeIdentity {
+                    user_id: r.get(0)?,
+                    node_id: r.get(1)?,
+                })
+            },
+        )
+        .optional()
+    }
+
     pub fn revoke(&mut self, node_id: &str, user_id: &str) -> rusqlite::Result<bool> {
+        if node_id.is_empty() || user_id.is_empty() {
+            return Ok(false);
+        }
         if let Some(db) = self.db {
             let tx =
                 rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;

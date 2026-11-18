@@ -21,6 +21,7 @@ impl TurnTools for NoTools {
 }
 struct TestProvider {
     pause: AtomicBool,
+    started: AtomicBool,
     burst: usize,
     retain: AtomicBool,
     retained: Mutex<Option<EventSink>>,
@@ -33,6 +34,7 @@ impl TurnProvider for TestProvider {
         sink: EventSink,
     ) -> BoxFuture<'a, Result<ParsedStream, StreamFailure>> {
         Box::pin(async move {
+            self.started.store(true, Ordering::SeqCst);
             if self.retain.load(Ordering::SeqCst) {
                 *self.retained.lock().unwrap() = Some(sink.clone());
             }
@@ -101,6 +103,14 @@ struct Fixture {
 }
 impl Fixture {
     async fn new(pause: bool, burst: usize, limits: ChatLimits) -> Self {
+        Self::with_stop_hook(pause, burst, limits, None).await
+    }
+    async fn with_stop_hook(
+        pause: bool,
+        burst: usize,
+        limits: ChatLimits,
+        stop: Option<crate::routes::agent_control::StopAgents>,
+    ) -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.jait/artifacts/gateway-rust/chat-http")
             .join(uuid::Uuid::new_v4().to_string());
@@ -119,6 +129,7 @@ impl Fixture {
         let factory = Arc::new(TestFactory {
             provider: Arc::new(TestProvider {
                 pause: AtomicBool::new(pause),
+                started: AtomicBool::new(false),
                 burst,
                 retain: AtomicBool::new(false),
                 retained: Mutex::new(None),
@@ -137,7 +148,13 @@ impl Fixture {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (tx, rx) = oneshot::channel();
-        let router = routes.router();
+        let mut control = crate::routes::agent_control::AgentControlRoutes::new(auth.clone());
+        let halt_chat = routes.clone();
+        control.on_halt_persisted = Arc::new(move |owner| halt_chat.cancel_owner_threads(owner));
+        if let Some(stop) = stop {
+            control.stop_running = stop;
+        }
+        let router = routes.router().merge(control.router());
         let server = tokio::spawn(async move {
             axum::serve(listener, router)
                 .with_graceful_shutdown(async {
@@ -1299,5 +1316,199 @@ async fn halt_cancels_only_the_owners_thread_leases() {
     assert!(!other.cancellation.is_cancelled());
     drop((thread, chat, other));
     assert!(fixture.routes.active.turns.lock().unwrap().is_empty());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn halt_interrupts_running_thread_and_resume_allows_another_turn() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    fixture.auth.with_database(|db| {
+        db.execute("INSERT INTO agent_threads (id,user_id,session_id,title,provider_id,status,created_at,updated_at) VALUES ('thread','owner','session','test','test','idle','now','now')", [])?;
+        Ok(())
+    }).await.unwrap();
+    assert_eq!(
+        fixture
+            .post("/api/threads/thread/start")
+            .json(&json!({"message":"start"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !fixture.factory.provider.started.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("provider did not start");
+    assert_eq!(
+        fixture
+            .post("/api/agent-control/halt")
+            .json(&json!({"reason":"test"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let status: String = fixture
+                .auth
+                .with_database(|db| {
+                    Ok(db.query_row(
+                        "SELECT status FROM agent_threads WHERE id='thread'",
+                        [],
+                        |row| row.get(0),
+                    )?)
+                })
+                .await
+                .unwrap();
+            if status == "interrupted" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("halt did not interrupt running thread");
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !fixture.routes.active.turns.lock().unwrap().is_empty() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("interrupted turn did not release its lease");
+    assert_eq!(
+        fixture
+            .post("/api/threads/thread/resume")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(
+        fixture
+            .post("/api/agent-control/resume")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    fixture
+        .factory
+        .provider
+        .pause
+        .store(false, Ordering::SeqCst);
+    assert_eq!(
+        fixture
+            .post("/api/threads/thread/resume")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let status: String = fixture
+                .auth
+                .with_database(|db| {
+                    Ok(db.query_row(
+                        "SELECT status FROM agent_threads WHERE id='thread'",
+                        [],
+                        |row| row.get(0),
+                    )?)
+                })
+                .await
+                .unwrap();
+            if status == "completed" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("resumed thread did not complete");
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn resume_during_halt_teardown_does_not_cancel_new_thread() {
+    use crate::services::agent_control::AgentStopResult;
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let stop: crate::routes::agent_control::StopAgents = {
+        let entered = entered.clone();
+        let release = release.clone();
+        Arc::new(move |_| {
+            let entered = entered.clone();
+            let release = release.clone();
+            Box::pin(async move {
+                entered.notify_one();
+                release.notified().await;
+                Ok(AgentStopResult::Count(0.0))
+            })
+        })
+    };
+    let fixture = Fixture::with_stop_hook(true, 1, ChatLimits::default(), Some(stop)).await;
+    fixture.auth.with_database(|db| {
+        db.execute("INSERT INTO agent_threads (id,user_id,session_id,title,provider_id,status,created_at,updated_at) VALUES ('thread','owner','session','test','test','idle','now','now')", [])?;
+        Ok(())
+    }).await.unwrap();
+    let old = fixture.routes.admit("owner", "old-session", true).unwrap();
+    let halt = fixture.post("/api/agent-control/halt").json(&json!({}));
+    let halt = tokio::spawn(async move { halt.send().await.unwrap() });
+    tokio::time::timeout(Duration::from_secs(5), entered.notified())
+        .await
+        .expect("halt did not reach teardown");
+    assert!(old.cancellation.is_cancelled());
+    drop(old);
+    assert_eq!(
+        fixture
+            .post("/api/agent-control/resume")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(
+        fixture
+            .post("/api/threads/thread/start")
+            .json(&json!({"message":"new"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !fixture.factory.provider.started.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("new thread did not start");
+    release.notify_one();
+    assert_eq!(halt.await.unwrap().status(), 200);
+    {
+        let active = fixture.routes.active.turns.lock().unwrap();
+        assert!(
+            !active
+                .get("session")
+                .expect("new thread was removed")
+                .cancellation
+                .is_cancelled()
+        );
+    }
     fixture.finish().await;
 }

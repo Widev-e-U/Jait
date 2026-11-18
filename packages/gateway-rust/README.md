@@ -2030,7 +2030,9 @@ and compilation is bounded to two jobs.
 Composed application (`JAIT_RUST_APPLICATION=1`) options:
 
 - `JAIT_WEB_DIR=/abs/path/to/apps/web/dist` serves the built web UI on the gateway
-  port with an SPA fallback; unclaimed `/api`, `/health` and `/ws` paths stay JSON 404s.
+  port with an SPA fallback. There is no default location, unlike the Node gateway's
+  `web-dist`: when unset, the binary serves no UI and `GET /` returns 404. Unclaimed
+  `/api`, `/health` and `/ws` paths never receive the shell; they answer with JSON errors.
 - `JAIT_RUST_ALLOW_NON_LOOPBACK=1` allows `JAIT_RUST_HOST` to be a non-loopback
   address. Default is off and the bind stays loopback-only.
 
