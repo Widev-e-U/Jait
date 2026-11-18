@@ -1,3 +1,4 @@
+import { embedInlineImages, inlineImageData, INLINE_IMAGE_TYPE } from "./inline-images.js";
 // Gmail mailbox client (Gmail REST API v1).
 
 import type {
@@ -33,7 +34,8 @@ const SYSTEM_LABELS: Record<string, string> = {
   spam: "SPAM", trash: "TRASH", starred: "STARRED", important: "IMPORTANT", unread: "UNREAD",
 };
 function normalizeLabelId(folder: string): string {
-  return SYSTEM_LABELS[folder.toLowerCase()] ?? folder;
+  const normalized = folder.toLowerCase();
+  return Object.hasOwn(SYSTEM_LABELS, normalized) ? SYSTEM_LABELS[normalized]! : folder;
 }
 
 function header(headers: GmailHeader[] | undefined, name: string): string {
@@ -62,7 +64,7 @@ export class GmailClient implements MailboxClient {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(init?.headers ?? {}),
+        ...init?.headers,
       },
     });
     const text = await res.text();
@@ -134,6 +136,23 @@ export class GmailClient implements MailboxClient {
     const summary = this.summarize(m, byId);
     const bodies = { text: "", html: "", attachments: false };
     extractBodies(m.payload, bodies);
+    if (/cid:/i.test(bodies.html)) {
+      const images = new Map<string, string>();
+      const queue = m.payload ? [m.payload] : [];
+      let visited = 0;
+      while (queue.length && images.size < 12 && visited++ < 1000) {
+        const part = queue.shift()!;
+        queue.push(...(part.parts ?? []));
+        const cid = header(part.headers, "Content-ID").replace(/^<|>$/g, "");
+        if (!cid || !bodies.html.includes("cid:" + cid) || !INLINE_IMAGE_TYPE.test(part.mimeType || "") || (part.body?.size ?? 0) > 1024 * 1024) continue;
+        try {
+          const raw = part.body?.data || (part.body?.attachmentId ? (await this.gfetch(accessToken, `/messages/${encodeURIComponent(id)}/attachments/${encodeURIComponent(part.body.attachmentId)}`) as { data?: string }).data : undefined);
+          const data = raw && inlineImageData(part.mimeType!, raw);
+          if (data) images.set(cid, data);
+        } catch { /* An unavailable image must not hide the message. */ }
+      }
+      bodies.html = embedInlineImages(bodies.html, images);
+    }
     return {
       ...summary,
       cc: header(m.payload?.headers, "Cc"),
@@ -151,9 +170,8 @@ export class GmailClient implements MailboxClient {
       `Subject: ${input.subject}`,
       "MIME-Version: 1.0",
       `Content-Type: ${input.html ? "text/html" : "text/plain"}; charset=UTF-8`,
-      "",
-      input.body,
     ].filter(Boolean);
+    lines.push("", input.body);
     const raw = Buffer.from(lines.join("\r\n"), "utf8").toString("base64url");
     const body: Record<string, unknown> = { raw };
     if (input.replyToMessageId) {

@@ -1,0 +1,231 @@
+[
+  {
+    "name": "empty",
+    "input": {
+      "questions": []
+    },
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    },
+    "actions": []
+  },
+  {
+    "name": "blank_id",
+    "input": {
+      "questions": [
+        {
+          "id": " ﻿ ",
+          "header": "H",
+          "question": "What?"
+        }
+      ]
+    },
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    },
+    "actions": []
+  },
+  {
+    "name": "blank_header",
+    "input": {
+      "questions": [
+        {
+          "id": "q",
+          "header": " ﻿ ",
+          "question": "What?"
+        }
+      ]
+    },
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    },
+    "actions": []
+  },
+  {
+    "name": "blank_question",
+    "input": {
+      "questions": [
+        {
+          "id": "q",
+          "header": "H",
+          "question": " ﻿ "
+        }
+      ]
+    },
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    },
+    "actions": []
+  },
+  {
+    "name": "duplicate_order",
+    "input": {
+      "questions": [
+        {
+          "id": " b ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " a ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " b ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " c ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " a ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " b ",
+          "header": "H",
+          "question": "Q"
+        },
+        {
+          "id": " c ",
+          "header": "H",
+          "question": "Q"
+        }
+      ]
+    },
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    },
+    "actions": []
+  },
+  {
+    "name": "normalization_and_context_owner",
+    "context": {
+      "sessionId": "context-session",
+      "userId": "owner"
+    },
+    "input": {
+      "title": "    Decisions ﻿",
+      "attention": "urgent",
+      "userId": "attacker",
+      "sessionId": "attacker",
+      "questions": [
+        {
+          "id": " q ",
+          "header": " ﻿ Header ",
+          "question": "  Pick  ",
+          "options": [
+            {
+              "label": "   ",
+              "description": "removed"
+            },
+            {
+              "label": " Yes ",
+              "description": " details ",
+              "recommended": true
+            },
+            {
+              "label": " No ",
+              "description": "  "
+            }
+          ]
+        }
+      ]
+    },
+    "actions": [
+      {
+        "op": "list",
+        "user": "other"
+      },
+      {
+        "op": "list",
+        "session": "context-session",
+        "user": "owner"
+      },
+      {
+        "op": "submit",
+        "user": "other",
+        "value": {
+          "answers": {}
+        }
+      },
+      {
+        "op": "submit",
+        "user": "owner",
+        "value": {
+          "answers": {
+            "q": {
+              "selected": [
+                "Yes"
+              ],
+              "freeText": null,
+              "skipped": false
+            }
+          }
+        }
+      },
+      {
+        "op": "submit",
+        "user": "owner",
+        "value": {
+          "answers": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "cancel_and_explicit_flags",
+    "input": {
+      "questions": [
+        {
+          "id": "q",
+          "header": "Header",
+          "question": "Question",
+          "multiSelect": true,
+          "allowFreeformInput": false,
+          "options": []
+        }
+      ]
+    },
+    "actions": [
+      {
+        "op": "cancel"
+      }
+    ],
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    }
+  },
+  {
+    "name": "pending_no_timeout",
+    "input": {
+      "questions": [
+        {
+          "id": "__proto__",
+          "header": "H",
+          "question": "Q"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "op": "list"
+      }
+    ],
+    "context": {
+      "sessionId": "s",
+      "userId": null
+    }
+  }
+]

@@ -16,6 +16,11 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: [fileURLToPath(new URL("./tests/vitest-state.ts", import.meta.url))],
+    // Bound simultaneous gateway fixtures on memory-limited local/CI hosts.
+    // CPU-count defaults overwhelm setup and make lifecycle deadlines flaky.
+    maxWorkers: 4,
+    minWorkers: 1,
     environment: "node",
     testTimeout: 30_000,
     include: [

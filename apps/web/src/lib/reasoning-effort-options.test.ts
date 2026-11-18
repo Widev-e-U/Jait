@@ -87,3 +87,15 @@ describe('resolveReasoningEffortOptions', () => {
     ])
   })
 })
+
+import { effortSupportedByModel } from './reasoning-effort-options'
+
+describe('effort when changing models', () => {
+  it('keeps supported choices and resets unsupported or unavailable choices', () => {
+    const model = { id: 'model', supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'ultra' }] }
+    expect(effortSupportedByModel(model, 'ultra')).toBe(true)
+    expect(effortSupportedByModel(model, 'high')).toBe(false)
+    expect(effortSupportedByModel({ id: 'other' }, 'ultra')).toBe(false)
+    expect(effortSupportedByModel(model, null)).toBe(true)
+  })
+})

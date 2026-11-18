@@ -41,6 +41,8 @@ export interface ToolContext {
    * the parent turn's event stream. See {@link NestedAgentEvent}.
    */
   onNestedEvent?: (event: NestedAgentEvent) => void;
+  /** Internal browser task may recover only from a verified pre-dispatch stale target. */
+  browserTaskRecoverStale?: boolean;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
   /**
@@ -57,6 +59,8 @@ export interface ToolResult {
   ok: boolean;
   message: string;
   data?: unknown;
+  /** Ephemeral visual content for a model; non-enumerable so it is not persisted in tool data. */
+  modelImage?: { base64: string; mimeType: string };
 }
 
 /** JSON Schema for OpenAI function-calling format */
@@ -64,6 +68,11 @@ export interface ToolParametersSchema {
   type: "object";
   properties: Record<string, ToolPropertySchema>;
   required?: string[];
+  /** Conditional requirements for action-based tools. */
+  allOf?: Array<{
+    if: { properties: Record<string, ToolPropertySchema>; required?: string[] };
+    then: { properties?: Record<string, ToolPropertySchema>; required?: string[] };
+  }>;
 }
 
 /** JSON Schema for a single tool parameter property */
@@ -71,6 +80,11 @@ export interface ToolPropertySchema {
   type: string | string[];
   description?: string;
   enum?: string[];
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  minItems?: number;
+  maxItems?: number;
   /** For type: "array" — describes the shape of each array element */
   items?: ToolPropertySchema & { properties?: Record<string, ToolPropertySchema>; required?: string[] };
   /** For type: "object" — nested properties */

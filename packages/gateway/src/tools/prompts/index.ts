@@ -23,6 +23,7 @@ import "./xai-prompt.js";
 import "./glm-prompt.js";
 import "./ollama-prompt.js";
 import "./qwen-prompt.js";
+import "./deepseek-prompt.js";
 
 // ── Public API re-exports ────────────────────────────────────────────
 export {

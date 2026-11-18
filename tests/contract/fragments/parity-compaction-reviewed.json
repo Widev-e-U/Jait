@@ -1,0 +1,19 @@
+{
+  "review_scope": "Complete active-turn compaction declaration including nested callback assertion",
+  "declarations": [],
+  "superseded_declarations": [
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:72:3",
+      "status": "verified",
+      "parity_review": "Manual comparison of the full original declaration and active-turn history helper against internal_contracts.rs and compaction.ts preserves all eight predicates, including the nested callback-time history equality. Rust constructs the same system/user/checkpoint messages and 38 assistant/tool pairs, exact file_read tool calls and 400-character result suffixes. The bounded driver invokes the production compactActiveTurnHistory with tools [], limit 1000 and the exact original injected summary. It records a deep snapshot during every summary callback before returning, and returns the removed prefix and final history. Rust requires callback snapshots to equal the original, changed true, removed source to include the old checkpoint and result-0 prefix, exactly 30 removed tool messages, the unchanged user message, the active-turn-summary marker and exact last 16 original messages. The callback observer is required to execute; no expected output is derived from observed output. Inputs are plain dense JSON, so original Vitest deep equality and Rust JSON equality preserve this domain. Fetch is restored in finally, and the injected summary avoids model/network calls. A mutation check independently rejects each failed source predicate, including a callback-only mutation while final history remains valid. All six original Vitest compaction tests pass; the full source-bound 396-scenario internal report passes with unchanged sources. This establishes this reference declaration, not native Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.compaction.active-turn-prefix-and-callback",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/3539ec5a-78f6-4f6d-813e-080fd9d67882/report.json"
+        }
+      ],
+      "superseded_reason": "Compaction source changed; original review retained, replaced by current source-bound review in parity-source-reconcile-reviewed.json."
+    }
+  ]
+}

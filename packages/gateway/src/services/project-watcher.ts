@@ -8,7 +8,7 @@
  */
 
 import type { AsyncSubscription, Event as ParcelEvent } from "@parcel/watcher";
-import { relative, sep } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { EventEmitter } from "node:events";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -36,10 +36,35 @@ export interface ProjectWatcherOptions {
    * large operations.  Default: 500.
    */
   maxBatchSize?: number;
+  /**
+   * Watch a root that lives inside a generated tree (a `.jait` directory).
+   *
+   * The gateway refuses those roots by default because its own artifacts,
+   * sandboxes and deploy workspaces hold far more directories than the kernel
+   * watch table can hand out.  Callers that pass a small, purpose-built
+   * scratch tree under `.jait` — contract harnesses, fixtures — can opt back
+   * in and get a real subscription.
+   */
+  allowGeneratedRoot?: boolean;
 }
 
 // ── Default ignore list ──────────────────────────────────────────────
-const DEFAULT_IGNORE = [
+/**
+ * Glob patterns that are never watched.
+ *
+ * Generated trees have to be excluded, not merely for noise: the watcher opens
+ * one OS watch handle per directory, and the kernel budget is finite
+ * (`fs.inotify.max_user_watches`, 524288 on a default Linux box). A single
+ * generated directory tree can exceed that on its own, and the recursive scan
+ * then never completes — it fails, retries and keeps re-reading the tree while
+ * starving the process' file I/O.
+ *
+ * `**\/.jait/**` is the important one: the gateway writes its own artifacts
+ * (git worktrees, agent evidence, parity runs, sandbox images, databases)
+ * inside the project it watches, so an unpruned artifact directory is a
+ * self-inflicted watch explosion.
+ */
+export const DEFAULT_IGNORE = [
   "**/.git/**",
   "**/node_modules/**",
   "**/dist/**",
@@ -49,6 +74,30 @@ const DEFAULT_IGNORE = [
   "**/.cache/**",
   "**/.parcel-cache/**",
   "**/__pycache__/**",
+  // Gateway-owned state and generated build/test output.
+  "**/.jait/**",
+  "**/target/**",
+  "**/.turbo/**",
+  "**/.nx/**",
+  "**/.angular/**",
+  "**/.svelte-kit/**",
+  "**/.gradle/**",
+  "**/.terraform/**",
+  "**/.venv/**",
+  "**/coverage/**",
+  "**/.pytest_cache/**",
+  "**/.mypy_cache/**",
+  "**/.ruff_cache/**",
+  // Sandboxes include toolchain homes with large package caches.
+  "**/.bun/**",
+  "**/.cargo/**",
+  "**/.rustup/**",
+  "**/.npm/**",
+  "**/.yarn/**",
+  "**/.pnpm-store/**",
+  "**/.gradle-docker/**",
+  "**/.android/**",
+  "**/site-packages/**",
   "**/.DS_Store",
   "**/Thumbs.db",
   "**/*.swp",
@@ -61,7 +110,8 @@ function coalesceEvents(events: FileChangeEvent[]): FileChangeEvent[] {
   const map = new Map<string, FileChangeEvent>();
 
   for (const event of events) {
-    const key = event.path.toLowerCase();
+    // Native watcher paths retain the filesystem's case semantics.
+    const key = event.path;
     const existing = map.get(key);
 
     if (!existing) {
@@ -114,6 +164,7 @@ export class ProjectWatcher extends EventEmitter {
       ignore: opts?.ignore ?? DEFAULT_IGNORE,
       coalesceMs: opts?.coalesceMs ?? 150,
       maxBatchSize: opts?.maxBatchSize ?? 500,
+      allowGeneratedRoot: opts?.allowGeneratedRoot ?? false,
     };
   }
 
@@ -131,21 +182,43 @@ export class ProjectWatcher extends EventEmitter {
    */
   async watch(projectRoot: string): Promise<void> {
     await this.stop();
+    // Ignore globs are relative to the watched root. If .jait is an ancestor,
+    // its artifacts and sandbox caches would otherwise receive native watches.
+    // Callers that deliberately watch a small generated scratch tree opt in.
+    if (!this.options.allowGeneratedRoot && /[\\/]\.jait(?:[\\/]|$)/.test(resolve(projectRoot))) {
+      this._root = null;
+      return;
+    }
     this._root = projectRoot;
 
     // Dynamic import so the native module is only loaded when actually needed
     const parcel = await import("@parcel/watcher");
-    this.subscription = await parcel.subscribe(
-      projectRoot,
-      (err, events) => {
-        if (err) {
-          this.emit("error", err);
-          return;
-        }
-        this.handleRawEvents(events);
-      },
-      { ignore: this.options.ignore },
-    );
+    try {
+      this.subscription = await parcel.subscribe(
+        projectRoot,
+        (err, events) => {
+          if (err) {
+            this.emit("error", err);
+            return;
+          }
+          this.handleRawEvents(events);
+        },
+        { ignore: this.options.ignore },
+      );
+    } catch (err) {
+      // The kernel reports a full watch table as ENOSPC / "No space left on
+      // device", which reads like a full disk. Say what it actually means.
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      const message = err instanceof Error ? err.message : String(err);
+      if (code === "ENOSPC" || /no space left on device/i.test(message)) {
+        throw new Error(
+          `Cannot watch ${projectRoot}: the OS ran out of file-watch descriptors. `
+            + "Ignore or delete generated directories (see DEFAULT_IGNORE), or raise "
+            + `fs.inotify.max_user_watches. Original error: ${message}`,
+        );
+      }
+      throw err;
+    }
   }
 
   /** Stop watching and flush any pending events. */

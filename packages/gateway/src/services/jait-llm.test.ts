@@ -215,6 +215,39 @@ describe("resolveJaitLlmConfig", () => {
       jaitBackend: "ollama",
     })).toThrow(/no longer configured/i);
   });
+
+  it("refuses a model-less chat turn instead of using a backend default model", () => {
+    // Regression: a turn with no model used to fall through the ladder to
+    // apiKeys.OLLAMA_MODEL — so a session ran (and was billed) on
+    // deepseek-v4-pro while the user's selector said deepseek-v4.1-flash.
+    // Strict callers must fail instead of silently choosing a model.
+    expect(() => resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      jaitBackend: "ollama",
+      strictModel: true,
+    })).toThrow(JaitConfigError);
+
+    // Same call without the strict flag keeps the documented fallback ladder,
+    // which background utilities still rely on.
+    expect(resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      jaitBackend: "ollama",
+    }).openaiModel).toBe("expensive-model");
+  });
+
+  it("honors the selected model on a strict turn", () => {
+    const llm = resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      requestedModel: "deepseek-v4.1-flash:cloud",
+      jaitBackend: "ollama",
+      strictModel: true,
+    });
+
+    expect(llm.openaiModel).toBe("deepseek-v4.1-flash:cloud");
+  });
 });
 
 describe("callJaitLlmCompletion", () => {

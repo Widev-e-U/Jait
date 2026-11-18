@@ -101,6 +101,49 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
     expect(merged.map((m) => m.id)).toEqual(['server-1'])
   })
 
+  it('matches a prompt with uploads although the gateway rewrote its persisted content', () => {
+    const image = { type: 'image' as const, name: 'shot.png', mimeType: 'image/png', data: 'AAAA' }
+    const snapshot = [
+      user('server-1', 'look at this [attached: shot.png]', {
+        displayContent: 'look at this',
+        displaySegments: [{ type: 'text', text: 'look at this' }, image],
+      }),
+      { id: 'server-assistant-1', role: 'assistant' as const, content: 'done' },
+    ]
+    const current = [
+      user('local-1', 'look at this', {
+        optimistic: true,
+        displaySegments: [{ type: 'text', text: 'look at this' }, { ...image, data: 'data:image/png;base64,AAAA' }],
+      }),
+      { id: 'local-assistant-1', role: 'assistant' as const, content: 'done', optimistic: true },
+    ]
+
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map((message) => message.id))
+      .toEqual(['server-1', 'server-assistant-1'])
+  })
+
+  it('matches a prompt whose content carries inlined file references but whose segments do not', () => {
+    const segments = [{ type: 'text' as const, text: 'fix ' }, { type: 'file' as const, path: 'src/a.ts', name: 'a.ts' }]
+    const snapshot = [user('server-1', 'fix <file src/a.ts>…</file>', { displaySegments: segments, displayContent: 'fix ' })]
+    const current = [user('local-1', 'fix <file src/a.ts>…</file>\n', { optimistic: true, displayContent: 'fix', displaySegments: segments })]
+
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map((message) => message.id)).toEqual(['server-1'])
+  })
+
+  it('does not let an older identical persisted prompt swallow a pending one', () => {
+    const older = user('server-old', 'go on')
+    const current = [
+      older,
+      { id: 'server-old-reply', role: 'assistant' as const, content: 'ok' },
+      user('local-1', 'go on', { optimistic: true }),
+    ]
+    // Snapshot taken before the new prompt was persisted.
+    const snapshot = current.slice(0, 2)
+
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map((message) => message.id))
+      .toEqual(['server-old', 'server-old-reply', 'local-1'])
+  })
+
   it('matches repeated identical messages by count instead of removing them all', () => {
     const snapshot = [
       user('server-1', 'repeat'),
@@ -149,5 +192,21 @@ describe('message render identity', () => {
     const snapshot = ['saved-1', 'saved-2'].map(id => user(id, 'repeat'))
     expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map(message => message.renderId))
       .toEqual(['local-1', 'local-2'])
+  })
+})
+
+
+describe('client message identity', () => {
+  it('keeps a pending prompt when another client sends identical text', () => {
+    const current = [user('user-local-12345678', 'continue', { optimistic: true })]
+    const snapshot = [user('server-other', 'continue', { clientMessageId: 'user-other-12345678' })]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map(message => message.id))
+      .toEqual(['server-other', 'user-local-12345678'])
+  })
+
+  it('reconciles the exact durable ID without relying on text', () => {
+    const current = [user('user-local-12345678', 'continue', { optimistic: true })]
+    const snapshot = [user('server-1', 'continue [attached: file]', { clientMessageId: 'user-local-12345678' })]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual([{ ...snapshot[0], renderId: 'user-local-12345678' }])
   })
 })

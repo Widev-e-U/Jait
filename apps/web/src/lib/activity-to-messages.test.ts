@@ -3,6 +3,50 @@ import { activitiesToMessages } from './activity-to-messages'
 import type { ThreadActivity } from '@/lib/agents-api'
 
 describe('activitiesToMessages', () => {
+  it('restores the exact approval request ID and reconciles decisions after reload', () => {
+    const activity = (id: string, kind: string, payload: unknown, threadId = 'thread-1'): ThreadActivity => ({
+      id, threadId, kind, payload, summary: kind, createdAt: `2026-03-16T00:00:0${id}.000Z`,
+    })
+    const requests = [
+      activity('1', 'tool.approval', { requestId: 'req-1', tool: 'edit', args: { file_path: 'a.txt' } }),
+      activity('2', 'tool.approval', { requestId: 'req-2', tool: 'terminal', args: {} }),
+      activity('3', 'tool.approval', { requestId: 'req-3', tool: 'read', args: {} }),
+    ]
+    const pending = activitiesToMessages(requests)[0]!.toolCalls!
+    expect(pending[0]).toMatchObject({ callId: 'req-1', approvalRequestId: 'req-1', approvalState: 'pending', status: 'pending', args: { path: 'a.txt' } })
+
+    const restored = activitiesToMessages([...requests,
+      activity('4', 'tool.approval-response', { requestId: 'req-1', approved: true }),
+      activity('5', 'tool.approval-response', { requestId: 'req-2', approved: false }),
+      activity('6', 'tool.approval-response', { requestId: 'req-3', approved: true, ok: false }),
+    ])[0]!
+    expect(restored.toolCalls).toHaveLength(3)
+    expect(restored.toolCalls![0]).toMatchObject({ approvalRequestId: 'req-1', approvalState: 'approved', status: 'success', result: { ok: true }, completedAt: Date.parse('2026-03-16T00:00:04.000Z') })
+    expect(restored.toolCalls![1]).toMatchObject({ approvalRequestId: 'req-2', approvalState: 'rejected', status: 'error', result: { ok: false } })
+    expect(restored.toolCalls![2]).toMatchObject({ approvalRequestId: 'req-3', approvalState: 'pending', status: 'pending' })
+    expect(restored.segments).toEqual([{ type: 'toolGroup', callIds: ['req-1', 'req-2', 'req-3'] }])
+  })
+
+  it('matches responses only to the same thread and valid request, and preserves later tool errors', () => {
+    const activity = (id: string, kind: string, payload: unknown, threadId = 'thread-1'): ThreadActivity => ({
+      id, threadId, kind, payload, summary: kind, createdAt: '2026-03-16T00:00:00.000Z',
+    })
+    const messages = activitiesToMessages([
+      activity('a', 'tool.approval', { requestId: 'shared', tool: 'edit' }),
+      activity('b', 'tool.approval-response', { requestId: 'shared', approved: true }, 'thread-2'),
+      activity('c', 'tool.approval-response', { requestId: 'shared', approved: 'true' }),
+      activity('d', 'tool.approval-response', { requestId: 'other', approved: true }),
+    ])
+    expect(messages[0]!.toolCalls![0]).toMatchObject({ approvalState: 'pending', status: 'pending' })
+
+    const failed = activitiesToMessages([
+      activity('a', 'tool.approval', { requestId: 'shared', tool: 'edit' }),
+      activity('b', 'tool.error', { callId: 'shared', tool: 'edit', ok: false, message: 'failed' }),
+      activity('c', 'tool.approval-response', { requestId: 'shared', approved: true }),
+    ])[0]!.toolCalls![0]!
+    expect(failed).toMatchObject({ status: 'error', result: { ok: false, message: 'failed' } })
+  })
+
   it('normalizes edit tool aliases from thread activities', () => {
     const messages = activitiesToMessages([
       {

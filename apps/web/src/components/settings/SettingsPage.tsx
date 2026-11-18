@@ -1,3 +1,4 @@
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { AccountInvitations } from "./AccountInvitations"
 import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
 import { OpenCodeGoConnection } from './opencode-go-connection'
@@ -32,10 +33,10 @@ import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
-import { shouldShowProviderLoginAction } from './provider-account-actions'
+import { getGatewayProviderAccounts, shouldShowProviderLoginAction } from './provider-account-actions'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
-import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import {
   JAIT_BACKEND_DEFAULT_URLS,
@@ -407,12 +408,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   'claude-code': 'Claude Code',
 }
 
-function isProviderAccount(provider: ProviderInfo): boolean {
-  const auth = provider.auth
-  if (provider.id === 'jait' || !auth) return false
-  return auth.login || auth.logout || auth.authenticated !== null
-}
-
 export interface UpdateInfo {
   currentVersion: string
   latestVersion: string
@@ -540,12 +535,12 @@ export function SettingsPage({
   const { providers: allProviders, remoteProviders: remoteProviderNodes, refresh: refreshProviderSnapshot } = useProviders()
   // Device accounts are rendered from `remoteProviderNodes` further down, so the
   // gateway list must exclude them to avoid listing the same account twice.
-  const providerAccounts = useMemo(
-    () => allProviders.filter((provider) => (provider.nodeId ?? 'gateway') === 'gateway' && isProviderAccount(provider)),
-    [allProviders],
-  )
   const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
   const [providerAccountTypes, setProviderAccountTypes] = useState<ProviderAccountType[]>([])
+  const providerAccounts = useMemo(
+    () => getGatewayProviderAccounts(allProviders, configuredProviderAccounts, providerAccountTypes),
+    [allProviders, configuredProviderAccounts, providerAccountTypes],
+  )
   const [newProviderAccountType, setNewProviderAccountType] = useState('')
   const [newProviderAccountNodeId, setNewProviderAccountNodeId] = useState('gateway')
   const [newProviderAccountLabel, setNewProviderAccountLabel] = useState('')
@@ -565,13 +560,21 @@ export function SettingsPage({
     waitingForCompletion?: boolean
   } | null>(null)
   const [providerLoginCode, setProviderLoginCode] = useState('')
-  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+  const [tab, setActiveTab] = useUrlSearchState('settings', 'tab', () => {
     if (focusNodeId) return 'nodes'
     try {
       const saved = window.localStorage.getItem('jait.settings.activeTab')
       return saved && Object.hasOwn(SETTINGS_TAB_LABELS, saved) ? saved as SettingsTab : 'general'
     } catch { return 'general' }
   })
+  const activeTab = Object.hasOwn(SETTINGS_TAB_LABELS, tab) ? tab as SettingsTab : 'general'
+  // A tab specified by a link stays selected until the user edits the search.
+  const linkedTabRef = useRef(typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab'))
+  useEffect(() => {
+    const restore = () => { linkedTabRef.current = new URLSearchParams(window.location.search).get('tab') }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
   const settingsRootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     try { window.localStorage.setItem('jait.settings.activeTab', activeTab) } catch { /* storage may be disabled */ }
@@ -597,7 +600,7 @@ export function SettingsPage({
       scroller?.removeEventListener('scroll', onScroll)
     }
   }, [activeTab, focusNodeId])
-  const [search, setSearch] = useState(() => {
+  const [search, setSearch] = useUrlSearchState('settings', 'q', () => {
     try { return window.sessionStorage.getItem('jait.settings.search') ?? '' } catch { return '' }
   })
   useEffect(() => {
@@ -1365,7 +1368,7 @@ export function SettingsPage({
   // When the user searches, jump to the first tab that has matching content so the
   // top-level search box actually finds results across the settings pages.
   useEffect(() => {
-    if (!searchQuery) return
+    if (!searchQuery || linkedTabRef.current) return
     if (tabHasMatch(activeTab)) return
     const next = (Object.keys(SETTINGS_TAB_LABELS) as SettingsTab[]).find((t) => tabHasMatch(t))
     if (next && next !== activeTab) setActiveTab(next)
@@ -1462,8 +1465,8 @@ const providerAccountsCard = (
               {isSignedIn && auth?.username && (
                 <p className="mt-1 text-xs text-muted-foreground">Signed in as {auth.username}</p>
               )}
-              {auth?.detail && (
-                <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
+              {(provider.unavailableReason || auth?.detail) && (
+                <p className="mt-1 text-xs text-muted-foreground">{provider.unavailableReason ?? auth?.detail}</p>
               )}
               {isOpenCode && <OpenCodeGoConnection accountId={providerId} onConnected={loadProviderAccounts} />}
               {loginInstructions && (
@@ -1632,7 +1635,7 @@ const providerAccountsCard = (
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { linkedTabRef.current = null; setSearch(event.target.value) }}
             placeholder="Search settings..."
             className="pl-9"
           />

@@ -1,0 +1,1629 @@
+{
+  "review_scope": "Source-bound pending declarations including local model integration",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/build-retry.test.ts:16:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_build_retry_test_ts_16_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/cli-start.test.ts:94:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_cli_start_test_ts_94_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/cli-update.test.ts:30:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_cli_update_test_ts_30_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/evaluation/isolated-gateway.test.ts:19:1",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_isolated_gateway_test_ts_19_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/browser-devtools.test.ts:80:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_browser_devtools_test_ts_80_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/pairing-preview-access.test.ts:81:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_pairing_preview_access_test_ts_81_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/pairing-preview-access.test.ts:118:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_pairing_preview_access_test_ts_118_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/pairing-preview-access.test.ts:127:1",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_pairing_preview_access_test_ts_127_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-manager.test.ts:57:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_manager_test_ts_57_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-manager.test.ts:78:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_manager_test_ts_78_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-manager.test.ts:96:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_manager_test_ts_96_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-manager.test.ts:117:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_manager_test_ts_117_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-manager.test.ts:155:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_manager_test_ts_155_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/git-stacked.test.ts:210:3",
+      "status": "verified",
+      "parity_review": "Reviewed the configured-state worktree-root expectation; all boundary assertions are retained and the current original/translated test bodies use JAIT_STATE_DIR consistently. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_git_stacked_test_ts_210_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/c91ea989-0bda-4264-a24c-9489c90feea8/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/ollama-device-auth.test.ts:120:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_120_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:970:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_970_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/system-one.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_system_one_test_ts_25_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/system-one.test.ts:62:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_system_one_test_ts_62_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint5.test.ts:252:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint5_test_ts_252_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop.test.ts:2983:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2983_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/decision.test.ts:8:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_decision_test_ts_8_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/remote-executor.test.ts:238:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the single batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-single/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_remote_executor_test_ts_238_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/jait-provider.test.ts:252:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_jait_provider_test_ts_252_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_providers_jait_provider_test_ts_252_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/ollama-device-auth.test.ts:86:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-tool-execution.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_tool_execution_test_ts_25_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_tool_execution_test_ts_25_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-tool-execution.test.ts:53:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_tool_execution_test_ts_53_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_tool_execution_test_ts_53_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:81:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:103:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:112:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:120:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:127:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools.test.ts:134:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/calendar-tools.test.ts:14:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_calendar_tools_test_ts_14_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_calendar_tools_test_ts_14_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/calendar-tools.test.ts:23:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_calendar_tools_test_ts_23_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_calendar_tools_test_ts_23_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/email-tools.test.ts:18:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_18_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_18_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_18_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_18_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_18_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/email-tools.test.ts:33:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_33_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_33_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_33_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_33_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_email_tools_test_ts_33_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/screen-share-tools.test.ts:51:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/screen-share-tools.test.ts:58:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/screen-share-tools.test.ts:64:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/screen-share-tools.test.ts:72:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the variants batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:81:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:86:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:91:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:99:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:104:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:110:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:115:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:120:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:126:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:132:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/browser-tools-integration.test.ts:140:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chromium batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chromium/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/dc1d7a35-e02b-4120-839d-0168b34bdacb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/agent-sandbox-lifecycle.integration.test.ts:9:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_agent_sandbox_lifecycle_integration_test_ts_9_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-ownership.integration.test.ts:46:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_ownership_integration_test_ts_46_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-ownership.integration.test.ts:56:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_ownership_integration_test_ts_56_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/sandbox-ownership.integration.test.ts:66:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_sandbox_ownership_integration_test_ts_66_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/worktree-sandbox.test.ts:33:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_worktree_sandbox_test_ts_33_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/terminal-sandbox-background.integration.test.ts:30:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_integration_test_ts_30_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/terminal-sandbox-background.integration.test.ts:60:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_integration_test_ts_60_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/terminal-sandbox-background.integration.test.ts:74:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_integration_test_ts_74_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/terminal-sandbox-background.integration.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the docker batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-docker/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_integration_test_ts_88_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/4eb51ac4-0ec3-4249-86f8-29e76c5abf17/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/disk-janitor.test.ts:153:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the filesystem batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-filesystem/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_153_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/65d83b59-458b-4f53-a2bd-b883875c1ad2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-ollama-e2e.test.ts:89:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the ollama batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-ollama/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_chat_ollama_e2e_test_ts_89_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/99d49a3e-c5ca-4c7d-9f1f-20a20e6b4db4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-ollama-e2e.test.ts:123:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the ollama batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-ollama/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_chat_ollama_e2e_test_ts_123_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/99d49a3e-c5ca-4c7d-9f1f-20a20e6b4db4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-ollama-e2e.test.ts:164:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the ollama batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-ollama/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_chat_ollama_e2e_test_ts_164_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/99d49a3e-c5ca-4c7d-9f1f-20a20e6b4db4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:964:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the loops batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-loops/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_964_5_for7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:220:7",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the loops batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-loops/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for9",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for10",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for11",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for12",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for13",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for14",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for15",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_220_7_for16",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-openrouter.test.ts:202:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the chat batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-chat/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_202_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_202_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/build-retry.test.ts:24:7",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the runtime batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-runtime/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_build_retry_test_ts_24_7_runtime_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_build_retry_test_ts_24_7_runtime_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_build_retry_test_ts_24_7_runtime_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_build_retry_test_ts_24_7_runtime_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/tool-discovery-consent.test.ts:9:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the runtime batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-runtime/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_tool_discovery_consent_test_ts_9_3_runtime",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/tool-contracts.test.ts:31:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the runtime batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-runtime/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_contracts_test_ts_31_3_runtime",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/tool-contracts.test.ts:43:3",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the runtime batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-runtime/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_contracts_test_ts_43_3_runtime",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/tool-contracts.test.ts:58:5",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the runtime batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-runtime/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_contracts_test_ts_58_5_runtime_branch",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:28:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'stores Go windows and provider-reported Ollama resets' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_28_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:45:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'preserves session usage when refresh temporarily returns request activity' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_45_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:58:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'prioritizes quota limits when response also contains request totals' against the isolated transcribed fixture: 1 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_58_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:63:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'stores request activity separately without inventing quota or resetting cached limits' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_63_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:82:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'inserts a new snapshot and lists it back for the owning account' against the isolated transcribed fixture: 3 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_82_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:104:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'upserts an existing row instead of duplicating it' against the isolated transcribed fixture: 3 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_104_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:123:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'filters snapshots by the requested account ids' against the isolated transcribed fixture: 3 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_123_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:139:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'warns once when utilization crosses the threshold and does not re-notify' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_139_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:159:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'warns on allowed_warning status even without a utilization number' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_159_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:173:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'clears the warned state once utilization drops back below the threshold' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_173_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:198:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'does not warn while utilization stays below the threshold' against the isolated transcribed fixture: 1 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_198_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-usage.test.ts:212:3",
+      "status": "verified",
+      "parity_review": "Reviewed current declaration 'stores Codex session and weekly subscription windows' against the isolated transcribed fixture: 2 original comparison sites; no completion guard or ignored case. Original input/setup/teardown and operand expressions retained; dynamically captured expected fixtures and reference identity remain compared in Rust. The 49-case batch passed both original Vitest and the full source-stable Rust translation run. Per-site reviewed comparison plan: .jait/artifacts/source-completion/refresh/review-comparisons.json. Reference declaration parity only.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_212_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/snapshot-b7df8852-f1ec-43f2-8586-f7699d2cc22f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/usage-refresh-cache.test.ts:4:1",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the drift batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-drift/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_usage_refresh_cache_test_ts_4_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/usage-refresh-cache.test.ts:22:1",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the drift batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-drift/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_usage_refresh_cache_test_ts_22_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/usage-refresh-cache.test.ts:36:1",
+      "status": "verified",
+      "parity_review": "Reviewed original declaration and all generated variants in the drift batch. The source AST review binds imports, fixture inputs, setup/teardown, dynamic tables, assertion operands and matcher polarity. Observed values passed the raw-domain guards; actual Vitest and Rust matcher verdicts agree for baseline observations and opposing counterexamples. Original unchanged Vitest files pass with explicit local integration opt-ins, including the separately saved three-test Ollama result. Runtime registration, discovery/consent, retry-loop and SQL expansion counts are independently checked in original-expansions.json. The batch mutation controls reject changed original/peer operands, expectations, gates or variant inventories as applicable. Every mapped variant has a successful source-bound reference report. Evidence: .jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/parity-final-drift/combined-selected.json, wire-summary.json and structural-negative-controls.json; .jait/artifacts/parity-final/original-expansions.json and complete.json. This is reviewed reference-test assertion preservation; native implementation coverage and complete runtime-source review remain separate requirements.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_usage_refresh_cache_test_ts_36_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-final/source-checkpoint/.jait/artifacts/contracts/853453c9-4449-4ee1-83e3-9f3135880bfb/report.json"
+        }
+      ]
+    }
+  ]
+}

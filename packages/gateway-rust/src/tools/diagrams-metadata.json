@@ -1,0 +1,46 @@
+[
+  {
+    "name": "architecture.generate",
+    "description": "Generate and display a Mermaid architecture diagram of the current project. Analyze the project structure, dependencies, modules, and data flow, then produce a valid Mermaid diagram (flowchart, graph, C4, etc.). The diagram will be rendered in the editor Architecture tab and saved to .jait/architecture.mmd. Output the Mermaid source as the `diagram` parameter.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "diagram": {
+          "type": "string",
+          "description": "The complete Mermaid diagram source code. Must be valid Mermaid syntax (e.g. flowchart TD, graph LR, C4Context, etc.). Do not wrap in code fences."
+        }
+      },
+      "required": [
+        "diagram"
+      ]
+    }
+  },
+  {
+    "name": "diagram.render",
+    "description": "Display a Mermaid diagram directly in chat. Use for flowcharts, sequences, and other visual explanations. Pass Mermaid source without code fences and an optional title. The chat card preserves the source; no files or editor tabs are changed.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "diagram": {
+          "type": "string",
+          "description": "Mermaid source without code fences"
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional title, up to 200 characters"
+        }
+      },
+      "required": [
+        "diagram"
+      ]
+    }
+  }
+]

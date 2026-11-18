@@ -5,6 +5,13 @@ import { signAuthToken } from "../security/http-auth.js";
 import { SessionStateService } from "../services/session-state.js";
 import { SessionService } from "../services/sessions.js";
 import { UserService } from "../services/users.js";
+import { ThreadService } from "../services/threads.js";
+import { TeamChatService } from "../services/team-chat.js";
+import { createTeamChatTool } from "../tools/team-chat-tools.js";
+import type { AppConfig } from "../config.js";
+import type { ToolContext } from "../tools/contracts.js";
+import { UserQuestionService } from "../services/user-questions.js";
+import { createUserAskTool } from "../tools/user-question-tools.js";
 import { createTodoTool } from "../tools/core/todo.js";
 import { ToolRegistry } from "../tools/registry.js";
 import {
@@ -22,6 +29,106 @@ afterEach(async () => {
 });
 
 describe("mcp-server", () => {
+  it.each([false, true])("requires browser calls to bind their chat instead of borrowing last-active (authenticated=%s)", async (authenticated) => {
+    const owner = "browser-owner";
+    const personal = { id: "personal-chat", userId: owner, projectPath: null };
+    const project = { id: "project-chat", userId: owner, projectPath: "/project" };
+    let active = project;
+    const sessionService = {
+      lastActive: vi.fn(() => active),
+      getById: vi.fn((id: string) => id === personal.id ? personal : project),
+    } as unknown as SessionService;
+    const execute = vi.fn(async (_input: unknown, context: ToolContext) => ({
+      ok: true, message: "browser opened", data: { sessionId: context.sessionId },
+    }));
+    const registry = new ToolRegistry();
+    for (const name of ["browser.navigate", "browser.handoff", "preview.open", "surfaces.start"]) {
+      registry.register({ name, description: "Browser session routing test", tier: "standard",
+        category: name === "surfaces.start" ? "surfaces" : "browser", source: "builtin",
+        parameters: { type: "object", properties: {} }, execute });
+    }
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService,
+      config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as AppConfig });
+    const headers = authenticated
+      ? { authorization: `Bearer ${await signAuthToken({ id: owner, username: owner }, "test-secret")}` } : {};
+    for (const endpoint of ["/mcp", "/mcp/sse"]) {
+      for (const name of ["browser_navigate", "browser_handoff", "preview_open", "surfaces_start"]) {
+        const payload = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: { type: "browser" } } };
+        const unbound = await app.inject({ method: "POST", url: endpoint, headers, payload });
+        expect(unbound.json()).toMatchObject({ result: { isError: true } });
+        expect(JSON.stringify(unbound.json())).toContain("explicit sessionId");
+        expect(execute).not.toHaveBeenCalled();
+        // A newer project conversation, or switching the last-active chat, must
+        // never move browser actions or their handoff away from this personal chat.
+        for (const selected of [project, personal, project]) {
+          active = selected;
+          const bound = await app.inject({ method: "POST", url: `${endpoint}?sessionId=${personal.id}`, headers, payload });
+          expect(bound.json()).toMatchObject({ result: { isError: false } });
+          expect(execute.mock.calls.at(-1)?.[1].sessionId).toBe(personal.id);
+        }
+        execute.mockClear();
+      }
+    }
+  });
+
+  it("keeps a user question resumable across MCP call deadlines", async () => {
+    vi.useFakeTimers();
+    try {
+      const service = new UserQuestionService();
+      const registry = new ToolRegistry();
+      registry.register(createUserAskTool(service));
+      const call = (args: unknown) => handleMcpRequest({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "user_ask", arguments: args },
+      }, registry, undefined, { sessionId: "session-1", userId: "user-1" });
+      const first = call({ questions: [{ id: "choice", header: "Choice", question: "Which one?" }] });
+      await vi.advanceTimersByTimeAsync(60_000);
+      const response = await first;
+      expect(response).toMatchObject({ result: { isError: false } });
+      const [request] = service.listPending();
+      expect(JSON.stringify(response)).toContain(request!.id);
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      expect(service.submit(request!.id, { answers: { choice: { selected: ["yes"], freeText: null, skipped: false } } }, "user-1")).toBe(true);
+      const answer = await call({ requestId: request!.id });
+      expect(answer).toMatchObject({ result: { isError: false } });
+      expect(JSON.stringify(answer)).toContain("yes");
+      expect(service.listPending()).toHaveLength(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("pauses MCP actions until this chat's question is answered or cancelled", async () => {
+    const app = Fastify();
+    appsToClose.push(app);
+    const questions = new UserQuestionService();
+    const registry = new ToolRegistry();
+    const mutate = vi.fn(async () => ({ ok: true, message: "changed" }));
+    registry.register({ name: "file.write", tier: "standard", category: "filesystem", source: "builtin",
+      description: "Test mutation", parameters: { type: "object", properties: {} }, execute: mutate });
+    registry.register(createUserAskTool(questions));
+    registerMcpRoutes(app, { toolRegistry: registry, userQuestionService: questions,
+      config: { host: "127.0.0.1", port: 3000 } as AppConfig });
+    const call = async (sessionId: string, name: string, args = {}) => (await app.inject({
+      method: "POST", url: `/mcp?sessionId=${sessionId}`,
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
+    })).json();
+    const id = questions.startResumable({ sessionId: "waiting-chat", questions: [], requestedBy: "user.ask" });
+    const blocked = await call("waiting-chat", "file_write");
+    expect(blocked.result.isError).toBe(true);
+    expect(JSON.stringify(blocked)).toContain(id);
+    expect(mutate).not.toHaveBeenCalled();
+    expect((await call("another-chat", "file_write")).result.isError).toBe(false);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    questions.submit(id, { answers: {} });
+    expect((await call("waiting-chat", "user_ask", { requestId: id })).result.isError).toBe(false);
+    expect((await call("waiting-chat", "file_write")).result.isError).toBe(false);
+    expect(mutate).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps essential tools in a dedicated core MCP catalog", async () => {
     const registry = new ToolRegistry();
     for (const [name, tier] of [
@@ -81,7 +188,7 @@ describe("mcp-server", () => {
     });
   });
 
-  it("exposes only non-core builtin tools and allowlisted core tools over MCP", async () => {
+  it("exposes non-core builtin, plugin and bridged MCP server tools plus allowlisted core tools over MCP", async () => {
     const registry = new ToolRegistry();
     registry.register({
       name: "read",
@@ -159,7 +266,12 @@ describe("mcp-server", () => {
       },
     });
 
-    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["jait.todos", "user.ask", "cron.add"]);
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual([
+      "jait.todos",
+      "user.ask",
+      "cron.add",
+      "mcp.github.create_issue",
+    ]);
 
     const response = await handleMcpRequest({
       jsonrpc: "2.0",
@@ -218,9 +330,167 @@ describe("mcp-server", () => {
               destructiveHint: true,
             },
           },
+          {
+            name: "mcp_github_create_issue",
+            description: "External MCP tool",
+            inputSchema: { type: "object", properties: {} },
+            annotations: {
+              destructiveHint: true,
+            },
+          },
         ],
       },
     });
+  });
+
+  it("calls tools by the provider-safe name clients are shown, even when the real name contains underscores", async () => {
+    const registry = new ToolRegistry();
+    const executed: string[] = [];
+    const register = (name: string, source: "builtin" | "mcp", tier: "core" | "standard" | "external" = "standard") =>
+      registry.register({
+        name,
+        description: name,
+        tier,
+        category: source === "mcp" ? "external" : "gateway",
+        source,
+        parameters: { type: "object", properties: {} },
+        async execute() {
+          executed.push(name);
+          return { ok: true, message: `ran ${name}` };
+        },
+      });
+    register("mcp.add_server", "builtin");
+    register("project.assign_repository", "builtin");
+    register("mcp.opengym.get_workout_history", "mcp", "external");
+    register("file.write", "builtin");
+    register("core.hidden_tool", "builtin", "core");
+
+    const call = (name: string) =>
+      handleMcpRequest(
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } },
+        registry,
+        "2025-03-26",
+        { sessionId: "session-1" },
+      );
+
+    const realNames = [
+      "mcp.add_server",
+      "project.assign_repository",
+      "mcp.opengym.get_workout_history",
+      "file.write",
+    ];
+    for (const realName of realNames) {
+      const advertised = realName.replace(/\./g, "_");
+      expect(await call(advertised)).toMatchObject({
+        result: { isError: false, content: [{ text: `ran ${realName}` }] },
+      });
+    }
+    expect(executed).toEqual(realNames);
+
+    // The underscore recovery only resolves names that tools/list advertises.
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).not.toContain("core.hidden_tool");
+    expect(await call("core_hidden_tool")).toMatchObject({
+      result: { isError: true, content: [{ text: "Unknown tool: core.hidden.tool" }] },
+    });
+    expect(executed).toEqual(realNames);
+  });
+
+  it("refuses to guess between tools that share a provider-safe name", async () => {
+    const registry = new ToolRegistry();
+    const executed: string[] = [];
+    for (const name of ["team.chat_room", "team_chat.room"]) {
+      registry.register({
+        name,
+        description: name,
+        tier: "standard",
+        category: "gateway",
+        source: "builtin",
+        parameters: { type: "object", properties: {} },
+        async execute() {
+          executed.push(name);
+          return { ok: true, message: `ran ${name}` };
+        },
+      });
+    }
+    const call = (name: string) =>
+      handleMcpRequest(
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } },
+        registry,
+        "2025-03-26",
+        { sessionId: "session-1" },
+      );
+
+    const ambiguous = await call("team_chat_room");
+    expect(ambiguous).toMatchObject({ result: { isError: true } });
+    expect(JSON.stringify(ambiguous)).toContain("Ambiguous tool name team_chat_room");
+    expect(JSON.stringify(ambiguous)).toContain("team.chat_room");
+    expect(JSON.stringify(ambiguous)).toContain("team_chat.room");
+    expect(executed).toEqual([]);
+
+    // The exact registered name is never ambiguous.
+    expect(await call("team.chat_room")).toMatchObject({ result: { isError: false } });
+    expect(executed).toEqual(["team.chat_room"]);
+  });
+
+  it("serves bridged MCP server tools in the deferred catalog and runs them through the tool executor under their real name", async () => {
+    const registry = new ToolRegistry();
+    const directExecute = vi.fn(async () => ({ ok: true, message: "direct execution" }));
+    registry.register({
+      name: "mcp.opengym.get_workout_history",
+      description: "[MCP: opengym] Get the user's workout history",
+      tier: "external",
+      category: "external",
+      source: "mcp",
+      parameters: { type: "object", properties: { days: { type: "number" } } },
+      execute: directExecute,
+    });
+    // The executor is the consent gate: it must be asked about the registered
+    // name, not about a name guessed from the provider-safe form.
+    const toolExecutor = vi.fn(async () => ({ ok: true, message: "gated execution" }));
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      toolExecutor,
+      config: { host: "127.0.0.1", port: 3000 } as any,
+    });
+
+    const listTools = async (toolSet: string) => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/mcp?toolSet=${toolSet}`,
+        payload: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      });
+      return response.json().result.tools.map((tool: { name: string }) => tool.name);
+    };
+    expect(await listTools("deferred")).toEqual(["mcp_opengym_get_workout_history"]);
+    expect(await listTools("core")).toEqual([]);
+
+    const call = (toolSet: string) =>
+      app.inject({
+        method: "POST",
+        url: `/mcp?toolSet=${toolSet}&sessionId=chat-1`,
+        payload: {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: "mcp_opengym_get_workout_history", arguments: { days: 7 } },
+        },
+      });
+
+    expect((await call("deferred")).json()).toMatchObject({
+      result: { content: [{ text: "gated execution" }], isError: false },
+    });
+    expect(toolExecutor).toHaveBeenCalledWith(
+      "mcp.opengym.get_workout_history",
+      { days: 7 },
+      expect.objectContaining({ sessionId: "chat-1", requestedBy: "mcp-client" }),
+    );
+    expect(directExecute).not.toHaveBeenCalled();
+
+    // The core catalog never serves deferred tools.
+    expect((await call("core")).json()).toMatchObject({ result: { isError: true } });
+    expect(toolExecutor).toHaveBeenCalledTimes(1);
   });
 
   it("advertises human-friendly tool titles to MCP clients", async () => {
@@ -713,6 +983,34 @@ describe("mcp-server", () => {
     });
   });
 
+  it("passes the authenticated user's saved API keys into MCP tool context", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const registry = new ToolRegistry();
+    const userId = "user-keys";
+    sessionService.create({ userId, name: "Keys", projectPath: "/tmp/keys" });
+    const token = await signAuthToken({ id: userId, username: "alice" }, "test-secret");
+    let captured: Record<string, string> | undefined;
+    registry.register({
+      name: "surfaces.start", description: "Start a surface", tier: "standard", category: "surfaces", source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute(_input, context) { captured = context.apiKeys; return { ok: true, message: "ok" }; },
+    });
+    const userService = { getSettings: (id: string) => ({ apiKeys: id === userId ? { JEV_API_KEY: "secret-key" } : {} }) } as unknown as UserService;
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService, userService, config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as any });
+
+    const response = await app.inject({
+      method: "POST", url: "/mcp",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "surfaces.start", arguments: {} } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(captured).toEqual({ JEV_API_KEY: "secret-key" });
+  });
+
   it("uses the global last active session for unauthenticated local MCP tool calls", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -1010,15 +1308,18 @@ describe("mcp-server", () => {
       const userService = new UserService(db);
       const sessionState = new SessionStateService(db);
       const user = userService.createUser("codex-owner", "password123");
-      userService.updateSettings(user.id, { chatProvider: "codex" });
+      // Account-level default is a decoy: autonomous/MCP turns must never
+      // inherit it — only the selection the user recorded on this chat counts.
+      userService.updateSettings(user.id, { chatProvider: "openrouter" });
       const session = sessionService.create({
         userId: user.id,
         name: "Codex Session",
         projectPath: "/tmp/current-project",
       });
       sessionState.set(session.id, {
+        "chat.provider": "codex",
         "chat.providerRuntimeMode": "supervised",
-        "chat.cliModels": { codex: "gpt-5-codex" },
+        "chat.cliModels": { codex: "gpt-5-codex", openrouter: "anthropic/claude-sonnet-4" },
       });
 
       const registry = new ToolRegistry();
@@ -1091,6 +1392,94 @@ describe("mcp-server", () => {
         model: "gpt-5-codex",
         runtimeMode: "supervised",
       });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it.each(["/mcp", "/mcp/sse"])("resolves a worker's owner and execution context through %s", async (endpoint) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const sessionService = new SessionService(db);
+      const threadService = new ThreadService(db);
+      // The most recent chat belongs to someone else; worker calls must keep
+      // their own durable identity rather than adopting global chat defaults.
+      sessionService.create({ userId: "other-user", name: "Unrelated chat" });
+      const thread = threadService.create({
+        userId: "worker-owner",
+        personaAgentId: "developer",
+        title: "Worker preflight",
+        providerId: "codex",
+        model: "gpt-5.5",
+        runtimeMode: "supervised",
+        workingDirectory: "/project/worker",
+      });
+      let capturedContext: ToolContext | undefined;
+      const registry = new ToolRegistry();
+      registry.register({
+        name: "agent.github",
+        description: "Inspect worker identity",
+        parameters: { type: "object", properties: {} },
+        async execute(_input, context) {
+          capturedContext = context;
+          return context.userId
+            ? { ok: true, message: "Authenticated worker" }
+            : { ok: false, message: "Authenticated user required." };
+        },
+      });
+      registry.register(createTeamChatTool(new TeamChatService(db, sessionService, threadService), sessionService));
+      const app = Fastify();
+      appsToClose.push(app);
+      registerMcpRoutes(app, {
+        toolRegistry: registry, sessionService, threadService,
+        config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as AppConfig,
+      });
+      const response = await app.inject({
+        method: "POST",
+        url: `${endpoint}?sessionId=${thread.id}`,
+        payload: {
+          jsonrpc: "2.0", id: 1, method: "tools/call",
+          params: { name: "agent_github", arguments: {} },
+        },
+      });
+      expect(response.json().result).toMatchObject({ isError: false });
+      expect(capturedContext).toMatchObject({
+        sessionId: thread.id,
+        threadId: thread.id,
+        userId: "worker-owner",
+        projectRoot: "/project/worker",
+        providerId: "codex",
+        model: "gpt-5.5",
+        runtimeMode: "supervised",
+      });
+      const teamResponse = await app.inject({
+        method: "POST",
+        url: `${endpoint}?sessionId=${thread.id}`,
+        payload: {
+          jsonrpc: "2.0", id: 2, method: "tools/call",
+          params: { name: "team_chat", arguments: { action: "list" } },
+        },
+      });
+      expect(teamResponse.json().result).toMatchObject({
+        isError: false,
+        content: [{ text: expect.stringContaining("Persistent team rooms.") }],
+      });
+
+      const token = await signAuthToken({ id: "other-user", username: "other" }, "test-secret");
+      await app.inject({
+        method: "POST",
+        url: `${endpoint}?sessionId=${thread.id}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          jsonrpc: "2.0", id: 3, method: "tools/call",
+          params: { name: "agent_github", arguments: {} },
+        },
+      });
+      expect(capturedContext?.userId).toBe("other-user");
+      expect(capturedContext?.threadId).toBeUndefined();
+      expect(capturedContext?.providerId).toBeUndefined();
+      expect(capturedContext?.projectRoot).not.toBe("/project/worker");
     } finally {
       sqlite.close();
     }

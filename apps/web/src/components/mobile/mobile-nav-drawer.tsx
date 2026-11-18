@@ -9,12 +9,13 @@ import {
   MessagesSquare,
   UsersRound,
   Brain,
-  Settings,
   Wifi,
+  Workflow,
   X,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useMessengerBadge } from '@/components/messenger/messenger-provider'
 import type { AppView } from '@/lib/app-view'
 
 interface NavItem {
@@ -25,6 +26,9 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { view: 'chat', label: 'Chat', icon: MessageSquare },
+  { view: 'agents', label: 'Agents', icon: UsersRound },
+  { view: 'messenger', label: 'Messenger', icon: MessagesSquare },
+  { view: 'threads', label: 'Threads', icon: Workflow },
   { view: 'pulls', label: 'PRs', icon: GitPullRequest },
   { view: 'todo', label: 'Todo', icon: Boxes },
   { view: 'email', label: 'Email', icon: Mail },
@@ -33,11 +37,6 @@ const NAV_ITEMS: readonly NavItem[] = [
   { view: 'jobs', label: 'Jobs', icon: Calendar },
   { view: 'network', label: 'Network', icon: Wifi },
 ] as const
-
-const MANAGER_NAV_ITEMS: readonly NavItem[] = [
-  { view: 'agents', label: 'Agents', icon: UsersRound },
-  { view: 'threads', label: 'Threads', icon: MessagesSquare },
-]
 
 interface MobileNavDrawerProps {
   open: boolean
@@ -49,9 +48,6 @@ interface MobileNavDrawerProps {
 
   // Projects / sessions sidebar
   sessionSelector: ReactNode
-
-  // Settings
-  onOpenSettings: () => void
 }
 
 export function MobileNavDrawer({
@@ -60,8 +56,8 @@ export function MobileNavDrawer({
   currentView,
   onNavigate,
   sessionSelector,
-  onOpenSettings,
 }: MobileNavDrawerProps) {
+  const { count: messengerCount } = useMessengerBadge()
   const managerMode = currentView === 'threads' || currentView === 'agents'
   return (
     <>
@@ -96,7 +92,7 @@ export function MobileNavDrawer({
           {/* Nav items */}
           <nav className="shrink-0 border-b p-1.5">
             <div className="grid grid-cols-3 gap-0.5">
-              {(managerMode ? MANAGER_NAV_ITEMS : NAV_ITEMS).map(({ view, label, icon: Icon }) => (
+              {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
                 <button
                   key={view}
                   onClick={() => { onNavigate(view); onClose() }}
@@ -108,31 +104,15 @@ export function MobileNavDrawer({
                   aria-label={label}
                   aria-current={currentView === view ? 'page' : undefined}
                 >
-                  <Icon className="h-4 w-4" />
+                  <span className="relative"><Icon className="h-4 w-4" />{view === 'messenger' && messengerCount > 0 && <span className="absolute -right-2 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">{messengerCount > 99 ? '99+' : messengerCount}</span>}</span>
                   <span>{label}</span>
                 </button>
               ))}
-              <button
-                onClick={() => { onOpenSettings(); onClose() }}
-                className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-2xs transition-colors ${
-                  currentView === 'settings'
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }`}
-                aria-label="Settings"
-                aria-current={currentView === 'settings' ? 'page' : undefined}
-              >
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </button>
             </div>
           </nav>
 
-          {/* Projects / sessions selector */}
+          {/* Projects / sessions selector — no title row: the selector's own search field names it */}
           {!managerMode && <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex h-9 shrink-0 items-center border-b px-3 text-xs font-medium text-foreground">
-              <span>Projects & Chats</span>
-            </div>
             <div className="min-h-0 flex-1">
               {sessionSelector}
             </div>

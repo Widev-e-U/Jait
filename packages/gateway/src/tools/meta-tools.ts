@@ -127,7 +127,7 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
         },
         limit: {
           type: "number",
-          description: "Maximum matches to return. Defaults to 8 and is capped at 20.",
+          description: "Maximum matches to return. Defaults to 3 and is capped at 20.",
         },
       },
       required: ["query"],
@@ -136,7 +136,7 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
     category: "meta",
     source: "builtin",
     async execute(input, context) {
-      const limit = Math.max(1, Math.min(20, Math.floor(input.limit ?? 8)));
+      const limit = Math.max(1, Math.min(20, Math.floor(input.limit ?? 3)));
       const candidates = context.requestedBy === "mcp-client" ? registry.listForMcp() : undefined;
       const ranked = await registry.rankSearchWithSystemOne(input.query, { candidates, limit }, context.apiKeys);
 

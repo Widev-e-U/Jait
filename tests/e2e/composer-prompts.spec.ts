@@ -65,6 +65,15 @@ test('compact questions preserve answers across steps and support custom text', 
   await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/question-mobile.png') })
   await page.getByRole('button', { name: 'Write another answer' }).click()
   await page.getByRole('textbox', { name: 'Answer: Approach' }).fill('Include the related regression test.')
+  const header = page.getByRole('button', { name: 'Choose your preferences', exact: true })
+  const expandedHeight = (await page.getByTestId('inline-user-question-prompt').boundingBox())!.height
+  await header.click()
+  await expect(header).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('textbox', { name: 'Answer: Approach' })).toBeHidden()
+  expect((await page.getByTestId('inline-user-question-prompt').boundingBox())!.height).toBeLessThan(expandedHeight)
+  expect(submissions).toEqual([])
+  await header.click()
+  await expect(page.getByRole('textbox', { name: 'Answer: Approach' })).toHaveValue('Include the related regression test.')
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Submit', exact: true })).toBeDisabled()
   await page.getByRole('checkbox', { name: 'Morning' }).check()
@@ -78,6 +87,29 @@ test('compact questions preserve answers across steps and support custom text', 
     approach: { selected: ['Focused change'], freeText: 'Include the related regression test.', skipped: false },
     timing: { selected: ['Morning', 'Evening'], freeText: null, skipped: false },
   } }])
+})
+
+test('prompt cards do not nest a second frame inside the composer shell', async ({ page }) => {
+  await openPrompt(page, 'question')
+  const card = page.getByTestId('inline-user-question-prompt')
+  await expect(card).toBeVisible()
+  const frames = await card.evaluate(el => {
+    const own = getComputedStyle(el)
+    const shell = el.closest('.rounded-2xl')
+    const shellStyle = shell ? getComputedStyle(shell) : null
+    return {
+      cardBorder: [own.borderTopWidth, own.borderRightWidth, own.borderBottomWidth, own.borderLeftWidth].join('/'),
+      cardRadius: own.borderTopLeftRadius,
+      shellBorder: shellStyle?.borderTopWidth ?? 'missing',
+      shellRadius: shellStyle?.borderTopLeftRadius ?? 'missing',
+    }
+  })
+  // The composer shell owns the one visible frame…
+  expect(frames.shellBorder).toBe('1px')
+  expect(frames.shellRadius).toBe('16px')
+  // …so the prompt card must stay square and frameless, otherwise the two nest into a double border.
+  expect(frames.cardBorder).toBe('0px/0px/0px/0px')
+  expect(frames.cardRadius).toBe('0px')
 })
 
 test('a long question scrolls independently while actions remain visible', async ({ page }) => {

@@ -1,0 +1,53 @@
+{
+  "review_scope": "Four bounded process cleanup completion contracts with original Node verdicts and targeted mutations",
+  "declarations": [
+    {
+      "id": "packages/gateway/scripts/smoke-process.test.mjs:26:1",
+      "status": "verified",
+      "parity_review": "A child with null exitCode and SIGTERM signalCode must complete without kill or another exit event. Original node:test has no explicit expect/assert call: success is bounded awaited completion, including the 100ms rejection race and finally timer cleanup. Manually reviewed the identical child and boundedCleanup helpers, execution statements and original node:events/production imports in fixture0. The single Rust toComplete predicate preserves both resolve and throw outcomes. The original Node runner, actual Bun fixture and unchanged Rust matcher agree for all 16 baseline/mutation pairs. Four targeted failures distinguish already-exited signal/code children, late exit subscription and undefined input. Evidence and SHA256 bindings: .jait/artifacts/parity-continue/completion/evidence.json. The full translated source-checkpoint report passes every mapped case. This is reference completion equivalence, not native gateway execution parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_scripts_smoke_process_test_mjs_26_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/scripts/smoke-process.test.mjs:30:1",
+      "status": "verified",
+      "parity_review": "A child with exitCode 0 must complete without kill or another exit event. Original node:test has no explicit expect/assert call: success is bounded awaited completion, including the 100ms rejection race and finally timer cleanup. Manually reviewed the identical child and boundedCleanup helpers, execution statements and original node:events/production imports in fixture0. The single Rust toComplete predicate preserves both resolve and throw outcomes. The original Node runner, actual Bun fixture and unchanged Rust matcher agree for all 16 baseline/mutation pairs. Four targeted failures distinguish already-exited signal/code children, late exit subscription and undefined input. Evidence and SHA256 bindings: .jait/artifacts/parity-continue/completion/evidence.json. The full translated source-checkpoint report passes every mapped case. This is reference completion equivalence, not native gateway execution parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_scripts_smoke_process_test_mjs_30_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/scripts/smoke-process.test.mjs:34:1",
+      "status": "verified",
+      "parity_review": "A synchronous exit emitted inside kill must not be missed; the listener must be attached first. Original node:test has no explicit expect/assert call: success is bounded awaited completion, including the 100ms rejection race and finally timer cleanup. Manually reviewed the identical child and boundedCleanup helpers, execution statements and original node:events/production imports in fixture0. The single Rust toComplete predicate preserves both resolve and throw outcomes. The original Node runner, actual Bun fixture and unchanged Rust matcher agree for all 16 baseline/mutation pairs. Four targeted failures distinguish already-exited signal/code children, late exit subscription and undefined input. Evidence and SHA256 bindings: .jait/artifacts/parity-continue/completion/evidence.json. The full translated source-checkpoint report passes every mapped case. This is reference completion equivalence, not native gateway execution parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_scripts_smoke_process_test_mjs_34_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/scripts/smoke-process.test.mjs:44:1",
+      "status": "verified",
+      "parity_review": "An undefined child must complete without dereference or event subscription. Original node:test has no explicit expect/assert call: success is bounded awaited completion, including the 100ms rejection race and finally timer cleanup. Manually reviewed the identical child and boundedCleanup helpers, execution statements and original node:events/production imports in fixture0. The single Rust toComplete predicate preserves both resolve and throw outcomes. The original Node runner, actual Bun fixture and unchanged Rust matcher agree for all 16 baseline/mutation pairs. Four targeted failures distinguish already-exited signal/code children, late exit subscription and undefined input. Evidence and SHA256 bindings: .jait/artifacts/parity-continue/completion/evidence.json. The full translated source-checkpoint report passes every mapped case. This is reference completion equivalence, not native gateway execution parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_scripts_smoke_process_test_mjs_44_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/d997650f-aba0-420b-be93-24403b0a4145/report.json"
+        }
+      ]
+    }
+  ]
+}

@@ -38,6 +38,70 @@ describe("MobilePushService", () => {
     } finally { sqlite.close(); }
   });
 
+  it("sends only a gateway image reference, never attachment contents or encryption keys", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, { project_id: "test", client_email: "test@example.com", private_key: "unused" }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone", "user-a", "token-a");
+      await service.sendMessengerMessage("user-a", { roomId: "!room:test", eventId: "$photo", title: "Bob", body: "Photo", timestamp: 1234, image: true });
+      const data = JSON.parse(send.mock.calls[0]![1]!.body as string).message.data;
+      expect(data).toMatchObject({ id: "matrix-message:$photo", replaceId: "matrix-room:!room:test", roomId: "!room:test", eventId: "$photo", imageAvailable: "true", timestamp: "1234" });
+      expect(JSON.stringify(data)).not.toContain("secret");
+      expect(JSON.stringify(data)).not.toContain("mxc://");
+    } finally { sqlite.close(); }
+  });
+
+  it("clears the exact completion on only the owner's devices, even if one push fails", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const token = JSON.parse(init!.body as string).message.token;
+        return new Response("{}", { status: token === "bad-token" ? 503 : 200 });
+      });
+      const service = new MobilePushService(db, {
+        project_id: "test", client_email: "test@example.com", private_key: "unused",
+      }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("stale", "user-a", "bad-token");
+      service.register("phone-a", "user-a", "token-a");
+      service.register("phone-b", "user-b", "token-b");
+      await service.sendChatNotificationRead("user-a", {
+        id: "completion-1", sessionId: "s", replaceId: "chat-complete:s", read: true,
+      });
+      const messages = send.mock.calls.map((call) => JSON.parse(call[1]!.body as string).message);
+      expect(messages).toHaveLength(2);
+      expect(messages.map((message) => message.token).sort()).toEqual(["bad-token", "token-a"]);
+      expect(messages.find((message) => message.token === "token-a")).toEqual({ token: "token-a", data: {
+        type: "chat.notification-read", id: "completion-1", sessionId: "s", replaceId: "chat-complete:s",
+      }, android: { priority: "high", ttl: "3600s" } });
+      expect(warn).toHaveBeenCalledOnce();
+    } finally { warn.mockRestore(); sqlite.close(); }
+  });
+
+  it("sends questions without an expiry or push TTL override", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, {
+        project_id: "test", client_email: "test@example.com", private_key: "unused",
+      }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone", "user-a", "token-phone");
+      await service.sendAttention({ key: "question:q1", kind: "question", requestId: "q1", sessionId: "s1",
+        userId: "user-a", title: "Question", body: "Choose", urgent: false, actions: [], link: "/",
+        createdAt: new Date().toISOString(), expiresAt: null });
+      const body = JSON.parse(send.mock.calls[0]![1]!.body as string);
+      expect(body.message.android).toEqual({ priority: "high" });
+      expect(JSON.parse(body.message.data.item).expiresAt).toBeNull();
+    } finally { sqlite.close(); }
+  });
+
   it("persists registrations across service instances", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

@@ -36,8 +36,71 @@ export function attentionKey(kind: AttentionKind, requestId: string): string {
   return `${kind}:${requestId}`;
 }
 
+/**
+ * Why a chat is stopped and waiting on the user right now.
+ *
+ * Every blocking interaction Jait has — a `user.ask` question, a tool-consent
+ * prompt, a secret prompt, the user taking browser control, a terminal command
+ * sitting at an interactive prompt — reports through this one vocabulary, so a
+ * chat list can render a single reason-aware icon instead of one badge per
+ * feature. `"background"` is the odd one out: the agent is not blocked on the
+ * user, it is waiting for a long-running background command.
+ */
+export type SessionWaitKind =
+  | "question"
+  | "consent"
+  | "secret"
+  | "browser"
+  | "terminal"
+  | "background";
+
+export interface SessionWait {
+  /** Stable identity — raising and clearing both go through this key. */
+  key: string;
+  kind: SessionWaitKind;
+  sessionId: string;
+  /** Short label rendered as the chat-row tooltip, e.g. "Waiting for approval". */
+  label: string;
+  /** Optional extra context: tool name, command, question title. */
+  detail?: string;
+  /**
+   * True when the user must act before the chat can continue (the agent has
+   * stopped). False for states the agent is only waiting out, such as a
+   * background command it asked to be woken up for.
+   */
+  blocking: boolean;
+}
+
+/** Default human-readable label for a wait kind, used when no detail is given. */
+export function sessionWaitLabel(kind: SessionWaitKind): string {
+  switch (kind) {
+    case "question":
+      return "Waiting for your answer";
+    case "consent":
+      return "Waiting for approval";
+    case "secret":
+      return "Waiting for a secret";
+    case "browser":
+      return "Paused — you have browser control";
+    case "terminal":
+      return "Waiting for terminal input";
+    case "background":
+      return "Waiting for a background command";
+  }
+}
+
+/** Blocking kinds the user must resolve, in the order a chat list should show them. */
+export const BLOCKING_SESSION_WAIT_KINDS: readonly SessionWaitKind[] = [
+  "question",
+  "consent",
+  "secret",
+  "browser",
+  "terminal",
+];
+
 // WebSocket event types
 export type WsEventType =
+  | "messenger.request"
   | "session.created"
   | "session.closed"
   | "node.registry"
@@ -55,6 +118,15 @@ export type WsEventType =
   | "session.streaming-snapshot"
   | "tool.call"
   | "tool.result"
+  // WebRTC screen-sharing signaling and lifecycle.
+  | "screen-share:offer"
+  | "screen-share:answer"
+  | "screen-share:ice-candidate"
+  | "screen-share:start-request"
+  | "screen-share:start-error"
+  | "screen-share:stop-request"
+  | "screen-share:control-handoff"
+  | "screen-share:state-update"
   | "consent.required"
   | "consent.resolved"
   | "consent.pending-snapshot"
@@ -62,6 +134,12 @@ export type WsEventType =
   | "secret.resolved"
   | "user-question.requested"
   | "user-question.resolved"
+  | "user-question.pending-snapshot"
+  // Per-chat waiting state: why a chat is stopped (question, consent, secret,
+  // browser takeover, interactive terminal) or which background command it is
+  // waiting on. Drives the reason-aware icon in the chat list.
+  | "session-wait.updated"
+  | "session-wait.snapshot"
   // Cross-device attention layer: one item per "a chat needs the user", with a
   // stable key every platform reuses as its native notification identity so a
   // single "cleared" event revokes the toast on phone, watch, desktop and web.
@@ -104,7 +182,13 @@ export type WsEventType =
   | "chat.deleted"
   | "chat.moved"
   | "notification"
+  | "notification.cleared"
+  | "notification.snapshot"
   | "fs.changes"
+  // Owner-wide autonomous-execution kill switch. Broadcast after every
+  // halt/resume so every surface can render the banner from server state
+  // rather than optimistically flipping a local flag.
+  | "agent.halted"
   | "error";
 
 export interface WsEvent<T = unknown> {

@@ -763,6 +763,11 @@ StartLimitIntervalSec=0
 ExecStart=${execStart}
 Environment=PATH=${extraPaths}
 Environment=JAIT_UNIT=${SERVICE_NAME}
+# Node ships a 4-thread libuv pool for all async filesystem work. One heavy
+# recursive scan (large project, generated build tree, watch retry loop) can
+# occupy every thread, which stalls unrelated file-backed responses — the UI
+# then hangs while /health still answers. Give the pool headroom.
+Environment=UV_THREADPOOL_SIZE=${process.env["UV_THREADPOOL_SIZE"] ?? "16"}
 Restart=always
 RestartSec=5
 KillMode=mixed

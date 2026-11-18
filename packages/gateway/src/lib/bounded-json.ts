@@ -7,10 +7,24 @@ interface CompactLimits {
   maxObjectEntries: number;
 }
 
+/**
+ * Slice without ever splitting a UTF-16 surrogate pair. Truncating mid-pair
+ * would emit a lone surrogate, which is malformed UTF-16 and encodes to a
+ * 3-byte replacement character in strict UTF-8 encoders.
+ */
+function safeSlice(value: string, end: number): string {
+  if (end <= 0) return "";
+  if (end >= value.length) return value;
+  const code = value.charCodeAt(end - 1);
+  const next = value.charCodeAt(end);
+  const splitsPair = code >= 0xd800 && code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+  return value.slice(0, splitsPair ? end - 1 : end);
+}
+
 function truncateString(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
   const keep = Math.max(0, maxChars - TRUNCATION_SUFFIX.length);
-  return value.slice(0, keep) + TRUNCATION_SUFFIX;
+  return safeSlice(value, keep) + TRUNCATION_SUFFIX;
 }
 
 function compactJsonValue(
@@ -53,8 +67,33 @@ function compactJsonValue(
   return compact;
 }
 
+/**
+ * Deterministic UTF-8 byte length independent of the host runtime: Bun counts a
+ * lone surrogate as 2 bytes (WTF-8) while Node encodes it as a 3-byte U+FFFD.
+ * Counting code points directly keeps the ceiling honest everywhere and lets
+ * Rust match it exactly.
+ */
 function byteLength(value: string): number {
-  return Buffer.byteLength(value, "utf8");
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3; // lone high surrogate -> U+FFFD
+      }
+    } else {
+      bytes += 3; // BMP char or lone low surrogate
+    }
+  }
+  return bytes;
 }
 
 export function limitUtf8(value: string, maxBytes: number, suffix = TRUNCATION_SUFFIX): string {
@@ -71,7 +110,7 @@ export function limitUtf8(value: string, maxBytes: number, suffix = TRUNCATION_S
     if (byteLength(value.slice(0, midpoint)) <= contentCeiling) low = midpoint;
     else high = midpoint - 1;
   }
-  return value.slice(0, low) + effectiveSuffix;
+  return safeSlice(value, low) + effectiveSuffix;
 }
 
 function tryStringify(value: unknown): string | null {

@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { commandSandboxGateway, commandSandboxOwner, commandSandboxOwnerAlive } from "./agent-sandbox-owner.js";
+import { startExecutorBackedBackgroundCommand, startSandboxBackgroundProcess, type SandboxBackgroundExecution } from "./sandbox-background-process.js";
 import { worktreeGitMountArgs } from "./worktree-sandbox.js";
 import { spawn, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
@@ -11,7 +14,7 @@ import { join, resolve, sep } from "node:path";
  * We probe for `docker` first then fall back to `podman`.
  */
 let _containerBinary: string | null = null;
-const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:recovery-v3";
+const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:stagehand-v4";
 const BROWSER_SANDBOX_NAME_PREFIX = "jait-browser-sb-";
 const BROWSER_SANDBOX_HEALTH_TIMEOUT_MS = 3_000;
 const DEFAULT_MAX_BROWSER_SANDBOXES = 2;
@@ -83,6 +86,8 @@ export interface SandboxRunResult {
 }
 
 export interface SandboxSessionOptions {
+  sessionId?: string;
+  threadId?: string;
   projectRoot: string;
   mountMode?: SandboxMountMode;
   networkEnabled?: boolean;
@@ -141,6 +146,8 @@ export interface SandboxBrowserOptions {
   mountMode?: SandboxMountMode;
   networkEnabled?: boolean;
   hostGateway?: boolean;
+  /** Internal, read-only SDK assets; never supplied by a tool caller. */
+  stagehandExtensionPath?: string;
 }
 
 export interface SandboxBrowserResult {
@@ -242,15 +249,19 @@ interface ProcessResult {
 }
 
 export class SandboxManager {
+  /** An injected runner owns process lifetime; real containers must not be spawned. */
+  private readonly injectedRunner: boolean;
+
   constructor(
     private readonly runProcess: (cmd: string[], timeoutMs: number) => Promise<ProcessResult> = runDockerProcess,
-  ) {}
+  ) {
+    this.injectedRunner = runProcess !== runDockerProcess;
+  }
 
-  async runCommand(options: SandboxRunOptions): Promise<SandboxRunResult> {
+  private commandInvocation(options: SandboxRunOptions): { cmd: string[]; containerName: string } {
     const projectRoot = resolve(options.projectRoot);
     const mountMode = options.mountMode ?? "read-write";
     const containerName = `jait-sb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const timeoutMs = Math.max(1000, options.timeoutMs);
 
     const mountArgs = this.buildMountArgs(projectRoot, mountMode);
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
@@ -276,6 +287,12 @@ export class SandboxManager {
       options.command,
     ];
 
+    return { cmd, containerName };
+  }
+
+  async runCommand(options: SandboxRunOptions): Promise<SandboxRunResult> {
+    const { cmd, containerName } = this.commandInvocation(options);
+    const timeoutMs = Math.max(1000, options.timeoutMs);
     const result = await this.runProcess(cmd, timeoutMs);
     return {
       ok: !result.timedOut && result.exitCode === 0,
@@ -303,6 +320,11 @@ export class SandboxManager {
       "--rm",
       "--name",
       containerName,
+      "--label", "dev.jait.kind=agent",
+      "--label", `dev.jait.gateway=${commandSandboxGateway()}`,
+      "--label", `dev.jait.owner=${commandSandboxOwner()}`,
+      ...(options.sessionId ? ["--label", `dev.jait.session=${options.sessionId}`] : []),
+      ...(options.threadId ? ["--label", `dev.jait.thread=${options.threadId}`] : []),
       ...networkArgs,
       ...memoryArgs,
       ...cpuArgs,
@@ -329,9 +351,40 @@ export class SandboxManager {
     };
   }
 
-  async execInContainer(options: SandboxExecOptions): Promise<SandboxRunResult> {
+  /** Only the exact keepalive process counts as idle. Inspection errors retain the container. */
+  async isCommandSandboxIdle(containerName: string): Promise<boolean> {
+    const result = await this.runProcess([containerBinary(), "top", containerName, "-eo", "pid,args"], 5_000);
+    if (result.exitCode !== 0 || result.timedOut) return false;
+    const lines = result.output.trim().split(/\r?\n/);
+    return lines.length === 2 && /^PID\s+(COMMAND|ARGS)$/.test(lines[0]!.trim())
+      && /^\d+\s+tail -f \/dev\/null$/.test(lines[1]!.trim());
+  }
+
+  /** Reclaim only labelled containers from dead gateway processes in our namespace. */
+  async cleanupOrphanedCommandSandboxes(ownerAlive = commandSandboxOwnerAlive): Promise<string[]> {
+    const result = await this.runProcess([containerBinary(), "ps", "--filter", "label=dev.jait.kind=agent",
+      "--filter", `label=dev.jait.gateway=${commandSandboxGateway()}`, "--format",
+      '{"name":{{json .Names}},"owner":{{json (.Label "dev.jait.owner")}}}'], 15_000);
+    if (result.exitCode !== 0 || result.timedOut) return [];
+    const removed: string[] = [];
+    for (const line of result.output.split(/\r?\n/)) {
+      let row: { name?: string; owner?: string };
+      try { row = JSON.parse(line); } catch { continue; }
+      if (typeof row?.name !== "string" || !/^jait-agent-sb-[a-z0-9-]+$/.test(row.name)
+        || typeof row.owner !== "string" || !row.owner || ownerAlive(row.owner)) continue;
+      try {
+        if (!await this.isCommandSandboxIdle(row.name)) continue;
+        await this.stopContainer(row.name);
+        removed.push(row.name);
+      } catch (error) {
+        console.warn(`[sandbox] Could not reclaim ${row.name}:`, error);
+      }
+    }
+    return removed;
+  }
+
+  private execInvocation(options: SandboxExecOptions): { cmd: string[]; containerName: string } {
     const containerName = options.containerName.trim();
-    const timeoutMs = Math.max(1000, options.timeoutMs);
     const cmd = [
       containerBinary(),
       "exec",
@@ -343,6 +396,23 @@ export class SandboxManager {
       options.command,
     ];
 
+    return { cmd, containerName };
+  }
+
+  startBackgroundCommand(options: SandboxRunOptions | SandboxExecOptions): SandboxBackgroundExecution {
+    const isExisting = "containerName" in options;
+    const { cmd, containerName } = isExisting
+      ? this.execInvocation(options)
+      : this.commandInvocation(options);
+    if (this.injectedRunner) {
+      return startExecutorBackedBackgroundCommand(this.runProcess, cmd, containerName, options.timeoutMs);
+    }
+    return startSandboxBackgroundProcess(cmd, containerName, options.timeoutMs, !isExisting);
+  }
+
+  async execInContainer(options: SandboxExecOptions): Promise<SandboxRunResult> {
+    const { cmd, containerName } = this.execInvocation(options);
+    const timeoutMs = Math.max(1000, options.timeoutMs);
     const result = await this.runProcess(cmd, timeoutMs);
     return {
       ok: !result.timedOut && result.exitCode === 0,
@@ -458,11 +528,13 @@ export class SandboxManager {
       ...networkArgs,
       ...hostGatewayArgs,
       ...mountArgs,
+      ...(options.stagehandExtensionPath ? ["--mount", `type=bind,src=${options.stagehandExtensionPath},dst=${options.stagehandExtensionPath},readonly`,
+        "-e", `JAIT_STAGEHAND_EXTENSION_ORIGIN=${stagehandExtensionOrigin(options.stagehandExtensionPath)}`] : []),
       "-p",
       `${novncPort}:6080`,
       "-p",
       `${vncPort}:5900`,
-      ...(typeof cdpPort === "number" ? ["-p", `${cdpPort}:9223`] : []),
+      ...(typeof cdpPort === "number" ? ["-p", `${options.stagehandExtensionPath ? "127.0.0.1:" : ""}${cdpPort}:9223`] : []),
       SANDBOX_BROWSER_IMAGE,
     ];
 
@@ -505,12 +577,15 @@ export class SandboxManager {
   async stopContainer(containerName: string): Promise<void> {
     const trimmed = containerName.trim();
     if (!trimmed) return;
-    await this.runProcess([
+    const result = await this.runProcess([
       containerBinary(),
       "rm",
       "-f",
       trimmed,
     ], 15_000);
+    if ((result.exitCode !== 0 || result.timedOut) && !/No such container/i.test(result.output)) {
+      throw new Error(`Failed to stop sandbox ${trimmed}: ${result.output}`);
+    }
   }
 
   async cleanupBrowserSandboxes(options: BrowserSandboxCleanupOptions = {}): Promise<string[]> {
@@ -1379,6 +1454,13 @@ export async function reserveLocalPort(): Promise<number> {
   });
 }
 
+export function stagehandExtensionOrigin(extensionPath: string): string {
+  // Chromium derives unpacked extension IDs from the absolute path (128 bits, a–p).
+  const id = createHash("sha256").update(extensionPath).digest("hex").slice(0, 32)
+    .replace(/[0-9a-f]/g, char => String.fromCharCode(97 + Number.parseInt(char, 16)));
+  return `chrome-extension://${id}`;
+}
+
 const SANDBOX_BROWSER_DOCKERFILE = `FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
@@ -1415,7 +1497,11 @@ done
 # A window manager is required for CDP fullscreen transitions on Xvfb.
 openbox &
 
-chromium --no-sandbox --kiosk --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 --app=about:blank &
+stagehand_args=()
+if [[ -n "\${JAIT_STAGEHAND_EXTENSION_ORIGIN:-}" ]]; then
+  stagehand_args=(--enable-unsafe-extension-debugging "--remote-allow-origins=$JAIT_STAGEHAND_EXTENSION_ORIGIN")
+fi
+chromium --no-sandbox "\${stagehand_args[@]}" --kiosk --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 --app=about:blank &
 
 (
   while true; do

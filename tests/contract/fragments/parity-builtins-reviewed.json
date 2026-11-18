@@ -1,0 +1,150 @@
+{
+  "review_scope": "parity-builtins bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/email/connection.test.ts:48:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects unsafe or malformed provider responses. All original table variants are bound exactly to fixture inputs, callback parameters, body, setup, imports, hooks and every assertion operand. Pure table constructors are narrowly limited to bounded string-literal repeat, unshadowed Number nonfinite constants and allocation of one-parameter callbacks whose body reads a property only from that parameter. No side-effecting calls or unresolved external value references are accepted. Enclosing test-root bindings account for the original table parameters; helper assertion bindings still match by their original function and parameter names. All five source-table/peer-binding/missing-variant/expectation control runs pass. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-builtins/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_connection_test_ts_48_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_connection_test_ts_48_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_connection_test_ts_48_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_connection_test_ts_48_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-search.test.ts:174:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects invalid result limit %s. All original table variants are bound exactly to fixture inputs, callback parameters, body, setup, imports, hooks and every assertion operand. Pure table constructors are narrowly limited to bounded string-literal repeat, unshadowed Number nonfinite constants and allocation of one-parameter callbacks whose body reads a property only from that parameter. No side-effecting calls or unresolved external value references are accepted. Enclosing test-root bindings account for the original table parameters; helper assertion bindings still match by their original function and parameter names. All five source-table/peer-binding/missing-variant/expectation control runs pass. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-builtins/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_search_test_ts_174_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_search_test_ts_174_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_search_test_ts_174_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_search_test_ts_174_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_search_test_ts_174_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/diagram-tools.test.ts:14:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects invalid or oversized input. All original table variants are bound exactly to fixture inputs, callback parameters, body, setup, imports, hooks and every assertion operand. Pure table constructors are narrowly limited to bounded string-literal repeat, unshadowed Number nonfinite constants and allocation of one-parameter callbacks whose body reads a property only from that parameter. No side-effecting calls or unresolved external value references are accepted. Enclosing test-root bindings account for the original table parameters; helper assertion bindings still match by their original function and parameter names. All five source-table/peer-binding/missing-variant/expectation control runs pass. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-builtins/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_14_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_14_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_14_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_14_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/link-tools.test.ts:50:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects invalid label. All original table variants are bound exactly to fixture inputs, callback parameters, body, setup, imports, hooks and every assertion operand. Pure table constructors are narrowly limited to bounded string-literal repeat, unshadowed Number nonfinite constants and allocation of one-parameter callbacks whose body reads a property only from that parameter. No side-effecting calls or unresolved external value references are accepted. Enclosing test-root bindings account for the original table parameters; helper assertion bindings still match by their original function and parameter names. All five source-table/peer-binding/missing-variant/expectation control runs pass. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-builtins/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_link_tools_test_ts_50_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_link_tools_test_ts_50_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_link_tools_test_ts_50_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_link_tools_test_ts_50_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/os-control-tools.test.ts:341:5",
+      "status": "verified",
+      "parity_review": "Reviewed %s returns ok:false when the action throws. All original table variants are bound exactly to fixture inputs, callback parameters, body, setup, imports, hooks and every assertion operand. Pure table constructors are narrowly limited to bounded string-literal repeat, unshadowed Number nonfinite constants and allocation of one-parameter callbacks whose body reads a property only from that parameter. No side-effecting calls or unresolved external value references are accepted. Enclosing test-root bindings account for the original table parameters; helper assertion bindings still match by their original function and parameter names. All five source-table/peer-binding/missing-variant/expectation control runs pass. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-builtins/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_os_control_tools_test_ts_341_5_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_os_control_tools_test_ts_341_5_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_os_control_tools_test_ts_341_5_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_os_control_tools_test_ts_341_5_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_os_control_tools_test_ts_341_5_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

@@ -11,26 +11,47 @@ export type JaitPageFeature = { id: string; description: string } & (
 export interface JaitPageContract {
   title: string;
   path: string;
-  mode: "developer" | "manager" | "both";
   description: string;
   examples: readonly string[];
   features: readonly JaitPageFeature[];
+  /** Supported URL parameters for agent links and shareable page searches. */
+  queryParameters?: Readonly<Record<string, string>>;
   /** New tools in these namespaces automatically join the page. */
   toolPrefixes: readonly string[];
 }
 export const JAIT_PAGES = {
   chat: {
-    title: "Chat", path: "/", mode: "developer",
+    queryParameters: {
+      q: "Search personal chats and projects in the sidebar.",
+      projectsQ: "Search the projects-only sidebar.",
+    },
+    title: "Chat", path: "/",
     description: "Ask Jait to work in a personal or project conversation, use tools, and inspect the results.",
     examples: ["Start a chat", "Find a prior conversation", "Run a command in this project"],
     features: [{ id: "diagrams", description: "Render Mermaid diagrams directly in chat with preserved source and visible parse errors.", toolRefs: ["diagram.render"] },
       { id: "navigation", description: "Render an explicit link to where a Jait change happened.", toolRefs: ["jait.link"] },
+      { id: "goal_loop", description: "Continue a chat towards an explicit goal across turns, with progress, verification evidence, pause/resume and quiet completion notifications.", toolRefs: ["loop.goal", "loop.status", "loop.check", "loop.pause", "loop.resume"] },
+      { id: "project_chat", description: "Create a separate project chat and start it with an initial message.", toolRefs: ["project.chat.create"] },
+      { id: "chat_control", description: "Check, send, queue, steer or stop messages in another existing chat.", toolRefs: ["chat.control"] },
       { id: "history", description: "Search persisted conversations and inspect exact chat traces.", toolRefs: ["session.search", "chat.traces"] },
-      { id: "workspace", description: "Read, edit, search, execute, and preview work in the active project.", toolRefs: ["read", "edit", "search", "jait.terminal", "preview.open"] }],
-    toolPrefixes: ["chat.", "session.", "file.", "terminal.", "preview.", "browser.", "web.", "project.", "surface.", "screen.", "voice.", "architecture."],
+      { id: "workspace", description: "Read, edit, search, execute, and preview work in the active project.", toolRefs: ["read", "edit", "search", "jait.terminal", "browser.open"] }],
+    toolPrefixes: ["loop.", "chat.", "session.", "file.", "terminal.", "preview.", "browser.", "web.", "project.", "surface.", "screen.", "voice.", "architecture."],
+  },
+  messenger: {
+    queryParameters: { q: "Filter conversations by name or network.", messageQ: "Search loaded decrypted message text; bounded to 50 joined rooms, not complete history.", service: "Filter conversations by exact service label, e.g. WhatsApp.", filter: "Chat list filter: unread, direct, groups or hidden; omit for all. Combine with q and service.", roomId: "Select a Matrix conversation.", homeserver: "Prefill existing Matrix homeserver sign-in; no credentials.", username: "Optional Matrix username to prefill." },
+    title: "Messenger", path: "/messenger",
+    description: "Read and reply to personal conversations through a Matrix homeserver and installed bridges. This inbox is independent of AI chat and assistant channels.",
+    examples: ["Open my messenger", "Connect a Matrix account", "Read bridged conversations"],
+    features: [{ id: "inbox", description: "Gateway-owned Matrix connection shared across signed-in Jait devices, with encrypted messages, attachments, invitations, search, and bridge setup conversations. Login, sync, and encryption keys persist on the gateway. Assistant access explicitly shares requested messages with the configured model. Bridge coverage depends on the installed adapter; Teams tenant support is not guaranteed.", toolRefs: ["messenger.connect", "messenger.status", "messenger.rooms", "messenger.messages", "messenger.attachment", "messenger.search", "messenger.send", "messenger.open"] }],
+    toolPrefixes: ["messenger."],
   },
   agents: {
-    title: "Agents", path: "/agents", mode: "manager",
+    queryParameters: {
+      panel: "Use team-chats to open the team chats panel.",
+      teamQ: "Filter team chats by name; use panel=team-chats.",
+      agentQ: "Search agents in the new team chat dialog; use panel=team-chats.",
+    },
+    title: "Agents", path: "/agents",
     description: "Manage persistent Jait people and teams: profiles, personas, roles, reporting lines, providers, models, repositories, skills, and tool preferences. These are saved agents from the Agents page, distinct from temporary execution workers.",
     examples: ["Set up a Scrum team", "Create an agent", "Give the developer a manager", "Pause an agent", "Assign skills to my team"],
     features: [{ id: "profiles", description: "List, inspect, create, update, pause, and delete persistent agent profiles and configure reporting relationships.", toolRefs: ["agent.profiles.inspect", "agent.profiles"] },
@@ -39,56 +60,64 @@ export const JAIT_PAGES = {
     toolPrefixes: ["agent.profiles", "team."],
   },
   threads: {
-    title: "Threads", path: "/threads", mode: "manager",
+    title: "Threads", path: "/threads",
     description: "Create, start, resume, interrupt, and review execution threads, including work assigned to saved agents.",
     examples: ["Start work for this agent", "Review a thread", "Create a pull request from a thread"],
     features: [{ id: "execution", description: "Control execution and review activities using thread IDs or saved personaAgentId values.", toolRefs: ["thread.control"] }],
     toolPrefixes: ["thread.", "agent.", "swarm."],
   },
   pulls: {
-    title: "Pull Requests", path: "/pulls", mode: "developer",
+    title: "Pull Requests", path: "/pulls",
     description: "Inspect repository pull requests and prepare changes for review.",
     examples: ["Show my pull requests", "Create a PR from this thread"],
     features: [{ id: "review", description: "Prepare a pull request from completed thread work.", toolRefs: ["thread.control"] }],
     toolPrefixes: ["github.", "git."],
   },
   todo: {
-    title: "Todo", path: "/todo", mode: "developer",
+    queryParameters: {
+      q: "Search todos by text, tag, status, or date.",
+    },
+    title: "Todo", path: "/todo",
     description: "Manage saved follow-up tasks across chats and track multi-step work.",
     examples: ["Save a task for later", "Show my todos"],
     features: [{ id: "tasks", description: "List, add, update, and remove durable todos.", toolRefs: ["jait.todos"] }],
     toolPrefixes: ["jait.todos", "todo"],
   },
   email: {
-    title: "Email", path: "/emails", mode: "developer",
+    queryParameters: {
+      q: "Provider mail search query (Gmail syntax or Outlook search); applied automatically on navigation.",
+      accountId: "Connected mailbox account ID.",
+      folder: "Mailbox folder or label; defaults to inbox.",
+    },
+    title: "Email", path: "/emails",
     description: "Read and organize mail using connected accounts and available channel tools.",
     examples: ["Read my email", "Show mail accounts"],
-    features: [{ id: "mail", description: "Use connected mail services; availability depends on account and tool configuration.", toolRefs: [], uiOnlyReason: "Account-specific adapters are resolved from registered tools; no generic mail mutation is implied." }],
+    features: [{ id: "mail", description: "Connect multiple Gmail, Outlook or secure IMAP/SMTP accounts, manage account signatures, and render messages in chat. Account setup requires the Email page; sending and deletion retain their tool consent checks.", toolRefs: ["email_accounts", "email_list", "email_read", "email_view", "email_send", "email_tag", "email_delete"] }],
     toolPrefixes: ["email.", "mail.", "gmail.", "outlook.", "himalaya."],
   },
   calendar: {
-    title: "Calendar", path: "/calendar", mode: "developer",
+    title: "Calendar", path: "/calendar",
     description: "View and manage calendar events using connected calendar accounts.",
     examples: ["Show my calendar", "Find an upcoming event"],
     features: [{ id: "events", description: "Use available connected calendar adapters.", toolRefs: [], uiOnlyReason: "Calendar tool availability depends on connected accounts." }],
     toolPrefixes: ["calendar."],
   },
   memory: {
-    title: "Memory", path: "/memory", mode: "developer",
+    title: "Memory", path: "/memory",
     description: "Inspect and maintain durable memories, preferences, and reminders. Saved memory is separate from persisted chat history.",
     examples: ["What do you remember", "Save this preference", "Find my reminders"],
     features: [{ id: "memories", description: "Search, save, list, and remove durable context.", toolRefs: ["memory.search", "memory.save", "memory.list"] }],
     toolPrefixes: ["memory.", "reminder."],
   },
   jobs: {
-    title: "Jobs", path: "/jobs", mode: "developer",
+    title: "Jobs", path: "/jobs",
     description: "Manage scheduled and recurring work and inspect job execution.",
     examples: ["Schedule a task", "Pause a recurring job", "Show scheduled work"],
     features: [{ id: "schedules", description: "Create, update, list, and remove executable scheduled jobs.", toolRefs: ["cron.add", "cron.update", "cron.list", "cron.remove"] }],
     toolPrefixes: ["cron.", "job.", "scheduler.", "taskflow."],
   },
   network: {
-    title: "Network", path: "/network", mode: "developer",
+    title: "Network", path: "/network",
     description: "Discover connected nodes and authorized network assets, manage assessment scopes, inspect evidence and findings, and verify improvements.",
     examples: ["Show my network", "Assess an authorized host", "Inspect connected nodes"],
     features: [{ id: "discovery", description: "Discover assets and inspect network state.", toolRefs: ["network.scan"] },
@@ -96,7 +125,16 @@ export const JAIT_PAGES = {
     toolPrefixes: ["network.", "security.", "node.", "ssh."],
   },
   settings: {
-    title: "Settings", path: "/settings", mode: "both",
+    queryParameters: {
+      q: "Search settings across tabs; overrides saved search, including q= to clear.",
+      tab: "Settings tab: general, api, tools, extensions, skills, email, channels, nodes, shortcuts, usage, activity, changelog.",
+      toolsQ: "Filter tools; use tab=tools.",
+      extensionsQ: "Filter extensions; use tab=extensions.",
+      skillsQ: "Filter installed skills; use tab=skills&skillsTab=installed.",
+      marketplaceQ: "Search ClawHub; use tab=skills&skillsTab=marketplace.",
+      skillsTab: "Skills subtab: installed or marketplace.",
+    },
+    title: "Settings", path: "/settings",
     description: "Configure Jait, providers, models, tool policies, skills, plugins, channels, and gateway services.",
     examples: ["Configure Jait", "Show tools", "Connect a provider", "Manage skills"],
     features: [{ id: "discovery", description: "Inspect available tools and the live product capability catalog.", toolRefs: ["jait.catalog", "tools.search", "tools.list"] }],

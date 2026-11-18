@@ -1,3 +1,7 @@
+import { createBrowserWorkflowTools } from "./browser-workflow-tools.js";
+import type { BrowserWorkflowService } from "../services/browser-workflows.js";
+import { configureContextEvidence, createContextReadTool } from "./context-evidence.js";
+import { createTerminalExecutionTool } from "./terminal-execution.js";
 import { createDecisionEvaluateTool } from "./decision.js";
 export type {
   ToolContext,
@@ -44,9 +48,11 @@ export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
+  createBrowserOpenTool,
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInspectTool,
+  createBrowserIntelligenceTools,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -90,7 +96,6 @@ export {
   createSshSessionRunTool,
   createSshSessionCloseTool,
 } from "./ssh-tools.js";
-export { createElevatedRunTool } from "./elevated-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
@@ -198,14 +203,17 @@ import {
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool, createProjectTransferTool } from "./project-tools.js";
 import { createProjectMessageTool } from "./project-message-tool.js";
+import { createProjectChatTool } from "./project-chat-tool.js";
+import { createChatControlTool } from "./chat-control-tool.js";
 import { createProjectEditorOpenTool } from "./project-editor-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
+  createBrowserOpenTool,
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
-  createBrowserInspectTool,
+  createBrowserIntelligenceTools,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -251,7 +259,6 @@ import {
 import {
   createSshRunTool,
 } from "./ssh-tools.js";
-import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createMobileAlarmScheduleTool } from "./mobile-tools.js";
@@ -278,6 +285,7 @@ import type { ArchitectureDiagramService } from "../services/architecture-diagra
 import type { CodeGraphService } from "../services/code-graph/code-graphs.js";
 import type { SecretInputService } from "../services/secret-input.js";
 import type { UserQuestionService } from "../services/user-questions.js";
+import { createBrowserHandoffTool } from "./browser-handoff.js";
 import type { UserSecretService } from "../services/user-secrets.js";
 import type { ProjectService } from "../services/projects.js";
 import type { RepositoryService } from "../services/repositories.js";
@@ -302,7 +310,12 @@ import {
   createJaitTool,
 } from "./core/index.js";
 
+import { createLoopTools } from "./loop-tools.js";
+import type { ChatLoopService } from "../services/chat-loops.js";
+
 export interface ToolRegistryDeps {
+  browserWorkflows?: BrowserWorkflowService;
+  chatLoops?: ChatLoopService;
   scheduler?: SchedulerService;
   sessionService?: SessionService;
   ws?: WsControlPlane;
@@ -311,6 +324,8 @@ export interface ToolRegistryDeps {
   hooks?: HookBus;
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
+  computerSessions?: import("../services/computer-control.js").ComputerControlSessionService;
+  screenShareControl?: import("../services/screen-share-control.js").ScreenShareControlCoordinator;
   config?: AppConfig;
   threadMcpConfig?: { host: string; port: number };
   threadService?: ThreadService;
@@ -379,6 +394,9 @@ export function createToolRegistry(
   deps: ToolRegistryDeps = {},
 ): ToolRegistry {
   const tools = new ToolRegistry();
+  if (deps.browserWorkflows) for (const tool of createBrowserWorkflowTools(deps.browserWorkflows)) tools.register(tool);
+  if (deps.sessionState) configureContextEvidence(deps.sessionState);
+  tools.register(createContextReadTool());
 
   /**
    * Terminal commands run by an agent thread authorise as that agent's own
@@ -404,6 +422,7 @@ export function createToolRegistry(
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());
+  if (deps.chatLoops) for (const tool of createLoopTools(deps.chatLoops)) tools.register(tool);
   tools.register(createJaitTool({
     memoryService: deps.memoryService,
     reminderService: deps.reminderService,
@@ -421,6 +440,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
+  tools.register(createTerminalExecutionTool());
   tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, agentGithubEnv));
   tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, agentGithubEnv));
   tools.register(createTerminalStreamTool(surfaceRegistry));
@@ -436,9 +456,8 @@ export function createToolRegistry(
   // OS tools
   tools.register(createOsQueryTool());
   tools.register(createOsInstallTool());
-  if (deps.ws) {
-    for (const tool of createComputerTools(deps.ws)) tools.register(tool);
-  }
+  const computerTools = deps.ws ? createComputerTools(deps.ws, deps.computerSessions, deps.screenShare) : [];
+  for (const tool of computerTools) tools.register(tool);
 
   // Surface self-control tools
   tools.register(createSurfacesListTool(surfaceRegistry));
@@ -515,6 +534,7 @@ export function createToolRegistry(
 
   if (deps.userQuestionService) {
     tools.register(createUserAskTool(deps.userQuestionService));
+    if (deps.previewService) tools.register(createBrowserHandoffTool(deps.previewService, deps.userQuestionService));
   }
 
   // Self-update / redeploy tool
@@ -592,6 +612,24 @@ export function createToolRegistry(
   }
 
   if (deps.threadService && deps.providerRegistry && deps.projectService && deps.sessionService) {
+    tools.register(createProjectChatTool({
+      projectService: deps.projectService,
+      sessionService: deps.sessionService,
+      threadService: deps.threadService,
+      providerRegistry: deps.providerRegistry,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+      config: deps.config,
+      getApp: deps.getApp,
+      ws: deps.ws,
+    }));
+    tools.register(createChatControlTool({
+      sessionService: deps.sessionService,
+      sessionState: deps.sessionState,
+      userService: deps.userService,
+      config: deps.config,
+      getApp: deps.getApp,
+    }));
     tools.register(
       createProjectMessageTool({
         projectService: deps.projectService,
@@ -610,7 +648,7 @@ export function createToolRegistry(
   }
 
   if (deps.screenShare) {
-    tools.register(createScreenShareTool(deps.screenShare, deps.ws));
+    tools.register(createScreenShareTool(deps.screenShare, deps.ws, deps.screenShareControl, computerTools));
     tools.register(createScreenCaptureTool(deps.screenShare));
     tools.register(createScreenRecordTool(deps.screenShare));
     tools.register(createOsTool(deps.screenShare, "os.tool"));
@@ -627,16 +665,31 @@ export function createToolRegistry(
   // Browser + web tools
   tools.register(createBrowserNavigateTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.previewService));
-  tools.register(createBrowserInspectTool(surfaceRegistry, deps.previewService));
+  tools.registerCompatibility({ ...createBrowserOpenTool(surfaceRegistry, deps.previewService), name: "browser.inspect" });
+  for (const tool of createBrowserIntelligenceTools(surfaceRegistry, deps.previewService)) tools.register(tool);
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
   }
-  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewRestartTool(deps.previewService));
-  tools.register(createPreviewStatusTool(deps.previewService));
-  tools.register(createPreviewLogsTool(deps.previewService));
-  tools.register(createPreviewInspectTool(deps.previewService));
+  // Legacy preview calls retain the managed project runner. New browser opens load a URL directly.
+  tools.registerCompatibility(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createBrowserOpenTool(surfaceRegistry, deps.previewService));
+  // Status is a read-only compatibility endpoint, not a browser startup entry point.
+  // browser.open handles both startup and current-page inspection.
+  const previewStatus = createPreviewStatusTool(deps.previewService);
+  tools.registerCompatibility(previewStatus);
+  tools.registerCompatibility({ ...previewStatus, name: "browser.status" });
+  const browserLifecycle = [
+    [createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService), "browser.close"],
+    [createPreviewRestartTool(deps.previewService), "browser.restart"],
+    [createPreviewLogsTool(deps.previewService), "browser.logs"],
+  ] as const;
+  for (const [legacy, name] of browserLifecycle) {
+    tools.registerCompatibility(legacy);
+    tools.register({ ...legacy, name,
+      description: legacy.description.replace(/preview\.(open|inspect|status|restart|logs|stop)/g, (_, action: string) => `browser.${action === "stop" ? "close" : action}`),
+    });
+  }
+  tools.registerCompatibility(createPreviewInspectTool(deps.previewService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
@@ -679,7 +732,6 @@ export function createToolRegistry(
   tools.register(createNetworkScanTool());
   for (const tool of createSecurityTools()) tools.register(tool);
   for (const tool of createSecurityWorkbenchTools(deps.scheduler)) tools.register(tool);
-  tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
   // Architecture and code graph tools

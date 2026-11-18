@@ -22,19 +22,33 @@ async function main(): Promise<void> {
   const spec = parseSpec(process.argv[2]);
   const forwardedArgs = process.argv.slice(3);
   const command = await ensureInstalled(spec);
-  const child = spawn(command, [...spec.args, ...forwardedArgs], {
+  // Install handlers before spawning: the child can become ready and receive a
+  // signal while the parent is descheduled immediately after spawn.
+  let child: ReturnType<typeof spawn> | undefined;
+  let pendingSignal: NodeJS.Signals | undefined;
+  const signals = ["SIGINT", "SIGTERM"] as const;
+  const handlers = signals.map((signal) => {
+    const handler = () => {
+      if (child) child.kill(signal);
+      else pendingSignal = signal;
+    };
+    process.on(signal, handler);
+    return handler;
+  });
+  child = spawn(command, [...spec.args, ...forwardedArgs], {
     stdio: "inherit",
     env: { ...process.env, ...spec.env },
     windowsHide: true,
   });
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => child.kill(signal));
-  }
+  if (pendingSignal) child.kill(pendingSignal);
+  const removeSignalHandlers = () => signals.forEach((name, index) => process.off(name, handlers[index]!));
   child.once("error", (error) => {
+    removeSignalHandlers();
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   });
   child.once("exit", (code, signal) => {
+    removeSignalHandlers();
     if (signal) process.kill(process.pid, signal);
     else process.exitCode = code ?? 1;
   });

@@ -53,9 +53,24 @@ test('live gateway exposes the catalog and page navigation preserves destination
   const result = (await catalogResponse.json()).result
   expect(result.isError).toBe(false)
   const text = result.content[0].text
-  const data = JSON.parse(text.slice(text.indexOf('{')))
+  // User-scoped MCP results arrive inside the context-evidence envelope
+  // { ok, message, contextEvidence, data }; the catalog payload lives in data.
+  const payload = JSON.parse(text.slice(text.indexOf('{')))
+  const data = payload.data ?? payload
   expect(data.pages.map((entry: { id: string }) => entry.id)).toContain('agents')
-  expect(data.pages.find((entry: { id: string }) => entry.id === 'agents').features[0].availableToolRefs).toContain('agent.profiles')
+  // The overview stays compact (id/title/link/toolCount); features and their
+  // available tool refs require an explicit pageId lookup.
+  const agentsResponse = await request.post(`${api}/mcp`, {
+    headers: { ...headers, 'x-jait-session-id': session.id },
+    data: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'jait_catalog', arguments: { pageId: 'agents' } } },
+  })
+  const agentsResult = (await agentsResponse.json()).result
+  expect(agentsResult.isError).toBe(false)
+  const agentsText = agentsResult.content[0].text
+  const agentsPayload = JSON.parse(agentsText.slice(agentsText.indexOf('{')))
+  const agentsData = agentsPayload.data ?? agentsPayload
+  const agentsPage = agentsData.pages.find((entry: { id: string }) => entry.id === 'agents')
+  expect(agentsPage.features[0].availableToolRefs).toContain('agent.profiles')
   const inspectResponse = await request.post(`${api}/mcp`, {
     headers: { ...headers, 'x-jait-session-id': session.id },
     data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'agent_profiles_inspect', arguments: { action: 'list' } } },

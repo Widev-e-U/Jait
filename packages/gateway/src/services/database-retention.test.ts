@@ -304,7 +304,7 @@ describe("DatabaseRetentionService", () => {
 
     expect(sqlite.prepare(
       "SELECT id FROM agent_thread_activities WHERE id = 'transient-old'",
-    ).get()).toBeUndefined();
+    ).get() ?? undefined).toBeUndefined();
     expect(sqlite.prepare(
       "SELECT id FROM agent_thread_activities WHERE id = 'transient-running'",
     ).get()).toMatchObject({ id: "transient-running" });
@@ -401,7 +401,7 @@ describe("DatabaseRetentionService", () => {
     ).get()).toMatchObject({ id: "legacy-index-noise" });
     expect(sqlite.prepare(
       "SELECT rowid FROM agent_thread_activities_fts WHERE activity_id = 'legacy-index-noise'",
-    ).get()).toBeUndefined();
+    ).get() ?? undefined).toBeUndefined();
   });
 
   it("enables bounded metadata retention by default", () => {

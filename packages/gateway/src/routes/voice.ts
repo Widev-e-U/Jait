@@ -4,6 +4,7 @@ import type { ConsentManager } from "../security/consent-manager.js";
 import type { AppConfig } from "../config.js";
 import type { UserService } from "../services/users.js";
 import { requireAuth } from "../security/http-auth.js";
+import { isWakeCandidate } from "../voice/wake-candidate.js";
 
 export function registerVoiceRoutes(
   app: FastifyInstance,
@@ -12,6 +13,24 @@ export function registerVoiceRoutes(
   config?: AppConfig,
   users?: UserService,
 ) {
+  // Only final ambiguous addresses reach the model; rate-limit per user.
+  const lastWakeCandidate = new Map<string, number>();
+  app.post("/api/voice/wake-candidate", { bodyLimit: 4096 }, async (request, reply) => {
+    if (!config || !users) return { activate: false };
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const transcript = typeof body["transcript"] === "string" ? body["transcript"].trim() : "";
+    if (!transcript || transcript.length > 1000) return { activate: false };
+    const settings = users.getSettings(authUser.id);
+    if (settings.disabledTools.includes("decision.evaluate")) return { activate: false };
+    const now = Date.now();
+    if (now - (lastWakeCandidate.get(authUser.id) ?? 0) < 2000) return { activate: false };
+    if (lastWakeCandidate.size >= 512) lastWakeCandidate.delete(lastWakeCandidate.keys().next().value!);
+    lastWakeCandidate.set(authUser.id, now);
+    return { activate: await isWakeCandidate(transcript, settings.apiKeys, AbortSignal.timeout(2000)) };
+  });
+
   app.post("/api/voice/transcribe", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";

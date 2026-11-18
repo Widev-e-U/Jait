@@ -1,0 +1,125 @@
+{
+  "review_scope": "Source-bound project watcher, sandbox browser and actual scanner assertions",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/project-watcher.test.ts:14:3",
+      "status": "verified",
+      "parity_review": "Reviewed ignores the generated trees that can exhaust the watch table. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_watcher_test_ts_14_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-watcher.test.ts:22:3",
+      "status": "verified",
+      "parity_review": "Reviewed passes the ignore list to the native subscriber. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_watcher_test_ts_22_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-watcher.test.ts:31:3",
+      "status": "verified",
+      "parity_review": "Reviewed honours an explicit ignore override. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_watcher_test_ts_31_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-watcher.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "Reviewed explains a full watch table instead of reporting a full disk. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_watcher_test_ts_40_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-watcher.test.ts:47:3",
+      "status": "verified",
+      "parity_review": "Reviewed rethrows unrelated subscription failures unchanged. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_project_watcher_test_ts_47_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint13.test.ts:76:3",
+      "status": "verified",
+      "parity_review": "Reviewed starts sandbox browser and returns noVNC URL. Five watcher declarations preserve generated-tree exclusions, default and custom subscription arguments, native callback Function semantics, ENOSPC translation and unrelated errors. The sandbox browser declaration preserves readiness fetch Object options and exact noVNC result fields. Raw call guards accept genuine functions only at Function asymmetric positions, and reject custom serialization/accessors. Eight controls reject changed expectations, constructor inputs, hybrid operands, matcher patterns, fabricated observations, shadowed Function and weakened reset lifecycle. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-typed/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint13_test_ts_76_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/5f94b85a-b430-4c94-833e-36cea78be0c2/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/security/engines.integration.test.ts:12:2",
+      "status": "verified",
+      "parity_review": "Reviewed checks real versions and Nmap TCP XML on an owned loopback fixture. The four real engine declarations preserve actual version availability, Nmap open-port XML, Nuclei issue/header-fix/absence with bounded request count, Trivy Dockerfile issue/fix and npm advisory correlation/fix. The opt-in cache condition is preserved. The original Vitest run passes all four tests; hashes match the stable re-review. Six structural controls reject changed states, removed header fix, fabricated conclusiveness, wrong engine imports and changed skip gate. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-scanners/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_security_engines_integration_test_ts_12_2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/eb008a65-30f2-44f6-a27d-b7a138aad85d/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/security/engines.integration.test.ts:20:2",
+      "status": "verified",
+      "parity_review": "Reviewed runs the actual pinned Nuclei template and observes match then absence after a header fix. The four real engine declarations preserve actual version availability, Nmap open-port XML, Nuclei issue/header-fix/absence with bounded request count, Trivy Dockerfile issue/fix and npm advisory correlation/fix. The opt-in cache condition is preserved. The original Vitest run passes all four tests; hashes match the stable re-review. Six structural controls reject changed states, removed header fix, fabricated conclusiveness, wrong engine imports and changed skip gate. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-scanners/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_security_engines_integration_test_ts_20_2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/eb008a65-30f2-44f6-a27d-b7a138aad85d/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/security/engines.integration.test.ts:30:2",
+      "status": "verified",
+      "parity_review": "Reviewed runs offline Trivy config checks on a real bounded Dockerfile snapshot. The four real engine declarations preserve actual version availability, Nmap open-port XML, Nuclei issue/header-fix/absence with bounded request count, Trivy Dockerfile issue/fix and npm advisory correlation/fix. The opt-in cache condition is preserved. The original Vitest run passes all four tests; hashes match the stable re-review. Six structural controls reject changed states, removed header fix, fabricated conclusiveness, wrong engine imports and changed skip gate. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-scanners/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_security_engines_integration_test_ts_30_2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/eb008a65-30f2-44f6-a27d-b7a138aad85d/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/security/engines.integration.test.ts:40:2",
+      "status": "verified",
+      "parity_review": "Reviewed correlates a vulnerable npm lockfile then verifies that the pinned-version fix removes those correlations. The four real engine declarations preserve actual version availability, Nmap open-port XML, Nuclei issue/header-fix/absence with bounded request count, Trivy Dockerfile issue/fix and npm advisory correlation/fix. The opt-in cache condition is preserved. The original Vitest run passes all four tests; hashes match the stable re-review. Six structural controls reject changed states, removed header fix, fabricated conclusiveness, wrong engine imports and changed skip gate. Every import, setup, lifecycle and reachable assertion operand is bound by the AST comparison. Actual Vitest and Rust matcher agree for all observations and opposing counterexamples. Stable full translated, internal, managed, Docker, Chromium and scanner lanes pass. Evidence: .jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/parity-100-stable-scanners/combined-selected.json, wire-summary.json and structural-negative-controls.json. All original, peer, transport, matcher and review-helper fingerprints still match the live checkout. This credits reference-test assertion preservation only; native gateway runtime coverage is separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_security_engines_integration_test_ts_40_2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100-current/source-checkpoint/.jait/artifacts/contracts/eb008a65-30f2-44f6-a27d-b7a138aad85d/report.json"
+        }
+      ]
+    }
+  ]
+}

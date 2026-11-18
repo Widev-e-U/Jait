@@ -1,0 +1,1503 @@
+{
+  "now": 1767225600000,
+  "cases": [
+    {
+      "name": "authorized-false",
+      "input": {
+        "authorized": false,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "authorized-null",
+      "input": {
+        "authorized": null,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "authorized-0",
+      "input": {
+        "authorized": 0,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "authorized-1",
+      "input": {
+        "authorized": 1,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "authorized-true",
+      "input": {
+        "authorized": "true",
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "authorized-true",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-null",
+      "input": {
+        "authorized": true,
+        "targets": null,
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[]",
+      "input": {
+        "authorized": true,
+        "targets": [],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"127.0.0.1\",\"127.0.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1",
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"127.00.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.00.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"localhost\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "localhost"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"http://127.0.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "http://127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"127.0.0.1/32\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1/32"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"0.1.2.3\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "0.1.2.3"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"224.0.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "224.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"255.255.255.255\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "255.255.255.255"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\" 127.0.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          " 127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"127.0.0.1 \"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1 "
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"::1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "::1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"169.254.1.2\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "169.254.1.2"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"192.0.2.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "192.0.2.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "targets-[\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\",\"127.0.0.1\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1",
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": null,
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[0]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          0
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[-1]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          -1
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[65535]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          65535
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[65536]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          65536
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[1.5]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1.5
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[\"443\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          "443"
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[true]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          true
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[1,1,443]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "ports-[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "expires-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": null
+      }
+    },
+    {
+      "name": "expires-invalid",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "invalid"
+      }
+    },
+    {
+      "name": "expires-2026-01-01T00:00:00.000Z",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "expires-2026-01-01T00:00:00.001Z",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T00:00:00.001Z"
+      }
+    },
+    {
+      "name": "expires-2026-01-01T01:00:00.001Z",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.001Z"
+      }
+    },
+    {
+      "name": "methods-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": null
+      }
+    },
+    {
+      "name": "methods-[]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": []
+      }
+    },
+    {
+      "name": "methods-[\"tcp\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "tcp"
+        ]
+      }
+    },
+    {
+      "name": "methods-[\"http\",\"https\",\"tls\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "http",
+          "https",
+          "tls"
+        ]
+      }
+    },
+    {
+      "name": "methods-[\"nmap\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "nmap"
+        ]
+      }
+    },
+    {
+      "name": "methods-[\"shell\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "shell"
+        ]
+      }
+    },
+    {
+      "name": "methods-[\"tcp\",\"tcp\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "tcp",
+          "tcp"
+        ]
+      }
+    },
+    {
+      "name": "methods-\"tcp\"",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": "tcp"
+      }
+    },
+    {
+      "name": "methods-[\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\",\"tcp\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "methods": [
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp",
+          "tcp"
+        ]
+      }
+    },
+    {
+      "name": "paths-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": null
+      }
+    },
+    {
+      "name": "paths-[]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": []
+      }
+    },
+    {
+      "name": "paths-[\"\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"a\\u0000b\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "a\u0000b"
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"a\",\"a\",\"a\",\"a\",\"a\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "a",
+          "a",
+          "a",
+          "a",
+          "a"
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"valid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "valid"
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"-invalid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "-invalid"
+        ]
+      }
+    },
+    {
+      "name": "paths-[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "paths": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": null
+      }
+    },
+    {
+      "name": "serverNames-[]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": []
+      }
+    },
+    {
+      "name": "serverNames-[\"\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"a\\u0000b\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "a\u0000b"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"a\",\"a\",\"a\",\"a\",\"a\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "a",
+          "a",
+          "a",
+          "a",
+          "a"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"valid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "valid"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"-invalid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "-invalid"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "serverNames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-null",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": null
+      }
+    },
+    {
+      "name": "sshUsernames-[]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": []
+      }
+    },
+    {
+      "name": "sshUsernames-[\"\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"a\\u0000b\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "a\u0000b"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"a\",\"a\",\"a\",\"a\",\"a\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "a",
+          "a",
+          "a",
+          "a",
+          "a"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"valid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "valid"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"-invalid\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "-invalid"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z",
+        "sshUsernames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "exclusions-all",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [
+          "127.0.0.1"
+        ],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "exclusions-partial",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1",
+          "192.0.2.1"
+        ],
+        "exclusions": [
+          "192.0.2.1"
+        ],
+        "ports": [
+          1,
+          443
+        ],
+        "expiresAt": "2026-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "serverNames-boundary-'good\\u2028'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "good "
+        ]
+      }
+    },
+    {
+      "name": "serverNames-boundary-'good\\u2029'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "good "
+        ]
+      }
+    },
+    {
+      "name": "serverNames-boundary-'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-boundary-'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-boundary-'a..a'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "a..a"
+        ]
+      }
+    },
+    {
+      "name": "serverNames-boundary-'a.'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "serverNames": [
+          "a."
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-boundary-'user\\u2028'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "sshUsernames": [
+          "user "
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-boundary-'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\u2028'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "sshUsernames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-boundary-'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "sshUsernames": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ]
+      }
+    },
+    {
+      "name": "sshUsernames-boundary-'_valid-name'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "sshUsernames": [
+          "_valid-name"
+        ]
+      }
+    },
+    {
+      "name": "paths-boundary-'😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "paths": [
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      }
+    },
+    {
+      "name": "paths-boundary-'😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀'",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": "2026-01-01T00:01:00.000Z",
+        "paths": [
+          "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+        ]
+      }
+    },
+    {
+      "name": "expiry-array-coercion",
+      "input": {
+        "authorized": true,
+        "targets": [
+          "127.0.0.1"
+        ],
+        "exclusions": [],
+        "ports": [
+          443
+        ],
+        "expiresAt": [
+          "2026-01-01T00:01:00Z"
+        ]
+      }
+    }
+  ]
+}

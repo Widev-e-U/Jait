@@ -72,6 +72,63 @@ const REMOTE_EXECUTABLE_TOOLS = new Set<string>([
 /** Subset of the allow-list that runs shell commands and honours `isBackground`. */
 const REMOTE_TERMINAL_TOOLS = new Set<string>(["execute", "terminal.run", "jait.terminal"]);
 
+/**
+ * True when a tool is allowed to run on another connected node. Used to reject
+ * per-call `nodeId` targets on gateway-only tools (memory, cron, …).
+ */
+export function isRemoteExecutableTool(toolName: string): boolean {
+  return REMOTE_EXECUTABLE_TOOLS.has(toolName);
+}
+
+/**
+ * Values that mean "run this on the gateway machine", the machine that hosts
+ * the gateway process itself, rather than on a connected node.
+ */
+const LOCAL_NODE_ALIASES = new Set(["gateway", "local", "this"]);
+
+export type CallNodeTarget = {
+  /** Node the call must run on, or null to use the chat's default machine. */
+  nodeId: string | null;
+  /** The caller explicitly pinned the call to the gateway machine. */
+  forcesLocal: boolean;
+  /** Call input with `nodeId` removed, so handlers never see it. */
+  input: unknown;
+  /** Set when the request must be rejected instead of executed. */
+  error?: string;
+};
+
+/**
+ * Resolve an explicit per-call device target from `nodeId`.
+ *
+ * A chat belongs to one project, but a single call may still be aimed at a
+ * different connected device (for example the user's Windows PC). Tools that
+ * only exist inside the gateway (memory, cron, …) are rejected rather than
+ * silently executed locally, so a typo cannot look like a successful remote run.
+ */
+export function resolveCallNodeTarget(toolName: string, input: unknown): CallNodeTarget {
+  const raw = input && typeof input === "object" && !Array.isArray(input)
+    ? (input as { nodeId?: unknown }).nodeId
+    : undefined;
+  const nodeId = typeof raw === "string" && raw.trim() ? raw.trim() : null;
+  if (!nodeId) return { nodeId: null, forcesLocal: false, input };
+
+  const rest: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  delete rest.nodeId;
+
+  if (LOCAL_NODE_ALIASES.has(nodeId.toLowerCase())) {
+    return { nodeId: null, forcesLocal: true, input: rest };
+  }
+  if (!isRemoteExecutableTool(toolName)) {
+    return {
+      nodeId: null,
+      forcesLocal: false,
+      input: rest,
+      error: `Tool '${toolName}' cannot run on another device. Only terminal and filesystem tools accept a nodeId target.`,
+    };
+  }
+  return { nodeId, forcesLocal: false, input: rest };
+}
+
 function isBackgroundInput(input: unknown): boolean {
   return Boolean(input && typeof input === "object" && (input as { isBackground?: unknown }).isBackground === true);
 }

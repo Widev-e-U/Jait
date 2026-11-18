@@ -1,0 +1,623 @@
+{
+  "minimal": [
+    {
+      "toolName": "todo",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Update the current execution task list without running work."
+    },
+    {
+      "toolName": "jait.catalog",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect Jait pages and available capabilities."
+    },
+    {
+      "toolName": "tools.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search available tool schemas without executing tools."
+    },
+    {
+      "toolName": "tools.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List registered tool capabilities without executing tools."
+    },
+    {
+      "toolName": "agent.profiles.inspect",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect saved agent profiles owned by the user."
+    },
+    {
+      "toolName": "agent.profiles",
+      "consentLevel": "dangerous",
+      "risk": "medium",
+      "description": "Create, update, or delete persistent Jait agents."
+    },
+    {
+      "toolName": "file.read",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Read a file from the project."
+    },
+    {
+      "toolName": "file.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List files and directories in the project."
+    },
+    {
+      "toolName": "file.stat",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect file metadata without changing contents."
+    },
+    {
+      "toolName": "file.write",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Create or overwrite files in the project."
+    },
+    {
+      "toolName": "file.patch",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Apply targeted edits to existing files."
+    },
+    {
+      "toolName": "terminal.run",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Run a non-interactive shell command."
+    },
+    {
+      "toolName": "terminal.stream",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Open an interactive terminal session."
+    },
+    {
+      "toolName": "os.query",
+      "consentLevel": "once",
+      "risk": "low",
+      "description": "Inspect operating-system information."
+    },
+    {
+      "toolName": "os.install",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Install system packages on the host."
+    },
+    {
+      "toolName": "computer.targets",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List connected computer-control targets."
+    },
+    {
+      "toolName": "computer.session",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Start or stop visible control of a user desktop."
+    },
+    {
+      "toolName": "computer.observe",
+      "consentLevel": "dangerous",
+      "risk": "medium",
+      "description": "Capture the screen during a computer-control session."
+    },
+    {
+      "toolName": "computer.act",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Control mouse and keyboard during a computer-control session."
+    },
+    {
+      "toolName": "surfaces.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List active surfaces such as terminals or browsers."
+    },
+    {
+      "toolName": "surfaces.start",
+      "consentLevel": "always",
+      "risk": "medium",
+      "description": "Start a new surface instance."
+    },
+    {
+      "toolName": "surfaces.stop",
+      "consentLevel": "always",
+      "risk": "medium",
+      "description": "Stop a running surface instance."
+    },
+    {
+      "toolName": "network.scan",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Scan the local network for reachable devices."
+    },
+    {
+      "toolName": "session.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search prior chat messages and agent activity."
+    },
+    {
+      "toolName": "chat.traces",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect persisted chat traces owned by the current user."
+    },
+    {
+      "toolName": "security.results.show",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Display saved assessment evidence owned by the current operator without running checks."
+    },
+    {
+      "toolName": "channel.send",
+      "consentLevel": "always",
+      "risk": "medium",
+      "description": "Send a message into a paired messaging chat."
+    },
+    {
+      "toolName": "channel.remind",
+      "consentLevel": "always",
+      "risk": "medium",
+      "description": "Schedule a reminder delivered to a paired messaging chat."
+    },
+    {
+      "toolName": "thread.control",
+      "consentLevel": "dangerous",
+      "risk": "high",
+      "description": "Create, run, or modify agent threads."
+    },
+    {
+      "toolName": "gateway.redeploy",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Redeploy the running gateway process."
+    },
+    {
+      "toolName": "project.create",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Create or resolve a project from a folder."
+    },
+    {
+      "toolName": "project.assign_repository",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Assign an existing or detected repository to a project."
+    },
+    {
+      "toolName": "project.transfer",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Copy a gateway project to a connected node over SCP and retarget it."
+    }
+  ],
+  "coding": [
+    {
+      "toolName": "todo",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Update the current execution task list without running work."
+    },
+    {
+      "toolName": "jait.catalog",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect Jait pages and available capabilities."
+    },
+    {
+      "toolName": "tools.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search available tool schemas without executing tools."
+    },
+    {
+      "toolName": "tools.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List registered tool capabilities without executing tools."
+    },
+    {
+      "toolName": "agent.profiles.inspect",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect saved agent profiles owned by the user."
+    },
+    {
+      "toolName": "agent.profiles",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Create, update, or delete persistent Jait agents."
+    },
+    {
+      "toolName": "file.read",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Read a file from the project."
+    },
+    {
+      "toolName": "file.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List files and directories in the project."
+    },
+    {
+      "toolName": "file.stat",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect file metadata without changing contents."
+    },
+    {
+      "toolName": "file.write",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Create or overwrite files in the project."
+    },
+    {
+      "toolName": "file.patch",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Apply targeted edits to existing files."
+    },
+    {
+      "toolName": "terminal.run",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Run a non-interactive shell command.",
+      "deniedCommands": [
+        "rm -rf *",
+        "del /s /q *",
+        "format *",
+        "mkfs*",
+        "dd if=*",
+        "git checkout -- **",
+        "git restore **",
+        "git reset --hard**",
+        "git clean **"
+      ]
+    },
+    {
+      "toolName": "terminal.stream",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Open an interactive terminal session."
+    },
+    {
+      "toolName": "os.query",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect operating-system information."
+    },
+    {
+      "toolName": "os.install",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Install system packages on the host."
+    },
+    {
+      "toolName": "computer.targets",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List connected computer-control targets."
+    },
+    {
+      "toolName": "computer.session",
+      "consentLevel": "once",
+      "risk": "high",
+      "description": "Start or stop visible control of a user desktop."
+    },
+    {
+      "toolName": "computer.observe",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Capture the screen during an approved computer-control session."
+    },
+    {
+      "toolName": "computer.act",
+      "consentLevel": "none",
+      "risk": "high",
+      "description": "Control mouse and keyboard during an approved computer-control session."
+    },
+    {
+      "toolName": "surfaces.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List active surfaces such as terminals or browsers."
+    },
+    {
+      "toolName": "surfaces.start",
+      "consentLevel": "once",
+      "risk": "low",
+      "description": "Start a new surface instance."
+    },
+    {
+      "toolName": "surfaces.stop",
+      "consentLevel": "once",
+      "risk": "low",
+      "description": "Stop a running surface instance."
+    },
+    {
+      "toolName": "network.scan",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Scan the local network for reachable devices."
+    },
+    {
+      "toolName": "session.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search prior chat messages and agent activity."
+    },
+    {
+      "toolName": "chat.traces",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect persisted chat traces owned by the current user."
+    },
+    {
+      "toolName": "security.results.show",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Display saved assessment evidence owned by the current operator without running checks."
+    },
+    {
+      "toolName": "channel.send",
+      "consentLevel": "once",
+      "risk": "low",
+      "description": "Send a message into a paired messaging chat."
+    },
+    {
+      "toolName": "channel.remind",
+      "consentLevel": "once",
+      "risk": "low",
+      "description": "Schedule a reminder delivered to a paired messaging chat."
+    },
+    {
+      "toolName": "thread.control",
+      "consentLevel": "once",
+      "risk": "high",
+      "description": "Create, run, or modify agent threads."
+    },
+    {
+      "toolName": "gateway.redeploy",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Redeploy the running gateway process."
+    },
+    {
+      "toolName": "project.create",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Create or resolve a project from a folder."
+    },
+    {
+      "toolName": "project.assign_repository",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Assign an existing or detected repository to a project."
+    },
+    {
+      "toolName": "project.transfer",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Copy a gateway project to a connected node over SCP and retarget it."
+    }
+  ],
+  "full": [
+    {
+      "toolName": "todo",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Update the current execution task list without running work."
+    },
+    {
+      "toolName": "jait.catalog",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect Jait pages and available capabilities."
+    },
+    {
+      "toolName": "tools.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search available tool schemas without executing tools."
+    },
+    {
+      "toolName": "tools.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List registered tool capabilities without executing tools."
+    },
+    {
+      "toolName": "agent.profiles.inspect",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect saved agent profiles owned by the user."
+    },
+    {
+      "toolName": "agent.profiles",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Create, update, or delete persistent Jait agents."
+    },
+    {
+      "toolName": "file.read",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Read a file from the project."
+    },
+    {
+      "toolName": "file.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List files and directories in the project."
+    },
+    {
+      "toolName": "file.stat",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect file metadata without changing contents."
+    },
+    {
+      "toolName": "file.write",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Create or overwrite files in the project."
+    },
+    {
+      "toolName": "file.patch",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Apply targeted edits to existing files."
+    },
+    {
+      "toolName": "terminal.run",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Run a non-interactive shell command.",
+      "deniedCommands": [
+        "rm -rf /",
+        "format C:",
+        "mkfs*",
+        "dd if=/dev/zero*",
+        "git checkout -- **",
+        "git restore **",
+        "git reset --hard**",
+        "git clean **"
+      ]
+    },
+    {
+      "toolName": "terminal.stream",
+      "consentLevel": "once",
+      "risk": "medium",
+      "description": "Open an interactive terminal session."
+    },
+    {
+      "toolName": "os.query",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect operating-system information."
+    },
+    {
+      "toolName": "os.install",
+      "consentLevel": "once",
+      "risk": "high",
+      "description": "Install system packages on the host."
+    },
+    {
+      "toolName": "computer.targets",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List connected computer-control targets."
+    },
+    {
+      "toolName": "computer.session",
+      "consentLevel": "once",
+      "risk": "high",
+      "description": "Start or stop visible control of a user desktop."
+    },
+    {
+      "toolName": "computer.observe",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Capture the screen during an approved computer-control session."
+    },
+    {
+      "toolName": "computer.act",
+      "consentLevel": "none",
+      "risk": "high",
+      "description": "Control mouse and keyboard during an approved computer-control session."
+    },
+    {
+      "toolName": "surfaces.list",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "List active surfaces such as terminals or browsers."
+    },
+    {
+      "toolName": "surfaces.start",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Start a new surface instance."
+    },
+    {
+      "toolName": "surfaces.stop",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Stop a running surface instance."
+    },
+    {
+      "toolName": "network.scan",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Scan the local network for reachable devices."
+    },
+    {
+      "toolName": "session.search",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Search prior chat messages and agent activity."
+    },
+    {
+      "toolName": "chat.traces",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Inspect persisted chat traces owned by the current user."
+    },
+    {
+      "toolName": "security.results.show",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Display saved assessment evidence owned by the current operator without running checks."
+    },
+    {
+      "toolName": "channel.send",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Send a message into a paired messaging chat."
+    },
+    {
+      "toolName": "channel.remind",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Schedule a reminder delivered to a paired messaging chat."
+    },
+    {
+      "toolName": "thread.control",
+      "consentLevel": "once",
+      "risk": "high",
+      "description": "Create, run, or modify agent threads."
+    },
+    {
+      "toolName": "gateway.redeploy",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Redeploy the running gateway process."
+    },
+    {
+      "toolName": "project.create",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Create or resolve a project from a folder."
+    },
+    {
+      "toolName": "project.assign_repository",
+      "consentLevel": "none",
+      "risk": "low",
+      "description": "Assign an existing or detected repository to a project."
+    },
+    {
+      "toolName": "project.transfer",
+      "consentLevel": "always",
+      "risk": "high",
+      "description": "Copy a gateway project to a connected node over SCP and retarget it."
+    }
+  ]
+}

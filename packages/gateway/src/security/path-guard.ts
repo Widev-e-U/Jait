@@ -5,8 +5,8 @@
  * checks against a configurable set of denied paths.
  */
 
-import { resolve, normalize, relative, sep } from "node:path";
-import { lstat } from "node:fs/promises";
+import { resolve, normalize, relative, sep, join, isAbsolute } from "node:path";
+import { lstat, realpath } from "node:fs/promises";
 
 /** Paths that are ALWAYS denied regardless of project root */
 const GLOBAL_DENIED: readonly string[] = Object.freeze([
@@ -113,27 +113,31 @@ export class PathGuard {
 
     if (!this.checkSymlinks) return norm;
 
-    try {
-      const stat = await lstat(norm);
-      if (stat.isSymbolicLink()) {
-        // Resolve the symlink and check that the real path is still inside boundary
-        const { realpath } = await import("node:fs/promises");
-        const real = await realpath(norm);
-        const rel = relative(this.root, real);
-        if (rel.startsWith("..") || rel.startsWith(".." + sep)) {
-          throw new PathTraversalError(
-            `Symlink escapes project boundary: ${target} -> ${real}`,
-            target,
-            this.root,
-          );
-        }
+    // A new file may be below an existing symlinked directory. Checking only
+    // lstat(target) misses that case because the leaf does not exist yet.
+    let realRoot = this.root;
+    try { realRoot = await realpath(this.root); }
+    catch (err) { if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err; }
+    let current = this.root;
+    for (const part of relative(this.root, norm).split(sep).filter(Boolean)) {
+      current = join(current, part);
+      let info;
+      try { info = await lstat(current); }
+      catch (err) {
+        // No later component can exist when this component is missing.
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") break;
+        throw err;
       }
-    } catch (err) {
-      // File doesn't exist yet — that's fine for writes
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return norm;
-      throw err;
+      if (!info.isSymbolicLink()) continue;
+      // A dangling symlink is rejected: a future write could otherwise follow it.
+      const real = await realpath(current);
+      const rel = relative(realRoot, real);
+      if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
+        throw new PathTraversalError(`Symlink escapes project boundary: ${target} -> ${real}`, target, this.root);
+      }
+      // A symlink must not bypass paths explicitly denied inside the project.
+      this.validate(join(this.root, rel));
     }
-
     return norm;
   }
 

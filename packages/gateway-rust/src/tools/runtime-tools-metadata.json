@@ -1,0 +1,60 @@
+[
+  {
+    "name": "agent.message",
+    "description": "Talk to the other specialists running alongside you in this swarm round. Pass `note` to share a finding or flag with your siblings; call with no `note` to just check in on what they've posted so far. Siblings only see your note when they call this tool themselves — there's no push notification, so don't rely on it for anything time-critical. Only available when you're one of several specialists spawned in parallel.",
+    "tier": "standard",
+    "category": "agent",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "Optional note to share with sibling specialists. Omit to just read what others have posted."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "gateway.status",
+    "description": "Return gateway runtime health information",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "project.editor.open",
+    "description": "Intentionally open the current project's editor UI. Use only when the user asks to see the editor or when opening it is necessary for the requested interaction; file edits do not open it automatically.",
+    "tier": "standard",
+    "category": "surfaces",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "voice.speak",
+    "description": "Speak text via the configured TTS output",
+    "tier": "standard",
+    "category": "voice",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Message to speak."
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+]

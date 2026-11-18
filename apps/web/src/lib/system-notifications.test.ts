@@ -85,6 +85,18 @@ describe('normalizeSystemNotification', () => {
     expect(notify).toHaveBeenCalledWith({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
   })
 
+  it('forwards messenger image references to the Android bridge', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', { Capacitor: { Plugins: { AgentOverlay: { notify } } } })
+    await triggerSystemNotification({
+      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Alice', body: 'Photo',
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    })
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    }))
+  })
+
   it('drops notifications with no visible title or body', () => {
     expect(normalizeSystemNotification({
       id: 'notif-1',
@@ -183,6 +195,24 @@ describe('normalizeSystemNotification', () => {
     expect(toastInfo).toHaveBeenCalledWith('Approval needed', { description: 'terminal.run wants to run' })
   })
 
+  it('delivers locally generated Messenger alerts when another surface owns attention events', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', {
+      jaitDesktop: { notify },
+      Capacitor: undefined,
+    } as unknown as Window & typeof globalThis)
+    setNativeNotificationsEnabled(false)
+
+    await triggerSystemNotification({
+      id: 'matrix:message-1',
+      title: 'Messenger',
+      body: 'New message',
+      independentOfAttention: true,
+    })
+
+    expect(notify).toHaveBeenCalledOnce()
+  })
+
   it('closes the browser notification when the request is answered elsewhere', async () => {
     NotificationMock.permission = 'granted'
 
@@ -211,7 +241,7 @@ describe('normalizeSystemNotification', () => {
 
 it('deduplicates the same completion but replaces the card for the next turn', async () => {
   const notify = vi.fn(async (_input: unknown) => {})
-  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  vi.stubGlobal('window', { dispatchEvent: vi.fn(), jaitDesktop: { notify } })
   try {
     const input = { id: 'completion:dedupe:1', replaceId: 'chat:dedupe', kind: 'completion' as const, sessionId: 'dedupe', title: 'Response ready', body: 'Done', link: '/chat?sessionId=dedupe', includeToast: false }
     await triggerSystemNotification(input)
@@ -224,7 +254,7 @@ it('deduplicates the same completion but replaces the card for the next turn', a
 
 it('suppresses only the visible focused chat completion', async () => {
   const notify = vi.fn(async (_input: unknown) => {})
-  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  vi.stubGlobal('window', { dispatchEvent: vi.fn(), jaitDesktop: { notify } })
   vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
   setVisibleNotificationSession('visible-chat')
   try {

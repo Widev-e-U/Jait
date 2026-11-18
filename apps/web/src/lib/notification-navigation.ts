@@ -4,6 +4,8 @@ let pending: NotificationActivation | null = null
 let handler: ((activation: NotificationActivation) => Promise<boolean>) | null = null
 let running = false
 
+export function pendingNotificationLink(): string | null { return pending?.link ?? null }
+
 export function openNotification(activation: NotificationActivation): void {
   const link = safeNotificationLink(activation.link)
   if (!link) return
@@ -40,12 +42,53 @@ export function subscribeNotificationNavigation(callback: NonNullable<typeof han
 
 export function retryNotificationNavigation(): void { void drain() }
 
+type NativeResult<T> = T | PromiseLike<T>
+
 export interface NotificationBridge {
-  getPendingNotification?: () => Promise<{ activation?: NotificationActivation | null }>
-  acknowledgeNotification?: (input: { id: string }) => Promise<unknown>
-  addListener?: (name: string, callback: (activation: NotificationActivation) => void) => Promise<{ remove(): Promise<void> }>
-  setNotificationContext?: (input: { sessionId: string; visible: boolean }) => Promise<unknown>
-  cancelNotification?: (input: { id: string }) => Promise<unknown>
+  getPendingNotification?: () => NativeResult<{ activation?: NotificationActivation | null }>
+  acknowledgeNotification?: (input: { id: string }) => NativeResult<unknown>
+  addListener?: (name: string, callback: (activation: NotificationActivation) => void) => NativeResult<{ remove(): NativeResult<void> }>
+  setNotificationContext?: (input: { sessionId: string; visible: boolean }) => NativeResult<unknown>
+  cancelNotification?: (input: { id: string; eventId?: string }) => NativeResult<unknown>
+}
+
+/** Keep native bridge methods that return synchronously from crashing notification setup. */
+export function setAndroidNotificationContext(
+  bridge: NotificationBridge | undefined,
+  input: { sessionId: string; visible: boolean },
+): void {
+  if (!bridge?.setNotificationContext) return
+  void Promise.resolve().then(() => bridge.setNotificationContext!(input)).catch(() => {})
+}
+
+export function watchAndroidNotifications(
+  bridge: NotificationBridge | undefined,
+  accept: (activation: NotificationActivation) => void,
+): { read: () => void; dispose: () => void } {
+  let disposed = false
+  let removeListener: (() => NativeResult<void>) | undefined
+
+  if (bridge?.addListener) {
+    void Promise.resolve().then(() => bridge.addListener!('notificationOpen', accept)).then((listener) => {
+      if (disposed) void Promise.resolve().then(() => listener.remove()).catch(() => {})
+      else removeListener = () => listener.remove()
+    }).catch(() => {})
+  }
+
+  const read = () => {
+    if (!bridge?.getPendingNotification) return
+    void Promise.resolve().then(() => bridge.getPendingNotification!()).then((result) => {
+      if (!disposed && result?.activation) accept(result.activation)
+    }).catch(() => {})
+  }
+
+  return {
+    read,
+    dispose: () => {
+      disposed = true
+      if (removeListener) void Promise.resolve().then(removeListener).catch(() => {})
+    },
+  }
 }
 
 export function androidNotificationBridge(): NotificationBridge | undefined {

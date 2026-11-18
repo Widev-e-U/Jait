@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
-import { runAgentLoop, type AgentLoopEvent } from "./agent-loop.js";
+import { runAgentLoop, toolDefsToSchemas, type AgentLoopEvent } from "./agent-loop.js";
 import { runAcpSpecialistTurn } from "./agent-acp-runner.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import type {
@@ -109,16 +109,11 @@ describe("swarm mode live streaming repro", () => {
           { role: "system", content: "system" },
           { role: "user", content: "investigate the bug" },
         ],
-        toolSchemas: [
-          {
-            type: "function",
-            function: {
-              name: "agent_spawn",
-              description: "Spawn a specialist sub-agent",
-              parameters: { type: "object", properties: {} },
-            },
-          },
-        ],
+        // Build through the production builder: the provider alias → internal name
+        // inverse is derived from advertised schemas, never guessed.
+        toolSchemas: toolDefsToSchemas([
+          { name: "agent.spawn", description: "Spawn a specialist sub-agent", parameters: { type: "object", properties: {} } },
+        ]),
         hasTools: true,
         sessionId: "session-1",
         abort: new AbortController(),

@@ -1,3 +1,4 @@
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useState } from 'react'
 import { Search, Shield, Puzzle, Wrench } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -57,7 +58,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useUrlSearchState('settings', 'toolsQ')
 
   // Fetch tool list on mount
   useEffect(() => {

@@ -3,6 +3,7 @@ import { type TeamChatService } from "../services/team-chat.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ToolDefinition } from "./contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { validateToolInput } from "./validate.js";
 
 interface TeamChatInput {
   action: "list" | "get" | "send" | "goal" | "complete";
@@ -29,10 +30,22 @@ export function createTeamChatTool(service: TeamChatService, _sessions: SessionS
       kind: { type: "string", enum: ["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"] },
       targetSessionId: { type: "string", description: "Steer this existing thread or legacy work chat instead of creating new execution. Recipient must own that work in this room." },
       clientKey: { type: "string", description: "Retain this key on retries to avoid duplicate messages and handoffs." },
-      criteria: { type: "array", items: { type: "string" } }, evidence: { type: "array", items: { type: "string" } },
-    }, required: ["action"] },
+      criteria: { type: "array", description: "Required for action=goal: 1–20 nonblank acceptance criteria, at most 2000 characters each.", items: { type: "string" } }, evidence: { type: "array", description: "Required for action=complete: evidence supporting independent verification.", items: { type: "string" } },
+    }, required: ["action"], allOf: [
+      { if: { properties: { action: { type: "string", enum: ["goal"] } }, required: ["action"] },
+        then: { required: ["content", "criteria"], properties: {
+          content: { type: "string", minLength: 1, pattern: "\\S" },
+          criteria: { type: "array", minItems: 1, maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000, pattern: "\\S" } },
+        } } },
+      { if: { properties: { action: { type: "string", enum: ["send"] } }, required: ["action"] },
+        then: { required: ["content"], properties: { content: { type: "string", minLength: 1, pattern: "\\S" } } } },
+      { if: { properties: { action: { type: "string", enum: ["complete"] } }, required: ["action"] },
+        then: { required: ["evidence"], properties: { evidence: { type: "array", minItems: 1, items: { type: "string", minLength: 1, pattern: "\\S" } } } } },
+    ] },
     async execute(input, context) {
       if (!context.userId) return { ok: false, message: "Authenticated user required." };
+      const validation = validateToolInput(this.parameters, input);
+      if (!validation.valid) return { ok: false, message: `Input validation failed: ${validation.errors.join("; ")}` };
       const userId = context.userId;
       try {
         if (input.action === "list") return { ok: true, message: "Persistent team rooms.", data: { rooms: service.list(userId) } };

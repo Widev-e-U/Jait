@@ -1,0 +1,46 @@
+{
+  "name": "todo",
+  "displayName": "Todo",
+  "description": "Track the current chat’s temporary plan; it is not saved to the Todo page. Provide the COMPLETE list each time. Use jait.todos for persistent repository follow-ups.",
+  "tier": "core",
+  "category": "meta",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "todoList": {
+        "type": "array",
+        "description": "Complete array of all todo items.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "number",
+              "description": "Sequential ID starting from 1."
+            },
+            "title": {
+              "type": "string",
+              "description": "Concise action label (3-7 words)."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "not-started",
+                "in-progress",
+                "completed"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "status"
+          ]
+        }
+      }
+    },
+    "required": [
+      "todoList"
+    ]
+  }
+}

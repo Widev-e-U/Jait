@@ -11,13 +11,17 @@ import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
 import { normalizeTodoStateValue, recoverTodoListFromMessages } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
-import { createOptimisticAssistantPlaceholder, mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
+import {
+  createOptimisticAssistantPlaceholder,
+  createOptimisticMessageId,
+  mergeSnapshotMessagesWithOptimisticUsers,
+} from '@/lib/optimistic-chat-messages'
+import { transcriptBeforeEditTarget } from '@/lib/edit-resend'
 import {
   deleteCachedChatHistory,
   getChatCacheScope,
   INITIAL_CHAT_HISTORY_MESSAGE_LIMIT,
   readCachedChatHistory,
-  readCachedStartupChat,
   reconcileChatHistory,
   reuseUnchangedMessages,
   selectImmediateChatHistory,
@@ -26,7 +30,6 @@ import {
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamSnapshot, type MessageStreamWriter } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
-import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
 import {
   openSessionEventSubscription,
   type SessionEventSubscription,
@@ -63,13 +66,6 @@ const LOCAL_SEND_TURN_START_TOLERANCE_MS = 60_000
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
   return { Authorization: `Bearer ${token}` }
-}
-
-function createOptimisticMessageId(prefix: 'user' | 'assistant'): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 export function getVisibleChangedFiles(changedFiles: ChangedFile[], isSwitchingSession: boolean): ChangedFile[] {
@@ -123,6 +119,19 @@ export interface ChatTransportSnapshot {
  */
 export const WAKE_TRANSPORT_STALE_MS = 45_000
 
+/**
+ * Staleness bound used after a wake once the socket had a moment to drain what
+ * the OS buffered while the app was paused. A live socket has delivered a 15s
+ * heartbeat by then; Android WebViews routinely keep a socket that died in the
+ * background looking `open`, and waiting the full 45s bound left the chat
+ * frozen until the user left and re-entered it.
+ */
+export const WAKE_RESUME_STALE_MS = 20_000
+/** How long a wake waits for buffered bytes before judging the socket. */
+const WAKE_SETTLE_MS = 1_500
+/** Foreground watchdog cadence for a socket that went silent without an error. */
+const TRANSPORT_WATCHDOG_INTERVAL_MS = 10_000
+
 export function getChatWakeRecoveryAction(params: {
   sessionId: string | null
   isLoading: boolean
@@ -131,6 +140,7 @@ export function getChatWakeRecoveryAction(params: {
   error?: string | null
   hasSubscription: boolean
   transport?: ChatTransportSnapshot | null
+  staleMs?: number
 }): ChatWakeRecoveryAction {
   if (!shouldResumeChatSession({ ...params, forceRefresh: true })) return 'none'
   const transport = params.transport
@@ -138,7 +148,7 @@ export function getChatWakeRecoveryAction(params: {
     transport != null &&
     transport.state === 'open' &&
     transport.attempts === 0 &&
-    transport.idleMs <= WAKE_TRANSPORT_STALE_MS
+    transport.idleMs <= (params.staleMs ?? WAKE_TRANSPORT_STALE_MS)
   ) {
     // The durable subscription replays any gap from Last-Event-ID and the
     // accumulator holds every uncommitted delta, so tearing down and refetching a
@@ -183,6 +193,48 @@ export function isTurnEndEvent(eventType: unknown): boolean {
   return eventType === 'done' || eventType === 'error'
 }
 
+/** A message a `request` (turn-start) event should append to the transcript. */
+export type TurnStartMessage =
+  | { kind: 'user'; content: string }
+  | { kind: 'system-notice'; content: string }
+
+/**
+ * What a `request` (turn-start) event should render, if anything.
+ *
+ * Not every turn is authored by the user. A finished background command
+ * re-enters the session as a continuation turn that carries
+ * `_systemNotification` and no prompt text, so the gateway sends
+ * `content: ""` and persists its own notice row for that turn. Synthesizing a
+ * bubble from that empty string rendered as a blank user message.
+ *
+ * The turn still needs a visible line, so the gateway sends the notice text
+ * itself (`noticeText`) and it is rendered the same way history renders the
+ * persisted row: as a gray `system-notice` line sharing role `user`. That
+ * shape is what `mergeSnapshotMessagesWithOptimisticUsers` matches on, so the
+ * live line is replaced in place by the persisted notice instead of being
+ * duplicated.
+ */
+export function planTurnStartMessage(input: {
+  isReplay: boolean
+  wasLocallySent: boolean
+  startedContent: string | null
+  systemNotice?: boolean
+  noticeText?: string
+  attachmentCount?: number
+}): TurnStartMessage | null {
+  if (input.isReplay || input.wasLocallySent) return null
+  if (input.systemNotice === true) {
+    // No prompt text exists for this turn; the notice line is its content.
+    const notice = safeTrim(input.noticeText ?? '')
+    return notice ? { kind: 'system-notice', content: notice } : null
+  }
+  if (input.startedContent === null) return null
+  // A user turn always has text; an empty body is only meaningful when it
+  // carries an attachment.
+  if (input.startedContent === '' && !input.attachmentCount) return null
+  return { kind: 'user', content: input.startedContent }
+}
+
 /**
  * Extract the server-assigned queue entry from the 202 response to POST
  * /api/chat.
@@ -218,11 +270,14 @@ function safeTrim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export function editQueuedChatMessage(item: QueuedChatMessage, content: string): QueuedChatMessage {
+export function editQueuedChatMessage<T extends QueuedMessage & { referencedFiles?: { path: string; name: string }[] }>(item: T, content: string, currentAttachments?: ChatAttachment[], editedSegments?: UserMessageSegment[]) {
   const trimmed = safeTrim(content)
-  const attachments = mergeChatAttachments(item.attachments, attachmentsFromSegments(item.displaySegments))
-  if (!trimmed && !attachments?.length) return item
-  const edited = createUserMessageEditSubmission(trimmed, undefined, item.displaySegments, attachments)
+  const attachments = currentAttachments ?? mergeChatAttachments(
+    item.attachments?.filter((item): item is ChatAttachment => typeof item !== 'string'),
+    attachmentsFromSegments(item.displaySegments),
+  )
+  const edited = createUserMessageEditSubmission(trimmed, editedSegments, item.displaySegments, attachments)
+  if (!edited) return item
   return {
     ...item,
     content: trimmed,
@@ -300,7 +355,17 @@ export type MessageSegment =
   | { type: 'toolGroup'; callIds: string[] }
   | { type: 'error'; content: string }
   /** A user message injected into a running turn via steering, anchored at the point it was received. */
-  | { type: 'steering'; content: string; displayContent?: string }
+  | {
+      type: 'steering'
+      content: string
+      displayContent?: string
+      /** Images sent with the steer, so the marker still shows them after a reload. */
+      attachments?: Array<{ name: string; mimeType: string; data: string }>
+      /** Id of the queued steer this marker consumed (absent on replays). */
+      queuedMessageId?: string
+      /** True when the gateway accepted the steer before injecting it. */
+      deferred?: boolean
+    }
 
 /**
  * Segments for a turn the gateway ended with an error — a rate limit, spent
@@ -333,6 +398,7 @@ export interface LlmContextFlowRound {
 
 /** Per-round performance and token metrics. */
 export interface RoundMetrics {
+  requestCount?: number;
   durationMs: number
   promptTokens?: number
   cachedPromptTokens?: number
@@ -353,6 +419,7 @@ export interface RoundMetrics {
 }
 
 export interface LlmContextFlow {
+  usageSummary?: import("@jait/shared").UsageSummary;
   provider: string
   model?: string
   rounds: LlmContextFlowRound[]
@@ -376,6 +443,7 @@ export interface LlmContextFlow {
 }
 
 export interface ChatMessage {
+  clientMessageId?: string
   persona?: ChatPersona
   id: string
   /** Stable UI identity; id remains the durable ID used by message APIs. */
@@ -389,6 +457,12 @@ export interface ChatMessage {
   kind?: 'system-notice'
   /** Local-only user message awaiting confirmation from a server snapshot. */
   optimistic?: boolean
+  /**
+   * Delivery state of a locally inserted user message: `sending` until the
+   * turn is accepted (or the restart round-trip lands), `sent` afterwards.
+   * Absent on rows restored from history — those are settled by definition.
+   */
+  sendState?: 'sending' | 'sent'
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
   steered?: boolean
   /** Clean display text for user messages (without appended file contents) */
@@ -417,6 +491,7 @@ export interface ChatMessage {
 }
 
 type RawSnapshotMessage = {
+  clientMessageId?: string
   persona?: ChatPersona
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -440,6 +515,9 @@ type RawSnapshotMessage = {
     output?: string
     data?: unknown
     streamingOutput?: string
+    streamingArgs?: string
+    streamIndex?: number
+    provisional?: boolean
     startedAt?: number
     completedAt?: number
     /** Ordered child segments of a sub-agent tool call (text/thinking/nested tool groups) so a reload replays the full interleaved layout. */
@@ -456,7 +534,7 @@ export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStrea
     if (m.role === 'system') {
       return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
     }
-    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona) }
+    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona), ...(m.clientMessageId ? { clientMessageId: m.clientMessageId } : {}) }
     if (m.hasContextFlow) msg.hasContextFlow = true
     if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
     if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
@@ -510,6 +588,9 @@ export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStrea
                 data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
               },
           streamingOutput: tc.streamingOutput,
+          streamingArgs: tc.streamingArgs,
+          streamIndex: tc.streamIndex,
+          provisional: tc.provisional,
           childSegments: tc.childSegments,
           startedAt,
           completedAt: resolvedCompletedAt,
@@ -651,6 +732,18 @@ interface SendMessageOptions {
    * positional index that can drift from a locally stale message list.
    */
   expectedContent?: string
+  /**
+   * ID of an optimistic user bubble that is already on screen (edit-and-resend
+   * renders it before the restart round-trip). The send adopts that row — it
+   * moves to `sent` instead of appending a second copy of the same prompt.
+   */
+  reuseOptimisticMessageId?: string
+  /**
+   * ID of an optimistic assistant placeholder that is already on screen (the
+   * edit-and-resend flow renders one while the restart round-trips). The send
+   * fills that row in instead of appending a second "thinking" row.
+   */
+  reuseOptimisticAssistantId?: string
 }
 
 interface QueuedChatMessage extends QueuedMessage {
@@ -664,6 +757,15 @@ interface QueuedChatMessage extends QueuedMessage {
   referencedFiles?: { path: string; name: string }[]
   displaySegments?: UserMessageSegment[]
   attachments?: ChatAttachment[]
+  /**
+   * The entry is a steer that the gateway has accepted but not injected yet.
+   * It renders like a queued message (VS Code style) and must never be drained
+   * as a new turn: it is removed only when the gateway emits the `steering`
+   * event that consumes it at the current agent-loop round boundary.
+   */
+  pendingSteer?: boolean
+  /** The id the gateway echoes back on the `steering` event for this steer. */
+  steerQueuedMessageId?: string
 }
 
 type SendMessageResult = 'sent' | 'retry' | 'aborted' | 'queued'
@@ -694,6 +796,15 @@ export function useChat(
     totalMessages: 0,
   })
 
+  /**
+   * Synchronous mirror of the rendered transcript. Edit-and-resend has to read
+   * the current list to snapshot it for rollback and to truncate it, and both
+   * must happen inside a single commit — `state.messages` in a callback closure
+   * is one render behind by the time the optimistic bubble is inserted.
+   */
+  const messagesRef = useRef<ChatMessage[]>([])
+  messagesRef.current = state.messages
+
   const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
   const [todoList, setTodoList] = useState<TodoItem[]>([])
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
@@ -722,7 +833,8 @@ export function useChat(
     setTodoList((items) => items.some((item) => item.status !== 'completed') ? [] : items)
   }, [])
 
-  const prevSessionIdRef = useRef<string | null>(null)
+  // `undefined` = "re-run the session effect"; `null` = deliberately no chat (a new-chat draft).
+  const prevSessionIdRef = useRef<string | null | undefined>(undefined)
   const subscriptionRunIdRef = useRef(0)
   const requestVersionRef = useRef(0)
   /**
@@ -753,8 +865,6 @@ export function useChat(
    * adopted by chat B's subscription.
    */
   const pendingAssistantPlaceholderRef = useRef<{ sessionId: string; messageId: string } | null>(null)
-  const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
-  if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -763,8 +873,6 @@ export function useChat(
   const subscriptionRef = useRef<SessionEventSubscription | null>(null)
   const documentWasHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false)
   const browserWasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false)
-
-  useEffect(() => () => startupCacheWriterRef.current?.flush(), [])
 
   useEffect(() => {
     if (
@@ -775,17 +883,6 @@ export function useChat(
       || state.messages.length === 0
     ) return
 
-    startupCacheWriterRef.current?.schedule({
-      scope: cacheScope,
-      sessionId,
-      history: {
-        messages: state.messages,
-        hasMore: state.hasMore,
-        totalMessages: state.totalMessages,
-        streaming: state.isLoading,
-        sessionLastActiveAt,
-      },
-    })
     const timer = window.setTimeout(() => {
       void writeCachedChatHistory(cacheScope, sessionId, {
         messages: state.messages,
@@ -807,7 +904,7 @@ export function useChat(
    */
   const resumeSessionStream = useCallback(() => {
     preserveMessagesOnNextResumeRef.current = true
-    prevSessionIdRef.current = null
+    prevSessionIdRef.current = undefined
     setRefreshTrigger(n => n + 1)
   }, [])
 
@@ -828,7 +925,6 @@ export function useChat(
   // two-consumers-on-one-turn problem the direct stream used to create.
   useLayoutEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
-    startupCacheWriterRef.current?.flush()
     const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
     preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
@@ -869,11 +965,6 @@ export function useChat(
     const runId = ++subscriptionRunIdRef.current
     const isCurrent = () => !cancelled && subscriptionRunIdRef.current === runId
 
-    const startupCache = selectImmediateChatHistory(
-      readCachedStartupChat(cacheScope, sessionId),
-      sessionLastActiveAtRef.current,
-    )
-
     // Show a skeleton (never cached messages) until the fresh server snapshot
     // is received, evaluated and merged. Rendering cached messages immediately
     // caused a stale-then-sudden-update flash once the snapshot arrived.
@@ -881,11 +972,11 @@ export function useChat(
       ...prev,
       readActivity: undefined,
       messages: preserveExistingMessages ? prev.messages : [],
-      isLoading: startupCache?.streaming === true,
+      isLoading: false,
       isLoadingHistory: !preserveExistingMessages,
       error: null,
-      hasMore: startupCache?.hasMore ?? false,
-      totalMessages: startupCache?.totalMessages ?? 0,
+      hasMore: false,
+      totalMessages: 0,
     }))
     if (!preserveExistingMessages) setChangedFiles([])
     setContextUsage(null)
@@ -1035,18 +1126,49 @@ export function useChat(
         const startedContent = startedTurnContentRef.current
         const wasLocallySent = (() => {
           const pending = localPendingSendRef.current
-          if (!pending) return false
-          if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) return false
-          return startedContent !== null && safeTrim(pending.content) === startedContent
+          if (!pending || isReplay) return false
+          if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) {
+            localPendingSendRef.current = null
+            return false
+          }
+          if (startedContent === null || safeTrim(pending.content) !== startedContent) return false
+          localPendingSendRef.current = null
+          return true
         })()
-        localPendingSendRef.current = null
 
         const queueBefore = messageQueueRef.current
         const drainedItem = startedContent !== null
           ? queueBefore.find((item) => startedTurnQueuedIdRef.current ? item.id === startedTurnQueuedIdRef.current : safeTrim(item.content) === startedContent)
           : undefined
 
-        if (!isReplay && !wasLocallySent && startedContent !== null) {
+        // Continuation turns (background command finished, loop resume) are started
+        // by the gateway with `_systemNotification` and no user prompt, so this
+        // event carries `content: ""` alongside the notice text. See
+        // `planTurnStartMessage`.
+        const turnStart = planTurnStartMessage({
+          isReplay,
+          wasLocallySent,
+          startedContent,
+          systemNotice: (data as { systemNotice?: boolean }).systemNotice,
+          noticeText: typeof data.noticeText === 'string' ? data.noticeText : undefined,
+          attachmentCount: typeof data.attachmentCount === 'number' ? data.attachmentCount : undefined,
+        })
+
+        if (turnStart?.kind === 'system-notice') {
+          // Exactly the shape `mapSnapshotMessages` builds from the persisted
+          // notice row, so history reconciliation replaces this line in place
+          // rather than appending a second copy of it.
+          const noticeLine: ChatMessage = {
+            id: createOptimisticMessageId('notice'),
+            role: 'user',
+            kind: 'system-notice',
+            content: turnStart.content,
+            optimistic: true,
+          }
+          setState(prev => ({ ...prev, messages: [...prev.messages, noticeLine] }))
+        }
+
+        if (turnStart?.kind === 'user') {
           const userBubble: ChatMessage = drainedItem
             ? {
                 id: createOptimisticMessageId('user'),
@@ -1097,6 +1219,7 @@ export function useChat(
           // Cumulative provider slot index (see agent-loop.ts): lets the stream
           // re-key a provisional `pending-N` id once the real id arrives.
           typeof data.index === 'number' ? data.index : undefined,
+          typeof data.provisional === 'boolean' ? data.provisional : undefined,
         )
         applyStreamSnapshot()
       } else if (data.type === 'tool_start') {
@@ -1147,6 +1270,33 @@ export function useChat(
               if (filePath) trackChangedFile(filePath, filePath.split('/').pop() ?? filePath)
             }
           }
+        }
+      } else if (data.type === 'steering') {
+        // The gateway accepted this steer earlier and only now injected it, at
+        // the current agent-loop round boundary. Promote the parked queue entry
+        // to a sent marker so the transcript matches the model's real history.
+        // Replays rebuild the turn from the durable log, so they must not touch
+        // the live queue (the WS snapshot owns that).
+        const steerId = typeof data.queuedMessageId === 'string' ? data.queuedMessageId : null
+        const steerContent = typeof data.message === 'string'
+          ? data.message
+          : typeof data.content === 'string' ? data.content : ''
+        // Internal steers (e.g. a background terminal completing) reach the
+        // model and the trajectory log, but must stay out of the transcript.
+        const steerHidden = data.hidden === true
+        const steerAttachments = Array.isArray(data.attachments) ? data.attachments as ChatAttachment[] : undefined
+        if (isReplay || !steerId) {
+          if (!steerHidden) {
+            recordSteeredMessage(steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined, steerAttachments)
+          }
+        } else {
+          resolveSteeredMessage(
+            steerId,
+            steerContent,
+            typeof data.displayContent === 'string' ? data.displayContent : undefined,
+            steerHidden,
+            steerAttachments,
+          )
         }
       } else if (data.type === 'content_rollback') {
         // The gateway discarded a degenerate generation after streaming
@@ -1388,6 +1538,7 @@ export function useChat(
 
     const subscribe = (fromSeq: string | null) => {
       if (!isCurrent()) return
+      let hasOpened = false
       subscriptionRef.current = openSessionEventSubscription({
         url: `${API_URL}/api/sessions/${sessionId}/events`,
         headers: authHeaders(authToken),
@@ -1396,6 +1547,13 @@ export function useChat(
         onOpen: () => {
           if (!isCurrent()) return
           setState(prev => (prev.error === TRANSIENT_CONNECTION_MESSAGE ? { ...prev, error: null } : prev))
+          // The gateway tags everything it replays after a drop as `replay`,
+          // including turns that ran entirely while this client was cut off
+          // (e.g. a queued prompt the server drained). Replays never synthesize
+          // the user bubble, so such a prompt simply vanished until the chat
+          // was reopened. Re-seed from an authoritative snapshot instead.
+          if (hasOpened) resumeSessionStreamRef.current?.()
+          hasOpened = true
         },
         onReconnect: (attempt) => {
           // A drop that repairs itself within a retry or two loses nothing —
@@ -1419,7 +1577,9 @@ export function useChat(
             ...prev,
             isLoading: false,
             isLoadingHistory: false,
-            error: 'Connection lost. Reconnect attempts exhausted.',
+            error: reason === 'replay'
+              ? 'Unable to recover the chat event stream. Reload the session to refresh its history.'
+              : 'Connection lost. Reconnect attempts exhausted.',
           }))
         },
       })
@@ -1462,10 +1622,9 @@ export function useChat(
               isLoadingHistory: false,
               error: isTransientConnectionError(error) ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
             }))
-            // Subscribe anyway. Live events still render, and the
-            // subscription's own retry ladder keeps working the connection —
-            // without a snapshot position it just starts from "now".
-            subscribe(null)
+            // Without a snapshot cursor, subscribing from the current head can
+            // silently skip the very events needed to reconstruct this turn.
+            setState(prev => ({ ...prev, isLoading: false, error: 'Unable to recover the chat history. Reload the session to try again.' }))
             return
           }
           setState(prev => ({ ...prev, isLoadingHistory: false }))
@@ -1484,7 +1643,7 @@ export function useChat(
       scheduler.cancel()
       if (activeStreamRef.current?.isCurrent === isCurrent) activeStreamRef.current = null
       // Reset so React strict-mode re-mount can re-run the effect
-      prevSessionIdRef.current = null
+      prevSessionIdRef.current = undefined
     }
   }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger, updateQueue])
 
@@ -1625,26 +1784,37 @@ export function useChat(
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     let requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
     const outboundAttachments = mergeChatAttachments(options.attachments, attachmentsFromSegments(options.displaySegments))
-    const assistantId = createOptimisticMessageId('assistant')
-
+    const reuseAssistantMessageId = options.reuseOptimisticAssistantId
+    const assistantId = reuseAssistantMessageId ?? createOptimisticMessageId('assistant')
+    // Edit-and-resend already put the edited prompt on screen while the
+    // restart round-tripped; reuse that row so the user sees one bubble that
+    // flips to "sent" rather than a second, freshly appended copy.
+    const reuseUserMessageId = options.reuseOptimisticMessageId
     const userMessage: ChatMessage = {
-      id: createOptimisticMessageId('user'),
+      id: reuseUserMessageId ?? createOptimisticMessageId('user'),
       role: 'user',
       content,
       optimistic: true,
+      sendState: 'sending',
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
       ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
       ...(outboundAttachments?.length ? { attachments: outboundAttachments } : {}),
     }
 
-    setState(prev => ({
-      ...prev,
-      messages: [...prev.messages, userMessage, createOptimisticAssistantPlaceholder(assistantId)],
-      isLoading: true,
-      error: null,
-      hitMaxRounds: false,
-    }))
+    setState(prev => {
+      const hasPlaceholder = reuseAssistantMessageId
+        ? prev.messages.some(message => message.id === reuseAssistantMessageId)
+        : false
+      const withUser = reuseUserMessageId ? prev.messages : [...prev.messages, userMessage]
+      return {
+        ...prev,
+        messages: hasPlaceholder ? withUser : [...withUser, createOptimisticAssistantPlaceholder(assistantId)],
+        isLoading: true,
+        error: null,
+        hitMaxRounds: false,
+      }
+    })
 
     // Clear the todo list for the new turn. Keep changed files so pending
     // review state survives across follow-up prompts until the user decides.
@@ -1697,6 +1867,15 @@ export function useChat(
       }))
     }
 
+    // The subscription can receive the start before POST headers arrive.
+    // Publish the marker before sending so that fast turns do not duplicate
+    // the optimistic user message. Clear only our own marker on rejection.
+    const pendingSend = { content, at: Date.now() }
+    localPendingSendRef.current = pendingSend
+    const clearPendingSend = () => {
+      if (localPendingSendRef.current === pendingSend) localPendingSendRef.current = null
+    }
+
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1704,6 +1883,7 @@ export function useChat(
       const requestBody = {
         content,
         sessionId: requestSessionId,
+        clientMessageId: userMessage.id,
         ...(options.personaAgentId ? { personaAgentId: options.personaAgentId } : {}),
         ...(options.queuedMessageId ? { queuedMessageId: options.queuedMessageId } : {}),
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
@@ -1728,6 +1908,7 @@ export function useChat(
       if (response.status === 401) {
         const data = await response.json().catch(() => ({})) as { detail?: string }
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
+          clearPendingSend()
           const detail = data.detail
           const owned = releasePlaceholder()
           setState(prev => ({
@@ -1759,6 +1940,7 @@ export function useChat(
       // arrive on `/events` for it, so this is the one response body still
       // worth reading — and it is already complete, so `.text()` suffices.
       if (response.status === 202) {
+        clearPendingSend()
         const queued = parseQueuedChatResponse(await response.text())?.message as Partial<QueuedChatMessage> | undefined
         dropOptimisticPair()
         setState(prev => ({ ...prev, isLoading: false }))
@@ -1786,12 +1968,17 @@ export function useChat(
       // carried is already on this session's subscription, and the gateway
       // keeps producing the turn after a client close.
       void response.body?.cancel().catch(() => {})
-      // The turn was accepted and this client initiated it (directly or via a
-      // client-side queue drain): the optimistic user bubble is already on
-      // screen, so the turn-start event must not append another one.
-      localPendingSendRef.current = { content, at: Date.now() }
+      // The prompt is durably accepted: retire its "sending" indicator. The
+      // subscription owns the assistant bubble from here on.
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(m =>
+          m.id === userMessage.id && m.sendState === 'sending' ? { ...m, sendState: 'sent' as const } : m
+        ),
+      }))
       return 'sent'
     } catch (error) {
+      clearPendingSend()
       const transientConnectionError = isTransientConnectionError(error)
       const errorMessage = transientConnectionError
         ? TRANSIENT_CONNECTION_MESSAGE
@@ -1802,7 +1989,18 @@ export function useChat(
       // turn *did* start, and its own terminal event owns the outcome.
       const owned = releasePlaceholder()
       setState(prev => {
-        if (!owned) return { ...prev, isLoading: false, error: errorMessage }
+        if (!owned) {
+          return {
+            ...prev,
+            isLoading: false,
+            error: errorMessage,
+            // This bubble will never reach "sent" — clear the pending marker so
+            // a failed send does not spin forever next to the error banner.
+            messages: prev.messages.map(m =>
+              m.id === userMessage.id && m.sendState ? { ...m, sendState: undefined } : m
+            ),
+          }
+        }
         // A transient failure keeps no partial turn worth marking up, and a
         // queued-drain send owns neither bubble.
         const dropPair = transientConnectionError || options.queued === true
@@ -1862,10 +2060,12 @@ export function useChat(
    * than always being appended after the whole conversation (which made it look
    * permanently stuck at the bottom while the assistant kept streaming above it).
    */
-  const recordSteeredMessage = useCallback((content: string, displayContent?: string) => {
+  const recordSteeredMessage = useCallback((content: string, displayContent?: string, attachments?: ChatAttachment[]) => {
+    const images = attachments?.filter(item => item.mimeType.startsWith('image/'))
+      .map(({ name, mimeType, data }) => ({ name, mimeType, data }))
     const active = activeStreamRef.current
     if (active?.isCurrent() && active.getAssistantId()) {
-      active.getWriter().pushSteering(content, displayContent)
+      active.getWriter().pushSteering(content, displayContent, undefined, undefined, images)
       active.flush()
       return
     }
@@ -1874,16 +2074,66 @@ export function useChat(
       role: 'user',
       content,
       displayContent: displayContent ?? content,
+      ...(attachments?.length ? { attachments } : {}),
       steered: true,
     }
     setState(prev => ({ ...prev, messages: [...prev.messages, steeredMessage] }))
   }, [])
 
+  /**
+   * Park a steer as a queued entry instead of writing a sent bubble right away.
+   * The gateway only injects the steer at the next round boundary of the running
+   * agent loop, so showing it as sent at POST time would misrepresent the
+   * transcript (and put the marker above tool calls that had not run yet).
+   * `resolveSteeredMessage` promotes it once the `steering` event arrives.
+   */
+  const enqueuePendingSteer = useCallback((
+    item: Omit<QueuedChatMessage, 'id' | 'queuedAt' | 'pendingSteer'> & { steerQueuedMessageId: string },
+  ) => {
+    updateQueue(prev => {
+      const rest = prev.filter(entry => entry.steerQueuedMessageId !== item.steerQueuedMessageId)
+      return [...rest, {
+        ...item,
+        id: `steer-${item.steerQueuedMessageId}`,
+        queuedAt: Date.now(),
+        pendingSteer: true,
+      }]
+    })
+  }, [updateQueue])
+
+  /**
+   * The gateway injected a deferred steer: drop the pending queue entry and
+   * splice the marker into the transcript at its real position. Falls back to
+   * the pending entry's own content when the event omits it.
+   */
+  const resolveSteeredMessage = useCallback((steerId: string, content?: string, displayContent?: string, hidden?: boolean, attachments?: ChatAttachment[]) => {
+    const pending = messageQueueRef.current.find(entry => entry.steerQueuedMessageId === steerId)
+    updateQueue(prev => prev.filter(entry => entry.steerQueuedMessageId !== steerId))
+    // An internal (hidden) steer must still clear its queue entry, but it never
+    // becomes a visible transcript marker.
+    if (hidden) return
+    const body = content ?? pending?.content
+    const steerAttachments = attachments?.length ? attachments : pending?.attachments
+    if (!body && !steerAttachments?.length) return
+    recordSteeredMessage(body ?? '', displayContent ?? pending?.displayContent, steerAttachments)
+  }, [recordSteeredMessage, updateQueue])
+
+  /**
+   * The steer request was rejected (or never left the app): drop the pending
+   * queue entry. Without this the entry would render as queued forever because
+   * no `steering` event will ever arrive to resolve it.
+   */
+  const discardPendingSteer = useCallback((steerId: string) => {
+    updateQueue(prev => prev.filter(entry => entry.steerQueuedMessageId !== steerId))
+  }, [updateQueue])
+
   /** Update the content of a queued message (inline edit). */
-  const updateQueueItem = useCallback((id: string, content: string) => {
-    // Guard: a stale queue entry or malformed edit payload could hold a
-    // non-string at runtime; safeTrim never throws.
-    updateQueue(prev => prev.map(q => q.id === id ? editQueuedChatMessage(q, content) : q))
+  const updateQueueItem = useCallback((id: string, content: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[], promptContent?: string) => {
+    updateQueue(prev => prev.map(q => {
+      if (q.id !== id) return q
+      const edited = editQueuedChatMessage(q, content, attachments, displaySegments)
+      return edited === q ? q : { ...q, ...edited, content: promptContent ?? edited.content }
+    }))
   }, [updateQueue])
 
   const reorderQueueItem = useCallback((sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
@@ -1931,10 +2181,14 @@ export function useChat(
   // Last-Event-ID and the latest accumulated state paints on the next visible
   // frame. Rebuilding unconditionally was visible as jank + a refetch pause
   // every time the user returned to the tab mid-stream.
+  const wakeStateRef = useRef({ isLoading: state.isLoading, isLoadingHistory: state.isLoadingHistory, messageCount: state.messages.length, error: state.error })
+  wakeStateRef.current = { isLoading: state.isLoading, isLoadingHistory: state.isLoadingHistory, messageCount: state.messages.length, error: state.error }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let settleTimer: ReturnType<typeof setTimeout> | null = null
 
-    const reattach = () => {
+    const reattach = (staleMs?: number) => {
       const subscription = subscriptionRef.current
       const health = subscription?.getHealth()
       const transport = health
@@ -1946,14 +2200,22 @@ export function useChat(
         : null
       const recoveryAction = getChatWakeRecoveryAction({
         sessionId,
-        isLoading: state.isLoading,
-        isLoadingHistory: state.isLoadingHistory,
-        messageCount: state.messages.length,
-        error: state.error,
+        ...wakeStateRef.current,
         hasSubscription: subscription != null,
         transport,
+        staleMs,
       })
       if (recoveryAction === 'snapshot') resumeSessionStream()
+    }
+
+    // Returning from the background: give a surviving socket a moment to
+    // deliver what was buffered, then hold it to a one-missed-heartbeat bound.
+    const reattachAfterWake = () => {
+      if (settleTimer !== null) clearTimeout(settleTimer)
+      settleTimer = setTimeout(() => {
+        settleTimer = null
+        if (!document.hidden) reattach(WAKE_RESUME_STALE_MS)
+      }, WAKE_SETTLE_MS)
     }
 
     const handleVisibilityChange = () => {
@@ -1963,10 +2225,10 @@ export function useChat(
       }
       if (!documentWasHiddenRef.current) return
       documentWasHiddenRef.current = false
-      reattach()
+      reattachAfterWake()
     }
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) reattach()
+      if (event.persisted) reattachAfterWake()
     }
     const handleOffline = () => {
       browserWasOfflineRef.current = true
@@ -1977,17 +2239,34 @@ export function useChat(
       if (wasOffline) reattach()
     }
 
+    // A socket can also die in the foreground without any error (Wi-Fi/LTE
+    // handoff, NAT timeout, Android doze): `read()` just never resolves again.
+    // The gateway heartbeats every 15s, so prolonged silence is proof enough.
+    const watchdog = setInterval(() => {
+      if (document.hidden) return
+      const health = subscriptionRef.current?.getHealth()
+      if (health?.state === 'open' && Date.now() - health.lastActivityAt > WAKE_TRANSPORT_STALE_MS) {
+        resumeSessionStream()
+      }
+    }, TRANSPORT_WATCHDOG_INTERVAL_MS)
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    // Capacitor dispatches `resume` on the document when the Android/iOS app
+    // returns to the foreground; WebViews do not always flip `visibilityState`.
+    document.addEventListener('resume', reattachAfterWake)
     window.addEventListener('pageshow', handlePageShow)
     window.addEventListener('offline', handleOffline)
     window.addEventListener('online', handleOnline)
     return () => {
+      if (settleTimer !== null) clearTimeout(settleTimer)
+      clearInterval(watchdog)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('resume', reattachAfterWake)
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
     }
-  }, [state.error, state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
+  }, [resumeSessionStream, sessionId])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients
@@ -2152,8 +2431,45 @@ export function useChat(
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId
-    if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current) return false
+    const trimmedContent = editedContent.trim()
+    if (!requestSessionId || !trimmedContent || restartInFlightRef.current) return false
     restartInFlightRef.current = true
+
+    // Show the edited turn before touching the network. The gateway needs its
+    // own turn stopped first (cancel + streaming poll, up to ~8s), and holding
+    // the UI back until that finished is what made an edit look like nothing
+    // happened: the old message stayed put and only the composer greyed out.
+    const previousMessages = messagesRef.current
+    const optimisticUserMessageId = createOptimisticMessageId('user')
+    // The assistant placeholder goes up with the user bubble so the transcript
+    // shows the turn already in flight; `sendMessage` adopts this row once the
+    // restart lands instead of appending a second one.
+    const optimisticAssistantMessageId = createOptimisticMessageId('assistant')
+    setState(prev => ({
+      ...prev,
+      messages: [
+        ...transcriptBeforeEditTarget(prev.messages, { messageId, messageIndex, messageFromEnd }),
+        {
+          id: optimisticUserMessageId,
+          role: 'user',
+          content: trimmedContent,
+          optimistic: true,
+          sendState: 'sending',
+          ...(options.displayContent ? { displayContent: options.displayContent } : {}),
+          ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
+        } as ChatMessage,
+        createOptimisticAssistantPlaceholder(optimisticAssistantMessageId) as ChatMessage,
+      ],
+      isLoading: true,
+      error: null,
+      hitMaxRounds: false,
+    }))
+
+    // The edit may still be rejected (missing message, cancelled login, dead
+    // connection), in which case the pre-edit transcript has to come back.
+    const rollbackOptimisticEdit = () => {
+      setState(prev => ({ ...prev, messages: previousMessages, isLoading: false }))
+    }
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -2201,6 +2517,7 @@ export function useChat(
       if (res.status === 401) {
         const data = await res.json().catch(() => ({})) as { detail?: string }
         if (data.detail === 'login_required') notifyLoginRequired?.()
+        rollbackOptimisticEdit()
         return false
       }
 
@@ -2220,15 +2537,18 @@ export function useChat(
         const totalMessages = data.total ?? messages.length
         return {
           ...prev,
-          messages,
-          isLoading: false,
+          // The snapshot is the truncated transcript: everything from the
+          // edited message onwards is gone server-side. Merge instead of
+          // replacing so the optimistic bubble just rendered survives the swap.
+          messages: mergeSnapshotMessagesWithOptimisticUsers(messages, prev.messages),
+          isLoading: true,
           error: null,
           hasMore: data.hasMore ?? messages.length < totalMessages,
           totalMessages,
         }
       })
 
-      const sendResult = await sendMessage(editedContent.trim(), {
+      const sendResult = await sendMessage(trimmedContent, {
         token: effectiveToken,
         sessionId: requestSessionId,
         mode: options.mode,
@@ -2236,16 +2556,29 @@ export function useChat(
         runtimeMode: options.runtimeMode,
         model: options.model,
         reasoningEffort: options.reasoningEffort,
-        displayContent: options.displayContent ?? editedContent.trim(),
+        displayContent: options.displayContent ?? trimmedContent,
         referencedFiles: options.referencedFiles,
         displaySegments: options.displaySegments,
         onLoginRequired: notifyLoginRequired,
+        reuseOptimisticMessageId: optimisticUserMessageId,
+        reuseOptimisticAssistantId: optimisticAssistantMessageId,
       })
-      return sendResult === 'sent' || sendResult === 'queued'
-    } catch (error) {
+      if (sendResult === 'sent' || sendResult === 'queued') return true
+      // History was rewritten but the new turn never started; the prompt on
+      // screen belongs to no server row, so drop it rather than leave a bubble
+      // that silently never gets answered.
       setState(prev => ({
         ...prev,
+        messages: prev.messages.filter(
+          m => m.id !== optimisticUserMessageId && m.id !== optimisticAssistantMessageId,
+        ),
         isLoading: false,
+      }))
+      return false
+    } catch (error) {
+      rollbackOptimisticEdit()
+      setState(prev => ({
+        ...prev,
         error: error instanceof Error ? error.message : 'Failed to restart from message',
       }))
       return false
@@ -2414,6 +2747,9 @@ export function useChat(
     enqueueMessage,
     dequeueMessage,
     recordSteeredMessage,
+    enqueuePendingSteer,
+    resolveSteeredMessage,
+    discardPendingSteer,
     updateQueueItem,
     reorderQueueItem,
     toggleHoldQueueItem,

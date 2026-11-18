@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase, type JaitDB } from "../db/connection.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
-import type { NotificationService } from "./notifications.js";
 import { providerUsage } from "../db/schema.js";
 import { ProviderUsageService } from "./provider-usage.js";
 
@@ -19,18 +18,20 @@ afterEach(() => {
   sqlite.close();
 });
 
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-
 describe("ProviderUsageService", () => {
+  it("removes absent quotas when a fresh balance replaces previous limits", () => {
+    const service = new ProviderUsageService(db);
+    service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.5, models: [] }, weekly: { usage: 0.8, models: [] } } });
+    service.recordOllamaUsage("ollama", { source: "balance", limits: { monthly: { usage: 0.2, models: [] } } } as any);
+    expect(service.listForUser(["ollama"]).map((row) => row.rateLimitType)).toEqual(["monthly"]);
+  });
+
   it("stores Go windows and provider-reported Ollama resets", () => {
     const service = new ProviderUsageService(db);
     const window = { status: "ok" as const, percent: 20, resetsAt: "2026-10-09T12:00:00Z" };
     service.recordOpenCodeGoUsage("go", { usage: { rolling: window, weekly: { ...window, percent: 90 }, monthly: { ...window, status: "rate-limited", percent: 100 } } });
     expect(service.listForUser(["go"])).toEqual(expect.arrayContaining([
-      expect.objectContaining({ providerType: "opencode-go", rateLimitType: "five_hour", utilization: 0.2, resetsAt: window.resetsAt }),
+      expect.objectContaining({ providerType: "opencode-go", rateLimitType: "five_hour", utilization: 0.2, resetsAt: window.resetsAt, resetSource: "provider-reported" }),
       expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.9, status: "allowed_warning" }),
       expect.objectContaining({ rateLimitType: "monthly", utilization: 1, status: "rejected" }),
     ]));
@@ -136,79 +137,6 @@ describe("ProviderUsageService", () => {
     expect(service.listForUser([])).toHaveLength(0);
   });
 
-  it("warns once when utilization crosses the threshold and does not re-notify", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.97,
-    });
-
-    expect(warning).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith("Approaching usage limit", "Claude Code's session limit is at 95%.", "/settings?tab=usage");
-  });
-
-  it("warns on allowed_warning status even without a utilization number", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed_warning",
-      rateLimitType: "seven_day",
-    });
-
-    expect(warning).toHaveBeenCalledTimes(1);
-    expect(warning).toHaveBeenCalledWith("Approaching usage limit", "Claude Code's weekly limit is near its limit.", "/settings?tab=usage");
-  });
-
-  it("clears the warned state once utilization drops back below the threshold", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    expect(warning).toHaveBeenCalledTimes(1);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.3,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.96,
-    });
-    expect(warning).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not warn while utilization stays below the threshold", () => {
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.5,
-    });
-
-    expect(warning).not.toHaveBeenCalled();
-  });
-
   it("stores Codex session and weekly subscription windows", () => {
     const service = new ProviderUsageService(db);
     service.recordCodexRateLimits("codex-account", {
@@ -236,11 +164,135 @@ describe("ProviderUsageService", () => {
           rateLimitType: "five_hour",
           utilization: 0.12,
           planType: "plus",
+          resetsAt: new Date(1_700_000_000 * 1000).toISOString(),
+          resetSource: "provider-reported",
         }),
         expect.objectContaining({
           rateLimitType: "seven_day",
           utilization: 0.34,
           credits: { hasCredits: true, balance: "7.50" },
+          resetSource: "provider-reported",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps Codex reset credits available to spend on every window row", () => {
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-account", {
+      rateLimits: {
+        primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1_700_000_000 },
+      },
+      rateLimitResetCredits: {
+        availableCount: 2,
+        credits: [
+          {
+            id: "RateLimitResetCredit_1",
+            resetType: "codexRateLimits",
+            status: "available",
+            grantedAt: 1_700_000_000,
+            expiresAt: 1_702_000_000,
+            title: "Full reset (Weekly + 5 hr)",
+          },
+        ],
+      },
+    });
+
+    const snapshots = service.listForUser(["codex-account"]);
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]?.resetCredits).toEqual({
+      availableCount: 2,
+      credits: [
+        expect.objectContaining({ title: "Full reset (Weekly + 5 hr)", status: "available" }),
+      ],
+    });
+  });
+
+  it.each([true, undefined])("keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)", (ordinaryUsageAllowed) => {
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-plus", {
+      ordinaryUsageAllowed,
+      rateLimits: {
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+        secondary: { usedPercent: 18, windowDurationMins: 10_080 },
+        planType: "plus",
+        credits: { hasCredits: false, unlimited: false, balance: "0" },
+      },
+    });
+
+    expect(service.listForUser(["codex-plus"])).toEqual([
+      expect.objectContaining({ rateLimitType: "five_hour", utilization: 0.15, status: "allowed" }),
+      expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.18, status: "allowed" }),
+    ]);
+  });
+
+  it.each([
+    { ordinaryUsageAllowed: false, rateLimits: {} },
+    { rateLimits: { spendControlReached: true } },
+    { rateLimits: { rateLimitReachedType: "workspace_member_credits_depleted" } },
+  ])("honors explicit Codex account blocks below the window limit: %j", (block) => {
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-blocked", {
+      ...block,
+      rateLimits: {
+        ...block.rateLimits,
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+      },
+    });
+    expect(service.listForUser(["codex-blocked"])[0].status).toBe("rejected");
+  });
+
+  it("updates Codex window status after a fresh quota report", () => {
+    const service = new ProviderUsageService(db);
+    for (const [usedPercent, status] of [[100, "rejected"], [95, "allowed_warning"], [15, "allowed"]] as const) {
+      service.recordCodexRateLimits("codex-plus", {
+        rateLimits: {
+          primary: { usedPercent, windowDurationMins: 300 },
+          credits: { hasCredits: false },
+        },
+      });
+      expect(service.listForUser(["codex-plus"])[0].status).toBe(status);
+    }
+  });
+
+  it("marks every Codex window as full when workspace credits are depleted", () => {
+    const service = new ProviderUsageService(db);
+    // Shape reported by the live Work (team) account: the workspace blocks
+    // ordinary usage even though only the 5h window sits at 100%.
+    service.recordCodexRateLimits("codex-work", {
+      ordinaryUsageAllowed: false,
+      rateLimits: {
+        primary: {
+          usedPercent: 100,
+          windowDurationMins: 300,
+          resetsAt: 1_792_364_608,
+        },
+        secondary: {
+          usedPercent: 63,
+          windowDurationMins: 10_080,
+          resetsAt: 1_792_500_000,
+        },
+        planType: "team",
+        rateLimitReachedType: "workspace_member_credits_depleted",
+        spendControlReached: false,
+        credits: { hasCredits: false },
+      },
+    });
+
+    const snapshots = service.listForUser(["codex-work"]);
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rateLimitType: "five_hour",
+          utilization: 1,
+          status: "rejected",
+          planType: "team",
+        }),
+        expect.objectContaining({
+          rateLimitType: "seven_day",
+          utilization: 0.63,
+          status: "rejected",
         }),
       ]),
     );

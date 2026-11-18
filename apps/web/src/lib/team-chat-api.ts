@@ -7,6 +7,8 @@ export interface TeamRoomSnapshot {
   members: PersonaAgentProfile[]
   messages: TeamRoomMessage[]
   deliveries: TeamDelivery[]
+  /** Present in paged responses: older messages exist before the first returned one. */
+  hasMore?: boolean
 }
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken()
@@ -22,7 +24,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const teamChatApi = {
   list: () => request<{ rooms: TeamRoom[] }>('/api/team-rooms'),
   create: (input: { name: string; memberIds: string[] }) => request<{ room: TeamRoom }>('/api/team-rooms', { method: 'POST', body: JSON.stringify(input) }),
-  get: (roomId: string) => request<TeamRoomSnapshot>('/api/team-rooms/' + encodeURIComponent(roomId)),
+  get: (roomId: string, page?: { limit: number; before?: string }) => request<TeamRoomSnapshot>('/api/team-rooms/' + encodeURIComponent(roomId) +
+    (page ? '?limit=' + page.limit + (page.before ? '&before=' + encodeURIComponent(page.before) : '') : '')),
   post: (roomId: string, input: { content: string; attachments?: TeamRoomMessage["attachments"]; clientKey: string; targetSessionId?: string; recipientIds?: string[]; kind?: TeamMessageKind }) =>
     request<{ message: TeamRoomMessage }>('/api/team-rooms/' + encodeURIComponent(roomId) + '/messages', { method: 'POST', body: JSON.stringify(input) }),
 }

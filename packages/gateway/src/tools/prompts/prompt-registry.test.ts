@@ -5,11 +5,14 @@ import { describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "./prompt-registry.js";
 import "./index.js";
 import type { Skill } from "../../skills/index.js";
-import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, PROJECT_ARTIFACT_INSTRUCTIONS } from "./shared-sections.js";
+import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, PROJECT_ARTIFACT_INSTRUCTIONS, LIVE_BROWSER_UPDATE_INSTRUCTIONS } from "./shared-sections.js";
 
 describe("buildSystemPrompt", () => {
   it("includes artifact guidance in the direct CLI provider bootstrap", () => {
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(PROJECT_ARTIFACT_INSTRUCTIONS);
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(LIVE_BROWSER_UPDATE_INSTRUCTIONS);
+    expect(LIVE_BROWSER_UPDATE_INSTRUCTIONS).toContain("Do not open a browser or look for an existing session merely");
+    expect(LIVE_BROWSER_UPDATE_INSTRUCTIONS).toContain("When you know a browser is already running");
   });
 
   it.each([
@@ -18,6 +21,7 @@ describe("buildSystemPrompt", () => {
     { model: "llama3.2", baseUrl: "http://localhost:11434/v1", backend: "ollama" },
   ])("keeps generated artifacts in the active project for $model", (endpoint) => {
     const prompt = buildSystemPrompt("agent", endpoint, { projectRoot: "/work/project" });
+    expect(prompt).toContain(LIVE_BROWSER_UPDATE_INSTRUCTIONS);
     expect(prompt).toContain("<projectArtifacts>");
     expect(prompt).toContain(".jait/shots/");
     expect(prompt).toContain(".jait/artifacts/");
@@ -25,8 +29,14 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("copy the finished artifact");
     expect(prompt).not.toContain("> /tmp/out.txt");
     expect(prompt).toContain("The tool card is the user-facing image display");
+    expect(prompt).toContain("do not follow them with image.view");
     expect(prompt).toContain("do not repeat it in assistant messages");
     expect(prompt).toContain("unless the user explicitly requests them");
+    expect(prompt).toContain("Do not turn every file reference into a download");
+    expect(prompt).toContain("unless the user requests a download");
+    expect(prompt).toContain("call file.stat with its absolute path");
+    expect(prompt).toContain("[Download filename](/api/project/download?path=<URL-encoded absolute file path>)");
+    expect(prompt).toContain("50 MiB per file");
   });
 
   it("includes the shared Jait external provider instructions", () => {
@@ -47,11 +57,11 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("use the todo tool even if you are operating through an external or CLI provider");
     expect(prompt).toContain("first discover and use Jait memory or prior session search tools");
     expect(prompt).toContain("If the user asks to open, switch, or use a project or repo");
-    expect(prompt).toContain("attach to an existing local target when available");
-    expect(prompt).toContain("The live preview is a controllable browser session.");
-    expect(prompt).toContain("use `preview.inspect`, `preview.status`, and `browser.*` tools");
-    expect(prompt).toContain("Do not tell the user that browser tools cannot control the previewed browser unless a tool call fails");
-    expect(prompt).toContain("If `preview.open` fails, then fall back to opening the localhost URL directly in the browser surface.");
+    expect(prompt).toContain("use an existing development server or start the project");
+    expect(prompt).toContain("The live browser is controllable.");
+    expect(prompt).toContain("without a URL to inspect the current page");
+    expect(prompt).toContain("Do not tell the user that browser tools cannot control the browser unless a tool call fails");
+    expect(prompt).toContain("Call `browser.open` with that HTTP/HTTPS URL to load it immediately");
     expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");
     expect(prompt).toContain("You are working in the project: /tmp/project");
   });
@@ -164,10 +174,15 @@ describe("buildSystemPrompt", () => {
       skills,
     });
 
-    expect(prompt).toContain("<available_skills>");
-    expect(prompt).toContain("<name>Word / DOCX</name>");
-    expect(prompt).toContain("<location>C:/skills/word-docx/SKILL.md</location>");
-    expect(prompt).toContain("Use the file.read tool to load a skill's content");
+    // Discovery-first contract: enabled skills contribute the lazy
+    // <skillDiscovery> instruction, never an eager catalog with names,
+    // descriptions and file paths (that was ~19k chars of per-request overhead).
+    expect(prompt).toContain("<skillDiscovery>");
+    expect(prompt).toContain("skills.search");
+    expect(prompt).toContain("skills.read");
+    expect(prompt).not.toContain("<available_skills>");
+    expect(prompt).not.toContain("C:/skills/word-docx/SKILL.md");
+    expect(prompt).not.toContain("<name>Word / DOCX</name>");
   });
 
   it("injects response style instructions when requested", () => {
@@ -210,6 +225,25 @@ describe("buildSystemPrompt", () => {
 
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("injects the project architecture graph and truncates oversized graphs", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      architectureGraph: "graph TD\nA-->B",
+    });
+    expect(prompt).toContain("<projectArchitecture>");
+    expect(prompt).toContain("A-->B");
+
+    const clipped = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      architectureGraph: "graph TD\nA" + "x".repeat(5000),
+    });
+    expect(clipped).toContain("%% …truncated");
   });
 
   it("does not inject the skill evaluation appendix", () => {

@@ -1,0 +1,77 @@
+{
+  "lane": "title-protocol-current-source-review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:334:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_334_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:363:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_363_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:376:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_376_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:389:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_389_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:410:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_410_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/screenshot-tools.test.ts:54:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_screenshot_tools_test_ts_54_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    }
+  ]
+}

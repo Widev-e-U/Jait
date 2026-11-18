@@ -1,3 +1,4 @@
+import { isToolDisabled } from "./tool-names.js";
 import { rankSystemOne, systemOneEnabled } from "../services/system-one.js";
 /**
  * Tool Registry — Sprint 3.5
@@ -82,6 +83,27 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   site: ["web", "browser", "preview", "application"],
 };
 
+// Discovery is synchronous on the HTTP event loop. Prompts include skills and
+// recovered context, so neither input size nor fuzzy work may grow unbounded.
+const MAX_SEARCH_CHARS = 8192;
+const MAX_SEARCH_TERMS = 64;
+const MAX_CORPUS_CHARS = 16384;
+const MAX_CORPUS_TERMS = 256;
+const MAX_FUZZY_TOKEN_CHARS = 32;
+
+function boundedSearchText(value: string, limit: number): string {
+  if (value.length <= limit) return value;
+  const half = Math.floor(limit / 2);
+  return `${value.slice(0, half)} ${value.slice(-half)}`;
+}
+
+function boundedSearchTerms(value: string, limit: number): string[] {
+  const terms = [...new Set(tokenizeSearchText(value))];
+  if (terms.length <= limit) return terms;
+  const half = Math.floor(limit / 2);
+  return [...terms.slice(0, half), ...terms.slice(-half)];
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -100,6 +122,9 @@ function tokenizeSearchText(value: string): string[] {
 function diceCoefficient(left: string, right: string): number {
   if (left === right) return 1;
   if (left.length < 3 || right.length < 3) return 0;
+  if (left.length > MAX_FUZZY_TOKEN_CHARS || right.length > MAX_FUZZY_TOKEN_CHARS) return 0;
+  // Even perfect bigram overlap cannot reach the matching threshold here.
+  if (2 * (Math.min(left.length, right.length) - 1) / (left.length + right.length - 2) < 0.72) return 0;
   const leftPairs = new Map<string, number>();
   for (let index = 0; index < left.length - 1; index++) {
     const pair = left.slice(index, index + 2);
@@ -117,9 +142,18 @@ function diceCoefficient(left: string, right: string): number {
   return (2 * overlap) / (left.length + right.length - 2);
 }
 
-function bestFuzzyScore(term: string, tokens: Set<string>): number {
+function bestFuzzyScore(term: string, tokens: Set<string>, cache: Map<string, number>): number {
   let best = 0;
-  for (const token of tokens) best = Math.max(best, diceCoefficient(term, token));
+  for (const token of tokens) {
+    const key = `${term}\0${token}`;
+    let score = cache.get(key);
+    if (score === undefined) {
+      score = diceCoefficient(term, token);
+      // Reuse repeated vocabulary across tools without an unbounded cache.
+      if (cache.size < 8192) cache.set(key, score);
+    }
+    best = Math.max(best, score);
+  }
   return best;
 }
 
@@ -153,6 +187,7 @@ function inferDefaultConsentLevel(tool: Pick<ToolDefinition, "name" | "tier" | "
       return "none";
     case "file.write":
     case "file.patch":
+    case "terminal.execution":
     case "terminal.run":
     case "terminal.stream":
     case "thread.control":
@@ -198,6 +233,7 @@ function inferRisk(tool: Pick<ToolDefinition, "name" | "category" | "source" | "
       return "low";
     case "file.write":
     case "file.patch":
+    case "terminal.execution":
     case "terminal.run":
     case "terminal.stream":
     case "thread.control":
@@ -242,8 +278,19 @@ function normalizeToolDefinition(tool: ToolDefinition): ToolDefinition {
 
 export class ToolRegistry {
   private readonly tools = new Map<string, ToolDefinition>();
+  private readonly compatibilityTools = new Map<string, ToolDefinition>();
+
+  /** Executable for old clients, omitted from discovery and model schemas. */
+  registerCompatibility(tool: ToolDefinition): void {
+    this.tools.delete(tool.name);
+    this.compatibilityTools.set(tool.name, normalizeToolDefinition(tool));
+  }
 
   register(tool: ToolDefinition): void {
+    // Names are registered verbatim. Provider alias collisions (for example the
+    // deliberate `os.tool` / `os_tool` legacy pair) are legitimate here and are
+    // resolved at call time by {@link fromOpenAIName}, never by throwing.
+    this.compatibilityTools.delete(tool.name);
     this.tools.set(tool.name, normalizeToolDefinition(tool));
   }
 
@@ -252,7 +299,7 @@ export class ToolRegistry {
    * actually removed, false if no tool with that name was registered.
    */
   unregister(name: string): boolean {
-    return this.tools.delete(name);
+    return this.tools.delete(name) || this.compatibilityTools.delete(name);
   }
 
   registerPluginTools(plugin: PluginDescriptor, tools: PluginToolDeclaration[]): void {
@@ -266,7 +313,7 @@ export class ToolRegistry {
   }
 
   get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name);
+    return this.tools.get(name) ?? this.compatibilityTools.get(name);
   }
 
   list(): ToolDefinition[] {
@@ -278,7 +325,7 @@ export class ToolRegistry {
   }
 
   has(name: string): boolean {
-    return this.tools.has(name);
+    return this.tools.has(name) || this.compatibilityTools.has(name);
   }
 
   /** List tools filtered by tier */
@@ -293,13 +340,16 @@ export class ToolRegistry {
 
   /** Rank tools using weighted lexical, synonym, and fuzzy matching. */
   rankSearch(query: string, options: ToolSearchOptions = {}): RankedToolMatch[] {
-    const originalTerms = [...new Set(tokenizeSearchText(query))];
+    const searchText = boundedSearchText(query, MAX_SEARCH_CHARS);
+    const originalTerms = boundedSearchTerms(searchText, MAX_SEARCH_TERMS);
+    const normalizedQuery = normalizeSearchText(searchText);
     if (originalTerms.length === 0) return [];
 
     const candidates = options.candidates ?? this.list();
     const matches: RankedToolMatch[] = [];
+    const fuzzyScores = new Map<string, number>();
     for (const tool of candidates) {
-      if (options.disabledTools?.has(tool.name)) continue;
+      if (isToolDisabled(tool.name, options.disabledTools)) continue;
 
       const nameTokens = new Set(tokenizeSearchText(tool.name));
       const metadataText = [
@@ -310,10 +360,10 @@ export class ToolRegistry {
         ...(tool.discovery?.aliases ?? []),
         ...(tool.discovery?.capabilities ?? []),
       ].filter((value): value is string => Boolean(value)).join(" ");
-      const metadataTokens = new Set(tokenizeSearchText(metadataText));
-      const descriptionText = [tool.description, ...(tool.discovery?.examples ?? [])].join(" ");
-      const descriptionTokens = new Set(tokenizeSearchText(descriptionText));
-      const normalizedCorpus = normalizeSearchText(`${tool.name} ${metadataText} ${descriptionText}`);
+      const metadataTokens = new Set(boundedSearchTerms(boundedSearchText(metadataText, MAX_CORPUS_CHARS), MAX_CORPUS_TERMS));
+      const descriptionText = boundedSearchText([tool.description, ...(tool.discovery?.examples ?? [])].join(" "), MAX_CORPUS_CHARS);
+      const descriptionTokens = new Set(boundedSearchTerms(descriptionText, MAX_CORPUS_TERMS));
+      const normalizedCorpus = normalizeSearchText(boundedSearchText(`${tool.name} ${metadataText} ${descriptionText}`, MAX_CORPUS_CHARS));
       const matchedTerms: string[] = [];
       let score = tool.discovery?.priority ?? 0;
 
@@ -329,9 +379,9 @@ export class ToolRegistry {
           else if (normalizedCorpus.includes(term)) termScore = Math.max(termScore, 4 * weight);
           else {
             const fuzzy = Math.max(
-              bestFuzzyScore(term, nameTokens),
-              bestFuzzyScore(term, metadataTokens),
-              bestFuzzyScore(term, descriptionTokens),
+              bestFuzzyScore(term, nameTokens, fuzzyScores),
+              bestFuzzyScore(term, metadataTokens, fuzzyScores),
+              bestFuzzyScore(term, descriptionTokens, fuzzyScores),
             );
             if (fuzzy >= 0.72) termScore = Math.max(termScore, fuzzy * 3 * weight);
           }
@@ -344,7 +394,6 @@ export class ToolRegistry {
 
       if (matchedTerms.length === 0) continue;
       score += (matchedTerms.length / originalTerms.length) * 12;
-      const normalizedQuery = normalizeSearchText(query);
       if (normalizedQuery.length > 2 && normalizedCorpus.includes(normalizedQuery)) score += 30;
       matches.push({ tool, score, matchedTerms });
     }
@@ -354,15 +403,16 @@ export class ToolRegistry {
   }
 
   async rankSearchWithSystemOne(query: string, options: ToolSearchOptions = {}, apiKeys?: Record<string, string>): Promise<RankedToolMatch[]> {
-    const fallback = this.rankSearch(query, options);
-    if (!systemOneEnabled(apiKeys)) return fallback;
-    const lexical = this.rankSearch(query, { ...options, limit: 48 });
+    const fallback = this.rankSearch(query, { ...options, limit: undefined });
+    const limitedFallback = options.limit ? fallback.slice(0, options.limit) : fallback;
+    if (!systemOneEnabled(apiKeys)) return limitedFallback;
+    const lexical = fallback.slice(0, 48);
     const known = new Set(lexical.map(match => match.tool.name));
-    const extras = (options.candidates ?? this.list()).filter(tool => !known.has(tool.name) && !options.disabledTools?.has(tool.name));
+    const extras = (options.candidates ?? this.list()).filter(tool => !known.has(tool.name) && !isToolDisabled(tool.name, options.disabledTools));
     const candidates = [...lexical, ...extras.map(tool => ({ tool, score: 0, matchedTerms: [] as string[] }))].slice(0, 48);
-    const ranked = await rankSystemOne(apiKeys, query, candidates, match => `${match.tool.name}: ${match.tool.description}`, "tool", undefined, (match, score) => { match.score = score; });
+    const ranked = await rankSystemOne(apiKeys, boundedSearchText(query, MAX_SEARCH_CHARS), candidates, match => `${match.tool.name}: ${match.tool.description}`, "tool", undefined, (match, score) => { match.score = score; });
     // Identity signals no model result: preserve lexical filtering, including no matches.
-    return ranked === candidates ? fallback : ranked.slice(0, options.limit ?? ranked.length);
+    return ranked === candidates ? limitedFallback : ranked.slice(0, options.limit ?? ranked.length);
   }
 
   /** Search tools in ranked relevance order. */
@@ -379,13 +429,23 @@ export class ToolRegistry {
     });
   }
 
-  /** Tools intentionally exposed to external MCP clients. */
+  /**
+   * Tools intentionally exposed to external MCP clients (Claude Code, Codex, ...).
+   *
+   * Every provider gets every tool the user has connected to Jait, so tools
+   * bridged from external MCP servers (`source: "mcp"`, named
+   * `mcp.<server>.<tool>`) are listed on the same footing as plugin tools.
+   * Listing does not widen what a call may do: both kinds default to high risk
+   * with "dangerous" consent and run through the same consent executor no
+   * matter which provider asks. Only the simplified core tools that duplicate a
+   * client's own file/shell tools stay internal.
+   */
   listForMcp(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((tool) => {
-      if (disabledTools?.has(tool.name)) return false;
+      if (isToolDisabled(tool.name, disabledTools)) return false;
       const source = tool.source ?? "builtin";
       const tier = tool.tier ?? "standard";
-      if (source.startsWith("plugin:")) return true;
+      if (source === "mcp" || source.startsWith("plugin:")) return true;
       if (MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name)) return true;
       return source === "builtin" && tier !== "core";
     });
@@ -410,7 +470,7 @@ export class ToolRegistry {
 
   /** Get tool info filtered to only enabled tools for a user */
   listInfoFiltered(disabledTools?: Set<string>): ToolInfo[] {
-    return this.listInfo().filter((t) => !disabledTools?.has(t.name));
+    return this.listInfo().filter((t) => !isToolDisabled(t.name, disabledTools));
   }
 
   /**
@@ -420,12 +480,12 @@ export class ToolRegistry {
    */
   listForLLM(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((t) => {
-      if (disabledTools?.has(t.name)) return false;
+      if (isToolDisabled(t.name, disabledTools)) return false;
       const tier = t.tier ?? "standard";
       // Only core tools in the initial payload (~10 tools)
       // Standard tools are discovered via tools.search / tools.list
       // External (MCP) tools must also be discovered via tools.search
-      return tier === "core";
+      return tier === "core" && !t.name.startsWith("os.");
     });
   }
 
@@ -435,8 +495,8 @@ export class ToolRegistry {
    * The disabled check only gates what's sent to the LLM, not execution.
    */
   isExecutable(name: string, disabledTools?: Set<string>): boolean {
-    if (!this.tools.has(name)) return false;
-    if (disabledTools?.has(name)) return false;
+    if (!this.has(name)) return false;
+    if (isToolDisabled(name, disabledTools)) return false;
     return true;
   }
 
@@ -449,7 +509,7 @@ export class ToolRegistry {
     context: ToolContext,
     audit?: AuditWriter,
   ): Promise<ToolResult> {
-    const tool = this.tools.get(name);
+    const tool = this.get(name);
     if (!tool) {
       return { ok: false, message: `Unknown tool: ${name}` };
     }

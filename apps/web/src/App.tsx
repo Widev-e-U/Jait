@@ -1,6 +1,9 @@
+import { handleMessengerNotification } from '@/lib/messenger/notification-actions'
 import { applyPendingApprovalEvent } from '@/lib/pending-approvals'
+import { applyPendingQuestionEvent, pendingQuestionSessionIds } from '@/lib/pending-questions'
+import { applySessionWaitEvent, type SessionWaitMap } from '@/lib/session-waits'
 import { safeNotificationLink } from '@jait/shared'
-import { openNotification, subscribeNotificationNavigation, retryNotificationNavigation, androidNotificationBridge } from '@/lib/notification-navigation'
+import { openNotification, subscribeNotificationNavigation, retryNotificationNavigation, androidNotificationBridge, setAndroidNotificationContext, watchAndroidNotifications } from '@/lib/notification-navigation'
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
@@ -17,7 +20,11 @@ import { AppHeader } from '@/components/app-shell/app-header'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
+import { MessagesSquare } from 'lucide-react'
+import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { UpdateButton } from '@/components/app-shell/update-button'
+import { AgentControlButton } from '@/components/app-shell/agent-control-button'
+import { useAgentControl } from '@/hooks/useAgentControl'
 import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
 import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
@@ -35,6 +42,7 @@ import { ManagerMode } from '@/components/manager/manager-mode'
 import { AgentsPage } from '@/components/manager/agents-page'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
+import { ScreenShareProvider } from '@/hooks/screen-share-context'
 import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId, resolveProjectTerminalSelection } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
@@ -72,11 +80,13 @@ import { NodePermissionsGate, shouldShowNodePermissionsGate } from '@/components
 import { FirstProjectSetup } from '@/components/onboarding/FirstProjectSetup'
 import { readFirstProjectSetupDone, saveFirstProjectSetupDone, shouldOfferFirstProjectSetup } from '@/components/onboarding/first-project-setup'
 import { getChatCacheScope } from '@/lib/chat-history-cache'
+import { useLastChatProject } from '@/hooks/use-last-chat-project'
+import { NewChatContextSelector } from '@/components/chat/new-chat-context-selector'
 import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/lib/view-mode'
 import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { ProjectEditorOpenData, ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
 import { ProjectContextDialog, type ProjectContextDraft } from '@/components/project/project-context-dialog'
@@ -90,7 +100,7 @@ import { useVoiceRecording } from '@/hooks/useVoiceRecording'
 import { useVoiceSession } from '@/hooks/useVoiceSession'
 import { useGatewayReachable } from '@/hooks/useGatewayReachable'
 import { useViewRouting } from '@/hooks/useViewRouting'
-import { parseAppView, type AppView } from '@/lib/app-view'
+import { appViewToPath, parseAppView, type AppView } from '@/lib/app-view'
 import { createDraftPrewarmTrigger } from '@/lib/chat-prewarm'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 import {
@@ -110,7 +120,6 @@ import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
   mergeAttachmentsIntoSegments
 } from '@/lib/message-segment-builders'
-import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
 import { activeProjectDuringSwitch, areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
 import {
@@ -145,6 +154,8 @@ import {
   getMemoryFeedbackSuccessMessage,
   type MemoryFeedbackKind
 } from '@/lib/memory-feedback'
+import { createUserMessageEditSubmission } from '@/components/chat/message-edit'
+import { collectAttachments } from '@/components/chat/attachment-list'
 import { appendUploadedAttachmentPromptBlock, getUploadedAttachmentDisplayLabel } from '@/lib/uploaded-attachment-prompt'
 import { mergeHydratedTodoState, normalizeTodoStateValue } from '@/lib/todo-state'
 import {
@@ -211,6 +222,17 @@ interface ParallelChatState {
   reasoningEffort: SessionReasoningEffort | null
 }
 
+/**
+ * Correlation id for a deferred steer. The gateway echoes it back on the
+ * `steering` event, which is how the UI knows the parked queue entry is now
+ * really in the transcript and can be promoted from "queued" to sent.
+ */
+function createSteerQueuedMessageId(): string {
+  const cryptoObj = typeof globalThis === 'object' ? globalThis.crypto : undefined
+  if (cryptoObj && typeof cryptoObj.randomUUID === 'function') return cryptoObj.randomUUID()
+  return `steer-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function App() {
   const {
     inputValueRef,
@@ -237,7 +259,7 @@ function App() {
   const [nodeSettingsTargetId, setNodeSettingsTargetId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
-    return parseAppView(path) ?? (path === '' && readStoredViewMode() === 'manager' ? 'agents' : 'chat')
+    return parseAppView(path) ?? 'chat'
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
@@ -282,6 +304,7 @@ function App() {
     displayTarget: null,
   })
   const [showScreenShare, setShowScreenShare] = useState(false)
+  const [messengerListHidden, setMessengerListHidden] = useMessengerListHidden()
   const [showProjectTree, setShowProjectTree] = useState(true)
   const [showProjectEditor, setShowProjectEditor] = useState(true)
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>(() => localStorage.getItem('developerSidebarView') === 'git' ? 'git' : 'files')
@@ -330,10 +353,7 @@ function App() {
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
   const managerCliModel = cliModelsByProvider[managerProvider] ?? null
-  const viewMode: ViewMode = currentView === 'settings' ? readStoredViewMode() : currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
-  const setViewMode = useCallback((mode: ViewMode) => {
-    setCurrentView(mode === 'manager' ? 'agents' : 'chat')
-  }, [])
+  const viewMode: ViewMode = currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
   const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
   const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
   const threadCliModel = viewMode === 'manager' ? managerCliModel : cliModel
@@ -429,7 +449,6 @@ function App() {
         nodeId: prev?.nodeId,
       }
     })
-    setViewMode('developer')
     setCurrentView('chat')
     if (!showProject) {
       showProjectRef.current = true
@@ -454,7 +473,6 @@ function App() {
       displayState: trimmed ? 'connected' : 'blank',
       displayTarget: trimmed,
     }
-    setViewMode('developer')
     setCurrentView('chat')
     setDevPreviewTarget(trimmed)
     setProjectPreviewState(nextPreviewState)
@@ -508,8 +526,10 @@ function App() {
     handleConnectionRestart
   } = useUpdateChecker({ token, isDesktop, appPlatform, apiUrl: API_URL })
 
+  const refreshActiveSessionRef = useRef<() => Promise<void>>(async () => {})
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
     if (connected) {
+      void refreshActiveSessionRef.current()
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
       // Re-hydrate the open thread — activities are fetched once per selection and
@@ -550,7 +570,6 @@ function App() {
   const {
     projects,
     personalSessions,
-    archivedSessionsByProject,
     activeProjectId,
     activeSessionId,
     loading: projectsLoading,
@@ -564,11 +583,12 @@ function App() {
     fetchProjectSubtree,
     assignProjectRepository,
     switchProject,
+    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,
     moveSession,
-    fetchArchivedSessions,
+    renameSession,
     removeProject,
     clearArchivedProjects,
     fetchArchivedProjects,
@@ -578,6 +598,7 @@ function App() {
     fetchProjects,
     loadProject,
     loadSession,
+    refreshActiveSession,
     searchChats,
     searchProjects,
     searchResults,
@@ -592,6 +613,9 @@ function App() {
     token,
     onLoginRequired
   )
+  const [changingNewChatContext, setChangingNewChatContext] = useState(false)
+  const changingNewChatContextRef = useRef(false)
+  const lastChatProjectId = useLastChatProject(getChatCacheScope(token, API_URL), activeProjectId, changingNewChatContext || !projectsInitialLoadComplete)
   const chatDraftsRef = useRef(new Map<string, { text: string; segments: UserMessageSegment[] | undefined }>())
   const draftSessionRef = useRef(activeSessionId)
   useLayoutEffect(() => {
@@ -607,6 +631,7 @@ function App() {
     setInputValue(draft?.text ?? '')
     setInputSegments(draft?.segments)
   }, [activeSessionId, inputSegments, inputValueRef, setInputSegments, setInputValue])
+  refreshActiveSessionRef.current = refreshActiveSession
   fetchProjectsRef.current = fetchProjects
   useEffect(() => {
     setPrimaryChatPanelHidden(false)
@@ -650,6 +675,23 @@ function App() {
   useEffect(() => { setPendingApprovals(new Map()) }, [token])
   const handleConsentEvent = useCallback((event: { type: string; payload: unknown }) => {
     setPendingApprovals((prev) => applyPendingApprovalEvent(prev, event))
+  }, [])
+  // Open `user.ask` questions, tracked per request so one chat can show a
+  // question badge until every one of its questions is answered.
+  const [pendingQuestions, setPendingQuestions] = useState<ReadonlyMap<string, string>>(() => new Map())
+  const questionSessionIds = useMemo(() => pendingQuestionSessionIds(pendingQuestions), [pendingQuestions])
+  useEffect(() => { setPendingQuestions(new Map()) }, [token])
+  const handleUserQuestionEvent = useCallback((event: { type: string; payload: unknown }) => {
+    setPendingQuestions((prev) => applyPendingQuestionEvent(prev, event))
+  }, [])
+  // Why each chat is currently stopped, in one channel: a `user.ask` question,
+  // a tool consent prompt, a secret prompt, the user holding browser control, a
+  // terminal blocked on an interactive prompt, or (non-blocking) a running
+  // background command. The chat list renders a single reason-aware icon.
+  const [sessionWaits, setSessionWaits] = useState<SessionWaitMap>(() => new Map())
+  useEffect(() => { setSessionWaits(new Map()) }, [token])
+  const handleSessionWaitEvent = useCallback((event: { type: string; payload: unknown }) => {
+    setSessionWaits((prev) => applySessionWaitEvent(prev, event))
   }, [])
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
   useEffect(() => {
@@ -696,15 +738,6 @@ function App() {
       ?? null,
     [activeSessionId, activeProjectRecord, personalSessions]
   )
-  const activeProjectSessions = useMemo(() => {
-    if (!activeProjectRecord) return personalSessions
-    const active = activeProjectRecord.sessions
-    const archived = archivedSessionsByProject[activeProjectRecord.id] ?? []
-    const seen = new Set<string>()
-    return [...active, ...archived]
-      .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
-      .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
-  }, [activeProjectRecord, archivedSessionsByProject, personalSessions])
   const waitForProjectHydration = useCallback(async () => {
     const deadline = Date.now() + 1500
     while (Date.now() < deadline) {
@@ -807,7 +840,8 @@ function App() {
     rejectPlan,
     enqueueMessage,
     dequeueMessage,
-    recordSteeredMessage,
+    enqueuePendingSteer,
+    discardPendingSteer,
     updateQueueItem,
     reorderQueueItem,
     toggleHoldQueueItem,
@@ -1013,18 +1047,24 @@ function App() {
   const pendingThreadCompletionRef = useRef<Record<string, AgentThread>>({})
   const previousThreadStatusesRef = useRef<Record<string, ThreadStatus>>({})
 
+  // A pending steer is already accepted by the running agent loop; it only sits
+  // in the queue so it can render VS Code-style as "queued until this step
+  // finishes". It must never be drained into a new turn, and it must not count
+  // as waiting work for the interrupted-exit prompt either.
+  const drainableQueue = useMemo(() => messageQueue.filter(item => !item.pendingSteer), [messageQueue])
+
   useEffect(() => {
-    if (messageQueue.length > 0) {
+    if (drainableQueue.length > 0) {
       chatQueueSeenRef.current = true
     }
-  }, [messageQueue.length])
+  }, [drainableQueue.length])
 
   const chatCompletionSignal = completionCount + remoteMessageCompleteCount
   const promptBeforeProcessingQueuedMessage = shouldPromptBeforeProcessingQueuedMessage({
     hasInterruptedExit: hitMaxRounds,
     isLoading,
     isLoadingHistory,
-    queuedCount: messageQueue.length,
+    queuedCount: drainableQueue.length,
     allowQueuedMessageAfterInterruptedExit,
   })
   const sourceControlCompletionCountRef = useRef(completionCount)
@@ -2021,6 +2061,10 @@ function App() {
       })
   }, [token],)
 
+  // Owner-wide stop switch. Server-backed: the banner reflects a broadcast, so
+  // every device agrees and a reload cannot show a stale "running".
+  const agentControl = useAgentControl({ token, enabled: !!token })
+
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
     token,
@@ -2031,6 +2075,9 @@ function App() {
     onSessionStreamingChange: handleSessionStreamingChange,
     onSessionStreamingSnapshot: handleSessionStreamingSnapshot,
     onConsentEvent: handleConsentEvent,
+    onUserQuestionEvent: handleUserQuestionEvent,
+    onSessionWaitEvent: handleSessionWaitEvent,
+    onAgentHaltEvent: agentControl.applyEvent,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
       if (type.startsWith('project.') || type.startsWith('chat.')) {
         handleProjectEventRef.current(type, payload)
@@ -2084,7 +2131,6 @@ function App() {
         if (requestedRoot && activeRoot && requestedRoot !== activeRoot) return
 
         setCurrentView('chat')
-        setViewMode('developer')
         showProjectRef.current = true
         setShowProject(true)
         if (isMobile) {
@@ -2515,10 +2561,6 @@ function App() {
 
 
   useEffect(() => {
-    if (currentView !== 'settings') window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
-  }, [currentView, viewMode])
-
-  useEffect(() => {
     if (viewMode === 'manager' && showDebugPanel) {
       setShowDebugPanel(false)
     }
@@ -2601,13 +2643,14 @@ function App() {
     dirPath: string,
     nodeId?: string,
     sessionIdOverride?: string | null,
-    openPanel?: boolean
+    openPanel?: boolean,
+    strictNode?: boolean,
   ) => {
     const sessionId = sessionIdOverride ?? activeSessionId
     const res = await fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel, }),
+      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel, strictNode, }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
@@ -2674,7 +2717,9 @@ function App() {
   const handleSwitchProject = useCallback(async (
     projectId: string,
     sessionId?: string,
-    focusChatOnMobile = false
+    focusChatOnMobile = false,
+    /** Show the project's empty "new chat" view without creating a chat yet. */
+    draft = false,
   ) => {
     const project = projects.find((entry) => entry.id === projectId) ?? ( await loadProject(projectId))
     if (!project) return
@@ -2686,7 +2731,7 @@ function App() {
     // Determine which session to activate (mirrors switchProject logic) —
     // an explicit sessionId (e.g. picked from the sidebar's recent-sessions
     // list) wins over the project's most-recently-active session.
-    const nextSessionId = sessionId ?? getLatestProjectSessionId(project)
+    const nextSessionId = draft ? null : sessionId ?? getLatestProjectSessionId(project)
     if (nextSessionId) {
       setParallelChats((current) => closeSecondaryChatPanel(current, nextSessionId))
     }
@@ -2727,11 +2772,13 @@ function App() {
     setManagerProvider(resolvedManagerProvider)
     if (!cachedProjectManagerProvider) saveProjectManagerProviderSelection(projectId, resolvedManagerProvider)
 
-    setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
+    setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project, Boolean(nextSessionId)))
     setProjectFiles([])
     setActiveProjectFileId(null)
     handleAvailableFilesForMentionChange([])
-    if (nextSessionId) {
+    if (draft) {
+      startProjectDraft(projectId)
+    } else if (nextSessionId) {
       switchSession(projectId, nextSessionId)
     } else {
       switchProject(projectId)
@@ -2740,7 +2787,8 @@ function App() {
     // Open the project directory on the gateway and directly hydrate from the
     // response rather than relying on the WS `project.open` event, which is
     // session-scoped and may arrive before the WS re-subscribes to the new session.
-    if (project.rootPath) {
+    // A draft has no chat yet, and the gateway scopes an open project to a chat.
+    if (project.rootPath && nextSessionId) {
       try {
         const openPanel = resolveProjectPanelOpenAfterChatSelection({
           isMobile,
@@ -2750,6 +2798,7 @@ function App() {
         const res = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(20_000),
           body: JSON.stringify({
             path: project.rootPath,
             sessionId: nextSessionId,
@@ -2778,10 +2827,12 @@ function App() {
         if (requestId !== projectSwitchRequestRef.current) return
         setActiveProjectIfChanged(null)
         console.error('Failed to open project:', e)
-        toast.error('Failed to open project files.')
+        toast.error(e instanceof Error && e.name === 'TimeoutError'
+          ? 'Opening project files timed out. Try again.'
+          : 'Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
+  }, [projects, loadProject, switchProject, startProjectDraft, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     setPrimaryChatPanelHidden(false)
@@ -2861,7 +2912,7 @@ function App() {
     const update = () => {
       const visible = currentView === 'chat' && viewMode !== 'manager' && document.visibilityState === 'visible' && document.hasFocus()
       setVisibleNotificationSession(visible ? activeSessionId : null)
-      void android?.setNotificationContext?.({ sessionId: activeSessionId ?? '', visible }).catch(() => {})
+      setAndroidNotificationContext(android, { sessionId: activeSessionId ?? '', visible })
       if (visible && activeSessionId) void revokeSystemNotification(`chat-complete:${activeSessionId}`)
       retryNotificationNavigation()
     }
@@ -2883,20 +2934,16 @@ function App() {
     const desktop = window.jaitDesktop
     const android = androidNotificationBridge()
     let disposed = false
-    let removeAndroid: (() => Promise<void>) | undefined
     const accept = (activation: import('@jait/shared').NotificationActivation) => { if (!disposed) openNotification(activation) }
     const removeDesktop = desktop?.onNotificationOpen?.(accept)
-    void android?.addListener?.('notificationOpen', accept).then((listener) => {
-      if (disposed) void listener.remove()
-      else removeAndroid = () => listener.remove()
-    }).catch(() => {})
+    const androidNotifications = watchAndroidNotifications(android, accept)
     const read = () => {
-      void desktop?.getPendingNotification?.().then((r) => { if (r.activation) accept(r.activation) }).catch(() => {})
-      void android?.getPendingNotification?.().then((r) => { if (r.activation) accept(r.activation) }).catch(() => {})
+      void Promise.resolve().then(() => desktop?.getPendingNotification?.()).then((r) => { if (r?.activation) accept(r.activation) }).catch(() => {})
+      androidNotifications.read()
     }
     read()
     window.addEventListener('focus', read)
-    return () => { disposed = true; removeDesktop?.(); void removeAndroid?.(); window.removeEventListener('focus', read) }
+    return () => { disposed = true; removeDesktop?.(); androidNotifications.dispose(); window.removeEventListener('focus', read) }
   }, [])
 
   useEffect(() => {
@@ -2909,6 +2956,15 @@ function App() {
       }
       const link = safeNotificationLink(activation.link)
       if (!link) return true
+      const messengerAction = await handleMessengerNotification(activation)
+      if (messengerAction !== null) {
+        if (messengerAction) await Promise.allSettled([
+          window.jaitDesktop?.acknowledgeNotification?.({ id: activation.id }),
+          androidNotificationBridge()?.acknowledgeNotification?.({ id: activation.id }),
+          revokeSystemNotification(activation.id),
+        ])
+        return messengerAction
+      }
       const url = new URL(link, window.location.origin)
       const sessionId = url.searchParams.get('sessionId')
       const threadId = url.searchParams.get('threadId')
@@ -2917,16 +2973,19 @@ function App() {
         if (!session) { toast.error('Chat unavailable. Reconnect and tap the notification again.'); return false }
         if (session.projectId && !await loadProject(session.projectId)) return false
         setCurrentView('chat')
-        setViewMode('developer')
         if (session.projectId) await handleSelectProjectSession(session.projectId, session.id)
         else await handleSelectPersonalSession(session.id)
       } else if (threadId) {
         setCurrentView('threads')
         automation.setSelectedThreadId(threadId)
       } else {
-        const view = parseAppView(url.pathname.replace(/^\//, '')) ?? 'chat'
+        const view = parseAppView(url.pathname.replace(/^\//, '').split('/')[0]!) ?? 'chat'
         setCurrentView(view)
       }
+      const destinationView = sessionId ? 'chat' : threadId ? 'threads' : parseAppView(url.pathname.replace(/^\//, '').split('/')[0]!) ?? 'chat'
+      const subPath = destinationView === 'messenger' && url.pathname === '/messenger/settings' ? '/settings' : ''
+      window.history.pushState(window.history.state, '', appViewToPath(destinationView) + subPath + url.search)
+      window.dispatchEvent(new PopStateEvent('popstate'))
       await Promise.allSettled([
         window.jaitDesktop?.acknowledgeNotification?.({ id: activation.id }),
         androidNotificationBridge()?.acknowledgeNotification?.({ id: activation.id }),
@@ -2945,7 +3004,6 @@ function App() {
 
   const handleOpenSecretChat = useCallback(async (sessionId: string) => {
     setCurrentView('chat')
-    setViewMode('developer')
     setChatCollapsed(false)
     setShowMobileToolbar(false)
     if (isMobile) {
@@ -2982,13 +3040,6 @@ function App() {
     personalSessions,
     projects,
     switchSession],)
-
-  const handleSessionSwitcherOpen = useCallback((open: boolean) => {
-    if (!open || !activeProjectId) return
-    if (!archivedSessionsByProject[activeProjectId]) {
-      void fetchArchivedSessions(activeProjectId)
-    }
-  }, [activeProjectId, archivedSessionsByProject, fetchArchivedSessions],)
 
   const handleProjectFolderSelected = useCallback(async (
     path: string,
@@ -3862,15 +3913,32 @@ function App() {
         }
         setInputValue('')
         setInputSegments(undefined)
-        if (attachments?.length || nextDisplaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
-          queueAsFallback()
-          toast.info('Attachments queued for the next message')
-          return
-        }
         if (!isLoading || !activeSessionId) {
           queueAsFallback()
           return
         }
+        // The gateway defers every steer to the running loop's next round
+        // boundary (after the in-flight tool round, before the next model call),
+        // so the message is accepted but not in the transcript yet. Park it as a
+        // pending queue entry — visibly "queued", VS Code style — and let the
+        // `steering` event with our id promote it to a sent bubble at its real
+        // position. Showing it as sent now would place it above tool calls that
+        // have not run yet.
+        const steerId = createSteerQueuedMessageId()
+        enqueuePendingSteer({
+          content: promptText,
+          displayContent,
+          mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
+          provider: chatProvider,
+          runtimeMode: chatProviderRuntimeMode,
+          responseStyle: chatResponseStyle,
+          model: cliModel ?? undefined,
+          reasoningEffort: chatReasoningEffort,
+          referencedFiles: prepared?.referencedFiles,
+          displaySegments: nextDisplaySegments,
+          attachments,
+          steerQueuedMessageId: steerId,
+        })
         try {
           const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
             method: 'POST',
@@ -3878,7 +3946,13 @@ function App() {
               'Content-Type': 'application/json',
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({ message: promptText, displayContent }),
+            body: JSON.stringify({
+              message: promptText,
+              displayContent,
+              ...(attachments?.length ? { attachments } : {}),
+              ...(nextDisplaySegments?.length ? { displaySegments: nextDisplaySegments } : {}),
+              queuedMessageId: steerId,
+            }),
           })
           if (!response.ok) {
             const err = (await response.json().catch(() => ({}))) as Record<string, unknown>
@@ -3886,15 +3960,17 @@ function App() {
             const error = typeof err.error === 'string' ? err.error : null
             throw new Error(details || error || `Failed to steer: ${response.statusText}`)
           }
-          recordSteeredMessage(promptText, displayContent)
-          toast.success('Steered the running agent')
+          toast.success('Queued — steers when the current step finishes')
         } catch (err) {
+          // Nothing will ever resolve the parked entry: pull it back out and
+          // keep the text as a normal queued message so nothing is lost.
+          discardPendingSteer(steerId)
           queueAsFallback()
           toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer — message queued instead'))
         }
       })()
     },
-    [activeSessionId, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, isLoading, preparePromptSubmission, recordSteeredMessage, sendTarget, setInputValue, setInputSegments, token],
+    [activeSessionId, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, enqueuePendingSteer, discardPendingSteer, isLoading, preparePromptSubmission, sendTarget, setInputValue, setInputSegments, token],
   )
 
   // Fork button in the composer while streaming: fork the running session and
@@ -3941,6 +4017,7 @@ function App() {
   )
 
   const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
+    if (changingNewChatContextRef.current) return
     if (sendTarget === 'thread') {
       const sent = await handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
       if (sent) {
@@ -4073,15 +4150,15 @@ function App() {
         hasInterruptedExit: hitMaxRounds,
         isLoading,
         isLoadingHistory,
-        queuedCount: messageQueue.length,
+        queuedCount: drainableQueue.length,
         allowQueuedMessageAfterInterruptedExit,
         isProcessing: chatQueueProcessingRef.current,
-        nextItemHeld: messageQueue[0]?.held ?? false,
+        nextItemHeld: drainableQueue[0]?.held ?? false,
       })
     )
       return
 
-    const [nextItem] = messageQueue
+    const [nextItem] = drainableQueue
     if (!nextItem) return
     // A held message blocks the queue: don't auto-send it (or anything after
     // it) until the user explicitly unlocks it. The server-side drain applies
@@ -4142,7 +4219,7 @@ function App() {
       .finally(() => {
         chatQueueProcessingRef.current = false
       })
-  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token])
+  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, drainableQueue, hitMaxRounds, isLoading, isLoadingHistory, sendMessage, sendTarget, token])
 
   const handleContinueChat = useCallback(
     (options: { token: string | null; sessionId: string | null }) => {
@@ -4171,15 +4248,16 @@ function App() {
       }
       const item = messageQueue.find((queued) => queued.id === id)
       if (!item || !activeSessionId) return
-      if (item.attachments?.length || item.displaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
-        toast.info('Attachments will be sent when this queued message runs')
-        return
-      }
       if (!isLoading) {
         toast.info('Steering is only available while the agent is running.')
         return
       }
 
+      // Same deferral as the composer path: the gateway only injects the steer
+      // at the running loop's next round boundary, so the queued message moves
+      // into a pending "queued" slot instead of appearing as if already sent.
+      const steerId = item.id
+      enqueuePendingSteer({ ...item, steerQueuedMessageId: steerId })
       void (async () => {
         const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
           method: 'POST',
@@ -4190,6 +4268,9 @@ function App() {
           body: JSON.stringify({
             message: item.content,
             displayContent: item.displayContent,
+            ...(item.attachments?.length ? { attachments: item.attachments } : {}),
+            ...(item.displaySegments?.length ? { displaySegments: item.displaySegments } : {}),
+            queuedMessageId: steerId,
           }),
         })
         if (!response.ok) {
@@ -4198,14 +4279,16 @@ function App() {
           const error = typeof err.error === 'string' ? err.error : null
           throw new Error(details || error || `Failed to steer: ${response.statusText}`)
         }
+        // The pending copy now owns the message; drop the plain queued entry so
+        // it cannot also be drained as a separate turn.
         dequeueMessage(id)
-        recordSteeredMessage(item.content, item.displayContent)
-        toast.success('Steered with queued message')
+        toast.success('Queued — steers when the current step finishes')
       })().catch((err) => {
+        discardPendingSteer(steerId)
         toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
       })
     },
-    [activeSessionId, dequeueMessage, isLoading, messageQueue, recordSteeredMessage, token],
+    [activeSessionId, dequeueMessage, discardPendingSteer, enqueuePendingSteer, isLoading, messageQueue, token],
   )
 
   const stopAndSteerQueuedChatMessage = useCallback((id: string) => {
@@ -4289,11 +4372,19 @@ function App() {
     })
   }, [])
 
-  const updateManagerQueueItem = useCallback((threadId: string, id: string, content: string) => {
-    // content is typed as string, but guard anyway: a malformed queue entry
-    // restored from persisted state could hold a non-string at runtime.
-    const trimmed = typeof content === 'string' ? content.trim() : ''
-    if (!trimmed) return
+  const handleUpdateQueueItem = useCallback(async (id: string, content: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
+    const submission = createUserMessageEditSubmission(content, displaySegments, displaySegments, attachments)
+    if (!submission) return
+    const prepared = await preparePromptSubmission(submission.text, submission.referencedFiles, submission.displaySegments)
+    updateQueueItem(id, submission.text, attachments, submission.displaySegments, prepared?.promptWithReferences ?? submission.text)
+  }, [preparePromptSubmission, updateQueueItem])
+
+  const updateManagerQueueItem = useCallback(async (threadId: string, id: string, content: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
+    const submission = createUserMessageEditSubmission(content, displaySegments, displaySegments, attachments)
+    if (!submission) return
+    const prepared = await preparePromptSubmission(submission.text, submission.referencedFiles, submission.displaySegments)
+    const uploaded = collectAttachments(attachments, submission.displaySegments)
+    const fullContent = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? submission.text, uploaded)
     setManagerMessageQueues((prev) => {
       const existing = prev[threadId] ?? []
       if (existing.length === 0) return prev
@@ -4303,18 +4394,18 @@ function App() {
           item.id === id
             ? {
                 ...item,
-                content: trimmed,
-                displayContent: trimmed,
-                fullContent: trimmed,
-                referencedFiles: undefined,
-                displaySegments: undefined,
-                attachments: undefined,
+                content: submission.text,
+                displayContent: submission.text,
+                fullContent,
+                referencedFiles: prepared?.referencedFiles ?? submission.referencedFiles,
+                displaySegments: submission.displaySegments,
+                attachments: prepared?.attachments,
               }
             : item,
         ),
       }
     })
-  }, [])
+  }, [preparePromptSubmission])
 
   const reorderManagerQueueItem = useCallback((threadId: string, sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
     setManagerMessageQueues((prev) => {
@@ -4512,6 +4603,7 @@ function App() {
   }, [automation.selectedRepo, automation.refresh, automation.setError])
 
   const handleSuggestion = async (suggestion: string) => {
+    if (changingNewChatContextRef.current) return
     if (!token) {
       setShowLoginDialog(true)
       return
@@ -4687,6 +4779,20 @@ function App() {
     void createSession()
   }, [createSession])
 
+  /**
+   * Sidebar project/folder click: the project's empty "new chat" view. The
+   * chat itself is only created when the first message is sent, so browsing
+   * projects leaves no blank chats behind.
+   */
+  const handleNewChatInProject = useCallback(async (projectId: string) => {
+    // Already looking at this project's new-chat view.
+    if (projectId === activeProjectId && !activeSessionId) {
+      if (isMobile) setShowSidebar(false)
+      return
+    }
+    await handleSwitchProject(projectId, undefined, false, true)
+  }, [activeProjectId, activeSessionId, handleSwitchProject, isMobile])
+
   const handleStartNewChatInTab = useCallback(() => {
     void openNewChatSurface('tab')
   }, [openNewChatSurface])
@@ -4764,15 +4870,8 @@ function App() {
   const wakeWord = useWakeWord({
     enabled: wakeWordEnabled && isAuthenticated && !voiceRecording && !voiceOverlayOpen,
     lang: navigator.language,
-    onCommand: () => {
-      // When the user says "Hey Jait <command>", start the voice session.
-      // The command will be picked up by the mic once the session opens.
-      startVoiceSession()
-    },
-    onWakeWordDetected: () => {
-      // Just the wake word — start voice session immediately
-      startVoiceSession()
-    },
+    token,
+    onActivate: startVoiceSession,
   })
 
   const voiceControlProps = {
@@ -4782,6 +4881,8 @@ function App() {
     wakeWordEnabled,
     toggleWakeWord,
     voiceAssistant,
+    startVoiceSession,
+    canStartVoice: isAuthenticated,
     isDesktop,
     activeProjectTitle: activeProjectRecord?.title ?? null,
   }
@@ -4846,6 +4947,34 @@ function App() {
   })
   const developerChatHydrating = developerChatSubmitLoading && messages.length === 0
   const hasMessages = messages.length > 0 || showDeveloperChatHistoryLoading
+
+  const handleNewChatContextChange = async (projectId: string | null) => {
+    if (hasMessages || isLoading || !projectsInitialLoadComplete || developerChatSubmitLoading || changingNewChatContextRef.current || projectId === activeProjectId) return false
+    const sourceSessionId = activeSessionId
+    changingNewChatContextRef.current = true
+    setChangingNewChatContext(true)
+    try {
+      // Search can return projects outside the paginated sidebar. Hydrate the
+      // record before selecting it so paths and execution nodes stay accurate.
+      if (projectId && !projects.some(project => project.id === projectId)) {
+        const project = await loadProject(projectId)
+        if (!project || project.status !== 'active') {
+          toast.error('This project is no longer available. Choose another project.')
+          return false
+        }
+      }
+      // Navigation while loading a project must not move a different chat.
+      if (activeSessionIdRef.current !== sourceSessionId) return false
+      const changed = sourceSessionId
+        ? await moveSession(sourceSessionId, projectId)
+        : await createSession(projectId)
+      if (!changed) toast.error('Could not change the chat context. Please try again.')
+      return Boolean(changed)
+    } finally {
+      changingNewChatContextRef.current = false
+      setChangingNewChatContext(false)
+    }
+  }
   const developerChatUiState = getDeveloperChatUiState({
     developerChatHydrating,
     isLoadingHistory: showDeveloperChatHistoryLoading,
@@ -4967,14 +5096,15 @@ function App() {
     () =>
       viewMode === 'developer' ? (
         <DeveloperComposerControlRow
-          activeProjectId={activeProjectId}
-          activeProjectSessions={activeProjectSessions}
-          activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
           activeSessionId={activeSessionId}
+          provider={chatProvider}
+          model={cliModel}
           approveAllInSession={approveAllInSession}
           compact={compactDeveloperComposer}
           disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
           remainingPrompts={remainingPrompts}
+          showDebugPanel={showDebugPanel}
+          onToggleDebug={() => setShowDebugPanel((d) => !d)}
           repositories={automation.repositories}
           selectedThreadRepo={threadTargetRepo}
           sendTarget={sendTarget}
@@ -4982,26 +5112,21 @@ function App() {
           getRuntimeInfo={automation.getRuntimeInfoForRepository}
           onAddRepository={handleFolderPickerOpen}
           onClearApproveAll={handleClearApproveAll}
-          onCreateSession={() => {
-            void createSession()
-          }}
           onSendTargetChange={setSendTarget}
-          onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
           onStartNewChat={handleStartNewChat}
           onStartNewChatInTab={handleStartNewChatInTab}
           onStartNewChatInWindow={handleStartNewChatInWindow}
           onSelectRepo={automation.setSelectedRepoId}
-          onSelectSession={switchSession}
         />
       ) : null,
     [
       viewMode,
       chatPersonaAgentId,
       token,
-      activeProjectId,
-      activeProjectSessions,
-      activeProjectRecord?.title,
+      showDebugPanel,
       activeSessionId,
+      chatProvider,
+      cliModel,
       approveAllInSession,
       compactDeveloperComposer,
       developerChatUiState.disableSendTargetSelector,
@@ -5014,12 +5139,9 @@ function App() {
       sendTarget,
       handleFolderPickerOpen,
       handleClearApproveAll,
-      createSession,
-      handleSessionSwitcherOpen,
       handleStartNewChat,
       handleStartNewChatInTab,
       handleStartNewChatInWindow,
-      switchSession,
     ],
   )
   const editComposerBag = useMemo(
@@ -5085,7 +5207,20 @@ function App() {
     return <GatewayUnavailable onRetry={retryGatewayReachable} canSetBackend={isStandaloneApp} />
   }
 
+  const renderAgentControl = (collapsed: boolean, placement: 'sidebar' | 'header' = 'sidebar') => isAuthenticated ? <AgentControlButton
+    state={agentControl.state}
+    placement={placement}
+    runningCount={activeManagerThreads.length}
+    avatars={agentControl.avatars}
+    pending={agentControl.pending}
+    error={agentControl.error}
+    collapsed={collapsed}
+    onOpenAgents={() => { setCurrentView('agents'); setShowMobileToolbar(false) }}
+    onStopAll={() => { void agentControl.stopAll() }}
+    onResume={() => { void agentControl.resume() }}
+  /> : null
   const sidebarAccount: SidebarAccount = {
+    agentControl: renderAgentControl,
     updateControl: (collapsed) => <UpdateButton appPlatform={appPlatform} updateInfo={updateInfo} releases={releases} updateApplying={updateApplying} updateAwaitingRestart={updateAwaitingRestart} onApplyUpdate={handleApplyUpdate} collapsed={collapsed} />,
     username: isAuthenticated ? user?.username ?? null : null,
     initial: userInitial,
@@ -5097,6 +5232,7 @@ function App() {
   }
 
   return (
+    <ScreenShareProvider value={screenShare}>
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         {showNodePermissionsGate && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
@@ -5111,7 +5247,6 @@ function App() {
             onOpenProject={async (path, nodeId) => {
               await handleProjectFolderSelected(path, nodeId, { openEditor: false })
               setCurrentView('chat')
-              setViewMode('developer')
               finishFirstProjectSetup()
             }}
             onProviderSettings={() => {
@@ -5147,7 +5282,12 @@ function App() {
                 {desktopPlatform === 'win32' ? <WinCaptionButtons isMaximized={isMaximized} /> : <LinuxWindowControls isMaximized={isMaximized} />}
               </div>
             )}
+            {/* Reserve header space before manager banners and toolbars, so their actions remain reachable. */}
+            {isMobile && (currentView === 'threads' || currentView === 'agents' || compactManagerToolbar) && (
+              <div className="h-14 shrink-0" aria-hidden="true" />
+            )}
             {isMobile && <AppHeader
+              agentControl={renderAgentControl(true, 'header')}
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
@@ -5171,7 +5311,6 @@ function App() {
               setShowLoginDialog={setShowLoginDialog}
               setShowProject={setShowProject}
               setShowProjectEditor={setShowProjectEditor}
-              setViewMode={setViewMode}
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               showScreenShare={showScreenShare}
               themeMode={themeMode}
@@ -5181,7 +5320,6 @@ function App() {
               releases={releases}
               user={user}
               userInitial={userInitial}
-              viewMode={viewMode}
               voiceAssistant={voiceAssistant}
               voiceControlProps={voiceControlProps}
               voiceOverlayOpen={voiceOverlayOpen}
@@ -5234,7 +5372,7 @@ function App() {
             />
 
             {currentView === 'threads' || currentView === 'agents' ? (
-              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile} account={sidebarAccount} viewMode={viewMode} onViewModeChange={setViewMode}>
+              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile} account={sidebarAccount}>
                 {currentView === 'threads' ? (
                     <ThreadsPage
                       automation={automation}
@@ -5322,12 +5460,11 @@ function App() {
                   <AppNavigationSidebar
                     account={sidebarAccount}
                     currentView={currentView}
-                    viewMode={viewMode}
                     onNavigate={setCurrentView}
-                    onViewModeChange={setViewMode}
                     onOpenSettings={() => setCurrentView('settings')}
-                    screenShareActive={showScreenShare}
-                    onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                    items={currentView === 'messenger' ? [
+                      { id: 'conversations', label: 'Chats', description: 'Show or hide the conversations list', icon: MessagesSquare, active: !messengerListHidden, onSelect: () => setMessengerListHidden(!messengerListHidden) },
+                    ] : []}
                   />
                 )}
                 <AppPageOutlet
@@ -5383,7 +5520,7 @@ function App() {
                 />
               </div>
             ) : (
-              <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
+              <div data-browser-workspace className={`relative flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
                 <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
                   {viewMode === 'developer' && (
                     <DeveloperSidebars
@@ -5391,11 +5528,7 @@ function App() {
                       changedFilesCount={gitCounts.fileCount}
                       account={sidebarAccount}
                       currentView={currentView}
-                      viewMode={viewMode}
                       onNavigate={setCurrentView}
-                      onViewModeChange={setViewMode}
-                      screenShareActive={showScreenShare}
-                      onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                       activeProject={activeProject}
                       activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}
@@ -5413,13 +5546,14 @@ function App() {
                       searchResults={searchResults}
                       sessionInfo={sessionInfo}
                       showArchitecture={showArchitecture}
-                      showDebugPanel={showDebugPanel}
                       showSidebar={showSidebar}
                       sidebarView={sidebarView}
                       sidebarWidth={developerSidebarWidth}
                       showTerminal={showTerminal}
                       streamingSessionIds={streamingSessionIds}
                       approvalSessionIds={approvalSessionIds}
+                      questionSessionIds={questionSessionIds}
+                      sessionWaits={sessionWaits}
                       sidebarRef={sidebarRef}
                       onAssignRepository={(projectId) => {
                         void handleAssignProjectRepository(projectId)
@@ -5456,13 +5590,16 @@ function App() {
                         void handleSelectPersonalSession(sessionId)
                       }}
                       onSelectProject={handleSwitchProject}
+                      onNewChatInProject={(projectId) => {
+                        void handleNewChatInProject(projectId)
+                      }}
+                      onRenameSession={renameSession}
                       onSelectProjectSession={handleSelectProjectSession}
                       onShowFewer={showFewerProjects}
                       onShowMore={showMoreProjects}
                       onToggleArchitecture={() => {
                         void handleSidebarArchitectureToggle()
                       }}
-                      onToggleDebug={() => setShowDebugPanel((d) => !d)}
                       onTogglePreview={() => {
                         void handleSidebarPreviewToggle()
                       }}
@@ -5571,6 +5708,20 @@ function App() {
                   !showMobileTerminalFullscreen &&
                   (<>
                       <DeveloperChatWorkspace
+                        newChatContext={
+                          <NewChatContextSelector
+                            projects={projects}
+                            activeProjectId={activeProjectId}
+                            lastProjectId={lastChatProjectId}
+                            disabled={!projectsInitialLoadComplete || projectsLoading || isLoading || developerChatSubmitLoading || changingNewChatContext}
+                            onSelectProject={handleNewChatContextChange}
+                            onAddProject={() => {
+                              setProjectPickerMode('project')
+                              setFolderPickerOpen(true)
+                            }}
+                            searchProjects={searchProjects}
+                          />
+                        }
                         onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
                         showDebugPanel={showDebugPanel}
                         onCloseDebugPanel={() => setShowDebugPanel(false)}
@@ -5579,6 +5730,7 @@ function App() {
                         activeProjectDisplayName={activeProjectDisplayName}
                         activeProjectRoot={activeProjectRoot}
                         activeSessionId={activeSessionId}
+                        sessionMetadata={activeSessionRecord?.metadata}
                         availableFilesForMention={availableFilesForMention}
                         availableSkills={availableSkills}
                         changedFiles={changedFiles}
@@ -5593,7 +5745,7 @@ function App() {
                         contextUsage={contextUsage}
                         defaultStreamingAction={settings.chat_streaming_action ?? 'queue'}
                         developerChatPanelStyle={developerChatPanelStyle}
-                        developerChatSubmitLoading={developerChatSubmitLoading}
+                        developerChatSubmitLoading={developerChatSubmitLoading || changingNewChatContext}
                         developerChatUiState={developerChatUiState}
                         developerComposerControlRow={developerComposerControlRow}
                         developerPlaceholder={developerPlaceholder}
@@ -5686,7 +5838,7 @@ function App() {
                         }}
                         onSubmit={handleSubmit}
                         onToggleHoldQueueItem={toggleHoldQueueItem}
-                        onUpdateQueueItem={updateQueueItem}
+                        onUpdateQueueItem={handleUpdateQueueItem}
                         onVoiceInput={handleVoiceInput}
                       />
                       {parallelChats.map((parallelChat, panelIndex) => {
@@ -5769,6 +5921,12 @@ function App() {
                         setShowMobileToolbar(false)
                         void handleSwitchProject(projectId)
                       }}
+                      onNewChatInProject={(projectId) => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        void handleNewChatInProject(projectId)
+                      }}
+                      onRenameSession={renameSession}
                       onSelectProjectSession={(projectId, sessionId) => {
                         setCurrentView('chat')
                         setShowMobileToolbar(false)
@@ -5825,10 +5983,11 @@ function App() {
                       repositories={automation.repositories}
                       streamingSessionIds={streamingSessionIds}
                       approvalSessionIds={approvalSessionIds}
+                      questionSessionIds={questionSessionIds}
+                      sessionWaits={sessionWaits}
                     />
                   </ErrorBoundary>
                 }
-                onOpenSettings={() => setCurrentView('settings')}
               />
             )}
           </>
@@ -5902,6 +6061,7 @@ function App() {
 
       {/* Voice overlay removed — voice controls are now inline in the header */}
     </TooltipProvider>
+    </ScreenShareProvider>
   )
 }
 

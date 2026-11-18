@@ -17,7 +17,7 @@ export function createInlineImageNode(image: UserImageAttachment, onRemove: (ref
   chip.dataset.chipName = image.name
   chip.dataset.imageMime = image.mimeType
   chip.dataset.imageData = image.data
-  chip.title = image.name
+  chip.dataset.tooltip = image.name
   chip.className = 'mx-0.5 inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted/45 px-1 py-0.5 align-middle select-none text-sm'
 
   const preview = document.createElement('img')

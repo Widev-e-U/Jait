@@ -81,6 +81,21 @@ describe("collapseLongTerminalLines", () => {
   it("does nothing when the whole output already fits", () => {
     expect(collapseLongTerminalLines("tiny", 2_000)).toBe("tiny");
   });
+
+  it("leaves output untouched when the per-line ceiling is disabled", () => {
+    const line = `head:${"X".repeat(5_000)}:tail`;
+    const output = `ok\n${line}`;
+
+    expect(collapseLongTerminalLines(output, 0)).toBe(output);
+    expect(collapseLongTerminalLines(output, -1)).toBe(output);
+  });
+
+  it("keeps multi-line output whose lines all fit inside a longer total", () => {
+    const output = "aaa\nbbb\nccc";
+
+    expect(output.length).toBeGreaterThan(4);
+    expect(collapseLongTerminalLines(output, 4)).toBe(output);
+  });
 });
 
 describe("truncateTerminalAnsiEcho", () => {
@@ -431,5 +446,29 @@ describe("remote PowerShell input", () => {
     const encoded = input.match(/FromBase64String\('([^']+)'\)/)![1];
     expect(Buffer.from(encoded, "base64").toString("utf8")).toBe(script);
     expect(input.startsWith(". ([scriptblock]::Create(")).toBe(true);
+  });
+});
+
+describe("terminal output truncation budgets", () => {
+  // Many short lines: long-line elision leaves this untouched, so the whole-text
+  // budget in truncateMiddleChars is what is being exercised.
+  const output = Array.from({ length: 50 }, () => "z".repeat(100)).join("\n");
+
+  it("returns nothing when the budget is already exhausted", () => {
+    expect(truncateTerminalToolOutput(output, 0)).toBe("");
+    expect(truncateTerminalToolOutput(output, -1)).toBe("");
+  });
+
+  it("keeps a plain head slice while the budget is below the elision marker", () => {
+    expect(truncateTerminalToolOutput(output, 5)).toBe("zzzzz");
+    expect(truncateTerminalAnsiEcho(output, 4)).toBe("zzzz");
+  });
+
+  it("elides the middle once the budget can hold both a head and a tail", () => {
+    const truncated = truncateTerminalToolOutput(output, 400);
+    expect(truncated.length).toBeLessThanOrEqual(400);
+    expect(truncated).toContain("…(middle truncated)…");
+    expect(truncated.startsWith("zzzz")).toBe(true);
+    expect(truncated.endsWith("zzzz")).toBe(true);
   });
 });

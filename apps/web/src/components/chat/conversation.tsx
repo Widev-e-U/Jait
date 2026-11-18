@@ -1,15 +1,24 @@
+import { isUserTurn } from '@/lib/conversation-turn'
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { observeConversationRect } from '@/lib/conversation-viewport'
-import { Loader2 } from 'lucide-react'
+import { ChevronUp, Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
 import { cn } from '@/lib/utils'
+import { getChatTranscriptColumnClassName } from './message-edit-layout'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { ChatBrowserView } from './chat-browser-view'
+import { ChatScreenShareView } from './chat-screen-share-view'
+import { findConversationBrowser } from '@/lib/conversation-browser'
+import { findConversationScreenShare } from '@/lib/conversation-screen-share'
 
 interface ConversationProps {
+  variant?: 'assistant' | 'messenger'
+  sessionId?: string | null
+  authToken?: string | null
   children: React.ReactNode
   className?: string
   compact?: boolean
@@ -35,6 +44,8 @@ interface ConversationProps {
     toolCalls?: unknown
     segments?: unknown
     role?: 'user' | 'agent' | 'assistant'
+    /** Set to 'system-notice' for background notices, which share role 'user'. */
+    kind?: 'system-notice'
     error?: unknown
   }>
   /** Whether there are older messages available to load. */
@@ -337,9 +348,10 @@ export function shouldLoadOlderMessages(
   return element.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX
 }
 
-const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
+const CONVERSATION_SCROLL_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
-  overscrollBehaviorY: 'contain',
+  // Containment alone still allows the native bounce at the bottom edge.
+  overscrollBehaviorY: 'none',
   touchAction: 'pan-y',
 }
 
@@ -384,7 +396,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
     >
       <span className="sr-only">{label}</span>
-      <div className="mx-auto flex h-full max-w-4xl flex-col justify-between gap-6 px-4 pb-8 pt-12 sm:px-5">
+      <div className={getChatTranscriptColumnClassName('flex h-full flex-col justify-between gap-6 pb-8 pt-12')}>
         {CONVERSATION_SKELETON_TURNS.map((turn, turnIndex) => {
           // Stagger the pulse, but cycle it so the top of a long list isn't
           // still waiting to start animating.
@@ -434,7 +446,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, mobile = false, loading, isStreaming, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
+export function Conversation({ variant = 'assistant', sessionId, authToken, children, className, mobile = false, loading, isStreaming, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // The scroll container may not exist yet on first mount (history still
   // loading renders the skeleton branch), and a plain ref object is not
@@ -465,7 +477,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
   const minimapRoles = useMemo<Array<'user' | 'agent'>>(
     () =>
       (messageEstimateInputs ?? []).map((m) =>
-        m && typeof m === 'object' && 'role' in m && (m as { role?: unknown }).role === 'user'
+        m && isUserTurn(m)
           ? 'user'
           : 'agent',
       ),
@@ -527,7 +539,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
   // Last scrollToMessageId handled, so we only force-scroll on a genuinely new
   // target (not on every re-render while the value stays constant).
   const prevScrollTargetRef = useRef(
-    childItems.length === 1 && messageEstimateInputs?.[0]?.role === 'user'
+    childItems.length === 1 && !!messageEstimateInputs?.[0] && isUserTurn(messageEstimateInputs[0])
       ? null
       : scrollToMessageId ?? null,
   )
@@ -543,6 +555,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
   const initialRevealFrameRef = useRef<number | null>(null)
+  const initialRevealTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Pending re-anchor after a minimap scrub (see detachFromBottom).
   const scrubAnchorFrameRef = useRef<number | null>(null)
   // In-flight "chase the end of the list" frame (see scrollToBottom).
@@ -947,7 +960,11 @@ export function Conversation({ children, className, mobile = false, loading, isS
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    // Elastic scrolling can report positions outside the actual scroll range.
+    // Returning from bottom overscroll is not an upward reading gesture.
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    const scrollTop = Math.max(0, Math.min(el.scrollTop, maxScrollTop))
+    const distanceFromBottom = maxScrollTop - scrollTop
     // A held new-turn reserve leaves deliberate slack below the prompt. That's
     // the feature, not the user having scrolled away, so keep reporting "at the
     // bottom" until they scroll off it themselves — otherwise the scroll-to-
@@ -961,15 +978,15 @@ export function Conversation({ children, className, mobile = false, loading, isS
     // never gets stuck to the bottom again. Same tolerance as the button's, so
     // "the button is hidden" and "following the stream" can't disagree.
     const atVeryBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
-    const scrollingUp = el.scrollTop < prevScrollTopRef.current
-    prevScrollTopRef.current = el.scrollTop
+    const scrollingUp = scrollTop < prevScrollTopRef.current
+    prevScrollTopRef.current = scrollTop
 
     setIsAtBottom(nextIsAtBottom)
-    const previousMessageIndex = el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
+    const previousMessageIndex = scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
       ? findPreviousUserMessage()
       : null
     const showPreviousMessagePreview = shouldShowPreviousMessagePreview({
-      scrollTop: el.scrollTop,
+      scrollTop,
       previousMessageIndex,
       isAtBottom: nextIsAtBottom,
       stickToBottom: stickToBottomRef.current,
@@ -1016,7 +1033,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
     }
   }, [findPreviousUserMessage])
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false) => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false, onSettled?: () => void) => {
     const el = scrollRef.current
     if (!el) return
     if (bottomSettleFrameRef.current !== null) {
@@ -1024,7 +1041,10 @@ export function Conversation({ children, className, mobile = false, loading, isS
       bottomSettleFrameRef.current = null
     }
     el.scrollTo({ top: el.scrollHeight, behavior })
-    if (!settle) return
+    if (!settle) {
+      onSettled?.()
+      return
+    }
 
     // Rows measure only as they render, so the ones this scroll reveals push
     // the real bottom further down while the scroll is still running — which is
@@ -1044,7 +1064,10 @@ export function Conversation({ children, className, mobile = false, loading, isS
       const current = scrollRef.current
       // Bail out the moment the user takes over — chasing the bottom against
       // someone scrolling up is exactly the yank detaching exists to prevent.
-      if (!current || !stickToBottomRef.current || detachedRef.current) return
+      if (!current || !stickToBottomRef.current || detachedRef.current) {
+        onSettled?.()
+        return
+      }
       const target = current.scrollHeight
       const remaining = target - current.scrollTop - current.clientHeight
       if (remaining > BOTTOM_SETTLE_EPSILON_PX) {
@@ -1069,6 +1092,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
         current.scrollTop = current.scrollHeight
       }
       updateBottomState()
+      onSettled?.()
     }
     bottomSettleFrameRef.current = requestAnimationFrame(step)
   }, [updateBottomState])
@@ -1272,7 +1296,7 @@ export function Conversation({ children, className, mobile = false, loading, isS
     prevChildCount.current = count
     prevLoadingRef.current = loading
 
-    if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
+    if (!loading && count > 0 && (wasEmpty || finishedLoading || !initialScrollReady)) {
       detachedRef.current = false
       setStickToBottom(true)
       stickToBottomRef.current = true
@@ -1294,17 +1318,29 @@ export function Conversation({ children, className, mobile = false, loading, isS
         // paint). Dropping back to the bottom here would undo it — and on a
         // one-message chat "the bottom" is a screen of reserved empty space.
         const holdingNewTurnSpace = heldNewTurnSpaceRef.current || pendingTopAlignIdRef.current != null
-        if (!holdingNewTurnSpace) {
-          positionConversationAtBottom(currentEl)
-          setIsAtBottom(true)
+        if (holdingNewTurnSpace) {
+          setInitialScrollReady(true)
+          return
         }
-        setInitialScrollReady(true)
+        positionConversationAtBottom(currentEl)
+        setIsAtBottom(true)
+        // Rows are still being measured, so revealing now would show the list
+        // visibly sliding to its real bottom. Stay hidden until the chase
+        // settles; the timer covers a settle that another scroll cancelled.
+        const reveal = () => {
+          clearTimeout(initialRevealTimerRef.current)
+          setInitialScrollReady(true)
+        }
+        clearTimeout(initialRevealTimerRef.current)
+        initialRevealTimerRef.current = setTimeout(reveal, BOTTOM_SETTLE_MS + 100)
+        scrollToBottom('auto', true, reveal)
       })
     }
-  }, [childItems.length, loading])
+  }, [childItems.length, loading, initialScrollReady, scrollToBottom])
 
   useEffect(() => {
     return () => {
+      clearTimeout(initialRevealTimerRef.current)
       if (initialRevealFrameRef.current !== null) {
         cancelAnimationFrame(initialRevealFrameRef.current)
       }
@@ -1397,137 +1433,161 @@ export function Conversation({ children, className, mobile = false, loading, isS
 
   // Park the floating controls just left of the minimap rail rather than on top
   // of it — a click meant for a button would otherwise scrub the transcript.
-  const floatingControlInset = (showMinimap ? MINIMAP_RAIL_WIDTH_PX : 0) + FLOATING_CONTROL_GAP_PX
+  const browser = useMemo(() => variant === 'assistant' ? findConversationBrowser(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
+  // A screen share is only shown in the chat that owns it; shares owned by other
+  // conversations (or gateway-wide shares) never render here.
+  const screenShare = useMemo(() => variant === 'assistant' ? findConversationScreenShare(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
   const previousMessagePreview = getPreviousMessagePreview(messageContents, previousUserMessageIndex)
 
   return (
-    <AIConversation className={cn('relative flex flex-1 overflow-hidden', className)}>
-      {loading && !hasContent ? (
-        <ConversationPositioningSkeleton label={loadingLabel} />
-      ) : (
-        <div
-          ref={attachScrollElement}
-          data-conversation-scroll
-          onScroll={updateBottomState}
-          className="h-full min-w-0 flex-1 overflow-y-auto scrollbar-none"
-          style={{
-            ...MOBILE_SCROLL_CONTAINMENT_STYLE,
-            visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
-          }}
-        >
-          {loading && (
-            <div className="sticky top-3 z-10 flex justify-center">
-              <div className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-primary/50" />
-                <span>{loadingLabel}</span>
-              </div>
-            </div>
-          )}
-          <div ref={innerRef} className="mx-auto max-w-4xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
-            {hasMore && (
-              <div className="flex justify-center py-3">
-                <button
-                  type="button"
-                  onClick={requestOlderMessages}
-                  className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
-                >
-                  <Loader2 className="h-3 w-3 text-primary animate-spin" style={{ animationPlayState: loadMoreTriggeredRef.current ? 'running' : 'paused' }} />
-                  <span>Load earlier messages</span>
-                </button>
+    <AIConversation className={cn('relative flex min-h-0 flex-1 flex-col overflow-hidden', className)}>
+      {browser && <ChatBrowserView key={sessionId ?? 'conversation-browser'} data={browser.data} sessionId={sessionId} authToken={authToken} autoOpen />}
+      {screenShare && sessionId && (
+        <ChatScreenShareView key={screenShare.sessionId} chatId={sessionId} authToken={authToken} />
+      )}
+      {/* The minimap and transcript share one row below the browser. Its full
+          height must not consume the transcript's space in the outer column. */}
+      <div className="chat-conversation-viewport relative flex min-h-0 flex-1 overflow-hidden" data-conversation-viewport>
+        {loading && !hasContent ? (
+          <ConversationPositioningSkeleton label={loadingLabel} />
+        ) : (
+          <div
+            ref={attachScrollElement}
+            data-conversation-scroll
+            role={variant === 'messenger' ? 'log' : undefined}
+            aria-label={variant === 'messenger' ? 'Messages' : undefined}
+            onScroll={updateBottomState}
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-none"
+            style={{
+              ...CONVERSATION_SCROLL_STYLE,
+              visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
+              // Opening a messenger chat repositions the list while hidden; fade it in
+              // once settled instead of snapping from the skeleton.
+              ...(variant === 'messenger' ? { opacity: !hasContent || initialScrollReady ? 1 : 0, transition: 'opacity 180ms ease-out' } : {}),
+            }}
+          >
+            {loading && (
+              <div className="sticky top-3 z-10 flex justify-center">
+                <div className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-primary/50" />
+                  <span>{loadingLabel}</span>
+                </div>
               </div>
             )}
-            <div
-              ref={sizerRef}
-              style={{
-                height: committedSize + newTurnTailPadding,
-                width: '100%',
-                position: 'relative',
-              }}
-            >
-              {virtualItems.map((virtualItem) => (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  // Stable identity for scroll anchoring — index shifts when
-                  // older messages are prepended, the key does not.
-                  data-conv-key={String(virtualItem.key)}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
-                    zIndex: getConversationItemZIndex(virtualItem.key, elevatedMessageId),
-                  }}
-                >
-                  {childItems[virtualItem.index]}
+            <div ref={innerRef} className={cn(getChatTranscriptColumnClassName('pb-6 sm:py-6', variant === 'messenger' ? 'pt-6' : 'pt-12'))}>
+              {hasMore && (
+                <div className="flex justify-center py-3">
+                  <button
+                    type="button"
+                    onClick={requestOlderMessages}
+                    className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
+                  >
+                    {loading && loadMoreTriggeredRef.current ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-primary" aria-hidden="true" />
+                    ) : (
+                      <ChevronUp className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                    )}
+                    <span>Load earlier messages</span>
+                  </button>
                 </div>
-              ))}
+              )}
+              <div
+                ref={sizerRef}
+                style={{
+                  height: committedSize + newTurnTailPadding,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualItems.map((virtualItem) => (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    // Stable identity for scroll anchoring — index shifts when
+                    // older messages are prepended, the key does not.
+                    data-conv-key={String(virtualItem.key)}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                      zIndex: getConversationItemZIndex(virtualItem.key, elevatedMessageId),
+                    }}
+                  >
+                    {childItems[virtualItem.index]}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {hasContent && !initialScrollReady && (
-        <ConversationPositioningSkeleton label={loading ? loadingLabel : 'Preparing conversation'} />
-      )}
+        {hasContent && !initialScrollReady && (
+          <ConversationPositioningSkeleton label={loading ? loadingLabel : 'Preparing conversation'} />
+        )}
 
-      {initialScrollReady && !loading && canJumpUp && !previousMessagePreviewSuppressed && (
-        // Styled after the user chat bubble itself (bg-muted, rounded, right
-        // where user messages sit) because the chip *is* the previous message:
-        // clicking it jumps to that message and starts editing it. The frame
-        // mirrors the transcript column (mx-auto max-w-4xl px-*) so the chip
-        // never extends past the chat's width; pointer-events pass through so
-        // the strip only captures clicks on the button itself.
-        <div
-          className="pointer-events-none absolute inset-x-0 top-14 z-20 mx-auto flex max-w-4xl justify-end px-4 sm:top-10 sm:px-5"
-        >
-          <TooltipHint content="Jump to and edit previous user message">
-          <button
-            type="button"
-            aria-label="Jump to and edit previous user message"
-            className="pointer-events-auto block w-fit max-w-full cursor-text rounded-lg bg-muted px-4 py-3 text-left text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-muted/80"
-            onClick={jumpToPreviousMessage}
+        {variant === 'assistant' && initialScrollReady && !loading && canJumpUp && !previousMessagePreviewSuppressed && (
+          // Styled after the user chat bubble itself (bg-muted, rounded, right
+          // where user messages sit) because the chip *is* the previous message:
+          // clicking it jumps to that message and starts editing it. The frame
+          // mirrors the transcript column (getChatTranscriptColumnClassName) so
+          // the chip never extends past the chat's width; pointer-events pass
+          // through so the strip only captures clicks on the button itself.
+          <div
+            className={getChatTranscriptColumnClassName(
+              'pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-end sm:top-10',
+            )}
           >
-            <span className="block truncate">{previousMessagePreview}</span>
-          </button>
+            <TooltipHint content="Jump to and edit previous user message">
+            <button
+              type="button"
+              aria-label="Jump to and edit previous user message"
+              className="pointer-events-auto block w-fit max-w-full cursor-text rounded-lg bg-muted px-4 py-3 text-left text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-muted/80"
+              onClick={jumpToPreviousMessage}
+            >
+              <span className="block truncate">{previousMessagePreview}</span>
+            </button>
+            </TooltipHint>
+          </div>
+        )}
+
+        {initialScrollReady && !loading && !isAtBottom && (
+          <TooltipHint content="Scroll to latest message">
+          <ConversationScrollButton
+            aria-label="Scroll to latest message"
+            className={cn('chat-scroll-latest left-auto bottom-5 translate-x-0', showMinimap && 'chat-scroll-latest-with-minimap')}
+            style={{ '--scroll-control-gap': `${FLOATING_CONTROL_GAP_PX}px`, '--minimap-rail-width': `${MINIMAP_RAIL_WIDTH_PX}px` } as CSSProperties}
+            onClick={() => {
+              detachedRef.current = false
+              setStickToBottom(true)
+              stickToBottomRef.current = true
+              pendingTopAlignIdRef.current = null
+              heldNewTurnSpaceRef.current = false
+              alignedTurnSizeRef.current = null
+              setTopAnchoredMessageId(null)
+              scrollToBottom('smooth', true)
+            }}
+          />
           </TooltipHint>
-        </div>
-      )}
+        )}
 
-      {initialScrollReady && !loading && !isAtBottom && (
-        <TooltipHint content="Scroll to latest message">
-        <ConversationScrollButton
-          aria-label="Scroll to latest message"
-          className="left-auto bottom-5 translate-x-0"
-          style={{ right: floatingControlInset }}
-          onClick={() => {
-            detachedRef.current = false
-            setStickToBottom(true)
-            stickToBottomRef.current = true
-            pendingTopAlignIdRef.current = null
-            heldNewTurnSpaceRef.current = false
-            alignedTurnSizeRef.current = null
-            setTopAnchoredMessageId(null)
-            scrollToBottom('smooth', true)
-          }}
-        />
-        </TooltipHint>
-      )}
-
-      {showMinimap && (
-        <ConversationMinimap
-          virtualizer={virtualizer}
-          scrollElement={scrollElement}
-          sizerOffset={sizerOffset}
-          roles={minimapRoles}
-          texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
-          messageInputs={messageEstimateInputs ?? []}
-          textWidth={containerWidth}
-          onScrub={handleMinimapScrub}
-        />
-      )}
+        {showMinimap && (
+          <div className="chat-conversation-minimap">
+          <ConversationMinimap
+            virtualizer={virtualizer}
+            scrollElement={scrollElement}
+            sizerOffset={sizerOffset}
+            roles={minimapRoles}
+            texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
+            messageInputs={messageEstimateInputs ?? []}
+            textWidth={containerWidth}
+            onScrub={handleMinimapScrub}
+          />
+          </div>
+        )}
+      </div>
     </AIConversation>
   )
 }

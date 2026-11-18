@@ -1,4 +1,5 @@
 import { ExecutionGuard } from "../services/execution-guard.js";
+import { agentHaltedBody, type AgentStopResult, type AgentControlService } from "../services/agent-control.js";
 import { personaAgentProfileSchema } from "@jait/shared";
 
 /**
@@ -26,6 +27,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
+import { cliSessionIdle } from "../providers/session-idle.js";
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
@@ -105,6 +107,9 @@ function resolveThreadProviderId(
 
 export interface ThreadRouteDeps {
   personaChatRuntime?: (userId: string, personaId: string, chatSessionId?: string) => { count: number; state: "running" | "waiting" | "idle" };
+  /** When present, refuses new autonomous work while the user is halted. */
+  agentControl?: AgentControlService;
+  cancelQueuedTeamDeliveries?: (threadId: string, reason: string) => void;
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
   userService?: UserService;
@@ -209,6 +214,22 @@ export function registerThreadRoutes(
   const { threadService, providerRegistry, ws } = deps;
   const gitService = deps.gitService ?? new GitService();
   const repoService = deps.repoService;
+
+  /**
+   * A halt stops autonomous execution, not the user's ability to observe or
+   * stop work. Every route that would start or continue a model turn checks
+   * here; reading routes, stop, interrupt, approve and resume-halt bypass it.
+   */
+  const refuseWhenHalted = (
+    reply: { status: (code: number) => { send: (payload: unknown) => unknown } },
+    userId: string,
+    action: string,
+  ): boolean => {
+    const control = deps.agentControl ?? threadService.agentControl;
+    if (!control || !control.isHalted(userId)) return false;
+    reply.status(409).send(agentHaltedBody(control.getState(userId), action));
+    return true;
+  };
 
   const recoveryToken = randomUUID();
   let recoveryRunning = false;
@@ -397,6 +418,50 @@ export function registerThreadRoutes(
     }
     pendingInterventionMessages.delete(threadId);
   }
+
+  /**
+   * Owner-wide stop used as `AgentControlService`'s `stopRunning` hook.
+   *
+   * The halt row is already persisted by the time this runs, so every failure
+   * is contained per thread: one runner that refuses to die must not leave the
+   * others spinning, and must not throw back into `halt()` and make the user
+   * believe the stop failed. Returns how many threads were actually stopped.
+   */
+  const stopUserThreads = async (userId: string): Promise<AgentStopResult> => {
+    if (!userId) return { stopped: 0, errors: [] };
+    const running = threadService
+      .list(userId)
+      .filter((thread) => thread.status === "running" || thread.status === "blocked");
+    let stopped = 0;
+    const errors: string[] = [];
+    await Promise.all(running.map(async (thread) => {
+      try {
+        const sessionId = thread.providerSessionId;
+        if (sessionId) {
+          const provider = resolveThreadStopProvider(thread, userId);
+          if (provider) await provider.stopSession(sessionId);
+        }
+        remoteProviders.delete(thread.id);
+        threadUnsubs.get(thread.id)?.();
+        threadUnsubs.delete(thread.id);
+        unregisterThreadResume(thread.id);
+        if (sessionId) {
+          threadService.markInterrupted(thread.id);
+          broadcastThreadStatus(thread.id, "interrupted");
+        } else {
+          // Nothing to stop at the provider, but the row still claims to run.
+          threadService.markError(thread.id, "Stopped by user (all agents halted).");
+          broadcastThreadStatus(thread.id, "error", "Stopped by user (all agents halted).");
+        }
+        stopped++;
+      } catch (error) {
+        errors.push(`${thread.id}: ${error instanceof Error ? error.message : String(error)}`);
+        app.log.warn({ error, threadId: thread.id }, "Failed to stop thread during owner halt");
+      }
+    }));
+    return { stopped, errors };
+  };
+  app.decorate("stopUserThreads", stopUserThreads);
 
   function broadcastQueuedThreadMessagesState(sessionId: string, value: QueuedThreadMessagesState | null): void {
     if (!ws) return;
@@ -703,7 +768,7 @@ export function registerThreadRoutes(
       }
 
       if (event.type === "session.completed" && threadService.getById(threadId)?.status !== "error") {
-        threadService.markCompleted(threadId);
+        threadService.markCompletedAndClearSession(threadId);
         broadcastThreadStatus(threadId, "completed");
         void drainQueuedThreadMessages();
         void persistThreadDiffStats(threadId);
@@ -976,6 +1041,7 @@ export function registerThreadRoutes(
   app.post("/api/threads", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
+    if (refuseWhenHalted(reply, authUser.id, "create-thread")) return;
     const body = request.body as Record<string, unknown>;
     if (body["personaAgentId"] !== undefined &&
         (typeof body["personaAgentId"] !== "string" || !threadService.getPersonaAgent(body["personaAgentId"], authUser.id))) {
@@ -1061,9 +1127,10 @@ export function registerThreadRoutes(
     let providerId: ProviderId | undefined;
     if (body["providerId"] !== undefined) {
       const requestedProviderId = body["providerId"] as ProviderId;
-      const userSelectedProvider = deps.userService?.getSettings(authUser.id).chatProvider ?? null;
+      // No account-level default is consulted: an update either names a provider
+      // explicitly or keeps the one already recorded on the thread.
       const resolvedProvider = resolveThreadProviderId(
-        userSelectedProvider,
+        null,
         requestedProviderId,
         existing.providerId as ProviderId,
       );
@@ -1191,6 +1258,9 @@ export function registerThreadRoutes(
       || thread.prState === "merged" || thread.prState === "closed") {
       return reply.status(409).send({ error: "Only stopped or failed work can be resumed" });
     }
+    // Check the halt before mutating: resuming rewrites the session id and
+    // would otherwise mark the thread as errored when the injected /start refuses.
+    if (refuseWhenHalted(reply, authUser.id, "resume-thread")) return;
     const agent = thread.personaAgentId ? threadService.getPersonaAgent(thread.personaAgentId, authUser.id) : undefined;
     if (thread.personaAgentId && !agent) return reply.status(404).send({ error: "Agent profile not found" });
     if (thread.personaAgentId && (resumingAgents.has(thread.personaAgentId)
@@ -1250,8 +1320,12 @@ export function registerThreadRoutes(
     if (thread.providerSessionId && thread.status === "running") {
       return reply.status(409).send({ error: "Thread already has an active session" });
     }
+    if (refuseWhenHalted(reply, authUser.id, "start-thread")) return;
 
     const recovering = request.headers["x-jait-thread-recovery"] === recoveryToken;
+    if (!recovering && request.headers["x-jait-thread-automatic"] !== recoveryToken) {
+      cliSessionIdle.recordUserMessage(id);
+    }
     const providerId = thread.providerId as ProviderId;
     // Resolve working directory — the stored path may come from a
     // different device/OS (e.g. Windows path on a Linux gateway).
@@ -1366,6 +1440,9 @@ export function registerThreadRoutes(
       }
     }
 
+    // A halt can arrive while availability or worktree preparation is awaited.
+    if (refuseWhenHalted(reply, authUser.id, "start-thread")) return;
+
     // Recovery can be cancelled while provider/node availability is being checked.
     if (recovering) {
       const current = threadService.getById(id);
@@ -1397,6 +1474,16 @@ export function registerThreadRoutes(
         reasoningEffort: thread.reasoningEffort ?? undefined,
         mcpServers,
       });
+
+      // Startup is asynchronous: a just-created session must be stopped if
+      // the owner halted while it was being created, before any model turn.
+      if ((deps.agentControl ?? threadService.agentControl).isHalted(authUser.id)) {
+        try { await provider.stopSession(session.id); }
+        catch (error) { app.log.warn({ error, threadId: id }, "Failed to stop halted startup session"); }
+        if (isRemote) remoteProviders.delete(id);
+        refuseWhenHalted(reply, authUser.id, "start-thread");
+        return;
+      }
 
       if (recovering && (recoveryClosed || threadService.getById(id)?.status !== "interrupted" || !threadService.getRecovery(id))) {
         await provider.stopSession(session.id);
@@ -1447,7 +1534,7 @@ export function registerThreadRoutes(
           const response = await app.inject({
             method: "POST",
             url: `/api/threads/${id}/send`,
-            headers: { authorization: `Bearer ${token}` },
+            headers: { authorization: `Bearer ${token}`, "x-jait-thread-automatic": recoveryToken },
             payload: { message },
           });
           if (response.statusCode >= 400) {
@@ -1739,6 +1826,7 @@ export function registerThreadRoutes(
   app.post("/api/threads/:id/send", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
+    if (refuseWhenHalted(reply, authUser.id, "send-message")) return;
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
     const message = typeof body["message"] === "string" ? body["message"] : "";
@@ -1823,6 +1911,16 @@ export function registerThreadRoutes(
     const thread = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.providerSessionId) {
+      if (thread.status === "completed") {
+        // An expired process is recreated using /start's saved-history replay.
+        const restarted = await app.inject({
+          method: "POST",
+          url: `/api/threads/${id}/start`,
+          headers: request.headers,
+          payload: body,
+        });
+        return reply.status(restarted.statusCode).type("application/json").send(restarted.body);
+      }
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
     if (thread.status === "running") {
@@ -1831,6 +1929,8 @@ export function registerThreadRoutes(
 
     const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
+
+    if (request.headers["x-jait-thread-automatic"] !== recoveryToken) cliSessionIdle.recordUserMessage(id);
 
     // A parked turn unsubscribes its terminal event handler. Reattach before
     // resuming so the repaired task can record progress and completion.
@@ -1889,6 +1989,7 @@ export function registerThreadRoutes(
   app.post("/api/threads/:id/steer", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
+    if (refuseWhenHalted(reply, authUser.id, "steer-thread")) return;
     const { id } = request.params as { id: string };
     const body = (request.body as Record<string, unknown>) ?? {};
     const message = typeof body["message"] === "string" ? body["message"] : "";
@@ -1902,6 +2003,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });
     }
 
+    cliSessionIdle.recordUserMessage(id);
     const attempt = await interventionRunResumeRegistry.resumeThread(id, message);
     if (attempt.status === "not-running") {
       return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });
@@ -1958,6 +2060,7 @@ export function registerThreadRoutes(
     }
 
     threadService.markInterrupted(id);
+    deps.cancelQueuedTeamDeliveries?.(id, "Thread was stopped before this delivery started.");
     unregisterThreadResume(id);
     broadcastThreadStatus(id, "interrupted");
     return reply.status(200).send({ ok: true });
@@ -1993,7 +2096,10 @@ export function registerThreadRoutes(
       }
       throw error;
     }
-    if (wasRunning) broadcastThreadStatus(id, "interrupted");
+    if (wasRunning) {
+      deps.cancelQueuedTeamDeliveries?.(id, "Thread was stopped before this delivery started.");
+      broadcastThreadStatus(id, "interrupted");
+    }
     return reply.status(200).send({ ok: true });
   });
 
@@ -2002,20 +2108,34 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, unknown>;
-    const requestId = typeof body["requestId"] === "string" ? body["requestId"] : "";
-    const approved = body["approved"] !== false;
-
     const thread = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
+    const body = request.body as Record<string, unknown> | null | undefined;
+    if (!body || typeof body["requestId"] !== "string" || !body["requestId"].trim()
+      || typeof body["approved"] !== "boolean") {
+      return reply.status(400).send({ error: "A requestId and explicit approval decision are required" });
+    }
+    const requestId = body["requestId"];
+    const approved = body["approved"];
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session" });
     }
 
-    const provider = providerRegistry.get(thread.providerId as ProviderId);
+    // Approval is not proxied to remote nodes; never fall back to a local provider.
+    if (thread.executionNodeId && thread.executionNodeId !== "gateway") {
+      return reply.status(409).send({ error: "Thread approval is not supported on remote nodes" });
+    }
+    const provider = resolveThreadStopProvider(thread, authUser.id);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
+    if (provider instanceof RemoteCliProvider || provider.id === "jait") {
+      return reply.status(409).send({ error: "Thread approval is not supported by this provider" });
+    }
 
-    await provider.respondToApproval(thread.providerSessionId, requestId, approved);
+    try {
+      await provider.respondToApproval(thread.providerSessionId, requestId, approved);
+    } catch {
+      return reply.status(409).send({ error: "Approval request is no longer available or could not be delivered" });
+    }
     threadService.addActivity(id, "tool.approval-response", approved ? "Tool approved" : "Tool denied", { requestId, approved });
     return reply.status(200).send({ ok: true });
   });

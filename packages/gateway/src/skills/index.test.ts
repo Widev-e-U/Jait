@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFrontmatter } from "./index.js";
+import { binExists, invalidateBinCache, parseFrontmatter } from "./index.js";
 
 describe("parseFrontmatter", () => {
   it("extracts name and description from simple frontmatter", () => {
@@ -43,5 +43,26 @@ describe("parseFrontmatter", () => {
     const fm = parseFrontmatter(["---", "name: Plain", "description: A skill", "  : broken", "---"].join("\n"));
     expect(fm.name).toBe("Plain");
     expect(fm.description).toBe("A skill");
+  });
+});
+
+describe("bin availability cache", () => {
+  it("treats a blank bin name as missing and caches lookups until invalidated", () => {
+    const bin = "jait-definitely-not-installed-bin";
+    invalidateBinCache();
+
+    expect(binExists("   ")).toBe(false);
+    expect(binExists(bin)).toBe(false);
+    // Second lookup is served from the cache — an install must invalidate it.
+    expect(binExists(bin)).toBe(false);
+
+    invalidateBinCache(bin);
+    expect(binExists(` ${bin} `)).toBe(false);
+    invalidateBinCache();
+    expect(binExists(bin)).toBe(false);
+  });
+
+  it("finds a binary that exists on PATH", () => {
+    expect(binExists(process.platform === "win32" ? "cmd" : "sh")).toBe(true);
   });
 });

@@ -6,8 +6,11 @@ has no whole-install timeout; npm retains its network retry limits. The running
 gateway continues serving requests throughout installation.
 
 Before activation, the updater checks the package identity, dependency manifests,
-CLI, compiled entry point, and bundled web entry point. A filesystem lock excludes
-concurrent web and CLI updates. An installation or validation failure removes the
+CLI, compiled entry point, and bundled web entry point. It also imports the real
+gateway module graph with CLI auto-start disabled, rejecting missing exports or
+incompatible installed dependencies before stopping the live service. Release CI
+runs the same validation against an npm tarball installed with registry dependencies.
+A filesystem lock excludes concurrent web and CLI updates. An installation or validation failure removes the
 candidate and leaves the running installation untouched.
 
 For systemd installations, activation stops the gateway, moves the old installation
@@ -33,3 +36,10 @@ does not assume a lock is stale just because the original gateway PID has exited
 Rollback restores software files. It does not undo database migrations or external
 changes made by package installation scripts. Back up persistent data before
 upgrading across releases that change database compatibility.
+
+Rust regressions run with `node tests/contract/run.mjs test --test gateway_updates`.
+They invoke the real updater and Node ESM loader against isolated installed-package
+fixtures: a missing shared export must fail before service shutdown or file changes,
+a corrected dependency must link before activation, and startup failure must restore
+the previous installation and verify its health. The contract CI workflow runs all
+three cases on every push and pull request.

@@ -50,3 +50,33 @@ describe("email_view", () => {
     expect(service.sendMessage).not.toHaveBeenCalled();
   });
 });
+
+describe("inline email display", () => {
+  it("returns the actual message for email_view without navigating away from chat", async () => {
+    const service = { resolveAccount: vi.fn().mockReturnValue(account), getMessage: vi.fn().mockResolvedValue(message) };
+    const ws = { sendUICommand: vi.fn() };
+    const tool = createEmailTools(service as unknown as EmailService, ws as unknown as WsControlPlane).find(tool => tool.name === "email_view")!;
+    const result = await tool.execute({ action: "open", messageId: "message-1", accountId: "account-1" }, context);
+    expect(result).toMatchObject({ ok: true, data: { accountId: "account-1", message } });
+    expect(JSON.stringify(result)).not.toContain("must-not-leak");
+    expect(service.resolveAccount).toHaveBeenCalledWith("owner-1", "account-1");
+    expect(service.getMessage).toHaveBeenCalledWith("owner-1", "account-1", "message-1");
+    expect(ws.sendUICommand).not.toHaveBeenCalled();
+  });
+  it("reports a missing or inaccessible message without a successful preview", async () => {
+    const service = { resolveAccount: vi.fn().mockImplementation(() => { throw new Error("Account not found"); }) };
+    const ws = { sendUICommand: vi.fn() };
+    const tool = createEmailTools(service as unknown as EmailService, ws as unknown as WsControlPlane).find(tool => tool.name === "email_view")!;
+    expect((await tool.execute({ action: "open" }, context)).ok).toBe(false);
+    expect(await tool.execute({ action: "open", messageId: "foreign", accountId: "foreign" }, context)).toEqual({ ok: false, message: "Account not found" });
+    expect(ws.sendUICommand).not.toHaveBeenCalled();
+  });
+  it("lists account metadata without credentials", async () => {
+    const service = { listAccounts: vi.fn().mockReturnValue([account]) };
+    const tool = createEmailTools(service as unknown as EmailService).find(tool => tool.name === "email_accounts")!;
+    const result = await tool.execute({}, context);
+    expect(result.ok).toBe(true);
+    expect(service.listAccounts).toHaveBeenCalledWith("owner-1");
+    expect(JSON.stringify(result)).not.toContain("must-not-leak");
+  });
+});

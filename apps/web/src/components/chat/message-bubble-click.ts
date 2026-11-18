@@ -62,12 +62,17 @@ export interface UserBubbleClickState {
  * is provided, only interactive descendants of it are treated as interactive.
  */
 export function shouldStartUserMessageEdit(
-  event: { target?: unknown; currentTarget?: unknown } | null | undefined,
+  event: { target?: unknown; currentTarget?: unknown; defaultPrevented?: boolean } | null | undefined,
   selectionText: string | null | undefined,
   state: UserBubbleClickState,
   bubble?: unknown,
 ): boolean {
-  if (!state.canEdit || state.isEditing) return false
+  if (!state.canEdit || state.isEditing || event?.defaultPrevented) return false
+  const boundary = bubble ?? event?.currentTarget
+  const target = event?.target as { nodeType?: number } | undefined
+  // React portal events bubble through the component tree, even though the
+  // image viewer is outside the message in the DOM. They never belong to edit.
+  if (typeof target?.nodeType === 'number' && hasContains(boundary) && !boundary.contains(target)) return false
   if (isInteractiveBubbleTarget(event?.target, bubble ?? event?.currentTarget)) return false
   if (selectionText && selectionText.trim().length > 0) return false
   return true

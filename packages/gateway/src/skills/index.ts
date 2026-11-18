@@ -343,15 +343,6 @@ export class SkillRegistry {
 /*  Prompt formatting — builds the XML block for the system prompt     */
 /* ------------------------------------------------------------------ */
 
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 /**
  * Format skills into an XML block for the system prompt.
  * Compatible with OpenClaw's `<available_skills>` format.
@@ -360,31 +351,8 @@ export interface SkillPromptFormatOptions {
   readToolInstruction?: string;
 }
 
-export function formatSkillsForPrompt(skills: Skill[], options: SkillPromptFormatOptions = {}): string {
-  if (skills.length === 0) return "";
+export const SKILL_DISCOVERY_INSTRUCTIONS = "Skills are available on demand. Discover skills.search and skills.read with tools.search. Search installed skills when specialized instructions could help; load a selected skill before applying it. Resolve an explicit /skill-id with skills.search, then read it. Resolve relative references against the returned baseDirectory. Do not list every installed skill.";
 
-  const readToolInstruction = options.readToolInstruction
-    ?? "Use the file.read tool to load a skill's content when the task matches its description.";
-
-  const lines = [
-    "",
-    "",
-    "The following skills provide specialized instructions for specific tasks.",
-    readToolInstruction,
-    "If the user explicitly invokes a skill by typing a slash command like `/skill-id`, treat that as a request to load and follow that skill's instructions for the turn.",
-    "When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md) and use that absolute path in tool commands.",
-    "",
-    "<available_skills>",
-  ];
-
-  for (const skill of skills) {
-    lines.push("  <skill>");
-    lines.push(`    <name>${escapeXml(skill.name)}</name>`);
-    lines.push(`    <description>${escapeXml(skill.description)}</description>`);
-    lines.push(`    <location>${escapeXml(skill.filePath)}</location>`);
-    lines.push("  </skill>");
-  }
-
-  lines.push("</available_skills>");
-  return lines.join("\n");
+export function formatSkillsForPrompt(skills: Skill[], _options: SkillPromptFormatOptions = {}): string {
+  return skills.length ? "\n\n<skillDiscovery>\n" + SKILL_DISCOVERY_INSTRUCTIONS + "\n</skillDiscovery>" : "";
 }

@@ -3,6 +3,7 @@ import { CheckCircle2, CircleAlert, ExternalLink, GitBranch, Loader2, RefreshCw,
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { GithubIntake } from './github-intake'
 import {
   agentsApi,
   type AgentGithubAppConnection,
@@ -124,7 +125,7 @@ export function AgentGithubConnection({ agentId, agentName }: { agentId: string;
 
   const verify = () => run('verify', async () => {
     const result = await agentsApi.verifyAgentGithubApp(agentId)
-    setState((previous) => ({ connection: result.connection, webhookSecretAvailable: previous?.webhookSecretAvailable ?? false }))
+    setState((previous) => ({ ...previous, connection: result.connection, webhookSecretAvailable: previous?.webhookSecretAvailable ?? false }))
     toast.success(result.connection.status === 'connected' ? `Verified as ${result.connection.botLogin ?? 'the App bot'}` : 'Credentials checked')
   })
 
@@ -139,6 +140,12 @@ export function AgentGithubConnection({ agentId, agentName }: { agentId: string;
     setTest(null)
     toast.success('GitHub App disconnected')
     await load()
+  })
+
+  const install = () => run('install', async () => {
+    setError(null)
+    const result = await agentsApi.startAgentGithubAppInstallation(agentId)
+    window.location.assign(result.installUrl)
   })
 
   const installUrl = connection?.appSlug ? `https://github.com/apps/${connection.appSlug}/installations/new` : null
@@ -176,13 +183,16 @@ export function AgentGithubConnection({ agentId, agentName }: { agentId: string;
 
     <div className="mt-3 flex flex-wrap gap-2">
       {!connection && <Button size="sm" disabled={busy !== null} onClick={() => void connectWithManifest()}>{busy === 'setup' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GitBranch className="mr-2 h-4 w-4" />}Create GitHub App for this agent</Button>}
-      {connection && connection.status !== 'connected' && installUrl && <Button size="sm" asChild variant="secondary"><a href={installUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-2 h-4 w-4" />Install on GitHub</a></Button>}
+      {connection && connection.status !== 'connected' && installUrl && (state?.installationFlow === 'stateful'
+        ? <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void install()}>{busy === 'install' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}Install on GitHub</Button>
+        : <Button size="sm" asChild variant="secondary"><a href={installUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-2 h-4 w-4" />Install on GitHub</a></Button>)}
       {connection && <Button size="sm" variant="outline" disabled={busy !== null || !connection.hasPrivateKey} onClick={() => void verify()}>{busy === 'verify' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Verify with GitHub</Button>}
       {connection?.status === 'connected' && <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void runTest()}>{busy === 'test' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Test token</Button>}
       {connection && <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void disconnect()}>{busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</Button>}
       <Button size="sm" variant="ghost" onClick={() => setShowManual((value) => !value)}>{showManual ? 'Hide manual setup' : 'Use an existing GitHub App'}</Button>
     </div>
 
+    {connection && <GithubIntake agentId={agentId} />}
     {connection && connection.status !== 'connected' && <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border p-3">
       <label className="text-sm">Installation id<input aria-label="GitHub App installation id" value={installationId} onChange={(event) => setInstallationId(event.target.value)} placeholder="12345678" className="mt-1 w-40 rounded-md border bg-background px-3 py-2 text-sm" /></label>
       <Button size="sm" disabled={busy !== null || !installationId.trim()} onClick={() => void bindInstallation()}>{busy === 'installation' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Bind installation</Button>

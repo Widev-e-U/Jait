@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import type { ReleaseNote } from './SettingsPage'
 
 /**
@@ -13,17 +14,21 @@ export function PatchNotesTooltip({
   notes,
   children,
   align = 'right',
+  side = 'bottom',
 }: {
   targetVersion: string
   notes: ReleaseNote[] | null | undefined
   children: React.ReactNode
   align?: 'left' | 'right'
+  side?: 'bottom' | 'right'
 }) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Only show the hover card on devices that actually support hover. On touch
   // devices tapping the update button fires onMouseEnter/onFocus, which would
-  // open this full-width bottom sheet and cover the button — making it
+  // open the release card and cover the button — making it
   // impossible to click or read. So we gate the tooltip behind hover support.
   const [canHover, setCanHover] = useState(false)
 
@@ -37,32 +42,59 @@ export function PatchNotesTooltip({
 
   const release = notes?.find((n) => n.version === targetVersion)
 
-  useEffect(() => {
-    if (!open) return
-    const onDocPointerDown = (event: PointerEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
     }
-    document.addEventListener('pointerdown', onDocPointerDown)
-    return () => document.removeEventListener('pointerdown', onDocPointerDown)
-  }, [open])
+  }
+  const show = () => {
+    cancelClose()
+    if (canHover) setOpen(true)
+  }
+  // Allow crossing the gap between the button and the portaled card.
+  const scheduleClose = () => {
+    cancelClose()
+    closeTimerRef.current = setTimeout(() => setOpen(false), 150)
+  }
+  const handleBlur = (event: React.FocusEvent) => {
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && (wrapperRef.current?.contains(nextTarget) || contentRef.current?.contains(nextTarget))) return
+    scheduleClose()
+  }
+
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
+  }, [])
 
   return (
-    <div
-      ref={wrapperRef}
-      className="relative inline-flex"
-      onMouseEnter={() => canHover && setOpen(true)}
-      onMouseLeave={() => canHover && setOpen(false)}
-      onFocus={() => canHover && setOpen(true)}
-      onBlur={() => canHover && setOpen(false)}
-    >
-      {children}
-      {open && release && (
+    <Popover open={open && canHover && Boolean(release)} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
         <div
-          className={`fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-50 max-h-[calc(100dvh-1rem)] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-1rem)] ${
-            align === 'right' ? 'sm:right-0' : 'sm:left-0'
-          }`}
+          ref={wrapperRef}
+          className="relative inline-flex"
+          onMouseEnter={show}
+          onMouseLeave={scheduleClose}
+          onFocus={show}
+          onBlur={handleBlur}
+        >
+          {children}
+        </div>
+      </PopoverAnchor>
+      {release && (
+        <PopoverContent
+          ref={contentRef}
+          side={side}
+          align={side === 'right' || align === 'right' ? 'end' : 'start'}
+          sideOffset={side === 'right' ? 16 : 8}
+          collisionPadding={8}
+          aria-label={`What's new in v${release.version}`}
+          className="flex max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-lg p-0 shadow-lg"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onMouseEnter={show}
+          onMouseLeave={scheduleClose}
+          onFocus={show}
+          onBlur={handleBlur}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
@@ -79,7 +111,7 @@ export function PatchNotesTooltip({
               </a>
             )}
           </div>
-          <div className="max-h-64 overflow-y-auto px-3 py-2">
+          <div className="min-h-0 max-h-64 overflow-y-auto px-3 py-2">
             {release.commits.length > 0 ? (
               <ul className="space-y-1.5">
                 {release.commits.map((commit) => (
@@ -93,8 +125,8 @@ export function PatchNotesTooltip({
               <p className="text-xs text-muted-foreground">No change details available for this release.</p>
             )}
           </div>
-        </div>
+        </PopoverContent>
       )}
-    </div>
+    </Popover>
   )
 }

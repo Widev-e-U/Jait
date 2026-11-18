@@ -1,0 +1,53 @@
+{
+  "review_scope": "parity-arrays bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/providers/remote-cli-provider.test.ts:199:3",
+      "status": "verified",
+      "parity_review": "Reviewed waits for remote turn completion before resolving sendTurn. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Array canonicalization removes presentation-only line breaks while retaining element order, values, spreads, holes and source bindings. Hybrid expected operands preserve their captured ordinal; the allowed arithmetic extension contains only numeric literal operations. Nine controls reject changed argv/stdin/timeout values, changed capture expressions, wrong containers and swapped observed indices. Both containment declarations bind dynamic expected fields to the original runtime operands. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-arrays/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_remote_cli_provider_test_ts_199_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/reminders.test.ts:22:3",
+      "status": "verified",
+      "parity_review": "Reviewed lists and deletes semantic MemoryEngine entries through the Memory page API. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Array canonicalization removes presentation-only line breaks while retaining element order, values, spreads, holes and source bindings. Hybrid expected operands preserve their captured ordinal; the allowed arithmetic extension contains only numeric literal operations. Nine controls reject changed argv/stdin/timeout values, changed capture expressions, wrong containers and swapped observed indices. Both containment declarations bind dynamic expected fields to the original runtime operands. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-arrays/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_reminders_test_ts_22_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/github-pull-requests.test.ts:109:3",
+      "status": "verified",
+      "parity_review": "Reviewed passes review text on stdin instead of shell interpolation. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Array canonicalization removes presentation-only line breaks while retaining element order, values, spreads, holes and source bindings. Hybrid expected operands preserve their captured ordinal; the allowed arithmetic extension contains only numeric literal operations. Nine controls reject changed argv/stdin/timeout values, changed capture expressions, wrong containers and swapped observed indices. Both containment declarations bind dynamic expected fields to the original runtime operands. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-arrays/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_github_pull_requests_test_ts_109_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/github-pull-requests.test.ts:198:3",
+      "status": "verified",
+      "parity_review": "Reviewed preserves binary conflict stages and resolves through the Git index. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Array canonicalization removes presentation-only line breaks while retaining element order, values, spreads, holes and source bindings. Hybrid expected operands preserve their captured ordinal; the allowed arithmetic extension contains only numeric literal operations. Nine controls reject changed argv/stdin/timeout values, changed capture expressions, wrong containers and swapped observed indices. Both containment declarations bind dynamic expected fields to the original runtime operands. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-arrays/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_github_pull_requests_test_ts_198_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    }
+  ]
+}

@@ -51,6 +51,25 @@ async function start() {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 }
+async function removeTemporary() {
+  // Windows keeps ConPTY and cmd.exe handles open for a moment after the
+  // runtime exits, so an immediate rmdir throws EBUSY. That used to replace the
+  // real smoke result with a confusing filesystem error, so retry with backoff
+  // and only warn if the directory genuinely cannot be removed.
+  const backoff = [100, 250, 500, 1000, 2000, 3000];
+  for (let attempt = 0; attempt <= backoff.length; attempt += 1) {
+    try {
+      rmSync(temporary, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === backoff.length) {
+        console.warn(`smoke cleanup could not remove ${temporary}: ${error.code ?? error.message}`);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, backoff[attempt]));
+    }
+  }
+}
 try {
   // Validate the two native dependencies through the packaged Node and modules.
   const nativeCheck = join(temporary, 'native-check.cjs');
@@ -128,13 +147,26 @@ const watcher = requireGateway('@parcel/watcher');
       ? [['echo JAIT_TERM_OK', 0, 'JAIT_TERM_OK'], ['cmd /c exit 7', 7, null], ['echo JAIT_RECOVERED', 0, 'JAIT_RECOVERED']]
       : [['echo JAIT_TERM_OK', 0, 'JAIT_TERM_OK'], ['false', 1, null], ['echo $((6*7))', 0, '42']];
     for (const [command, exitCode, expectedOutput] of cases) {
-      const response = await fetch(`${base}/api/terminals/${terminal.id}/execute`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ command, timeout: 10000 }),
-        signal: AbortSignal.timeout(15000),
-      });
-      assert.equal(response.status, 200, command);
-      const result = await response.json();
+      // Windows ConPTY occasionally delivers the shell's echo of the command
+      // before the command's own output. The route settles on a short quiet
+      // window, so a loaded CI VM can be observed as
+      // {output:"(no output)", exitCode:0} even though the PTY is healthy.
+      // Re-run the observation a couple of times — the assertions below stay
+      // strict, so a genuinely broken runtime still fails the gate.
+      let result;
+      for (let attempt = 1; ; attempt++) {
+        const response = await fetch(`${base}/api/terminals/${terminal.id}/execute`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ command, timeout: 10000 }),
+          signal: AbortSignal.timeout(15000),
+        });
+        assert.equal(response.status, 200, command);
+        result = await response.json();
+        const lostOutput = expectedOutput && result.exitCode === exitCode && !result.output.includes(expectedOutput);
+        if (!lostOutput || attempt >= 3) break;
+        console.warn(`${command}: output not captured on attempt ${attempt} (${JSON.stringify(result)}), retrying`);
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
       assert.equal(result.timedOut, false, command);
       assert.equal(result.exitCode, exitCode, command);
       if (expectedOutput) assert.ok(result.output.includes(expectedOutput),
@@ -162,5 +194,5 @@ const watcher = requireGateway('@parcel/watcher');
   throw error;
 } finally {
   await terminateChild(child);
-  rmSync(temporary, { recursive: true, force: true });
+  await removeTemporary();
 }

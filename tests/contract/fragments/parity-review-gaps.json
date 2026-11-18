@@ -1,0 +1,54 @@
+{
+  "lane": "review-corrections",
+  "declarations": [],
+  "gaps": [
+    {
+      "id": "packages/gateway/src/parallel-sessions.test.ts:705:3",
+      "reason": "Missing nonempty persisted message history: empty snapshot/reconnect checks do not replace this declaration."
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-auth.test.ts:57:3",
+      "reason": "Missing anti-buffering headers and the reduced-server no-session stream behavior."
+    },
+    {
+      "id": "packages/gateway/src/routes/consent-notification.test.ts:73:3",
+      "reason": "Missing a real foreign pending request, retained nonempty queue and no-audit-write assertion."
+    },
+    {
+      "id": "packages/gateway/src/routes/thread-consent.test.ts:48:3",
+      "reason": "Session approve-all mode with no requests does not exercise a pending thread approval or queue retention."
+    },
+    {
+      "id": "packages/gateway/src/routes/thread-consent.test.ts:65:3",
+      "reason": "Missing a seeded thread approval whose nonempty pending queue remains after anonymous refusal."
+    },
+    {
+      "id": "packages/gateway/src/routes/jobs.test.ts:216:3",
+      "reason": "Missing legacy agent_task metadata with no prompt: toggling a normally created job does not test bypass of prompt revalidation."
+    },
+    {
+      "id": "packages/gateway/src/routes/jobs.test.ts:306:3",
+      "reason": "Missing agent-created thread.control payload without explicit metadata columns and list-time editable-field inference."
+    },
+    {
+      "id": "packages/gateway/src/tools/cron-tools.test.ts:25:3",
+      "reason": "HTTP route checks do not execute the cron tool wrapper, its return envelope/message, scheduler call arguments, or every parameterized variant."
+    },
+    {
+      "id": "packages/gateway/src/tools/cron-tools.test.ts:32:3",
+      "reason": "HTTP route checks do not execute the cron tool wrapper, its return envelope/message, scheduler call arguments, or every parameterized variant."
+    },
+    {
+      "id": "packages/gateway/src/tools/cron-tools.test.ts:41:3",
+      "reason": "HTTP route checks do not execute the cron tool wrapper, its return envelope/message, scheduler call arguments, or every parameterized variant."
+    },
+    {
+      "id": "packages/gateway/src/tools/cron-tools.test.ts:49:3",
+      "reason": "HTTP route checks do not execute the cron tool wrapper, its return envelope/message, scheduler call arguments, or every parameterized variant."
+    },
+    {
+      "id": "packages/gateway/src/tools/cron-tools.test.ts:54:3",
+      "reason": "HTTP route checks do not execute the cron tool wrapper, its return envelope/message, scheduler call arguments, or every parameterized variant."
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "review_scope": "Fourteen manually reviewed token-estimation and input-validation declarations with all original predicates and fresh source-bound execution.",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:13:3",
+      "status": "verified",
+      "parity_review": "Preserves four exact estimates: empty text 0, text abcd 2, JSON abcd 1, JSON object 3. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.plain-and-json-rounding",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:20:3",
+      "status": "verified",
+      "parity_review": "Materializes undefined, a function returning ignored, and a self-referential object before invoking production estimateJsonTokens; each result equals 0. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.unsupported-json",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:29:3",
+      "status": "verified",
+      "parity_review": "Preserves user-message estimate 6 and compares the assistant tool-call estimate against the same assistant message without calls. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.message-tool-calls",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "Preserves the exact thinking text, strict increase over the same baseline message, and the difference >= 15. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.hidden-thinking",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:52:3",
+      "status": "verified",
+      "parity_review": "Materializes exactly 100000 x characters in the same three messages, schemas [], limit 200000; preserves history > 27000 and ratio > 0.13. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.large-thinking-usage",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:68:3",
+      "status": "verified",
+      "parity_review": "Preserves the system/user abcd history and exact primed total 15. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.history-priming",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:75:3",
+      "status": "verified",
+      "parity_review": "Preserves all seven exact usage fields: system 6, history 6, toolResults 4, tools 31, total 47, limit 16, ratio 1. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.usage-categories",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:91:3",
+      "status": "verified",
+      "parity_review": "Preserves empty schema input and exact 0. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.empty-schemas",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/token-estimator.test.ts:95:3",
+      "status": "verified",
+      "parity_review": "Preserves all four original messages and full function schema; system > 0, history > system, toolResults > 0, tools > 0, total equals the sum in original order, limit 10, ratio 1. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.usage-summed-categories",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/validate.test.ts:5:3",
+      "status": "verified",
+      "parity_review": "Preserves the complete nested todo schema and original string id; asserts both the full success result and the mutated input with numeric id 1. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.coerce-nested-array",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/validate.test.ts:53:3",
+      "status": "verified",
+      "parity_review": "Preserves the complete threads schema and missing-title input; valid is false and errors contains the original full indexed path, allowing other errors as the original does. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.nested-required-path",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/validate.test.ts:87:3",
+      "status": "verified",
+      "parity_review": "Preserves urls string schema and mixed string/number input; valid is false and errors contains the original indexed type message. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.invalid-array-item",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/validate.test.ts:107:3",
+      "status": "verified",
+      "parity_review": "Preserves the nested JSON string and payload schema; asserts full success and the mutated nested boolean true. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.parse-object-then-coerce",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/validate.test.ts:136:3",
+      "status": "verified",
+      "parity_review": "Materializes NaN and positive infinity before validation, preserving both original schemas and finite companion fields; asserts both complete failure objects and original error arrays. Manual comparison of the original test, driver materialization, vector inputs/predicates and Rust interpreter preserves every assertion. Production exports execute through tailhelpers.ts; expected values and arithmetic comparisons execute in Rust. Fixtures are plain JSON except the explicit unsupported-value constructors, which execute before the production call. Dense finite numeric results use the original comparison direction, bounds and order. No lifecycle hooks, module mocks or parameterized variants occur in these declarations. Required Rust registrations reject missing/duplicated helper vectors. The report is bound to the isolated parity-continue/source-checkpoint snapshot; live freshness is audited separately. This establishes TypeScript reference-test equivalence for these fixtures; it does not establish Rust gateway implementation parity.",
+      "rust_cases": [
+        {
+          "id": "internal.tailhelpers.reject-nonfinite",
+          "source": "tests/contract/src/fixture_internal_contracts.rs",
+          "report": ".jait/artifacts/parity-continue/source-checkpoint/.jait/artifacts/contracts/21621206-23fe-4c79-b33f-63d84a64b9a7/report.json"
+        }
+      ]
+    }
+  ]
+}

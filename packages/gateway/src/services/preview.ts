@@ -12,6 +12,7 @@ import {
   type PreviewRunner,
   type PreviewRunnerResult,
 } from "./preview-runner.js";
+import { browserWaitKey, sessionWaits } from "./session-waits.js";
 
 export type PreviewStatus = "starting" | "ready" | "error" | "stopped";
 export type PreviewMode = "local" | "docker" | "url";
@@ -63,6 +64,8 @@ export interface StartPreviewInput {
   port?: number | null;
   frameworkHint?: string | null;
   sharedWithAgent?: boolean;
+  /** Tool-created previews start shared; existing user control always wins. */
+  agentInitiated?: boolean;
 }
 
 interface InternalPreviewSession extends PreviewSession {
@@ -134,8 +137,15 @@ export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
   private readonly runner: PreviewRunner;
+  private readonly restartingSessions = new Map<string, Promise<PreviewSession | null>>();
   private readonly startingSessions = new Map<string, Promise<PreviewSession>>();
   private devToolsRevisions = new Map<string, number>();
+  private readonly controlLossListeners = new Set<(browserId: string) => void>();
+
+  onBrowserControlLost(callback: (browserId: string) => void): () => void {
+    this.controlLossListeners.add(callback);
+    return () => this.controlLossListeners.delete(callback);
+  }
   private _onSessionChanged: ((session: PreviewSession) => void) | null = null;
 
   constructor(private readonly surfaceRegistry: SurfaceRegistry) {
@@ -166,7 +176,7 @@ export class PreviewService {
       return this.get(input.sessionId)!;
     }
 
-    const sharedWithAgent = input.sharedWithAgent ?? existing?.sharedWithAgent ?? false;
+    const sharedWithAgent = input.sharedWithAgent ?? existing?.sharedWithAgent ?? true;
     const startPromise = this.startFresh({ ...input, sharedWithAgent });
     this.startingSessions.set(input.sessionId, startPromise);
     try {
@@ -307,14 +317,52 @@ export class PreviewService {
     }
   }
 
+  /** Release an idle agent browser while retaining its last page for chat recovery. */
+  async suspendIdleAgentBrowser(browserId: string): Promise<boolean> {
+    const session = [...this.sessions.values()].find((item) => item.browserId === browserId && item.origin === "agent");
+    const browser = this.surfaceRegistry.getSurface(browserId) as BrowserSurface | undefined;
+    if (!session || session.terminating || !browser || browser.state !== "running") return false;
+    const url = (await browser.inspect()).snapshot.url;
+    if (!/^https?:\/\//i.test(url) || this.sessions.get(session.sessionId) !== session || session.terminating) return false;
+    session.target = url;
+    await this.surfaceRegistry.stopSurface(browserId, "browser idle timeout");
+    if (this.sessions.get(session.sessionId) === session) {
+      session.status = "stopped";
+      session.url = null;
+      session.remoteBrowser = null;
+      this.notifyChanged(session);
+    }
+    return true;
+  }
+
   async restart(sessionId: string): Promise<PreviewSession | null> {
+    const pending = this.restartingSessions.get(sessionId);
+    if (pending) return pending;
+    const operation = this.restartSession(sessionId);
+    this.restartingSessions.set(sessionId, operation);
+    try { return await operation; }
+    finally { if (this.restartingSessions.get(sessionId) === operation) this.restartingSessions.delete(sessionId); }
+  }
+
+  private async restartSession(sessionId: string): Promise<PreviewSession | null> {
     const existing = this.sessions.get(sessionId);
     if (!existing) return null;
     if (existing.origin === "agent") {
       const shared = existing.sharedWithAgent;
+      const previous = existing.browserId ? this.surfaceRegistry.getSurface(existing.browserId) as BrowserSurface | undefined : undefined;
+      const currentUrl = previous?.state === "running" ? (await previous.inspect()).snapshot.url : existing.target;
+      // A stopped agent browser may never have navigated away from about:blank.
+      // Recreate it as a blank browser so browser.open can inspect or navigate it.
+      const recoverableUrl = currentUrl && /^https?:\/\//i.test(currentUrl) ? currentUrl : null;
       await this.stop(sessionId);
-      const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd() });
-      this.attachAgentBrowser(sessionId, browser as BrowserSurface, existing.projectRoot ?? undefined, shared);
+      const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
+      try {
+        if (recoverableUrl) await browser.navigate(recoverableUrl);
+        this.attachAgentBrowser(sessionId, browser, existing.projectRoot ?? undefined, shared);
+      } catch (error) {
+        await this.surfaceRegistry.stopSurface(browser.id, "browser-restart-failed").catch(() => {});
+        throw error;
+      }
       return this.get(sessionId);
     }
     return this.start({
@@ -327,11 +375,31 @@ export class PreviewService {
     }, true);
   }
 
+  /** Start a fresh agent browser for a chat whose live browser was stopped, opened at the remembered page. */
+  async reopen(sessionId: string, url: string, projectRoot: string | null): Promise<PreviewSession> {
+    if (!/^https?:\/\//i.test(url)) throw new Error("Cannot reopen the browser without an HTTP/HTTPS page.");
+    const existing = this.sessions.get(sessionId);
+    if (existing) return this.get(sessionId)!;
+    const id = `browser-${sessionId}`;
+    const browser = await this.surfaceRegistry.startSurface("browser", id, { sessionId, projectRoot: projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
+    try {
+      await browser.navigate(url);
+      this.attachAgentBrowser(sessionId, browser, projectRoot ?? undefined, false);
+    } catch (error) {
+      await this.surfaceRegistry.stopSurface(browser.id, "browser-reopen-failed").catch(() => {});
+      throw error;
+    }
+    return this.get(sessionId)!;
+  }
+
   async stop(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
     session.terminating = true;
+    if (session.browserId) {
+      for (const listener of this.controlLossListeners) listener(session.browserId);
+    }
     this.devToolsRevisions.set(sessionId, (this.devToolsRevisions.get(sessionId) ?? 0) + 1);
 
     if (session.runnerResult) {
@@ -346,6 +414,7 @@ export class PreviewService {
     session.status = "stopped";
     session.updatedAt = nowIso();
     this.appendLog(session, "system", "Preview stopped");
+    sessionWaits.clear(browserWaitKey(session.sessionId));
     this.notifyChanged(session);
     this.sessions.delete(sessionId);
     return true;
@@ -392,6 +461,12 @@ export class PreviewService {
     if (!session) return null;
     if (session.sharedWithAgent !== shared) {
       session.sharedWithAgent = shared;
+      if (!shared && session.browserId) {
+        for (const listener of this.controlLossListeners) listener(session.browserId);
+      }
+      // Sharing back with the agent ends the takeover wait; a fresh takeover only
+      // starts one once the agent actually tries to drive the browser.
+      if (shared) sessionWaits.clear(browserWaitKey(session.sessionId));
       this.devToolsRevisions.set(sessionId, (this.devToolsRevisions.get(sessionId) ?? 0) + 1);
       session.updatedAt = nowIso();
       this.notifyChanged(session);
@@ -423,6 +498,14 @@ export class PreviewService {
     if (!browserId) return;
     const session = [...this.sessions.values()].find((item) => item.browserId === browserId);
     if (session && !session.sharedWithAgent) {
+      // The agent just lost the browser to the user, so the chat stops here until
+      // they share control back. Reporting it turns into the chat-row reason.
+      sessionWaits.raise({
+        key: browserWaitKey(session.sessionId),
+        kind: "browser",
+        sessionId: session.sessionId,
+        label: "Paused — you have browser control",
+      });
       throw new Error("This preview is not shared with the agent. Use Share with agent in the chat browser card or preview tab to allow browser tools.");
     }
   }
@@ -431,7 +514,6 @@ export class PreviewService {
   async navigate(sessionId: string, target: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
-    if (session.sharedWithAgent) throw new Error("Take control before navigating.");
     const url = new URL(target);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
       throw new Error("Enter an HTTP or HTTPS URL without credentials.");
@@ -474,11 +556,24 @@ export class PreviewService {
     return { ...connection, browserId, revision };
   }
 
+  async history(sessionId: string, direction: "back" | "forward"): Promise<PreviewSession | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    const snapshot = await (surface as BrowserSurface).history(direction);
+    if (this.sessions.get(sessionId) !== session || session.terminating) return null;
+    session.browserUrl = snapshot.url;
+    session.updatedAt = nowIso();
+    await this.refreshSessionCapture(sessionId);
+    this.notifyChanged(session);
+    return this.toPublicSession(session);
+  }
+
   /** Refresh the current page, preserving the browser and its cookies. */
   async reload(sessionId: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
-    if (session.sharedWithAgent) throw new Error("Take control before refreshing.");
     const surface = this.surfaceRegistry.getSurface(session.browserId);
     if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
     const snapshot = await (surface as BrowserSurface).reload();

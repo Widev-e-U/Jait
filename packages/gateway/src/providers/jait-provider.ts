@@ -7,6 +7,7 @@
  */
 
 import { resolve, isAbsolute, sep } from "node:path";
+import { SteeringController } from "../tools/agent-loop.js";
 import { ExecutionGuard } from "../services/execution-guard.js";
 import { EventEmitter } from "node:events";
 import type { AppConfig } from "../config.js";
@@ -38,6 +39,7 @@ import type {
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
+  ProviderTurnAttachment,
   StartSessionOptions,
 } from "./contracts.js";
 import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
@@ -115,10 +117,13 @@ interface JaitSessionState {
   }>;
   currentTurnAbort?: AbortController;
   currentTurn?: Promise<void>;
+  steering?: SteeringController;
   contextRounds?: LlmContextFlowRound[];
   activatedToolNames: Set<string>;
   sandboxContainerName?: string;
   sandboxStart?: Promise<string>;
+  sandboxLastUsedAt?: number;
+  sandboxCleanup?: Promise<void>;
   executionGuard?: ExecutionGuard;
   turnError?: string;
 }
@@ -147,7 +152,7 @@ export interface JaitProviderDeps {
     context: ToolContext,
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>;
-  sandboxManager?: Pick<SandboxManager, "startCommandSandbox" | "stopContainer">;
+  sandboxManager?: Pick<SandboxManager, "startCommandSandbox" | "stopContainer"> & Partial<Pick<SandboxManager, "isCommandSandboxIdle" | "cleanupOrphanedCommandSandboxes">>;
 }
 
 export class JaitProvider implements CliProviderAdapter {
@@ -163,10 +168,68 @@ export class JaitProvider implements CliProviderAdapter {
 
   private emitter = new EventEmitter();
   private sessions = new Map<string, JaitSessionState>();
-  private sandboxManager: Pick<SandboxManager, "startCommandSandbox" | "stopContainer">;
+  private sandboxManager: Pick<SandboxManager, "startCommandSandbox" | "stopContainer"> & Partial<Pick<SandboxManager, "isCommandSandboxIdle" | "cleanupOrphanedCommandSandboxes">>;
+
+  private readonly sandboxStopRetries = new Set<string>();
+  private disposed = false;
+  private sandboxReaper?: ReturnType<typeof setInterval>;
+  private sandboxMaintenance?: Promise<void>;
 
   constructor(private readonly deps: JaitProviderDeps) {
     this.sandboxManager = deps.sandboxManager ?? new SandboxManager();
+  }
+
+  /** Called by the gateway after startup, and disposed on shutdown. */
+  startSandboxMaintenance(): void {
+    if (this.sandboxReaper || this.disposed) return;
+    const run = () => {
+      if (this.sandboxMaintenance) return;
+      this.sandboxMaintenance = (async () => {
+        await this.reapIdleSandboxes();
+        const removed = await this.sandboxManager.cleanupOrphanedCommandSandboxes?.();
+        if (removed?.length) console.info(`[sandbox] Reclaimed ${removed.length} orphaned agent sandbox(es).`);
+      })().catch(error => console.warn("[sandbox] Agent cleanup failed:", error))
+        .finally(() => { this.sandboxMaintenance = undefined; });
+    };
+    this.sandboxReaper = setInterval(run, 60_000);
+    this.sandboxReaper.unref?.();
+    run();
+  }
+
+  async reapIdleSandboxes(maxIdleMs = 30 * 60_000, now = Date.now()): Promise<void> {
+    for (const name of this.sandboxStopRetries) {
+      try {
+        await this.sandboxManager.stopContainer(name);
+        this.sandboxStopRetries.delete(name);
+      } catch (error) { console.warn(`[sandbox] Stop retry failed for ${name}:`, error); }
+    }
+    for (const state of this.sessions.values()) {
+      const name = state.sandboxContainerName;
+      const lastUsed = state.sandboxLastUsedAt;
+      if (!name || lastUsed === undefined || now - lastUsed < maxIdleMs
+        || state.currentTurn || state.sandboxCleanup) continue;
+      if (!await this.sandboxManager.isCommandSandboxIdle?.(name)) continue;
+      // A new turn may have arrived while Docker was inspecting processes.
+      if (!this.sessions.has(state.session.id) || state.currentTurn || state.sandboxContainerName !== name
+        || state.sandboxLastUsedAt !== lastUsed || state.sandboxCleanup) continue;
+      // Publish the cleanup lock before yielding; ensureThreadSandbox waits on it.
+      const cleanup = this.sandboxManager.stopContainer(name).then(() => {
+        if (state.sandboxContainerName === name) {
+          state.sandboxContainerName = undefined;
+          state.sandboxStart = undefined;
+        }
+      }).catch(error => console.warn(`[sandbox] Idle cleanup failed for ${name}:`, error));
+      state.sandboxCleanup = cleanup;
+      try { await cleanup; } finally { state.sandboxCleanup = undefined; }
+    }
+  }
+
+  async dispose(): Promise<void> {
+    this.disposed = true;
+    clearInterval(this.sandboxReaper);
+    this.sandboxReaper = undefined;
+    await this.sandboxMaintenance;
+    await Promise.all([...this.sessions.keys()].map(id => this.stopSession(id)));
   }
 
   async checkAvailability(): Promise<boolean> {
@@ -195,6 +258,7 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    if (this.disposed) throw new Error("Jait provider has shut down.");
     const thread = this.deps.threadService.getById(options.threadId);
     const userId = thread?.userId ?? undefined;
     const llm = this.buildLlmConfig(userId, options.model);
@@ -233,19 +297,21 @@ export class JaitProvider implements CliProviderAdapter {
     if (!state) {
       throw new Error(`Unknown Jait session: ${sessionId}`);
     }
-    if (state.currentTurn) {
+    if (state.currentTurnAbort) {
       throw new Error("A turn is already in progress for this Jait session.");
     }
 
     const abort = new AbortController();
     state.currentTurnAbort = abort;
+    const steering = new SteeringController();
+    state.steering = steering;
     state.contextRounds = [];
     state.turnError = undefined;
     // An explicit new turn may resume after the recorded dependency was fixed.
     if (!state.executionGuard || state.executionGuard.stopReason) state.executionGuard = new ExecutionGuard(undefined,
       this.deps.threadService.getById(state.threadId)?.kind === "delivery" ? Number.POSITIVE_INFINITY : 120);
     state.history.push({ role: "user", content: message });
-    this.emit({ type: "turn.started", sessionId });
+    this.emit({ type: "turn.started", sessionId, turnId: steering.turnId });
 
     const turnPromise = (async () => {
       let streamedAssistantContent = "";
@@ -317,7 +383,10 @@ export class JaitProvider implements CliProviderAdapter {
           },
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
+          steering,
         );
+        // The sampling loop has ended; do not accept input during compaction or completion.
+        state.steering = undefined;
 
         if (state.turnError || state.executionGuard?.stopReason) {
           throw new Error(state.turnError ?? state.executionGuard!.stopReason);
@@ -364,6 +433,7 @@ export class JaitProvider implements CliProviderAdapter {
         state.executionGuard = undefined;
         this.emit({ type: "turn.completed", sessionId });
       } catch (error) {
+        state.steering = undefined;
         const message = error instanceof Error ? error.message : String(error);
         flushStreamedAssistantMessage();
         this.flushContextRounds(sessionId, state);
@@ -376,6 +446,8 @@ export class JaitProvider implements CliProviderAdapter {
       } finally {
         const current = this.sessions.get(sessionId);
         if (current) {
+          current.sandboxLastUsedAt = Date.now();
+          current.steering = undefined;
           current.currentTurn = undefined;
           current.currentTurnAbort = undefined;
         }
@@ -384,6 +456,16 @@ export class JaitProvider implements CliProviderAdapter {
 
     state.currentTurn = turnPromise;
     await turnPromise;
+  }
+
+  async steerTurn(sessionId: string, message: string, expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean> {
+    const state = this.sessions.get(sessionId);
+    const steering = state?.steering;
+    const uploads = (attachments ?? []).filter((item): item is Exclude<ProviderTurnAttachment, string> => typeof item !== "string");
+    if (!steering || state?.currentTurnAbort?.signal.aborted || (!message.trim() && uploads.length === 0)) return false;
+    if (expectedTurnId !== undefined && expectedTurnId !== steering.turnId) return false;
+    steering.steer(message, uploads.length ? { attachments: uploads } : undefined);
+    return true;
   }
 
   async interruptTurn(sessionId: string): Promise<void> {
@@ -407,11 +489,15 @@ export class JaitProvider implements CliProviderAdapter {
       state.session.status = "completed";
       state.session.completedAt = new Date().toISOString();
       void state.currentTurn?.catch(() => {});
+      await state.sandboxCleanup;
       const containerName = state.sandboxStart
         ? await state.sandboxStart.catch(() => undefined)
         : state.sandboxContainerName;
       if (containerName) {
-        await this.sandboxManager.stopContainer(containerName).catch(() => {});
+        await this.sandboxManager.stopContainer(containerName).catch(error => {
+          this.sandboxStopRetries.add(containerName);
+          console.warn(`[sandbox] Session cleanup failed for ${containerName}; will retry:`, error);
+        });
       }
       this.emit({ type: "session.completed", sessionId });
     }
@@ -430,11 +516,22 @@ export class JaitProvider implements CliProviderAdapter {
 
   private buildLlmConfig(userId?: string, requestedModel?: string): ResolvedJaitLlmConfig {
     const userSettings = userId ? this.deps.userService?.getSettings(userId) : undefined;
+    // Sessions can reach the provider without a model (continuations, resumed
+    // threads, background turns). Derive it from the user's provider selector
+    // so a run never bills a model they did not choose; strict mode then
+    // applies only once something has actually been chosen, so a run with no
+    // selection keeps using the configured deployment default instead of
+    // failing the turn outright.
+    const selectedModel = typeof userSettings?.selectedModel === "string"
+      ? userSettings.selectedModel.trim()
+      : "";
+    const explicitModel = requestedModel?.trim() || selectedModel;
     return resolveJaitLlmConfig({
       config: this.deps.config,
       apiKeys: userSettings?.apiKeys,
-      requestedModel,
+      requestedModel: explicitModel || undefined,
       jaitBackend: userSettings?.jaitBackend,
+      strictModel: Boolean(explicitModel),
     });
   }
 
@@ -531,9 +628,14 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   private async ensureThreadSandbox(state: JaitSessionState): Promise<string> {
+    await state.sandboxCleanup;
+    if (!this.sessions.has(state.session.id)) throw new Error("Jait session has stopped.");
+    state.sandboxLastUsedAt = Date.now();
     if (state.sandboxContainerName) return state.sandboxContainerName;
     if (!state.sandboxStart) {
       state.sandboxStart = this.sandboxManager.startCommandSandbox({
+        sessionId: state.session.id,
+        threadId: state.threadId,
         projectRoot: state.workingDirectory,
         mountMode: "read-write",
         networkEnabled: true,
@@ -592,6 +694,9 @@ export class JaitProvider implements CliProviderAdapter {
           callId: event.call_id,
           data: event.data,
         });
+        break;
+      case "steering":
+        if (!event.hidden) this.emit({ type: "activity", sessionId, kind: "steering", summary: event.message, payload: event });
         break;
       case "error":
         this.emit({ type: "activity", sessionId, kind: "error", summary: event.message });

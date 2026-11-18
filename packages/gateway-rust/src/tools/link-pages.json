@@ -1,0 +1,50 @@
+[
+  {
+    "path": "/",
+    "search": true
+  },
+  {
+    "path": "/messenger",
+    "search": true
+  },
+  {
+    "path": "/agents",
+    "search": false
+  },
+  {
+    "path": "/threads",
+    "search": false
+  },
+  {
+    "path": "/pulls",
+    "search": false
+  },
+  {
+    "path": "/todo",
+    "search": true
+  },
+  {
+    "path": "/emails",
+    "search": true
+  },
+  {
+    "path": "/calendar",
+    "search": false
+  },
+  {
+    "path": "/memory",
+    "search": false
+  },
+  {
+    "path": "/jobs",
+    "search": false
+  },
+  {
+    "path": "/network",
+    "search": false
+  },
+  {
+    "path": "/settings",
+    "search": true
+  }
+]

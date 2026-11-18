@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { resolveFsNodePlatform, shouldApplySessionScopedWsEvent } from '@/hooks/useUICommands'
+import { resolveFsNodePlatform, shouldApplySessionScopedWsEvent, shouldReconnectUiSocketAfterWake } from '@/hooks/useUICommands'
 
 describe('shouldApplySessionScopedWsEvent', () => {
   it('rejects a delayed full-state packet from the previously open chat', () => {
@@ -27,5 +27,25 @@ describe('WebSocket reconnect state ordering', () => {
     const onOpen = source.slice(onOpenStart, onOpenEnd)
 
     expect(onOpen.indexOf('flushQueue(ws)')).toBeLessThan(onOpen.indexOf('subscribeToSession(ws, sid)'))
+  })
+})
+
+describe('UI socket wake reconnect', () => {
+  const wake = { isAlwaysOnNode: false, hidden: false, hasSocket: true, sinceLastWakeReconnectMs: 60_000 }
+
+  it('replaces a socket that still looks open after an Android resume', () => {
+    expect(shouldReconnectUiSocketAfterWake(wake)).toBe(true)
+  })
+
+  it('opens only one fresh socket when resume and visibilitychange fire together', () => {
+    expect(shouldReconnectUiSocketAfterWake({ ...wake, sinceLastWakeReconnectMs: 300 })).toBe(false)
+    // Visibility always reconnects, and no socket at all is never deduplicated.
+    expect(shouldReconnectUiSocketAfterWake({ ...wake, sinceLastWakeReconnectMs: 300, force: true })).toBe(true)
+    expect(shouldReconnectUiSocketAfterWake({ ...wake, sinceLastWakeReconnectMs: 300, hasSocket: false })).toBe(true)
+  })
+
+  it('leaves hidden documents and always-on desktop nodes alone', () => {
+    expect(shouldReconnectUiSocketAfterWake({ ...wake, hidden: true, force: true })).toBe(false)
+    expect(shouldReconnectUiSocketAfterWake({ ...wake, isAlwaysOnNode: true })).toBe(false)
   })
 })

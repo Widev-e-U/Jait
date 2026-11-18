@@ -1,3 +1,4 @@
+import { agentHaltedBody } from "../services/agent-control.js";
 import { existsSync } from "node:fs";
 import type { WsEventType } from "@jait/shared";
 import type { AppConfig } from "../config.js";
@@ -297,17 +298,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
   const createManagedDeliveryWorktree = (thread: ThreadRow) => prepareDeliveryWorktree(thread, deps.threadService, gitService);
 
+  // Provider and model are deliberately absent here. Autonomous work must
+  // never inherit or resolve them: the user's explicit choice is the only
+  // source, and a thread without one is refused instead of started.
   const resolveSelectedThreadDefaults = (context: ToolContext) => {
-    const defaults = resolveThreadSelectionDefaults({
-      userId: context.userId,
-      sessionId: context.sessionId,
-      userService: deps.userService,
-      sessionState: deps.sessionState,
-    });
-    const contextProviderId = normalizeThreadProviderId(context.providerId);
+    const defaults = recordedSessionSelection(context);
     return {
-      providerId: contextProviderId ?? (defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null),
-      model: (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined) ?? defaults.model,
       reasoningEffort: defaults.reasoningEffort,
       runtimeMode:
         (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined)
@@ -315,9 +311,24 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     };
   };
 
+  // The provider and model the user already picked on this chat, if any.
+  // Account-level settings are never consulted: a missing recorded choice
+  // stays missing and the caller has to ask the user.
+  const recordedSessionSelection = (context: ToolContext, sessionIdOverride?: string) =>
+    resolveThreadSelectionDefaults({
+      userId: context.userId,
+      sessionId: sessionIdOverride?.trim() || context.sessionId,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+    });
+
+  // A thread's provider comes only from an explicit request or from the
+  // selection already recorded on this chat — never from the surrounding
+  // chat's live runtime.
   const resolveProviderId = (
     context: ToolContext,
     requestedProviderId?: unknown,
+    sessionIdOverride?: string,
   ): ProviderResolution => {
     const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
       deps.providerRegistry.get(providerId)
@@ -327,15 +338,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     if (requestedProvider) {
       return resolveRegisteredProvider(requestedProvider, "The requested provider");
     }
-    const selectedProvider = resolveSelectedThreadDefaults(context).providerId;
-
-    if (!selectedProvider) {
-      return {
-        error: "No provider could be resolved for this thread. A selected user provider must be configured and supported.",
-      };
+    const recordedProvider = normalizeThreadProviderId(recordedSessionSelection(context, sessionIdOverride).providerId);
+    if (recordedProvider) {
+      return resolveRegisteredProvider(recordedProvider, "The provider recorded on this chat");
     }
-
-    return resolveRegisteredProvider(selectedProvider, "The selected user provider");
+    return {
+      error:
+        "No provider was supplied for this thread. Autonomous work never picks a provider: ask the user which provider and model to use, then pass them explicitly.",
+    };
   };
 
   const preflightScheduledProvider = async (providerId: ProviderId): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -378,7 +388,6 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
   const resolveStoredThreadProvider = (
     threadProviderId: unknown,
-    context: ToolContext,
   ): ProviderResolution => {
     const storedProvider = normalizeThreadProviderId(threadProviderId);
     if (!storedProvider) {
@@ -386,12 +395,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         error: `Thread provider '${String(threadProviderId)}' is not supported for agent threads.`,
       };
     }
-    const contextProvider = normalizeThreadProviderId(context.providerId);
-    if (contextProvider && contextProvider !== storedProvider) {
-      return {
-        error: `Thread provider '${storedProvider}' does not match the calling agent provider '${contextProvider}'.`,
-      };
-    }
+    // A thread always runs on the provider it was created with. That provider
+    // is allowed to differ from the provider of the agent that starts the
+    // turn: cross-provider delegation (e.g. a Codex/Claude chat driving Jait
+    // workers, or a Jait coordinator driving CLI swarm workers) is supported.
+    // The only hard requirement is that the stored provider is registered and
+    // available on this gateway, which `startThread` verifies next.
     return deps.providerRegistry.get(storedProvider)
       ? { providerId: storedProvider }
       : { error: `Provider '${storedProvider}' is not registered on this gateway.` };
@@ -501,12 +510,22 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: "start requires non-empty `prompt`." };
     }
 
-    const resolvedProvider = resolveStoredThreadProvider(thread.providerId, context);
+    const resolvedProvider = resolveStoredThreadProvider(thread.providerId);
     if (!resolvedProvider.providerId) {
       return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
     }
     const effectiveProviderId = resolvedProvider.providerId;
     const effectiveThread = thread;
+    // The model is whatever the user chose for this thread. It is never
+    // inherited from the calling chat and never defaulted by the provider.
+    const threadModel = typeof effectiveThread.model === "string" ? effectiveThread.model.trim() : "";
+    if (!threadModel) {
+      return {
+        ok: false,
+        message:
+          "This thread has no model. Autonomous work never picks one: ask the user which provider and model to use, set it on the thread, then start it.",
+      };
+    }
     const autoFinishAfterFirstTurn =
       effectiveThread.kind === "delegation" ||
       options.autoStopAfterTurn === true ||
@@ -526,6 +545,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: `Provider '${effectiveProviderId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}` };
     }
 
+    deps.threadService.agentControl.assertCanRun(effectiveThread.userId ?? context.userId ?? "", "start-thread");
+
     const mcpServers = deps.mcpConfig
       ? deps.providerRegistry.buildJaitMcpServerRefs(deps.mcpConfig, undefined, {
           sessionId: effectiveThread.id,
@@ -539,10 +560,15 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         threadId: effectiveThread.id,
         workingDirectory: effectiveThread.workingDirectory ?? process.cwd(),
         mode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
-        model: effectiveThread.model ?? context.model ?? undefined,
+        model: threadModel,
         reasoningEffort: effectiveThread.reasoningEffort ?? undefined,
         mcpServers,
       });
+
+      if (deps.threadService.agentControl.isHalted(effectiveThread.userId ?? context.userId ?? "")) {
+        await provider.stopSession(session.id);
+        return { ok: false, message: "Autonomous agents are halted. Resume agents to continue." };
+      }
 
       if (options.generateTitleFromPrompt) {
         await generateAndApplyThreadTitle(context, effectiveThread, provider, effectiveProviderId, session.id, rawMessage);
@@ -704,6 +730,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         }
       }
 
+      // Title generation may have awaited a model turn while a halt arrived.
+      if (deps.threadService.agentControl.isHalted(effectiveThread.userId ?? context.userId ?? "")) {
+        cleanup();
+        await provider.stopSession(session.id);
+        return { ok: false, message: "Autonomous agents are halted. Resume agents to continue." };
+      }
       deps.threadService.markRunning(effectiveThread.id, session.id);
       broadcastThreadStatus(effectiveThread.id, "running");
 
@@ -766,6 +798,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     description:
       "Control agent threads end-to-end: create/list/update/delete threads, run them in parallel, " +
       "send turns, stop/interrupt, and create pull requests with direct links. " +
+      "For parallel work, assign independent, bounded tasks with explicit file ownership and resource constraints; " +
+      "prefer isolated workspaces for concurrent edits. Use one integration owner for shared files and contracts, " +
+      "review interrupted workers’ changes, and validate the integrated result against a stable snapshot. " +
+      "Threads do not automatically isolate shared workspaces or builds. " +
       "Threads have two kinds: delivery threads are user-owned work items that can be completed, resumed, reviewed, and used to create PRs; " +
       "delegation threads are helper/sub-agent tasks that auto-finish after one turn and cannot create PRs. " +
       "Creating or starting a thread requires a non-empty prompt. Scheduled jobs should create delivery threads with detach=true so the scheduler returns after dispatching the turn.",
@@ -883,7 +919,13 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
     async execute(input, context): Promise<ToolResult> {
       const userId = ensureUserId(context);
-      const caller = deps.threadService.getById(context.threadId ?? context.sessionId);
+      const control = deps.threadService.agentControl;
+      if (["create", "create_many", "start", "send"].includes(input.action) && control.isHalted(userId)) {
+        const body = agentHaltedBody(control.getState(userId), input.action);
+        return { ok: false, message: String(body.error), data: body };
+      }
+      const callerId = context.threadId ?? context.sessionId;
+      const caller = callerId ? deps.threadService.getById(callerId) : undefined;
       if (caller?.personaAgentId && caller.userId === userId && ["create", "create_many"].includes(input.action)) {
         return { ok: false, message: "Saved-team agents coordinate new work through addressed team.chat assignments. Post results directly; do not create relay/helper threads." };
       }
@@ -919,7 +961,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!prompt) {
               return { ok: false, message: "create requires non-empty `prompt`." };
             }
-            const resolvedProvider = resolveProviderId(context, input.providerId);
+            const targetSessionId = typeof input.sessionId === "string" ? input.sessionId : undefined;
+            const resolvedProvider = resolveProviderId(context, input.providerId, targetSessionId);
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
@@ -928,6 +971,15 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: "Agent profile not found." };
             }
             const selectedDefaults = resolveSelectedThreadDefaults(context);
+            const requestedModel = typeof input.model === "string" ? input.model.trim() : "";
+            const selectedModel = requestedModel || (recordedSessionSelection(context, targetSessionId).model ?? "");
+            if (input.start && !selectedModel) {
+              return {
+                ok: false,
+                message:
+                  "`model` is required to start a thread. Autonomous work never picks a model: ask the user which provider and model to use, then pass both explicitly.",
+              };
+            }
             if (context.requestedBy === "scheduler") {
               const preflight = await preflightScheduledProvider(selectedProviderId);
               if (!preflight.ok) return preflight;
@@ -938,7 +990,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               sessionId: input.sessionId,
               title: input.title?.trim() || normalizeGeneratedThreadTitle(prompt, "New Thread"),
               providerId: selectedProviderId,
-              model: input.model ?? selectedDefaults.model,
+              model: selectedModel || undefined,
               reasoningEffort: selectedDefaults.reasoningEffort,
               runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
@@ -1009,10 +1061,21 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (missingPrompt) {
               return { ok: false, message: `create_many requires non-empty prompt for thread '${missingPrompt.title}'.` };
             }
+            const missingModel = input.threads.find((spec) => {
+              const model = spec.model ?? input.model;
+              return typeof model !== "string" || !model.trim();
+            });
+            if (missingModel) {
+              return {
+                ok: false,
+                message:
+                  `create_many requires an explicit model for thread '${missingModel.title}'. Autonomous work never picks a provider or model: ask the user which provider and model to use, then pass both explicitly.`,
+              };
+            }
 
             const validatedSpecs = input.threads.map((spec) => ({
               spec,
-              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId),
+              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId, spec.sessionId ?? input.sessionId),
             }));
             const firstResolutionError = validatedSpecs.find(({ resolvedProvider }) => !resolvedProvider.providerId);
             if (firstResolutionError) {
@@ -1037,7 +1100,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
                 providerId: selectedProviderId,
-                model: spec.model ?? input.model ?? selectedDefaults.model,
+                model: spec.model ?? input.model,
                 reasoningEffort: selectedDefaults.reasoningEffort,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
@@ -1224,7 +1287,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!prompt) return { ok: false, message: "start requires non-empty `prompt`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(context, thread, {
+            const requestedModel = typeof input.model === "string" ? input.model.trim() : "";
+            const effectiveThread = requestedModel && requestedModel !== thread.model
+              ? (deps.threadService.update(thread.id, { model: requestedModel }) ?? thread)
+              : thread;
+            if (effectiveThread !== thread) {
+              broadcastThreadEvent(effectiveThread.id, "updated", { thread: effectiveThread });
+            }
+            const started = await startThread(context, effectiveThread, {
               message: prompt,
               attachments: input.attachments,
               detach: input.detach,

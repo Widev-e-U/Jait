@@ -41,7 +41,7 @@ export function getSecretRequestCommand(request: SecretInputRequest): string {
 }
 
 const SSH_SECRET_REQUESTERS = new Set(['ssh.run', 'run.ssh', 'ssh.session.start'])
-const INLINE_SECRET_REQUESTERS = new Set([...SSH_SECRET_REQUESTERS, 'elevated.run', 'terminal.run', 'jait.terminal', 'execute'])
+const INLINE_SECRET_REQUESTERS = new Set([...SSH_SECRET_REQUESTERS, 'terminal.run', 'jait.terminal', 'execute'])
 
 function isSshSecretTool(tool: string): boolean {
   return SSH_SECRET_REQUESTERS.has(tool)
@@ -86,7 +86,7 @@ export function secretRequestMatchesTool(request: SecretInputRequest | null, too
   }
   const effectiveTool = mcpToolFromName ?? normalizedTool
   if (request?.title === 'SSH password') return isSshSecretTool(effectiveTool)
-  if (request?.title === 'Administrator password') return effectiveTool === 'elevated.run'
+  if (request?.title === 'Administrator password') return effectiveTool === 'terminal.run' || effectiveTool === 'jait.terminal' || effectiveTool === 'execute'
   if (request?.title === 'Terminal input required') return effectiveTool === 'terminal.run' || effectiveTool === 'jait.terminal' || effectiveTool === 'execute'
   return false
 }

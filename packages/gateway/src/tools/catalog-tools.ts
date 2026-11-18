@@ -20,13 +20,13 @@ export function createJaitCatalogTool(registry: ToolRegistry): ToolDefinition<{ 
       const offset = Math.max(0, Math.floor(input.toolOffset ?? 0));
       const query = (input.query ?? "").toLowerCase().trim();
       const words = query.split(/\s+/).filter((word) => word.length > 2 && !["the", "for", "with", "jait", "can", "you", "harness"].includes(word));
-      const pages = JAIT_PAGE_IDS.filter((id) => !input.pageId || input.pageId === id).map((id) => {
+      const detailedPages = JAIT_PAGE_IDS.filter((id) => !input.pageId || input.pageId === id).map((id) => {
         const page: JaitPageContract = JAIT_PAGES[id];
         const resolved = tools.filter((tool) => isJaitPageTool(tool, id));
-        const searchText = [id, page.title, page.description, ...page.examples, ...page.features.map((f) => f.description), ...resolved.map((t) => t.description)].join(" ").toLowerCase();
+        const searchText = [id, page.title, page.description, ...page.examples, ...Object.values(page.queryParameters ?? {}), ...page.features.map((f) => f.description), ...resolved.map((t) => t.description)].join(" ").toLowerCase();
         const score = words.filter((word) => searchText.includes(word)).length;
         return { id, title: page.title, description: page.description, examples: page.examples,
-          link: jaitPageLink(id), features: page.features.map((feature) => ({
+          link: jaitPageLink(id), queryParameters: page.queryParameters, features: page.features.map((feature) => ({
             ...feature, availableToolRefs: feature.toolRefs.filter((name) => tools.some((tool) => tool.name === name)),
             missingToolRefs: feature.toolRefs.filter((name) => !tools.some((tool) => tool.name === name)),
           })),
@@ -35,10 +35,14 @@ export function createJaitCatalogTool(registry: ToolRegistry): ToolDefinition<{ 
             consent: tool.defaultConsentLevel ?? "none" })),
           score };
       }).filter((page) => words.length === 0 || page.score > 0).sort((a, b) => b.score - a.score);
+      const selectedPages = words.length && !input.pageId ? detailedPages.slice(0, 3) : detailedPages;
+      const pages = selectedPages.map(page => input.pageId ? page : ({
+        id: page.id, title: page.title, description: page.description, link: page.link, toolCount: page.toolCount,
+      }));
       const candidates = tools.filter((tool) => pages.some((page) => isJaitPageTool(tool, page.id)));
       // Keep the overview compact; targeted lookups activate at most 12 schemas.
-      const selected = input.pageId ? candidates.slice(offset, offset + 12)
-        : words.length ? registry.search(query, { candidates, limit: 12 }) : [];
+      const selected = input.pageId ? candidates.slice(offset, offset + 3)
+        : words.length ? registry.search(query, { candidates, limit: 3 }) : [];
       let matches = selected.map((tool) => ({ name: tool.name, description: tool.description,
         parameters: tool.parameters, openai_name: toOpenAIName(tool.name) }));
       const covered = new Set(JAIT_PAGE_IDS.flatMap((id) => {
@@ -46,16 +50,16 @@ export function createJaitCatalogTool(registry: ToolRegistry): ToolDefinition<{ 
       }));
       const data = { version: 1, pages, matches, pageLinks: pages.map((page) => page.link),
         uncataloguedTools: tools.filter((tool) => !covered.has(tool.name)).map((tool) => ({ name: tool.name })),
-        schemaLookupRequired: [] as string[] };
+        schemaLookupRequired: input.pageId ? selectedPages.flatMap(page => page.tools.map(tool => tool.name)).filter(name => !matches.some(match => match.name === name)) : [] as string[] };
       // MCP caps text at 30k characters. Preserve valid JSON and navigation data
       // by dropping excess schemas before transport, with exact lookup refs.
-      while (JSON.stringify(data).length > 24_000 && matches.length) {
+      while (JSON.stringify(data).length > 10_000 && matches.length) {
         const removed = matches.pop()!;
         data.schemaLookupRequired.push(removed.name);
       }
       data.matches = matches;
       return { ok: true, message: pages.length
-        ? pages.map((page) => `${page.title}: ${page.description} — ${page.toolCount} available tools. Open ${page.link.href}`).join("\n")
+        ? `${pages.length} Jait page(s). Use pageId for details and tools.search for exact tool schemas.`
         : "No matching Jait capability. Try a broader query or omit it to inspect all pages.",
         data };
     },

@@ -311,5 +311,11 @@ function extractDurableMemoryCandidate(content: string): string | null {
   const compact = content.replace(/\s+/g, " ").trim();
   if (compact.length < 12 || compact.length > 600) return null;
   if (!/\b(remember|always|prefer|preference|use .+ by default|do not|don't|never)\b/i.test(compact)) return null;
-  return compact.length <= 280 ? compact : `${compact.slice(0, 279)}…`;
+  if (compact.length <= 280) return compact;
+  // SQLite adapters encode lone surrogates differently. Keep the stored
+  // candidate intact so the same chat deduplicates on later scans.
+  let end = 279;
+  const last = compact.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${compact.slice(0, end)}…`;
 }

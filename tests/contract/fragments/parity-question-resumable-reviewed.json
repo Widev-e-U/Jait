@@ -1,0 +1,41 @@
+{
+  "lane": "resumable-question-current-source-review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/mcp-server.test.ts:32:3",
+      "status": "verified",
+      "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/c91ea989-0bda-4264-a24c-9489c90feea8/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/user-question-tools.test.ts:113:3",
+      "status": "verified",
+      "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_user_question_tools_test_ts_113_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/c91ea989-0bda-4264-a24c-9489c90feea8/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/user-question-tools.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_user_question_tools_test_ts_88_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/c91ea989-0bda-4264-a24c-9489c90feea8/report.json"
+        }
+      ]
+    }
+  ]
+}

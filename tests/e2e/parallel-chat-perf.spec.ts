@@ -29,7 +29,7 @@ import { resolve } from 'node:path'
 interface PerfEntry { commits: number; duration: number; phases: Record<string, number>; renders: number }
 type PerfReport = Record<string, PerfEntry>
 
-const reportDir = resolve(__dirname, '.artifacts')
+const reportDir = resolve(__dirname, '../../.jait/artifacts/parallel-chat-perf')
 
 const PANELS = 3
 const HISTORY = 80

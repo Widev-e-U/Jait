@@ -1,0 +1,1586 @@
+{
+  "version": 1,
+  "http": [
+    {
+      "method": "DELETE",
+      "path": "/api/auth/settings/archive",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings/env-status",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings/tools",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/settings",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/settings/tools",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/invitations",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/session/bind",
+      "tests": [
+        {
+          "file": "tests/binary_auth.rs",
+          "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals",
+      "tests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals/:id",
+      "tests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/terminals/:id",
+      "tests": [
+        {
+          "file": "tests/binary_terminal.rs",
+          "name": "explicit_gateway_terminal_is_local_and_remote_ids_are_denied"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools/execute",
+      "tests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "direct_execution_tracks_live_disabled_tool_settings"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions",
+      "tests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "direct_execution_tracks_live_disabled_tool_settings"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects",
+      "tests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminder_projects_use_owned_live_project_data"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/discovery",
+      "tests": [
+        {
+          "file": "tests/binary_mobile.rs",
+          "name": "mobile_device_flow_runs_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders",
+      "tests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/reminders/:id",
+      "tests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders/export.md",
+      "tests": [
+        {
+          "file": "tests/binary_reminders.rs",
+          "name": "reminders_are_isolated_by_owner_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/sessions/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/sessions/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/:id",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/count",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/policy",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/:id",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/:id/approve",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/:id/reject",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust/levels",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:id/state",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/archive",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/state",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/sessions",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/sessions",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/repos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/repos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:id/strategy",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/repos/:id/strategy",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/move",
+      "tests": [
+        {
+          "file": "tests/binary_move_trust.rs",
+          "name": "session_move_trust_and_project_search_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/search",
+      "tests": [
+        {
+          "file": "tests/binary_move_trust.rs",
+          "name": "session_move_trust_and_project_search_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust/levels/:actionType",
+      "tests": [
+        {
+          "file": "tests/binary_move_trust.rs",
+          "name": "session_move_trust_and_project_search_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/trust/levels/:actionType/reset",
+      "tests": [
+        {
+          "file": "tests/binary_move_trust.rs",
+          "name": "session_move_trust_and_project_search_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/info",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/open",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/list",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/stat",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/read",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/download",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/search",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/write",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/backup",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo-all",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/apply-diff",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-file",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-directory",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/rename",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/move",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/delete",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/reveal",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/last-active",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/streaming",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.list",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.status",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/viewed",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/messages",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/runtime",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/plan",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/loop",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/loop",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/cancel",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/steer",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/fork",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/approve",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/stream",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/events",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/trajectory",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/nodes",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/roots",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/browse",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/user-questions/requests",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/skills",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jait-todos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jait-todos/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/devices",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/consent/pending",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/devices/:deviceId/heartbeat",
+      "tests": [
+        {
+          "file": "tests/binary_mobile_routes.rs",
+          "name": "mobile_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/threads/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/runtime",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/activities",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/persona-agents",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/persona-agents/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/persona-agents/:id",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "thread_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/jobs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jobs/:id",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id/runs",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/providers/available",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/config",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/calendar/config/google",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/accounts",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/calendar/accounts/:id",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/calendar/device/sync",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/oauth/callback",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/secrets/:id",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets/requests",
+      "tests": [
+        {
+          "file": "tests/binary_secrets_routes.rs",
+          "name": "secrets_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/plans",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/plans",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/plans/:id",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/start",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/tasks/:taskId/start",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-accounts",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage/summary",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals/shells",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/surfaces",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/write",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/resize",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/execute",
+      "tests": [
+        {
+          "file": "tests/binary_terminals_routes.rs",
+          "name": "terminal_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice/state/:sessionId",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/voice/state/:sessionId",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/speak",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe-audio",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/wake-candidate",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice-assistant/status",
+      "tests": [
+        {
+          "file": "tests/binary_voice_routes.rs",
+          "name": "voice_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/interfaces",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/scan/latest",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/nodes",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/devices",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/topology",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/nodes/register",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/ssh/enable",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/assessments",
+      "tests": [
+        {
+          "file": "tests/binary_network_security_routes.rs",
+          "name": "network_security_codegraph_through_the_binary"
+        }
+      ]
+    }
+  ],
+  "ws": []
+}

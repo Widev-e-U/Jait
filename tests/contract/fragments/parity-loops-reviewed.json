@@ -1,0 +1,235 @@
+{
+  "review_scope": "parity-loops bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/opencode-go-fetch.test.ts:9:3",
+      "status": "verified",
+      "parity_review": "Reviewed `runs ${family} native streaming text and tool round trips through the actual agent loop`. Every bounded const registration-loop variant is matched to its exact table input, generated binding, callback, setup, imports, hooks and assertion operands. Five negative controls reject changed source data, changed fixture input, registration side effects, and omitted variants. Raw values satisfy the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-loops/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_opencode_go_fetch_test_ts_9_3_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_opencode_go_fetch_test_ts_9_3_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:186:5",
+      "status": "verified",
+      "parity_review": "Reviewed `refuses: ${label}`. Every bounded const registration-loop variant is matched to its exact table input, generated binding, callback, setup, imports, hooks and assertion operands. Five negative controls reject changed source data, changed fixture input, registration side effects, and omitted variants. Raw values satisfy the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-loops/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for9",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for10",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for11",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for12",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for13",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for14",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_186_5_for15",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:237:5",
+      "status": "verified",
+      "parity_review": "Reviewed `allows harmless: ${sql.slice(0, 50)}`. Every bounded const registration-loop variant is matched to its exact table input, generated binding, callback, setup, imports, hooks and assertion operands. Five negative controls reject changed source data, changed fixture input, registration side effects, and omitted variants. Raw values satisfy the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-loops/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_237_5_for6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:305:5",
+      "status": "verified",
+      "parity_review": "Reviewed `refuses: ${label}`. Every bounded const registration-loop variant is matched to its exact table input, generated binding, callback, setup, imports, hooks and assertion operands. Five negative controls reject changed source data, changed fixture input, registration side effects, and omitted variants. Raw values satisfy the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-loops/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_305_5_for7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:369:5",
+      "status": "verified",
+      "parity_review": "Reviewed `allows: ${label}`. Every bounded const registration-loop variant is matched to its exact table input, generated binding, callback, setup, imports, hooks and assertion operands. Five negative controls reject changed source data, changed fixture input, registration side effects, and omitted variants. Raw values satisfy the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-loops/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_369_5_for5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

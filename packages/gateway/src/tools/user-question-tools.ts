@@ -4,9 +4,9 @@ import { ToolName } from "./tool-names.js";
 
 interface UserAskInput {
   title?: string;
-  timeoutMs?: number;
   attention?: "normal" | "urgent";
-  questions: Array<{
+  requestId?: string;
+  questions?: Array<{
     id: string;
     header: string;
     question: string;
@@ -21,7 +21,7 @@ interface UserAskInput {
 }
 
 function normalizeQuestions(input: UserAskInput): UserQuestion[] {
-  return input.questions.map((question) => ({
+  return (input.questions ?? []).map((question) => ({
     id: question.id.trim(),
     header: question.header.trim(),
     question: question.question.trim(),
@@ -42,12 +42,12 @@ function normalizeQuestions(input: UserAskInput): UserQuestion[] {
 export function createUserAskTool(userQuestions: UserQuestionService): ToolDefinition<UserAskInput> {
   return {
     name: ToolName.UserAsk,
-    description: "Ask the user one or more structured questions and wait for their answers. Questions are surfaced on every connected Jait client; attention only controls notification emphasis.",
+    description: "Ask the user one or more structured questions and wait until they answer or cancel, without a timeout. MCP calls may return pending with a requestId: keep calling user.ask with only that requestId until answered or cancelled; do not create another question or proceed without the answer. Questions are surfaced on every connected Jait client; attention only controls notification emphasis.",
     parameters: {
       type: "object",
       properties: {
+        requestId: { type: "string", description: "Resume waiting for a pending request. Supply only this field; use the exact returned requestId." },
         title: { type: "string", description: "Short title shown above the questions." },
-        timeoutMs: { type: "number", description: "Optional timeout in milliseconds." },
         attention: {
           type: "string",
           enum: ["normal", "urgent"],
@@ -55,7 +55,7 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
         },
         questions: {
           type: "array",
-          description: "Questions to ask. Use stable IDs so answers are easy to map.",
+          description: "Questions for a new request. Required unless resuming with requestId. Use stable IDs so answers are easy to map.",
           items: {
             type: "object",
             properties: {
@@ -82,7 +82,6 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
           },
         },
       },
-      required: ["questions"],
     },
     tier: "core",
     category: "gateway",
@@ -90,6 +89,22 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
     risk: "low",
     defaultConsentLevel: "none",
     async execute(input, context) {
+      const waitForAnswer = async (requestId: string) => {
+        const outcome = await userQuestions.waitForAnswer(requestId, context.sessionId, context.userId);
+        if (outcome.status === "missing") return { ok: false, message: "Question request not found for this user and session." };
+        if (outcome.status === "pending") return {
+          ok: true,
+          message: "Waiting for the user. Call user.ask again with only this requestId until answered or cancelled. The question has no expiry; do not proceed without the answer.",
+          data: { status: "pending", requestId },
+        };
+        return outcome.result
+          ? { ok: true, message: "User answered the question request.", data: outcome.result }
+          : { ok: false, message: "The user cancelled the question request." };
+      };
+      if (input.requestId) {
+        if (input.questions?.length) return { ok: false, message: "Resume with only requestId; do not supply new questions." };
+        return waitForAnswer(input.requestId);
+      }
       const questions = normalizeQuestions(input);
       if (questions.length === 0) {
         return { ok: false, message: "At least one question is required." };
@@ -107,15 +122,18 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
         return { ok: false, message: `Duplicate question id(s): ${[...duplicateIds].join(", ")}` };
       }
 
-      const result = await userQuestions.ask({
+      const request = {
         sessionId: context.sessionId,
         userId: context.userId ?? null,
         requestedBy: ToolName.UserAsk,
         title: input.title,
         attention: input.attention,
         questions,
-        timeoutMs: input.timeoutMs,
-      });
+      };
+      if (context.requestedBy === "mcp-client") {
+        return waitForAnswer(userQuestions.startResumable(request));
+      }
+      const result = await userQuestions.ask(request);
       if (!result) {
         return { ok: false, message: "The user did not answer the question request." };
       }

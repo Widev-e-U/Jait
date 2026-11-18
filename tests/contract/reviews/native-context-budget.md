@@ -1,0 +1,9 @@
+# Context budget and evidence review
+
+The required `gateway_rust_context_budget` target owns assertions for bounded defaults/config parsing, Unicode-safe evidence projection and pages (including exact explicit-page content/offsets through the real loop and MCP), reload/ownership/expiry, deterministic pruning with unread-result protection, provider usage anchors and prefix/model changes, cache affinity/markers and backend exclusion, configured-rate price partitions, cooldown/material-savings gates, provider-advertised native commands and failures, independent summary input bounds, and combined pressure/recovery flows.
+
+TypeScript reference functions are called by `drivers/contextbudget.ts`. Rust implementations are under gateway-rust services/context_budget, providers/context_control and tools/context_evidence. No driver implements the reference policy. The TS runtime acceptance fixture injects a deterministic local fetch peer and calls the real `runAgentLoop`, MCP dispatcher and recovery tool. It is explicitly a reference-runtime acceptance assertion, not proof of a complete Rust model loop.
+
+Boundaries: finite JSON and scalar Unicode strings; UTF-16 lengths match JS; projection never mutates original UI evidence. Persistence is an existing session-state capability; read access requires the authenticated session/user pair. The native ledger exposes serialization/restoration for the native session-state caller. No schema migration or live public-provider calls are needed. Cache prices are caller-configured examples, not bundled provider pricing. Unsupported external context transports are not compacted by rewriting a local mirror.
+
+Required broader validation: TypeScript typecheck and tests; native fmt/strict Clippy/library tests; this contract target and prompt parity; source fingerprints unchanged during validation. Native migration and production replacement remain distinct claims.

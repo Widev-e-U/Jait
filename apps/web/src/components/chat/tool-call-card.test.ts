@@ -402,8 +402,8 @@ describe('sub-agent activity', () => {
 
     for (const markup of [beforeChildCalls, afterChildCalls]) {
       expect(markup).toContain('sticky top-0 z-20')
-      expect(markup).toContain('file.read')
-      expect(markup).toContain('terminal.run')
+      expect(markup).toContain('File Read')
+      expect(markup).toContain('Terminal Run')
     }
   })
 
@@ -540,14 +540,14 @@ describe('formatMcpHeaderText', () => {
     expect(formatMcpHeaderText('Ran mcp.jait.terminal.run', {
       title: 'mcp.jait.terminal.run',
       details: null,
-    })).toBe('mcp.jait.terminal.run')
+    })).toBe('MCP Jait Terminal Run')
   })
 
   it('keeps details behind the MCP title without wrapper metadata', () => {
     expect(formatMcpHeaderText('Ran mcp.jait.thread.control', {
       title: 'mcp.jait.thread.control',
       details: 'action: create',
-    })).toBe('mcp.jait.thread.control • action: create')
+    })).toBe('MCP Jait Thread Control • action: create')
   })
 })
 
@@ -593,6 +593,18 @@ describe('formatStructuredValue', () => {
 })
 
 describe('formatOutput', () => {
+  it('prefers available structured and text data to a generic completion status', () => {
+    expect(formatOutput({ ok: true, message: 'completed', data: { results: [{ title: 'Example', snippet: 'Useful evidence' }] } }, 'other.search')).toContain('Useful evidence')
+    expect(formatOutput({ ok: true, message: 'completed', data: 'Fetched page text' }, 'fetch')).toBe('Fetched page text')
+    expect(formatOutput({ ok: false, message: 'Access denied', data: { detail: 'private' } }, 'fetch')).toBe('Access denied')
+    expect(formatOutput({ ok: true, message: 'completed' }, 'web')).toBe('completed')
+  })
+
+  it('keeps fetched content available in the scrollable result', () => {
+    const content = 'a'.repeat(500)
+    expect(formatOutput({ ok: true, message: 'completed', data: { results: [{ url: 'https://example.com', content }] } }, 'web')).toContain(content)
+  })
+
   it('renders structured terminal results as terminal output text', () => {
     expect(formatOutput({
       ok: true,
@@ -832,7 +844,7 @@ describe('structured tool result views', () => {
 
     expect(markup).toContain('Available tools')
     expect(markup).toContain('2 found')
-    expect(markup).toContain('file.read')
+    expect(markup).toContain('File Read')
     expect(markup).toContain('Filesystem')
     expect(markup).not.toContain('parameters')
     expect(markup).not.toContain('&quot;')
@@ -892,8 +904,8 @@ describe('getCallSummary', () => {
     }
     expect(getCallSummary('user.ask', args)).toBe('Inter-agent interaction model (+1 more)')
     expect(getToolInvocationLabels('user.ask', args)).toEqual({
-      running: 'Asking a question',
-      done: 'Asked a question',
+      running: 'Waiting for your answer',
+      done: 'Question answered',
     })
   })
 
@@ -1480,3 +1492,16 @@ describe('security tool-card integration', () => {
     expect(isInlineToolCall({ ...call('security.http.check'), status: 'pending', result: undefined, approvalRequestId: 'approve-scope' })).toBe(false)
   })
 })
+
+describe('inline email cards', () => {
+  it('keeps successful email_read and email_view results visible like images', () => {
+    for (const tool of ['email_read', 'email_view', 'mcp__jait__email_view']) {
+      const call = { callId: 'email-card', tool, args: { action: 'open', messageId: 'm1' }, status: 'success', result: { ok: true, message: 'Mail', data: { message: { id: 'm1', subject: 'Hello', bodyHtml: '<p>Mail body</p>' } } } } as ToolCallInfo;
+      expect(isInlineToolCall(call)).toBe(true);
+    }
+  });
+  it('keeps errors and compose actions in their normal tool state', () => {
+    expect(isInlineToolCall({ callId: 'error', tool: 'email_view', args: { action: 'open' }, status: 'error', result: { ok: false, message: 'No account' } } as ToolCallInfo)).toBe(false);
+    expect(isInlineToolCall({ callId: 'compose', tool: 'email_view', args: { action: 'compose' }, status: 'success', result: { ok: true, message: 'Draft opened' } } as ToolCallInfo)).toBe(false);
+  });
+});

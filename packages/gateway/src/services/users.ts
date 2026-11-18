@@ -1,4 +1,4 @@
-import { and, eq, sql, asc, gt } from "drizzle-orm";
+import { and, eq, sql, asc, gt, or, isNull } from "drizzle-orm";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { JaitBackend } from "@jait/shared/types";
 import type { JaitDB } from "../db/connection.js";
@@ -47,6 +47,7 @@ export interface UserSettingsRecord {
   reasoningEffort: ReasoningEffort | null;
   projectPickerPath: string | null;
   projectPickerNodeId: string | null;
+  navigationOrder?: string[];
   updatedAt: string;
 }
 
@@ -91,6 +92,9 @@ function hashPassword(password: string): string {
 function verifyPasswordHash(password: string, encoded: string): boolean {
   const [prefix, salt, digest] = encoded.split("$");
   if (prefix !== HASH_PREFIX || !salt || !digest) return false;
+  // Buffer.from(hex) silently truncates malformed hex, including to zero bytes.
+  // Only complete 64-byte digests emitted by hashPassword are valid credentials.
+  if (!/^[a-f0-9]{128}$/i.test(digest)) return false;
   const expected = Buffer.from(digest, "hex");
   const actual = scryptSync(password, salt, expected.length);
   if (expected.length !== actual.length) return false;
@@ -241,6 +245,7 @@ export class UserService {
       reasoningEffort: REASONING_EFFORT_VALUES.has((row as any).reasoningEffort) ? (row as any).reasoningEffort : null,
       projectPickerPath: typeof (row as any).projectPickerPath === "string" ? (row as any).projectPickerPath : null,
       projectPickerNodeId: typeof (row as any).projectPickerNodeId === "string" ? (row as any).projectPickerNodeId : null,
+      navigationOrder: parseStringArray((row as any).navigationOrder ?? null),
       updatedAt: row.updatedAt,
     };
   }
@@ -260,6 +265,7 @@ export class UserService {
       reasoningEffort?: ReasoningEffort | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
+      navigationOrder?: string[];
     },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
@@ -283,6 +289,7 @@ export class UserService {
     const projectPickerNodeId = patch.projectPickerNodeId !== undefined
       ? patch.projectPickerNodeId
       : existing.projectPickerNodeId;
+    const navigationOrder = patch.navigationOrder ?? existing.navigationOrder ?? [];
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -299,6 +306,7 @@ export class UserService {
         reasoningEffort,
         projectPickerPath,
         projectPickerNodeId,
+        navigationOrder: JSON.stringify(navigationOrder),
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))
@@ -332,14 +340,18 @@ export class UserService {
   }
 
   bindSessionToUser(userId: string, sessionId: string): boolean {
-    const session = this.db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
-    if (!session) return false;
-    this.db
+    // Claim legacy unowned sessions or keep the current owner's binding.
+    // Check in the UPDATE so concurrent claims cannot transfer ownership.
+    const updated = this.db
       .update(sessions)
       .set({ userId })
-      .where(eq(sessions.id, sessionId))
-      .run();
-    return true;
+      .where(and(
+        eq(sessions.id, sessionId),
+        or(isNull(sessions.userId), eq(sessions.userId, userId)),
+      ))
+      .returning({ id: sessions.id })
+      .get();
+    return Boolean(updated);
   }
 
   clearArchivedSessions(userId: string): number {

@@ -527,6 +527,8 @@ test('confirmShare bridges the web confirm() dialog into accepted flag', async (
   );
   window.confirm = () => false;
   assert.equal((await window.jaitDesktop.confirmShare({})).accepted, false);
+  window.confirm = () => { throw new Error('dialog unavailable'); };
+  assert.equal((await window.jaitDesktop.confirmShare({})).accepted, false);
 });
 
 test('getDesktopSources returns an empty source list on the web', async () => {

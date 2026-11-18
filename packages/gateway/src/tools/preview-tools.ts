@@ -87,6 +87,7 @@ export function createPreviewStartTool(
         command: input.command?.trim() || undefined,
         port: typeof input.port === "number" ? input.port : undefined,
         frameworkHint: input.frameworkHint?.trim() || undefined,
+        agentInitiated: true,
       });
       if (preview.status === "ready") {
         // Persist the original user-facing target (e.g. "http://127.0.0.1:3000/")

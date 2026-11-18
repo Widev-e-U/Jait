@@ -104,7 +104,7 @@ export function createEmailReadTool(email: EmailService): ToolDefinition<ReadInp
         return {
           ok: true,
           message: `${message.subject} — from ${message.from}`,
-          data: { ...message, body },
+          data: { ...message, body, accountId: input?.accountId ?? email.resolveAccount?.(userId(context)).id },
         };
       } catch (err) {
         return { ok: false, message: err instanceof Error ? err.message : "Failed to read email" };
@@ -121,6 +121,7 @@ interface SendInput {
   bcc?: string;
   replyToMessageId?: string;
   html?: boolean;
+  includeSignature?: boolean;
   accountId?: string;
 }
 
@@ -139,10 +140,18 @@ export function createEmailSendTool(email: EmailService, ws?: WsControlPlane): T
       properties: {
         to: { type: "string", description: "Recipient address(es), comma-separated." },
         subject: { type: "string", description: "Subject line (new messages)." },
-        body: { type: "string", description: "Message body." },
+        body: {
+          type: "string",
+          description:
+            "Format every email for readability; never run the greeting, message, and closing together on one line. " +
+            "Use a suitable greeting, blank lines between paragraphs, and a separate closing and sender name when appropriate. " +
+            "For plain text use newline characters; for HTML use appropriate paragraph and line-break tags. " +
+            "Avoid duplicating the account's saved signature when it is included. Respect the user's requested wording and format.",
+        },
         cc: { type: "string", description: "Cc address(es), comma-separated." },
         bcc: { type: "string", description: "Bcc address(es), comma-separated." },
         replyToMessageId: { type: "string", description: "Reply within this message's thread." },
+        includeSignature: { type: "boolean", description: "Include the sending account's saved signature (default true)." },
         html: { type: "boolean", description: "Send body as HTML (default plain text)." },
         accountId: { type: "string", description: "Account to send from. Omit for the default account." },
       },
@@ -158,6 +167,7 @@ export function createEmailSendTool(email: EmailService, ws?: WsControlPlane): T
           bcc: input.bcc,
           replyToMessageId: input.replyToMessageId,
           html: input.html,
+          ...(input.includeSignature !== undefined ? { includeSignature: input.includeSignature } : {}),
         });
         controlEmailPage(ws, context, { action: "refresh", accountId: input?.accountId });
         return { ok: true, message: input.replyToMessageId ? "Reply sent." : `Email sent to ${input.to}.` };
@@ -251,13 +261,13 @@ interface ViewInput {
   replyToMessageId?: string;
 }
 
-export function createEmailViewTool(ws: WsControlPlane): ToolDefinition<ViewInput> {
+export function createEmailViewTool(ws: WsControlPlane, email?: EmailService): ToolDefinition<ViewInput> {
   return {
     name: "email_view",
     description:
-      "Drive the Email page the user is looking at: open a folder, open a specific message in the reading " +
-      "pane, prefill a compose/reply draft, or refresh the list. Use this to follow along visually with what " +
-      "you are doing in email (e.g. open the message you just read, or pop open a draft for the user to review).",
+      "Display an email as a rendered card directly in this chat with action=open and messageId. " +
+      "Use navigate to open the Email page, compose to show a draft for review, or refresh to reload it. " +
+      "Always specify accountId when multiple mailboxes are connected (email_accounts lists them).",
     tier: "standard",
     category: "web",
     source: "builtin",
@@ -281,6 +291,14 @@ export function createEmailViewTool(ws: WsControlPlane): ToolDefinition<ViewInpu
       required: ["action"],
     },
     async execute(input, context): Promise<ToolResult> {
+      if (input.action === "open") {
+        if (!input.messageId || !email) return { ok: false, message: "A messageId and connected email service are required." };
+        try {
+          const account = email.resolveAccount(userId(context), input.accountId);
+          const message = await email.getMessage(userId(context), account.id, input.messageId);
+          return { ok: true, message: `Email: ${message.subject} — ${message.from}`, data: { accountId: account.id, message } };
+        } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "Email unavailable" }; }
+      }
       controlEmailPage(ws, context, {
         action: input.action,
         accountId: input.accountId,
@@ -298,12 +316,20 @@ export function createEmailViewTool(ws: WsControlPlane): ToolDefinition<ViewInpu
 
 export function createEmailTools(email: EmailService, ws?: WsControlPlane): ToolDefinition[] {
   const tools: ToolDefinition[] = [
+    {
+      name: "email_accounts", description: "List connected email account ids and addresses. Use accountId when multiple mailboxes are connected.",
+      tier: "standard", category: "web", source: "builtin", risk: "low", parameters: { type: "object", properties: {} },
+      async execute(_input, context) {
+        const accounts = email.listAccounts(userId(context)).map(({ id, email: address, provider, displayName, status }) => ({ id, email: address, provider, displayName, status }));
+        return { ok: true, message: `${accounts.length} connected email account(s).`, data: { accounts } };
+      },
+    },
     createEmailListTool(email),
     createEmailReadTool(email),
     createEmailSendTool(email, ws),
     createEmailTagTool(email, ws),
     createEmailDeleteTool(email, ws),
   ] as ToolDefinition[];
-  if (ws) tools.push(createEmailViewTool(ws) as ToolDefinition);
+  if (ws) tools.push(createEmailViewTool(ws, email) as ToolDefinition);
   return tools;
 }

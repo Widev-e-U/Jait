@@ -246,9 +246,9 @@ describe('conversation skeleton proportions', () => {
 
     // Scroll container uses the overflow-y-auto utility class...
     expect(markup).toContain('overflow-y-auto')
-    // ...plus inline mobile overscroll-containment styles.
+    // Suppress both scroll chaining and native boundary bounce.
     expect(markup).toContain('-webkit-overflow-scrolling:touch')
-    expect(markup).toContain('overscroll-behavior-y:contain')
+    expect(markup).toContain('overscroll-behavior-y:none')
     expect(markup).toContain('touch-action:pan-y')
   })
 

@@ -5,6 +5,7 @@ import type {
 } from "@jait/shared";
 import { ComputerControlSessionService } from "../services/computer-control.js";
 import type { WsControlPlane } from "../ws.js";
+import type { ScreenShareService } from "@jait/screen-share";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 
 interface ComputerSessionInput {
@@ -116,7 +117,14 @@ function validateActInput(input: ComputerActInput): string | null {
 export function createComputerTools(
   ws: WsControlPlane,
   sessions = new ComputerControlSessionService(),
+  screenShare?: ScreenShareService,
 ): ToolDefinition[] {
+  const requireAgentControl = (nodeId: string, chatId: string) => {
+    const shares = screenShare?.getSessionsForNode(nodeId) ?? [];
+    if (shares.some(share => share.chatId !== chatId || share.controlOwner !== "agent" || share.pendingApproval || share.status !== "sharing")) {
+      throw new Error("The shared computer is not in this chat's agent control mode.");
+    }
+  };
   const targetsTool: ToolDefinition<Record<string, never>> = {
     name: "computer.targets",
     displayName: "List Computers",
@@ -189,6 +197,7 @@ export function createComputerTools(
         let session: ComputerControlSession | undefined;
         try {
           const target = selectTarget(ws, input.nodeId);
+          requireAgentControl(target.nodeId, context.sessionId);
           session = sessions.start(context.sessionId, target.nodeId);
           const remote = asRemoteToolResult(await ws.proxyToolOp(
             target.nodeId,
@@ -318,6 +327,7 @@ export function createComputerTools(
       if (validationError) return { ok: false, message: validationError };
       try {
         const session = sessions.requireOwned(input.sessionId, context.sessionId);
+        requireAgentControl(session.nodeId, context.sessionId);
         return asRemoteToolResult(await ws.proxyToolOp(
           session.nodeId,
           "computer.act",

@@ -23,7 +23,7 @@ function isProjectImagePath(value: string): boolean {
   )
 }
 
-export function resolveChatImageUrl(src: string, apiUrl = getApiUrl()): string | null {
+export function resolveChatImageUrl(src: string, apiUrl = getApiUrl(), sessionId?: string | null): string | null {
   const trimmed = src.trim()
   if (!trimmed) return null
 
@@ -44,7 +44,7 @@ export function resolveChatImageUrl(src: string, apiUrl = getApiUrl()): string |
   }
 
   if (isProjectImagePath(trimmed)) {
-    return `${apiUrl}/api/browser/screenshot?path=${encodeURIComponent(trimmed)}`
+    return `${apiUrl}/api/browser/screenshot?path=${encodeURIComponent(trimmed)}${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ''}`
   }
 
   return null

@@ -1,0 +1,451 @@
+{
+  "format": 1,
+  "latest": 77,
+  "migrations": [
+    {
+      "id": 1,
+      "name": "baseline_schema"
+    },
+    {
+      "id": 2,
+      "name": "legacy_column_additions"
+    },
+    {
+      "id": 3,
+      "name": "user_settings_disabled_tools"
+    },
+    {
+      "id": 4,
+      "name": "session_state_table"
+    },
+    {
+      "id": 5,
+      "name": "user_settings_stt_provider"
+    },
+    {
+      "id": 6,
+      "name": "messages_segments_column"
+    },
+    {
+      "id": 7,
+      "name": "agent_threads_tables"
+    },
+    {
+      "id": 8,
+      "name": "user_settings_chat_provider"
+    },
+    {
+      "id": 9,
+      "name": "agent_threads_pr_metadata"
+    },
+    {
+      "id": 10,
+      "name": "automation_repositories_table"
+    },
+    {
+      "id": 11,
+      "name": "automation_repositories_device_id"
+    },
+    {
+      "id": 12,
+      "name": "automation_repositories_github_url"
+    },
+    {
+      "id": 13,
+      "name": "agent_threads_kind"
+    },
+    {
+      "id": 14,
+      "name": "automation_plans_table"
+    },
+    {
+      "id": 15,
+      "name": "network_hosts_table"
+    },
+    {
+      "id": 16,
+      "name": "scheduled_job_runs_table"
+    },
+    {
+      "id": 17,
+      "name": "agent_threads_execution_node"
+    },
+    {
+      "id": 18,
+      "name": "user_settings_workspace_picker_location"
+    },
+    {
+      "id": 19,
+      "name": "automation_repositories_strategy"
+    },
+    {
+      "id": 20,
+      "name": "architecture_diagrams_table"
+    },
+    {
+      "id": 21,
+      "name": "workspaces_and_workspace_state"
+    },
+    {
+      "id": 22,
+      "name": "user_settings_jait_backend"
+    },
+    {
+      "id": 23,
+      "name": "assistant_profiles_table"
+    },
+    {
+      "id": 24,
+      "name": "browser_collaboration_tables"
+    },
+    {
+      "id": 25,
+      "name": "plugins_table"
+    },
+    {
+      "id": 26,
+      "name": "messages_context_flow_column"
+    },
+    {
+      "id": 27,
+      "name": "agent_threads_pr_base_branch"
+    },
+    {
+      "id": 28,
+      "name": "agent_threads_skill_ids"
+    },
+    {
+      "id": 29,
+      "name": "messages_thinking_column"
+    },
+    {
+      "id": 30,
+      "name": "agent_threads_routing_plan"
+    },
+    {
+      "id": 31,
+      "name": "agent_threads_diff_stats"
+    },
+    {
+      "id": 32,
+      "name": "automation_repo_proposals_table"
+    },
+    {
+      "id": 33,
+      "name": "automation_repo_proposals_todo_metadata"
+    },
+    {
+      "id": 34,
+      "name": "reminders_table"
+    },
+    {
+      "id": 35,
+      "name": "automation_repo_proposals_completion_history"
+    },
+    {
+      "id": 36,
+      "name": "user_secrets_table"
+    },
+    {
+      "id": 37,
+      "name": "rename_workspace_to_project"
+    },
+    {
+      "id": 38,
+      "name": "reminders_usage_metadata"
+    },
+    {
+      "id": 39,
+      "name": "session_search_fts"
+    },
+    {
+      "id": 40,
+      "name": "channels_table"
+    },
+    {
+      "id": 41,
+      "name": "email_accounts_table"
+    },
+    {
+      "id": 42,
+      "name": "user_settings_reasoning_effort"
+    },
+    {
+      "id": 43,
+      "name": "provider_accounts"
+    },
+    {
+      "id": 44,
+      "name": "provider_accounts_node_scope"
+    },
+    {
+      "id": 45,
+      "name": "provider_usage"
+    },
+    {
+      "id": 46,
+      "name": "user_settings_last_selected"
+    },
+    {
+      "id": 47,
+      "name": "code_graph_indexes"
+    },
+    {
+      "id": 48,
+      "name": "calendar_accounts_table"
+    },
+    {
+      "id": 49,
+      "name": "device_calendar_snapshots"
+    },
+    {
+      "id": 50,
+      "name": "mobile_push_registrations"
+    },
+    {
+      "id": 51,
+      "name": "sessions_viewed_at"
+    },
+    {
+      "id": 52,
+      "name": "message_context_metadata"
+    },
+    {
+      "id": 53,
+      "name": "project_folders"
+    },
+    {
+      "id": 54,
+      "name": "memories_drop_embedding"
+    },
+    {
+      "id": 55,
+      "name": "agent_threads_reasoning_effort"
+    },
+    {
+      "id": 56,
+      "name": "memories_restore_legacy_embedding"
+    },
+    {
+      "id": 57,
+      "name": "session_search_filter_activity_noise"
+    },
+    {
+      "id": 58,
+      "name": "database_retention_indexes"
+    },
+    {
+      "id": 59,
+      "name": "node_permissions_tables"
+    },
+    {
+      "id": 60,
+      "name": "sub_agent_history"
+    },
+    {
+      "id": 61,
+      "name": "session_events_table"
+    },
+    {
+      "id": 62,
+      "name": "automation_repositories_unique_path"
+    },
+    {
+      "id": 63,
+      "name": "sessions_status_index"
+    },
+    {
+      "id": 64,
+      "name": "user_settings_chat_streaming_action"
+    },
+    {
+      "id": 65,
+      "name": "persona_agents_and_thread_link"
+    },
+    {
+      "id": 66,
+      "name": "control_identity_and_invitations"
+    },
+    {
+      "id": 67,
+      "name": "security_tcp_assessment_records"
+    },
+    {
+      "id": 68,
+      "name": "security_workbench_evidence_findings"
+    },
+    {
+      "id": 69,
+      "name": "persistent_team_rooms"
+    },
+    {
+      "id": 70,
+      "name": "thread_restart_recovery"
+    },
+    {
+      "id": 71,
+      "name": "chat_persona_attribution"
+    },
+    {
+      "id": 72,
+      "name": "multiple_team_chats"
+    },
+    {
+      "id": 73,
+      "name": "chat_streaming_action_defaults_to_queue"
+    },
+    {
+      "id": 74,
+      "name": "agent_github_apps"
+    },
+    {
+      "id": 75,
+      "name": "agent_control_hard_stop"
+    },
+    {
+      "id": 76,
+      "name": "browser_workflows"
+    },
+    {
+      "id": 77,
+      "name": "github_intake_observation"
+    }
+  ],
+  "sourceSha256": {
+    "packages/gateway/src/db/migrations.ts": "7292f264b29566edbe8dae1862fef4a93ba4b9d349a25ad7f86b94cb6158943d",
+    "packages/gateway/src/db/connection.ts": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
+    "packages/gateway/src/db/sqlite-shim.ts": "910cc9a8d0448693e9a5e147f3af3e0fb61f65db1e0f175709147320cad44ba3"
+  },
+  "prefixCoverage": {
+    "first": 0,
+    "last": 77,
+    "classification": "synthetic current-definition prefixes, not archived released databases",
+    "skippedPrefixes": []
+  },
+  "artifactRoot": ".jait/artifacts/rust-continuation/recovery/",
+  "requiredTables": [
+    "sessions",
+    "messages",
+    "memories",
+    "audit_log",
+    "scheduled_jobs",
+    "user_settings",
+    "agent_threads",
+    "session_state",
+    "security_findings",
+    "thread_recovery",
+    "agent_control",
+    "message_context_metadata"
+  ],
+  "requiredIndexes": [
+    "idx_messages_session",
+    "idx_memories_scope",
+    "idx_scheduled_jobs_enabled",
+    "idx_agent_github_app_agent"
+  ],
+  "rollbackPolicy": {
+    "supported": "quiesce all writers; restore a pre-upgrade SQLite snapshot to a fresh database path and run the matching old application version",
+    "unsupported": [
+      "in-place down migrations",
+      "old and new gateways writing the same database",
+      "binary-only downgrade on an upgraded database",
+      "merging post-upgrade writes into an old snapshot"
+    ],
+    "cutoverGate": "Keep cutover blocked for an irreversible/data-transforming migration until its pre-upgrade snapshot restoration and retained-domain checks pass. This corpus is evidence, not a production deployment enforcer."
+  },
+  "gaps": [
+    "No archived release binaries or databases; current source definitions only",
+    "Representative payload retention, not all persisted domain semantics",
+    "No real accounts, credentials, model/provider calls, job execution or network state",
+    "Linux Bun SQLite only; no Node adapter or other OS/filesystem matrix",
+    "SIGKILL process crash only; no host power loss, torn writes or disk-full simulation",
+    "No backup encryption, online backup API, restore service orchestration or production cutover enforcement",
+    "Schema comparison uses fresh current migration output as reference, supplemented by named table/index and FK assertions; not an independent full schema specification",
+    "Only message-context FK has rejection/cascade behavior assertions; calendar FK receives structural and foreign_key_check coverage only"
+  ],
+  "tableCoverage": {
+    "_migrations": "migration-ledger",
+    "account_invitations": "structural-only",
+    "agent_control": "representative-payload-retention",
+    "agent_github_apps": "structural-only",
+    "agent_thread_activities": "structural-only",
+    "agent_thread_activities_fts": "structural-only",
+    "agent_thread_activities_fts_config": "structural-only",
+    "agent_thread_activities_fts_content": "structural-only",
+    "agent_thread_activities_fts_data": "structural-only",
+    "agent_thread_activities_fts_docsize": "structural-only",
+    "agent_thread_activities_fts_idx": "structural-only",
+    "agent_threads": "representative-payload-retention",
+    "architecture_diagrams": "structural-only",
+    "assistant_profiles": "structural-only",
+    "audit_log": "representative-payload-retention",
+    "automation_plans": "structural-only",
+    "automation_repo_proposals": "structural-only",
+    "automation_repositories": "structural-only",
+    "browser_interventions": "structural-only",
+    "browser_sessions": "structural-only",
+    "browser_workflow_runs": "structural-only",
+    "browser_workflows": "structural-only",
+    "calendar_accounts": "structural-only",
+    "channels": "structural-only",
+    "code_graph_indexes": "structural-only",
+    "consent_log": "structural-only",
+    "consent_session_approvals": "structural-only",
+    "device_calendar_snapshots": "structural-only",
+    "email_accounts": "structural-only",
+    "github_intake_decisions": "structural-only",
+    "github_intake_policies": "structural-only",
+    "memories": "representative-payload-retention",
+    "message_context_metadata": "FK-behavior",
+    "messages": "representative-payload-retention",
+    "messages_fts": "structural-only",
+    "messages_fts_config": "structural-only",
+    "messages_fts_content": "structural-only",
+    "messages_fts_data": "structural-only",
+    "messages_fts_docsize": "structural-only",
+    "messages_fts_idx": "structural-only",
+    "mobile_push_registrations": "structural-only",
+    "network_hosts": "structural-only",
+    "node_credentials": "structural-only",
+    "node_permissions": "structural-only",
+    "nodes": "structural-only",
+    "persona_agents": "structural-only",
+    "plugins": "structural-only",
+    "project_state": "structural-only",
+    "projects": "structural-only",
+    "provider_accounts": "structural-only",
+    "provider_usage": "structural-only",
+    "reminders": "structural-only",
+    "scheduled_job_runs": "structural-only",
+    "scheduled_jobs": "representative-payload-retention",
+    "security_artifacts": "structural-only",
+    "security_assessment_runs": "structural-only",
+    "security_check_runs": "structural-only",
+    "security_findings": "representative-payload-retention",
+    "security_scopes": "structural-only",
+    "session_events": "structural-only",
+    "session_state": "representative-payload-retention",
+    "sessions": "representative-payload-retention",
+    "sub_agent_history": "structural-only",
+    "team_room_deliveries": "structural-only",
+    "team_room_messages": "structural-only",
+    "team_rooms": "structural-only",
+    "thread_recovery": "representative-payload-retention",
+    "trust_levels": "structural-only",
+    "user_secrets": "structural-only",
+    "user_settings": "representative-payload-retention",
+    "users": "structural-only"
+  },
+  "dataTransformations": [
+    {
+      "migration": 54,
+      "effect": "Drops legacy memory embedding values; content and provenance retained; migration 56 restores column with empty-object default, not original values",
+      "recovery": "Pre-upgrade snapshot restores exact original embedding; explicitly asserted for all eligible prefixes"
+    },
+    {
+      "migration": 73,
+      "effect": "Normalizes steer settings to queue; corpus asserts retained dark theme and resulting queue setting",
+      "gap": "Explicit thread selection and additional settings combinations not exercised"
+    }
+  ]
+}

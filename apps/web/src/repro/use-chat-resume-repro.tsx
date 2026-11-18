@@ -9,6 +9,8 @@ const failFirstSnapshot = search.has('stall-first')
 const failFirstTwoStreams = search.has('fail-first-two')
 const stallAfterSnapshot = search.has('stall-after-snapshot')
 const initialDirect = search.has('stall-initial-direct')
+const earlyStart = search.has('early-start')
+let eventController: ReadableStreamDefaultController<Uint8Array> | undefined
 const counters = { streams: 0, snapshots: 0, direct: 0, times: [] as number[] }
 Object.assign(window, { __resumeStreamFetchTimes: counters.times })
 if (failFirstTwoStreams) Math.random = () => 0
@@ -37,6 +39,7 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     let heartbeat: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        eventController = controller
         controller.enqueue(encoder.encode(': keepalive\n\n'))
         if (!stallAfterSnapshot || counters.streams > 1) heartbeat = setInterval(() => controller.enqueue(encoder.encode(': keepalive\n\n')), 1000)
         init?.signal?.addEventListener('abort', () => {
@@ -44,9 +47,19 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
           try { controller.error(new DOMException('Aborted', 'AbortError')) } catch { /* already closed */ }
         }, { once: true })
       },
-      cancel() { clearInterval(heartbeat) },
+      cancel() { eventController = undefined; clearInterval(heartbeat) },
     })
     return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
+  }
+  if (earlyStart && url.includes('/api/chat')) {
+    counters.direct += 1
+    // A replay from a previous turn can arrive while the POST is pending.
+    eventController?.enqueue(encoder.encode('id: 1\ndata: {"type":"request","content":"old prompt","replay":true}\n\n'))
+    eventController?.enqueue(encoder.encode('id: 2\ndata: {"type":"request","content":"race prompt"}\n\n'))
+    // The start reaches the subscription while the POST has no response yet.
+    return new Promise(resolve => setTimeout(() => {
+      resolve(new Response('', { headers: { 'Content-Type': 'text/event-stream' } }))
+    }, 500))
   }
   if (initialDirect && url.includes('/api/chat')) {
     counters.direct += 1
@@ -77,6 +90,7 @@ function UseChatResumeRepro() {
   }, [])
   return <main className="mx-auto max-w-xl p-6">
     <h1 className="mb-4 text-xl font-semibold">useChat Resume Repro</h1>
+    {earlyStart && <button onClick={() => { void chat.sendMessage('race prompt') }}>Send race prompt</button>}
     <dl className="space-y-2 text-sm">
       <dd data-testid="stream-fetch-count">{counters.streams}</dd>
       <dd data-testid="snapshot-fetch-count">{counters.snapshots}</dd>
@@ -84,6 +98,8 @@ function UseChatResumeRepro() {
       <dd data-testid="loading">{String(chat.isLoading)}</dd>
       <dd data-testid="history-loading">{String(chat.isLoadingHistory)}</dd>
       <dd data-testid="message-count">{chat.messages.length}</dd>
+      <dd data-testid="race-user-count">{chat.messages.filter(message => message.role === 'user' && message.content === 'race prompt').length}</dd>
+      <dd data-testid="race-send-state">{chat.messages.find(message => message.role === 'user' && message.content === 'race prompt')?.sendState ?? ''}</dd>
       <dd data-testid="assistant-content">{chat.messages.find(message => message.role === 'assistant')?.content ?? ''}</dd>
     </dl>
   </main>

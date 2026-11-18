@@ -1,0 +1,44 @@
+{
+  "review_scope": "parity-objects bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/security/consent-executor.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Reviewed requires approval before executing $name. All table variants match their original inputs, callback bindings, body, setup, hooks and assertion operands. Primitive or data fields read from a literal object table are resolved only through the bound callback parameter; the object cannot escape through an alias, be called as a method, or be assigned/deleted/updated through a direct or nested property access. Eight binding controls distinguish changed table values and reject aliases, writes, deletion, increment, method calls and nested writes. The five input-table/peer-binding/missing-variant controls also pass. Last-call assertions retain the ordered mock history and complete expected argument vector. Every observed value passes the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-objects/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_security_consent_executor_test_ts_88_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_security_consent_executor_test_ts_88_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_security_consent_executor_test_ts_88_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/project-tools.test.ts:71:3",
+      "status": "verified",
+      "parity_review": "Reviewed moves the current chat into the created project (existing project: %s). All table variants match their original inputs, callback bindings, body, setup, hooks and assertion operands. Primitive or data fields read from a literal object table are resolved only through the bound callback parameter; the object cannot escape through an alias, be called as a method, or be assigned/deleted/updated through a direct or nested property access. Eight binding controls distinguish changed table values and reject aliases, writes, deletion, increment, method calls and nested writes. The five input-table/peer-binding/missing-variant controls also pass. Last-call assertions retain the ordered mock history and complete expected argument vector. Every observed value passes the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-objects/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_project_tools_test_ts_71_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_project_tools_test_ts_71_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

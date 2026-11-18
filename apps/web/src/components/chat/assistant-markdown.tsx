@@ -12,9 +12,12 @@ import {
 } from '@/components/ai-elements/code-block'
 import { cn } from '@/lib/utils'
 import { FileIcon } from '@/components/icons/file-icons'
-import { parseProjectLinkTarget } from '@/lib/project-links'
+import { parseInlinePathCandidate, parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
+import { safeNotificationLink } from '@jait/shared'
+import { parseFileDownloadLink } from '@/components/ui/file-download-link'
+import { MessageLink } from '@/components/ui/message-link'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
@@ -217,7 +220,7 @@ function ProjectPathLink({
     <a
       href={href}
       className={cn(
-        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-normal text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       )}
       onClick={(event) => {
         event.preventDefault()
@@ -225,7 +228,7 @@ function ProjectPathLink({
       }}
     >
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[220px] truncate">{fileName}</span>
+      <span className="-my-0.5 max-w-[220px] truncate py-0.5">{fileName}</span>
       {location ? (
         <span className="shrink-0 rounded bg-background/80 px-1 py-0.5 text-2xs text-muted-foreground">
           {location}
@@ -263,35 +266,43 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
         )
       }
 
+      const codeClassName = cn(
+        'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-normal text-foreground',
+        'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
+      )
+      const pathTarget = onOpenPath ? parseInlinePathCandidate(String(children ?? '')) : null
+      if (pathTarget && onOpenPath) {
+        return (
+          <TooltipHint content={`Open ${pathTarget.path}`}>
+            <button
+              type="button"
+              data-chat-path={pathTarget.path}
+              className={cn(codeClassName, 'cursor-pointer items-center gap-1 hover:border-primary/50 hover:bg-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+              onClick={(event) => {
+                event.preventDefault()
+                void onOpenPath(pathTarget.path, pathTarget.line, pathTarget.column)
+              }}
+            >
+              <FileIcon filename={getFileLinkLabel(pathTarget.path)} className="h-3 w-3 shrink-0 self-center" />
+              <span className="-my-0.5 max-w-[32rem] truncate py-0.5 sm:max-w-[40rem]">{children}</span>
+            </button>
+          </TooltipHint>
+        )
+      }
+
       return (
-        <code
-          className={cn(
-            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
-            'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
-          )}
-          {...props}
-        >
-          <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
+        <code className={codeClassName} {...props}>
+          <span className="-my-0.5 max-w-[32rem] truncate py-0.5 sm:max-w-[40rem]">{children}</span>
         </code>
       )
     },
     a: ({ href, ref: _ref, ...props }) => {
-      if (!onOpenPath) {
-        return (
-          <a href={href} {...props}>
-            {props.children}
-          </a>
-        )
-      }
-
-      const target = parseProjectLinkTarget(href)
-      if (!target) {
-        return (
-          <a href={href} {...props}>
-            {props.children}
-          </a>
-        )
-      }
+      if (parseFileDownloadLink(href)) return <MessageLink href={href} {...props} />
+      // Resolve Jait pages before absolute project paths. Web URLs remain web URLs,
+      // even when their pathname ends in a file extension.
+      const target = onOpenPath && !safeNotificationLink(href) && !/^(?:https?:)?\/\//i.test(href ?? '')
+        ? parseProjectLinkTarget(href) : null
+      if (!target || !onOpenPath) return <MessageLink href={href} {...props} />
 
       return <ProjectPathLink href={href} target={target} onOpenPath={onOpenPath} />
     },

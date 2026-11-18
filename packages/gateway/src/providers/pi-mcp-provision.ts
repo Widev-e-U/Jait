@@ -55,11 +55,13 @@ export function provisionPiMcp(
   if (!isPiBasedProvider(providerType)) return null;
   if (!mcpServers?.length) return null;
 
-  const dir = mkdtempSync(join(tmpdir(), `jait-pi-mcp-${opts.sessionId}-`));
-  const configPath = join(dir, "mcp.json");
-  const wrapperPath = join(dir, isWindows() ? "pi-wrapper.cmd" : "pi-wrapper.sh");
-
+  let dir: string | undefined;
+  let wrapperPath: string;
   try {
+    if (/[\/\\\0]/.test(opts.sessionId)) throw new Error("Invalid pi MCP session id");
+    dir = mkdtempSync(join(tmpdir(), `jait-pi-mcp-${opts.sessionId}-`));
+    const configPath = join(dir, "mcp.json");
+    wrapperPath = join(dir, isWindows() ? "pi-wrapper.cmd" : "pi-wrapper.sh");
     writeFileSync(
       configPath,
       `${JSON.stringify({ mcpServers: toPiMcpServers(mcpServers) }, null, 2)}\n`,
@@ -73,7 +75,7 @@ export function provisionPiMcp(
     if (!isWindows()) chmodSync(wrapperPath, 0o755);
   } catch (error) {
     // Best-effort: never fail session startup because provisioning broke.
-    try { rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
+    try { if (dir) rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
     console.warn(`[acp] pi MCP provisioning failed, continuing without Jait tools: ${String(error)}`);
     return null;
   }
@@ -81,13 +83,13 @@ export function provisionPiMcp(
   return {
     env: { PI_ACP_PI_COMMAND: wrapperPath },
     cleanup: () => {
-      try { rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
+      try { if (dir) rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
     },
   };
 }
 
 function toPiMcpServers(servers: McpServerRef[]): Record<string, Record<string, unknown>> {
-  const result: Record<string, Record<string, unknown>> = {};
+  const result: Record<string, Record<string, unknown>> = Object.create(null);
   for (const ref of servers) {
     if (ref.transport === "stdio") {
       result[ref.name] = {
@@ -111,7 +113,12 @@ function buildWrapper(configPath: string, realPi: string): string {
       "",
     ].join("\r\n");
   }
-  return `#!/bin/sh\nexec "${realPi}" --mcp-config "${configPath}" "$@"\n`;
+  return `#!/bin/sh\nexec ${quotePosixArgument(realPi)} --mcp-config ${quotePosixArgument(configPath)} "$@"\n`;
+}
+
+/** Double quotes preserve whitespace; escape the characters still expanded by sh. */
+function quotePosixArgument(value: string): string {
+  return '"' + value.replace(/["\\$\x60]/g, (character) => "\\" + character) + '"';
 }
 
 function isWindows(): boolean {

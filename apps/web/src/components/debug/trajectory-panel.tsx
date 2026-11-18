@@ -1,27 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  X,
-  Trash2,
-  Copy,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Search,
-  ArrowDown,
-  Route,
-  MessageSquareText,
-  Sparkles,
-  Gauge,
-  Wrench,
-  CheckCircle2,
-  AlertCircle,
-  Radio,
-  Terminal,
-  FileText,
-  Globe2,
-  Bot,
-  Clock3,
-} from 'lucide-react'
+import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search, ArrowDown, Route, MessageSquareText, Gauge, Wrench, CheckCircle2, AlertCircle, Radio, Terminal, FileText, Globe2, Bot, Clock3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { clearSSEDebugEvents, useSSEDebugEvents } from './sse-debug-panel'
@@ -59,7 +37,7 @@ export function nextStickToBottom(params: {
   return params.userScrolling ? false : params.stuck
 }
 
-type Role = 'user' | 'assistant' | 'context' | 'tool' | 'done' | 'error'
+type Role = 'user' | 'assistant' | 'context' | 'tool' | 'steering' | 'done' | 'error'
 
 const roleStyles: Record<Role, {
   label: string
@@ -85,6 +63,11 @@ const roleStyles: Record<Role, {
     label: 'Tool',
     iconClass: 'border-amber-500/20 bg-amber-500/10 text-amber-500',
     badgeClass: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  },
+  steering: {
+    label: 'Steering',
+    iconClass: 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-500',
+    badgeClass: 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
   },
   done: {
     label: 'Complete',
@@ -114,9 +97,10 @@ function getToolIcon(tool: string) {
 
 function getStepIcon(step: TrajectoryStep) {
   if (step.kind === 'turn') return MessageSquareText
-  if (step.kind === 'assistant') return Sparkles
+  if (step.kind === 'assistant') return Bot
   if (step.kind === 'context') return Gauge
   if (step.kind === 'tool') return getToolIcon(step.tool)
+  if (step.kind === 'steering') return Radio
   if (step.kind === 'done') return CheckCircle2
   return AlertCircle
 }
@@ -126,6 +110,7 @@ function getStepTitle(step: TrajectoryStep): string {
   if (step.kind === 'assistant') return step.completedAt ? 'Assistant response' : 'Assistant working'
   if (step.kind === 'context') return 'Context window'
   if (step.kind === 'tool') return step.tool
+  if (step.kind === 'steering') return step.hidden ? 'Steering (internal)' : 'Steering'
   if (step.kind === 'done') return 'Turn completed'
   return 'Turn error'
 }
@@ -185,6 +170,26 @@ function StepContent({ step, expanded }: { step: TrajectoryStep; expanded: boole
             <span>{step.result.message.length > 240 ? `${step.result.message.slice(0, 240)}…` : step.result.message}</span>
           </div>
         )}
+      </div>
+    )
+  }
+  if (step.kind === 'steering') {
+    const body = step.displayContent || step.message
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className={cn('text-sm leading-5 text-foreground/90', expanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2')}>
+          {body || <span className="italic text-muted-foreground">(empty steer)</span>}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+          {step.hidden && (
+            <span className="rounded border border-fuchsia-500/20 bg-fuchsia-500/10 px-1.5 py-0.5 font-medium text-fuchsia-600 dark:text-fuchsia-400">
+              internal
+            </span>
+          )}
+          {step.deferred && (
+            <span className="rounded border border-border/60 px-1.5 py-0.5">deferred</span>
+          )}
+        </div>
       </div>
     )
   }
@@ -434,6 +439,13 @@ function stepDetailText(step: TrajectoryStep): string {
         step.sessionId ? `[session] ${step.sessionId}` : '',
         step.promptCount !== undefined ? `[prompt count] ${step.promptCount}` : '',
       ].filter(Boolean).join('\n')
+    case 'steering':
+      return [
+        step.displayContent && step.displayContent !== step.message ? `[display]\n${step.displayContent}` : '',
+        `[message]\n${step.message}`,
+        step.hidden ? '[internal] yes' : '[internal] no',
+        step.deferred ? '[deferred] yes' : '',
+      ].filter(Boolean).join('\n')
     case 'error':
       return step.message
   }
@@ -473,6 +485,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
         case 'context': return 'context usage tokens pruned'.includes(q)
         case 'tool': return s.tool.toLowerCase().includes(q) || s.argsPreview.toLowerCase().includes(q) || (s.result?.message ?? '').toLowerCase().includes(q)
         case 'done': case 'error': return s.message.toLowerCase().includes(q)
+        case 'steering': return `${s.hidden ? 'steering internal hidden defer ' : 'steering '}${s.message} ${s.displayContent ?? ''}`.toLowerCase().includes(q)
       }
     })
   }, [steps, filter])
@@ -560,11 +573,12 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   // events, and the ResizeObserver above keeps the view glued to the bottom as
   // that history lands — so the replayed log never appears from the top and
   // there is no visible scroll-down; the panel simply opens at the end.
+  const ready = sessionId ? sessionTrajectory.loaded : true
   useLayoutEffect(() => {
     stickToBottomRef.current = true
     setShowScrollToBottom(false)
     pinToBottom()
-  }, [sessionId, pinToBottom])
+  }, [sessionId, ready, pinToBottom])
 
   const scrollToBottom = useCallback(() => {
     stickToBottomRef.current = true
@@ -675,7 +689,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
 
       <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/[0.08]" aria-label="Trajectory timeline">
-          <div ref={contentRef} className="mx-auto w-full max-w-4xl p-3 sm:p-4">
+          <div ref={contentRef} className={cn('mx-auto w-full max-w-4xl p-3 sm:p-4', !ready && 'invisible')}>
             {filtered.length === 0 ? (
               <div className="flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card/50 px-6 text-center">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">

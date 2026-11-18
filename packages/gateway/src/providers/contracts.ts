@@ -56,10 +56,11 @@ export interface ProviderSession {
 // ── Events emitted by CLI providers ──────────────────────────────────
 
 export type ProviderEvent =
+  | { type: "usage"; sessionId: string; usage: import("@jait/shared").ModelUsage }
   | { type: "session.started"; sessionId: string }
   | { type: "session.completed"; sessionId: string }
   | { type: "session.error"; sessionId: string; error: string }
-  | { type: "turn.started"; sessionId: string }
+  | { type: "turn.started"; sessionId: string; turnId?: string }
   | { type: "turn.completed"; sessionId: string }
   | { type: "token"; sessionId: string; content: string }
   | { type: "thinking"; sessionId: string; content: string }
@@ -75,6 +76,9 @@ export type ProviderEvent =
   | { type: "content_rollback"; sessionId: string; contentLength: number; segments: number };
 
 // ── Provider interface ───────────────────────────────────────────────
+
+/** Uploaded image bytes travel with the turn, including across remote nodes. */
+export type ProviderTurnAttachment = string | { name: string; mimeType: string; data: string };
 
 export interface CliProviderAdapter {
   readonly id: ProviderId;
@@ -130,7 +134,13 @@ export interface CliProviderAdapter {
   /**
    * Send a user message / turn to an active session.
    */
-  sendTurn(sessionId: string, message: string, attachments?: string[]): Promise<void>;
+  sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void>;
+
+  /**
+   * Deliver to the running turn. False leaves the message queued for a follow-up.
+   * Native Jait callers may pin delivery to the id from turn.started.
+   */
+  steerTurn?(sessionId: string, message: string, expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean>;
 
   /**
    * Interrupt the current turn in a session.
@@ -146,6 +156,9 @@ export interface CliProviderAdapter {
    * Stop a session and kill the provider process.
    */
   stopSession(sessionId: string): Promise<void>;
+
+  /** Whether a retained local process still exists (idle sessions may expire). */
+  hasSession?(sessionId: string): boolean;
 
   /**
    * Subscribe to events from this provider.

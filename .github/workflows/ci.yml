@@ -29,6 +29,12 @@ jobs:
       - name: Release version source check
         run: bun run release:check
 
+      - name: Release workflow regression tests
+        run: node --test .github/scripts/*.test.mjs
+
+      - name: Local deployment guard tests
+        run: node --test scripts/local-deploy.test.mjs
+
       - name: Typecheck
         run: bun run typecheck
 
@@ -75,3 +81,28 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Install web smoke test runtime
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.jait/artifacts/playwright-browsers
+        run: |
+          npm --prefix tests/e2e ci
+          node tests/e2e/node_modules/playwright/cli.js install chromium
+
+      - name: Test core workflows in the web app
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.jait/artifacts/playwright-browsers
+        run: node tests/e2e/scripts/run-isolated.mjs bun run test:smoke
+
+      - name: Upload web test evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-smoke-evidence
+          path: |
+            .jait/artifacts/playwright-results
+            .jait/artifacts/playwright-report
+            .jait/artifacts/playwright-shards/**/playwright-results
+            .jait/artifacts/playwright-shards/**/playwright-report
+            .jait/artifacts/playwright-shards/**/summary.json
+          retention-days: 7

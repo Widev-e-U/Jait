@@ -71,6 +71,7 @@ test('normal chat addresses a saved agent, streams its identity, cancels and res
   })
   await page.goto('/agents', { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Open Captain Standup', exact: true }).click()
+  await page.getByRole('button', { name: 'Chat', exact: true }).click()
   await page.locator('[data-testid="chat-composer"] [contenteditable="true"]').fill('Status please')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => posted?.personaAgentId).toBe(id)

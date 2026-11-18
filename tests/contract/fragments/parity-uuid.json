@@ -1,0 +1,101 @@
+{
+  "review_scope": "8 individually reviewed uuidv7/newActionId declarations; independent AST and execution-trace checks",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:19:3",
+      "status": "verified",
+      "parity_review": "One exact positive toMatch against the full UUIDv7 hex layout, applied to 100 generated values. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_19_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "One exact primitive-string equality: the first hex character of the third group must be 7 across 100 generated values. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_25_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:32:3",
+      "status": "verified",
+      "parity_review": "One positive containment check: the first hex character of the fourth group must fall in 89ab (variant bits 10) across 100 generated values. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_32_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "One positive equality between the decoded 48-bit timestamp prefix and Date.now pinned to a fixed instant. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_40_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:48:3",
+      "status": "verified",
+      "parity_review": "Three assertion sites remain mandatory: the decoded timestamp equals the mocked now for 50 consecutive values, each next value differs from the previous (not.toBe), and an earlier decoded timestamp is strictly less than a later one. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_48_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:68:3",
+      "status": "verified",
+      "parity_review": "One positive equality: the collected set size equals 20000 distinct values, proving uniqueness across many calls. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_68_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:77:3",
+      "status": "verified",
+      "parity_review": "Two assertion sites remain mandatory: uuidv7() must not throw when Date.now returns a pre-epoch value (not.toThrow on the invocation), and its output still matches the UUIDv7 hex layout. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_77_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/uuidv7.test.ts:85:3",
+      "status": "verified",
+      "parity_review": "Two assertion sites remain mandatory: newActionId() matches the UUIDv7 hex layout, and two calls differ (not.toBe). Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_uuidv7_test_ts_85_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    }
+  ]
+}

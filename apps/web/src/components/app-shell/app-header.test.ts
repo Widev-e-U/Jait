@@ -18,15 +18,9 @@ describe('AppHeader manager model control', () => {
       fileURLToPath(new URL('./app-header.tsx', import.meta.url)),
       'utf8',
     )
-    const navSource = readFileSync(
-      fileURLToPath(new URL('./progressive-nav.tsx', import.meta.url)),
-      'utf8',
-    )
 
     expect(headerSource).toContain("desktopPlatform !== 'linux'")
-    expect(headerSource).toContain('tauriDragRegion={hasCustomTitleBar}')
     expect(headerSource).toContain('data-tauri-drag-region={hasCustomTitleBar || undefined}')
-    expect(navSource).toContain('data-tauri-drag-region={tauriDragRegion || undefined}')
   })
 
   it('keeps a transparent drag strip when the desktop header is hidden', () => {

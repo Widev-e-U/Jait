@@ -202,7 +202,12 @@ public class AgentOverlayPlugin extends Plugin {
         ChatNotifications.show(getContext(), id, call.getString("title", "Jait"),
             call.getString("body", ""), call.getString("replaceId", id),
             call.getString("link", "/chat"), call.getString("scope", NotificationNavigation.scope(getContext())),
-            call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")));
+            call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")), call.getString("markReadLink", null));
+        if (Boolean.TRUE.equals(call.getBoolean("imageAvailable", false))) {
+            String cardId = call.getString("replaceId", id);
+            NotificationImage.fetch(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
+                id, call.getString("roomId", ""), call.getString("eventId", ""));
+        }
         call.resolve();
     }
 
@@ -241,7 +246,9 @@ public class AgentOverlayPlugin extends Plugin {
     @PluginMethod
     public void cancelNotification(PluginCall call) {
         String id = call.getString("id", "");
-        ((NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE)).cancel(id, 0);
+        String eventId = call.getString("eventId", "");
+        if (!eventId.isEmpty()) ChatNotifications.clear(getContext(), id, eventId);
+        else ChatNotifications.cancel(getContext(), id);
         call.resolve();
     }
 

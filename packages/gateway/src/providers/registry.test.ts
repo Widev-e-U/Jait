@@ -28,6 +28,19 @@ describe("ProviderRegistry", () => {
     }
   });
 
+  it("binds personal chat tools to their own chat without a project root", () => {
+    delete process.env.JAIT_OMNIROUTE_MCP;
+    const registry = new ProviderRegistry();
+    const personal = registry.buildJaitMcpServerRefs({ host: "127.0.0.1", port: 8000 }, undefined, { sessionId: "personal-chat" });
+    registry.buildJaitMcpServerRefs({ host: "127.0.0.1", port: 8000 }, undefined, { sessionId: "other-chat", projectRoot: "/project" });
+    expect(personal).toHaveLength(2);
+    for (const ref of personal) {
+      const url = new URL(ref.url!);
+      expect(url.searchParams.get("sessionId")).toBe("personal-chat");
+      expect(url.searchParams.has("projectRoot")).toBe(false);
+    }
+  });
+
   it("does not grant full access when no mode is supplied", () => {
     const ref = new ProviderRegistry().buildJaitMcpServerRef({ host: "127.0.0.1", port: 8000 });
     expect(new URL(ref.url!).searchParams.has("runtimeMode")).toBe(false);

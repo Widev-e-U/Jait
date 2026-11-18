@@ -58,7 +58,8 @@ export interface AttentionItem {
    */
   detail?: Record<string, unknown>;
   createdAt: string;
-  expiresAt: string;
+  /** Null for questions that wait until answered or cancelled. */
+  expiresAt: string | null;
 }
 
 /** Reason an item stopped needing attention — clients may show it or stay silent. */

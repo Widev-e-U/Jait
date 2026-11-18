@@ -1,0 +1,149 @@
+[
+  {
+    "name": "security.scope.create",
+    "displayName": "Authorize assessment targets",
+    "description": "Record explicit authorized IPv4 targets, excluded IPs, selected TCP ports and expiry (within one hour). Gateway-only TCP connection checks, up to 16 targets and 16 ports. Requires the operator's authorization.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "medium",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Explicit operator-authorized IPv4 addresses; no inferred authorization"
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "ISO timestamp, within the next hour"
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Explicit allowed methods: tcp, tls, http, https, ssh, host-audit, nmap, nuclei, trivy, telemetry"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Project-relative file/directory targets for software scans or telemetry import"
+        },
+        "serverNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed TLS SNI/identity names (no DNS resolution)"
+        },
+        "sshUsernames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed SSH users for read-only authenticated host audit"
+        },
+        "authorized": {
+          "type": "boolean",
+          "description": "True only after operator authorization for these exact targets and methods"
+        }
+      },
+      "required": [
+        "targets",
+        "exclusions",
+        "ports",
+        "expiresAt",
+        "authorized"
+      ]
+    }
+  },
+  {
+    "name": "security.services.scan",
+    "displayName": "Check authorized TCP services",
+    "description": "Run bounded TCP connections for an existing authorized scope. No DNS, banners, HTTP requests, redirects, scripts or credential testing. Open ports are observations, not vulnerabilities. Records evidence, time and coverage.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "low",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "scopeId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scopeId"
+      ]
+    }
+  },
+  {
+    "name": "security.assessments.list",
+    "displayName": "Review assessment evidence",
+    "description": "Review your recent assessment scopes, TCP observations, evidence IDs and coverage gaps.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "security.assessments.get",
+    "displayName": "Inspect assessment evidence",
+    "description": "Get a single assessment's bounded TCP evidence, authorization scope, gateway vantage, engine version and coverage gaps.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "runId"
+      ]
+    }
+  },
+  {
+    "name": "security.assessments.cancel",
+    "displayName": "Stop service checks",
+    "description": "Cancel your running gateway TCP assessment and retain partial evidence.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "runId"
+      ]
+    }
+  }
+]

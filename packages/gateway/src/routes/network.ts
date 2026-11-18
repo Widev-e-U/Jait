@@ -13,6 +13,7 @@ import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-too
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { createRequire } from "node:module";
+import { DockerResourceInventory } from '../services/network-resources.js';
 import { scanNetwork } from "../lib/network-scan.js";
 import type { SecretInputService } from "../services/secret-input.js";
 
@@ -693,6 +694,8 @@ function readHostsFromDb(sqlite: SqliteDatabase): { hosts: NetworkHost[]; scanne
 // In-memory node registry (gateway mesh)
 // ---------------------------------------------------------------------------
 
+const dockerInventory = new DockerResourceInventory();
+
 const knownNodes = new Map<string, GatewayNode>();
 
 // ---------------------------------------------------------------------------
@@ -1023,7 +1026,9 @@ export function registerNetworkRoutes(
   // ---- GET /api/network/topology — unified graph data for the force-graph visualization ----
   app.get("/api/network/topology", async () => {
     // Gateway node — cached, refreshed every 5 min
-    const gatewayNode = await getGatewayNode(providerRegistry);
+    const [gatewayNode, inventory] = await Promise.all([getGatewayNode(providerRegistry), dockerInventory.get()]);
+    const localIps = new Set(Object.values(networkInterfaces()).flatMap(entries => (entries ?? []).map(entry => entry.address)));
+    const containerIps = new Set(inventory.resources.flatMap(resource => resource.addresses));
 
     // Connected FsNode devices
     const connectedDevices = (ws?.getFsNodes() ?? []).filter(n => !n.isGateway).map(n => ({
@@ -1049,7 +1054,7 @@ export function registerNetworkRoutes(
     }
 
     const routerIp = scan?.routerIp ?? null;
-    const scannedHosts = hostSource.map(h => ({
+    const scannedHosts = hostSource.filter(h => !localIps.has(h.ip) && !containerIps.has(h.ip)).map(h => ({
       id: `host-${h.ip}`,
       type: "host" as const,
       name: h.isRouter || h.ip === routerIp ? (h.hostname ?? "Router") : (h.hostname ?? h.ip),
@@ -1081,6 +1086,8 @@ export function registerNetworkRoutes(
       devices: connectedDevices,
       hosts: scannedHosts,
       meshNodes,
+      resources: inventory.resources,
+      inventory: { status: inventory.status, truncated: inventory.truncated ?? false },
       routerIp,
       scannedAt,
     };

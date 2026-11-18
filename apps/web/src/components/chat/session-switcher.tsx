@@ -6,7 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipHint } from '@/components/ui/tooltip'
 import type { ProjectSession } from '@/hooks/useProjects'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { parseSessionChatError } from '@/lib/session-chat-selection'
@@ -128,14 +128,15 @@ export function SessionSwitcher({
                           </span>
                           <SessionChatIcon metadata={session.metadata} />
                           {chatError && (
-                            <span
-                              role="img"
-                              aria-label="Last reply failed"
-                              className="inline-flex h-3 w-3 shrink-0 items-center justify-center"
-                              title={`Last reply failed: ${chatError.message}`}
-                            >
-                              <MessageSquareX className="h-3 w-3 text-destructive" />
-                            </span>
+                            <TooltipHint content={`Last reply failed: ${chatError.message}`}>
+                              <span
+                                role="img"
+                                aria-label="Last reply failed"
+                                className="inline-flex h-3 w-3 shrink-0 items-center justify-center"
+                              >
+                                <MessageSquareX className="h-3 w-3 text-destructive" />
+                              </span>
+                            </TooltipHint>
                           )}
                           {session.status === 'archived' && (
                             <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-2xs text-muted-foreground">

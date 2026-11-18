@@ -20,6 +20,25 @@ function mockFetchOnce(body: unknown, init: { ok?: boolean; status?: number } = 
   return fetchMock;
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/**
+ * Install a fetch mock that answers per URL (and optionally per HTTP method),
+ * so a single test can exercise the local daemon and the cloud catalogue.
+ */
+function mockFetchRoutes(
+  handler: (url: string, init?: RequestInit) => Response,
+): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => handler(String(input), init));
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  return fetchMock;
+}
+
 beforeEach(() => {
   resetModelFetcherCaches();
 });
@@ -310,5 +329,93 @@ describe("fetchOllamaModels", () => {
     const result = await fetchOllamaModels("http://b:11434");
     expect(fetchMock2).toHaveBeenCalledTimes(1);
     expect(result.map((m) => m.id)).toEqual(["b"]);
+  });
+
+  it("merges the hosted cloud catalogue for a signed-in daemon", async () => {
+    mockFetchRoutes((url) => {
+      if (url.endsWith("/api/me")) return jsonResponse({ plan: "pro", email: "a@b.c" });
+      if (url === "https://ollama.com/api/tags") {
+        return jsonResponse({
+          models: [
+            { name: "llama3:8b-cloud", capabilities: ["completion", "tools"] },
+            { name: "gpt-oss:120b", capabilities: ["completion"] },
+            { name: "kimi-k2:1t-cloud", capabilities: ["completion", "thinking"] },
+          ],
+        });
+      }
+      return jsonResponse({
+        models: [{ name: "llama3:8b", details: { family: "llama", parameter_size: "8B" } }],
+      });
+    });
+
+    const models = await fetchOllamaModels("http://localhost:11434", { includeCloud: true });
+    const ids = models.map((m) => m.id);
+
+    expect(ids[0]).toBe("llama3:8b");
+    // The locally pulled cloud tag suppresses the bare hosted duplicate.
+    expect(ids).not.toContain("llama3:8b-cloud");
+    expect(ids).toEqual(["llama3:8b", "gpt-oss:120b", "kimi-k2:1t-cloud"]);
+    expect(models[0].group).toBeUndefined();
+    expect(models[1]).toMatchObject({ group: "Ollama Cloud" });
+    expect(models[2].description).toBe("thinking");
+  });
+
+  it("skips the hosted catalogue when the daemon is signed out", async () => {
+    const fetchMock = mockFetchRoutes((url) => {
+      if (url.endsWith("/api/me")) return jsonResponse({ error: "unauthorized" }, 401);
+      if (url === "https://ollama.com/api/tags") throw new Error("must not be called");
+      return jsonResponse({ models: [{ name: "llama3:8b" }] });
+    });
+
+    const models = await fetchOllamaModels("http://localhost:11434", { includeCloud: true });
+
+    expect(models.map((m) => m.id)).toEqual(["llama3:8b"]);
+    expect(fetchMock).not.toHaveBeenCalledWith("https://ollama.com/api/tags", expect.anything());
+  });
+
+  it("does not probe the cloud catalogue unless asked to", async () => {
+    const fetchMock = mockFetchRoutes((url) => {
+      if (url === "https://ollama.com/api/tags") throw new Error("must not be called");
+      if (url.endsWith("/api/me")) throw new Error("must not be called");
+      return jsonResponse({ models: [{ name: "llama3:8b" }] });
+    });
+
+    await fetchOllamaModels("http://localhost:11434");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:11434/api/tags", expect.anything());
+  });
+
+  it("caches the cloud catalogue until force is set", async () => {
+    let cloudCalls = 0;
+    const fetchMock = mockFetchRoutes((url) => {
+      if (url.endsWith("/api/me")) return jsonResponse({ plan: "pro" });
+      if (url === "https://ollama.com/api/tags") {
+        cloudCalls += 1;
+        return jsonResponse({ models: [{ name: "gpt-oss:120b" }] });
+      }
+      return jsonResponse({ models: [{ name: "llama3:8b" }] });
+    });
+
+    await fetchOllamaModels("http://localhost:11434", { includeCloud: true });
+    await fetchOllamaModels("http://localhost:11434", { includeCloud: true });
+    expect(cloudCalls).toBe(1);
+
+    const forced = await fetchOllamaModels("http://localhost:11434", { includeCloud: true, force: true });
+    expect(cloudCalls).toBe(2);
+    expect(forced.map((m) => m.id)).toEqual(["llama3:8b", "gpt-oss:120b"]);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("keeps the local catalogue when the cloud catalogue fails", async () => {
+    mockFetchRoutes((url) => {
+      if (url.endsWith("/api/me")) return jsonResponse({ plan: "pro" });
+      if (url === "https://ollama.com/api/tags") return jsonResponse({ error: "boom" }, 503);
+      return jsonResponse({ models: [{ name: "llama3:8b" }] });
+    });
+
+    const models = await fetchOllamaModels("http://localhost:11434", { includeCloud: true });
+
+    expect(models.map((m) => m.id)).toEqual(["llama3:8b"]);
   });
 });

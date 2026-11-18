@@ -8,6 +8,14 @@ export interface NotificationContext {
   sessionId?: string;
 }
 
+/** Exact completion identity used by read acknowledgements and native dismissal. */
+export interface ChatNotificationState {
+  id: string;
+  sessionId: string;
+  replaceId: string;
+  read: boolean;
+}
+
 export interface NotificationActivation {
   id: string;
   link: string;

@@ -1,0 +1,76 @@
+{
+  "name": "decision.evaluate",
+  "tier": "standard",
+  "category": "meta",
+  "source": "builtin",
+  "description": "Use the configured System One Model for cheap bounded decisions: batch choices, ordered scores, or yes/no probabilities. Supply evidence and criteria; results are advice, never permission or proof of completion.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "state": {
+        "type": "string",
+        "description": "Relevant evidence/context, up to 24000 characters."
+      },
+      "questions": {
+        "type": "array",
+        "description": "1–48 independent questions evaluated in one call.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique question identifier."
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "choice",
+                "score",
+                "noul"
+              ]
+            },
+            "instructions": {
+              "type": "string",
+              "description": "The bounded question to assess."
+            },
+            "options": {
+              "type": "array",
+              "description": "For choice: 2–32 alternatives.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "description"
+                ]
+              }
+            },
+            "levels": {
+              "type": "array",
+              "description": "For score: 2–10 descriptions ordered from lowest to highest.",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "instructions"
+          ]
+        }
+      }
+    },
+    "required": [
+      "state",
+      "questions"
+    ]
+  }
+}

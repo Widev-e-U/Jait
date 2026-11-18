@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Search, WifiOff } from 'lucide-react'
+import { Archive, ArrowUpToLine, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Pencil, Search, WifiOff } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import type { ProjectRecord } from '@/hooks/useProjects'
@@ -20,6 +20,8 @@ const SUBMENU_CLOSE_DELAY_MS = 180
  * only the top-level rows count here.
  */
 export function getSessionContextMenuHeight(options: {
+  showRename?: boolean
+  showMoveToTop?: boolean
   showOpenInPanel?: boolean
   showMoveSection: boolean
   showStreamingNote: boolean
@@ -28,6 +30,8 @@ export function getSessionContextMenuHeight(options: {
 }): number {
   const ROW_HEIGHT = 30
   let height = 8 // menu padding
+  if (options.showRename) height += ROW_HEIGHT
+  if (options.showMoveToTop) height += ROW_HEIGHT
   if (options.showOpenInPanel) height += ROW_HEIGHT
   if (options.showMoveSection) {
     height += ROW_HEIGHT // "Move to project" parent row
@@ -208,6 +212,11 @@ export interface SessionContextMenuProps {
   onMoveSession?: (sessionId: string, projectId: string | null) => void
   onArchiveSession?: (sessionId: string) => void
   onOpenInPanel?: (sessionId: string, projectId: string | null) => void
+  onRename?: (sessionId: string) => void
+  /** Moves the chat one slot up in its project / personal list. */
+  onMoveToTop?: (sessionId: string) => void
+  /** False when the chat is already first, so there is nowhere to go. */
+  canMoveToTop?: boolean
   /**
    * Looks up projects beyond the ones the sidebar has paged in. Without it the
    * picker can only offer the visible projects.
@@ -227,6 +236,9 @@ export function SessionContextMenu({
   onMoveSession,
   onArchiveSession,
   onOpenInPanel,
+  onRename,
+  onMoveToTop,
+  canMoveToTop = true,
   onSearchProjects,
   onClose,
 }: SessionContextMenuProps) {
@@ -287,7 +299,7 @@ export function SessionContextMenu({
 
   return (
     <div
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-50 select-none [-webkit-touch-callout:none]"
       onPointerDown={onClose}
       onContextMenu={(event) => {
         event.preventDefault()
@@ -297,11 +309,44 @@ export function SessionContextMenu({
       <div
         role="menu"
         aria-label="Chat actions"
-        className="fixed flex w-64 flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        className="fixed flex w-64 select-none [-webkit-touch-callout:none] flex-col rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
         style={{ left, top }}
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.stopPropagation()}
       >
+        {onRename && (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+            onClick={() => {
+              onRename(sessionId)
+              onClose()
+            }}
+            onPointerEnter={scheduleSubmenuClose}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate text-xs">Rename chat</span>
+          </button>
+        )}
+
+        {onMoveToTop && (
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canMoveToTop}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+            onClick={() => {
+              onMoveToTop(sessionId)
+              onClose()
+            }}
+            onPointerEnter={scheduleSubmenuClose}
+          >
+            <ArrowUpToLine className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate text-xs">Move chat to top</span>
+          </button>
+        )}
+
         {onOpenInPanel && (
           <button
             type="button"

@@ -1,10 +1,13 @@
+import { MessageText } from '@/components/ui/message-text'
+import { MessageReadStatus } from './message-read-status'
+import type { MessengerReadReceipt } from '@/lib/messenger/model'
 import { AgentAvatar } from '@/components/manager/agent-avatar'
 import type { ChatPersona } from '@/lib/chat-persona'
 import { AttachmentList, collectAttachments } from './attachment-list'
 import { MessageAgentActivity } from './message-agent-activity'
 import { UserMessageImages, UserMessageImageReference } from './user-message-images'
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
-import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Check, CheckCheck, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
 import {
   Message as AIMessage,
@@ -27,7 +30,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, SubAgentAuthProvider, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ChatOpenPathContext, SubAgentAuthProvider, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
 import { AssistantBody, shouldUseAgentToolCallWrapper } from './assistant-body'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
@@ -42,6 +45,7 @@ import type { ResponseStyle } from '@jait/shared'
 import { hasRenderableUserMessageContent } from './message-render-state'
 import {
   getMobileUserMessageEditTop,
+  getMessageEditPromptClassName,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
 } from './message-edit-layout'
@@ -61,6 +65,16 @@ import {
 import { TooltipHint } from '@/components/ui/tooltip'
 
 interface MessageProps {
+  /** Personal-message metadata; uses the same bubbles/actions with literal text and no AI controls. */
+  messenger?: {
+    sender: string
+    timestamp: number
+    pending?: boolean
+    failed?: boolean
+    unableToDecrypt?: boolean
+    readBy?: MessengerReadReceipt[]
+    attachment?: ReactNode
+  }
   persona?: ChatPersona
   messageId?: string
   messageIndex?: number
@@ -71,6 +85,12 @@ interface MessageProps {
   content: string
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
   steered?: boolean
+  /**
+   * Delivery state of a freshly sent or edited user turn: `sending` shows a
+   * single check in the bottom-right corner; `sent` keeps a double check visible.
+   * Absent for ordinary history rows.
+   */
+  sendState?: 'sending' | 'sent'
   contextFlow?: LlmContextFlow
   /** Lightweight badge: a contextFlow payload exists on the server (lazy-loaded). */
   hasContextFlow?: boolean
@@ -92,6 +112,8 @@ interface MessageProps {
   /** Ordered interleaving of text and tool-call groups (from live streaming). */
   segments?: MessageSegment[]
   isStreaming?: boolean
+  onTryContinue?: () => void
+  isContinuing?: boolean
   compact?: boolean
   preferLlmUi?: boolean
   /** Active chat provider. Non-Jait providers still use inline tool groups. */
@@ -166,6 +188,7 @@ function ThinkingDots() {
 }
 
 function MessageInner({
+  messenger,
   persona,
   messageId,
   messageIndex,
@@ -174,6 +197,7 @@ function MessageInner({
   kind,
   content,
   steered,
+  sendState,
   contextFlow,
   hasContextFlow,
   hasMemoryProvenance,
@@ -188,6 +212,8 @@ function MessageInner({
   toolCalls: toolCallsProp,
   segments: segmentsProp,
   isStreaming,
+  onTryContinue,
+  isContinuing,
   compact,
   preferLlmUi,
   provider: requestedProvider,
@@ -246,6 +272,7 @@ function MessageInner({
   }, [lazyContextFlow, contextFlowLoading, contextFlow, messageIndex, sessionId, authToken])
 
   const { userDisplayText, userDisplaySegments } = useMemo(() => {
+    if (messenger) return { userDisplayText: content, userDisplaySegments: [{ type: 'text' as const, text: content }] }
     if (!isUser) {
       return {
         userDisplayText: content,
@@ -267,7 +294,7 @@ function MessageInner({
 
     const parsed = parseLegacyReferencedFilesBlock(content)
     return { userDisplayText: parsed.text, userDisplaySegments: parsed.displaySegments }
-  }, [isUser, content, displayContentProp, referencedFilesProp, displaySegmentsProp])
+  }, [messenger, isUser, content, displayContentProp, referencedFilesProp, displaySegmentsProp])
 
   const [copied, setCopied] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
@@ -390,12 +417,42 @@ function MessageInner({
       }
     }
 
-    const messageText = isUser ? buildUserCopyText() : content
+    const segmentText = segments?.filter((segment) => segment.type === 'text').map((segment) => segment.content).join('\n\n') ?? ''
+    const messageText = isUser ? buildUserCopyText() : content || segmentText
     if (messageText) {
       parts.push(messageText)
     }
 
     return parts.join('\n').trim()
+  }
+
+  // Reference chips are select-none, so the browser would drop them from a native copy.
+  // Rebuild the clipboard from the segments the selection touches so pasting restores the refs.
+  const handleUserSegmentsCopy = (event: React.ClipboardEvent<HTMLElement>) => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return
+    const range = selection.getRangeAt(0)
+    const displaySegments = optimisticUserDisplaySegments ?? userDisplaySegments
+    const picked: UserMessageSegment[] = []
+    event.currentTarget.querySelectorAll<HTMLElement>('[data-user-segment]').forEach((el) => {
+      const segment = displaySegments[Number(el.dataset.userSegment)]
+      if (!segment || !range.intersectsNode(el)) return
+      if (segment.type !== 'text') {
+        picked.push(segment)
+        return
+      }
+      const part = document.createRange()
+      part.selectNodeContents(el)
+      if (part.compareBoundaryPoints(Range.START_TO_START, range) < 0) part.setStart(range.startContainer, range.startOffset)
+      if (part.compareBoundaryPoints(Range.END_TO_END, range) > 0) part.setEnd(range.endContainer, range.endOffset)
+      const text = part.toString()
+      if (text) picked.push({ type: 'text', text })
+    })
+    if (!picked.some(segment => segment.type !== 'text')) return
+    event.preventDefault()
+    event.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(picked))
+    const structured = serializeUserMessageSegmentsForClipboard(picked)
+    if (structured) event.clipboardData.setData(JAIT_REF_MIME, structured)
   }
 
   const copyToClipboard = async () => {
@@ -460,7 +517,7 @@ function MessageInner({
       window.removeEventListener('resize', update)
     }
   }, [isEditing, isMobile])
-  const canEdit = isUser && !!messageId && !!onEditMessage
+  const canEdit = !messenger && isUser && !!messageId && !!onEditMessage && sendState !== 'sending'
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
   const hasCopyableMessage = buildCopyText().length > 0
@@ -625,6 +682,25 @@ function MessageInner({
     },
   ]
 
+  // Keep delivery updates out of the bubble layout.
+  const showSendStatus = isUser && (sendState === 'sending' || sendState === 'sent')
+  const compactMobileActions = isMobile && isUser && !messenger
+  const mobileStatusRow = compactMobileActions && canCopyMessage && messageActionItems.length > 0
+  const sendStatus = showSendStatus ? (
+    <TooltipHint content={sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}>
+      <span
+        className="pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+        aria-live="polite"
+        data-testid="user-message-send-status"
+        data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
+      >
+        {sendState === 'sent' ? <CheckCheck aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4 translate-x-[1.33px]" />}
+        <span className="sr-only">{sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}</span>
+      </span>
+    </TooltipHint>
+  ) : null
+
+
   const renderActions = (outsideBubble?: boolean) => {
     if (isEditing || !canCopyMessage || messageActionItems.length === 0) return null
 
@@ -634,8 +710,9 @@ function MessageInner({
       return (
         <div
           className={cn(
-            'absolute z-10',
-            getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            isUser ? 'absolute z-10' : 'relative z-10 flex justify-end',
+            isUser && getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            compactMobileActions && 'right-0 bottom-[2.67px]',
           )}
         >
           <DropdownMenu>
@@ -643,15 +720,16 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
+                className={cn(
+                  'relative flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground transition-colors active:text-foreground',
+                  compactMobileActions && 'w-[29.33px]',
+                )}
               >
-                {/* Pinned to the tap-area's right edge. The lucide
-                    ellipsis-vertical glyph is inset 7.33px (at 16px scale,
-                    viewBox 24) from its box's right edge but only 2.67px from
-                    its box's bottom (bottom dot r=1 at cy=19), so the box is
-                    lifted 4.67px (= 7.33 - 2.67) — that makes the visible gap
-                    to the bubble edge pixel-identical bottom vs right. */}
-                <MoreVertical className="absolute bottom-[4.67px] right-0 h-4 w-4" />
+                <MoreVertical className={cn('absolute right-0 h-4 w-4', compactMobileActions ? 'bottom-0' : 'bottom-[4.67px]')} />
+                {/* Keep the painted gaps while sharing the menu's full touch target. */}
+                {compactMobileActions && sendStatus && (
+                  <span className="absolute bottom-0 right-[13.33px]">{sendStatus}</span>
+                )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">
@@ -679,9 +757,11 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 rounded-md border border-border/60 bg-background/95 p-0.5 shadow-sm',
-          outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
-          'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
-          copied && 'opacity-100',
+          // Toolbar sits below the bubble, bottom-right: overlaying the message
+          // text made it unclickable (click-to-edit / lightbox regressions).
+          showSendStatus ? 'right-1 -bottom-8' : outsideBubble ? 'right-1 -bottom-6' : 'right-1 -bottom-5',
+          'pointer-events-none opacity-0 transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          copied && 'pointer-events-auto opacity-100',
         )}
       >
         <MessageActions>
@@ -706,9 +786,8 @@ function MessageInner({
     )
   }
 
-  const assistantActions = !isUser ? renderActions() : null
+  const assistantActions = !messenger && !isUser ? renderActions() : null
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
-  const hasSteeringSegment = !isUser && segments?.some((segment) => segment.type === 'steering')
   const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(effectiveContextFlow) : []
   const showMemoryBadge = !isUser && (memoryProvenanceEntries.length > 0 || (hasMemoryProvenance && !effectiveContextFlow))
   const memoryProvenance = showMemoryBadge ? (
@@ -778,12 +857,12 @@ function MessageInner({
   }
 
   return (
-    <>
+    <ChatOpenPathContext.Provider value={onOpenPath ?? null}>
     <div className="w-full">
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn(
         'min-w-0 space-y-2',
-        hasSteeringSegment ? 'w-full max-w-full' : 'max-w-[85%]',
+        isUser ? 'max-w-[85%]' : 'w-full max-w-full',
         isUser && 'order-1',
       )}>
         {!isUser && persona && <div data-persona-agent-id={persona.id} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -819,10 +898,11 @@ function MessageInner({
                 compact={compact}
                 preferLlmUi={preferLlmUi}
                 onOpenPath={onOpenPath}
-                capNonSteeringWidth={hasSteeringSegment}
+                onTryContinue={onTryContinue}
+                isContinuing={isContinuing}
               />
 
-              <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
+              <div className="min-w-0">
                 {assistantActions}
                 {memoryProvenance}
               </div>
@@ -858,7 +938,7 @@ function MessageInner({
             )}
 
             {hasUserRenderableContent || content ? (
-              isUser ? (
+              isUser || messenger ? (
                 isEditing ? (
                   <div
                     className={getUserMessageEditComposerShellClassName()}
@@ -876,6 +956,7 @@ function MessageInner({
                           key={`edit-${messageId ?? 'user-message'}`}
                           ref={editPromptInputRef}
                           draftStateKey={`edit:${messageId ?? 'user-message'}`}
+                          clearOnSubmit={false}
                           value={editDraft}
                           segments={editSegments}
                           initialAttachments={userAttachments}
@@ -931,12 +1012,19 @@ function MessageInner({
                             </Button>
                             </TooltipHint>
                           )}
-                          className="rounded-lg border-primary/20 bg-primary/[0.08] dark:!bg-primary/[0.08] shadow-none [&_.text-muted-foreground]:text-muted-foreground [&>div]:!bg-transparent [&_[contenteditable='true']]:!bg-transparent"
+                          className={getMessageEditPromptClassName()}
                         />
                     </div>
                   </div>
                 ) : (
-                  <div className="relative w-fit max-w-full">
+                  <div className="relative w-fit max-w-full space-y-2">
+                    {messenger && <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+                      <span className="max-w-48 truncate font-medium">{messenger.sender}</span>
+                      <TooltipHint content={new Date(messenger.timestamp).toLocaleString()}><time dateTime={new Date(messenger.timestamp).toISOString()}>{new Date(messenger.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
+                      {messenger.pending && <span>Sending…</span>}
+                      {messenger.failed && <span className="text-destructive">Not sent</span>}
+                    </div>}
+                    <UserMessageImages images={userImages} />
                     {steered && (
                       <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
                         <ArrowRight className="h-3 w-3" />
@@ -946,30 +1034,30 @@ function MessageInner({
                     <TooltipHint content={canEdit && !isEditing ? 'Click to edit message' : undefined}>
                     <AIMessageContent
                       ref={userBubbleRef}
-                      data-message-from="user"
+                      data-message-from={role}
                       className={cn(
                         'min-w-0 rounded-lg bg-muted p-4 break-words [overflow-wrap:anywhere]',
                         canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
                         'leading-relaxed [font-size:0.9rem]',
-                        userImages.length > 0 && canEdit && 'pb-10',
                         steered && 'border border-dashed border-primary/40 bg-primary/5',
+                        messenger?.unableToDecrypt && 'italic text-muted-foreground',
                       )}
                       onClick={handleUserBubbleClick}
                     >
                       <div className="min-w-0 space-y-3">
                         <AttachmentList attachments={userAttachments.filter(item => !item.mimeType.startsWith('image/'))} />
-                        <UserMessageImages images={userImages} excluded={(optimisticUserDisplaySegments ?? userDisplaySegments).filter(segment => segment.type === 'image')} />
-                        <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                        <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]" onCopy={handleUserSegmentsCopy}>
                           {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
                             ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
+                                <span key={`segment-${index}`} data-user-segment={index} className="contents">{
                                 segment.type === 'text' ? (
-                                  <span key={`text-${index}`}>{segment.text}</span>
+                                  <span key={`text-${index}`}><MessageText>{segment.text}</MessageText></span>
                                 ) : segment.type === 'image' ? (
                                   <UserMessageImageReference key={`image-${index}`} image={segment} number={userImages.findIndex(image => image.name === segment.name && image.mimeType === segment.mimeType && image.data === segment.data) + 1} />
                                 ) : segment.type === 'file' ? (
                                   <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
@@ -978,7 +1066,7 @@ function MessageInner({
                                 ) : segment.type === 'project' ? (
                                   <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <FolderIcon name={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
@@ -987,7 +1075,7 @@ function MessageInner({
                                 ) : segment.type === 'terminal' ? (
                                   <TooltipHint key={`${segment.terminalId}-${index}`} content={segment.projectRoot ? `${segment.terminalId} · ${segment.projectRoot}` : segment.terminalId}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
@@ -996,7 +1084,7 @@ function MessageInner({
                                 ) : segment.type === 'skill' ? (
                                   <TooltipHint key={`${segment.id}-${index}`} content={'/' + segment.id}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">/{segment.name}</span>
@@ -1005,21 +1093,28 @@ function MessageInner({
                                 ) : segment.type === 'chat' ? (
                                   <TooltipHint key={`chat-${segment.sessionId}-${index}`} content={`Chat: ${segment.sessionId}`}>
                                   <span
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-normal text-foreground align-middle select-none"
                                   >
                                     <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
                                   </TooltipHint>
-                                ) : null,
+                                ) : null
+                                }</span>,
                               )
-                            : (optimisticUserDisplayText ?? userDisplayText)}
+                            : <MessageText>{optimisticUserDisplayText ?? userDisplayText}</MessageText>}
                         </div>
+                        {messenger?.attachment}
                       </div>
+                      {/* Use the existing padding so delivery updates never resize the bubble. */}
+                      {showSendStatus && !mobileStatusRow && (
+                        <div className="absolute bottom-0 right-2 max-w-[calc(100%-1rem)]">{sendStatus}</div>
+                      )}
                     </AIMessageContent>
                     </TooltipHint>
 
-                    {renderActions()}
+                    {messenger && isUser && !messenger.pending && !messenger.failed && <div className="pr-10"><MessageReadStatus readers={messenger.readBy ?? []} /></div>}
+                    {renderActions(true)}
                   </div>
                 )
               ) : (
@@ -1057,7 +1152,7 @@ function MessageInner({
       responseContent={content}
       loading={contextFlowLoading}
     />
-    </>
+    </ChatOpenPathContext.Provider>
   )
 }
 

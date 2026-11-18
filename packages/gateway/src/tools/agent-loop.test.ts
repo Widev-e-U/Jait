@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
   applyProviderPromptCaching,
+  buildSteeringUserContent,
   formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
@@ -10,6 +11,8 @@ import {
   buildTieredToolSchemas,
   toolDefsToSchemas,
   fromOpenAIName,
+  registerOpenAINameMappings,
+  listAmbiguousOpenAINames,
   runAgentLoop,
   serializeToolResultForModel,
   SteeringController,
@@ -24,6 +27,13 @@ import {
 } from "./agent-loop.js";
 import { ToolRegistry } from "./registry.js";
 import { getReminderInstructions } from "./prompts/index.js";
+
+// Test scaffolding: the provider→internal inverse is derived from the names that
+// were actually advertised, never guessed. These handwritten fixtures bypass the
+// production schema builders, so they must declare their canonical names here.
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -51,6 +61,39 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
     },
   }).getReader();
 }
+describe("buildSteeringUserContent", () => {
+  it("returns plain text when there are no attachments", () => {
+    expect(buildSteeringUserContent("go left")).toBe("go left");
+    expect(buildSteeringUserContent("go left", [])).toBe("go left");
+  });
+
+  it("builds multimodal parts for images and inlines text files", () => {
+    const parts = buildSteeringUserContent("see this", [
+      { name: "a.png", mimeType: "image/png", data: "AAAA" },
+      { name: "b.png", mimeType: "image/png", data: "data:image/png;base64,BBBB" },
+      { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("hello").toString("base64") },
+    ]);
+    expect(parts).toEqual([
+      { type: "text", text: "see this" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,AAAA", detail: "auto" } },
+      { type: "image_url", image_url: { url: "data:image/png;base64,BBBB", detail: "auto" } },
+      { type: "text", text: "[File: notes.txt]\nhello" },
+    ]);
+  });
+
+  it("omits the text part for attachment-only steers", () => {
+    const parts = buildSteeringUserContent("  ", [{ name: "a.png", mimeType: "image/png", data: "AAAA" }]);
+    expect(parts).toHaveLength(1);
+  });
+
+  it("carries attachments through the SteeringController", () => {
+    const queue = new SteeringController();
+    const attachments = [{ name: "a.png", mimeType: "image/png", data: "AAAA" }];
+    queue.steer("x", { attachments });
+    expect(queue.drain()[0]?.attachments).toEqual(attachments);
+  });
+});
+
 describe("serializeMessages", () => {
   it("omits unsupported tool-result names while preserving call correlation", () => {
     expect(serializeMessages([
@@ -330,7 +373,8 @@ describe("OpenAI tool name conversion", () => {
       parameters: { type: "object", properties: {}, required: [] },
       execute: async () => ({ ok: true, message: "ok" }),
     });
-    // Both collapse to the same OpenAI-safe name; the mapping must stay unambiguous for everyone else.
+    // Both collapse to the same provider-safe name. Registration must never fail:
+    // the registry legitimately exposes legacy alias pairs such as os.tool/os_tool.
     register("a.b_c");
     register("a_b.c");
     register("preview.open");
@@ -338,10 +382,27 @@ describe("OpenAI tool name conversion", () => {
     const advertised = buildTieredToolSchemas(registry, undefined, {
       activatedToolNames: ["a.b_c", "a_b.c", "preview.open"],
     }).map((schema) => schema.function.name);
-    expect(advertised).toContain("a_b_c");
 
+    // One schema per provider name, so a provider never receives a duplicate function.
+    expect(advertised.filter((name) => name === "a_b_c")).toHaveLength(1);
+    // Unambiguous neighbours keep round-tripping.
+    expect(advertised).toContain("preview_open");
     expect(fromOpenAIName("preview_open")).toBe("preview.open");
-    expect(["a.b_c", "a_b.c"]).toContain(fromOpenAIName("a_b_c"));
+
+    // The advertised alias resolves to a registered, executable tool — never to an
+    // invented name — and stays deterministic across repeated resolution.
+    const winner = fromOpenAIName("a_b_c");
+    expect(["a.b_c", "a_b.c"]).toContain(winner);
+    expect(registry.isExecutable(winner)).toBe(true);
+    expect(fromOpenAIName("a_b_c")).toBe(winner);
+  });
+
+  it("never invents a dotted name for an unadvertised alias", () => {
+    // The inverse is derived only from names that were actually advertised. An
+    // alias nobody advertised stays unresolved, so the agent gets an actionable
+    // "Unknown tool" error instead of silently executing a different tool.
+    expect(fromOpenAIName("never_advertised_tool")).toBe("never_advertised_tool");
+    expect(fromOpenAIName("totally_unknown_tool")).toBe("totally_unknown_tool");
   });
 });
 
@@ -1694,7 +1755,60 @@ describe("runAgentLoop persistence", () => {
       { type: "steering", content: "Adjust the answer now" },
       { type: "text", content: " Steered follow-up." },
     ]);
-    expect(events).toContainEqual({ type: "steering", message: "Adjust the answer now" });
+    // The steer arrived mid-response, so it is only injected at the round
+    // boundary; the event is marked deferred and carries no queuedMessageId
+    // because it was not submitted through the HTTP steer route.
+    expect(events).toContainEqual({
+      type: "steering",
+      message: "Adjust the answer now",
+      deferred: true,
+    });
+  });
+
+  it.each(["before model call", "during final response"])("keeps internal steering hidden when received %s", async (timing) => {
+    const notification = "[system-notification: background command finished]\nprivate command output";
+    const steering = new SteeringController();
+    if (timing === "before model call") steering.steer(notification, { hidden: true });
+    const history: AgentMessage[] = [{ role: "user", content: "Verify the fix." }];
+    const requests: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      requests.push(String(init?.body));
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Verified."}}]}\n\n' +
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+          ));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+    const events: AgentLoopEvent[] = [];
+    const persisted = vi.fn();
+    const result = await runAgentLoop({
+      llm: { openaiApiKey: "test-key", openaiBaseUrl: "https://llm.test", openaiModel: "test-model", contextWindow: 100_000 },
+      history, toolSchemas: [], hasTools: false, sessionId: "hidden-background-steering", abort: new AbortController(),
+      maxRounds: 2, mode: "agent", onPersist: persisted,
+      onEvent: event => {
+        events.push(event);
+        if (timing === "during final response" && event.type === "token" && requests.length === 1) {
+          steering.steer(notification, { hidden: true });
+        }
+      },
+    }, async () => ({ ok: true, message: "" }), steering);
+
+    expect(requests).toHaveLength(timing === "before model call" ? 1 : 2);
+    expect(requests.at(-1)).toContain("private command output");
+    expect(history.some(message => String(message.content).includes(notification))).toBe(true);
+    expect(result.segments?.some(segment => segment.type === "steering")).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private command output");
+    expect(JSON.stringify(persisted.mock.calls)).not.toContain("private command output");
+    // The event is still emitted so trajectory/debug views can show it, but it is
+    // flagged hidden so chat surfaces never render it.
+    const steers = events.filter(event => event.type === "steering");
+    expect(steers.length).toBeGreaterThan(0);
+    for (const steer of steers) expect(steer).toMatchObject({ hidden: true });
   });
 
   it("calls onPersist exactly once and reports persisted=true on normal completion", async () => {
@@ -4140,4 +4254,26 @@ describe("retryToolCall", () => {
 
     expect(result).toEqual({ ok: false, message: "Tool call missing-call not found" });
   });
+});
+
+
+describe("provider alias identity precedence", () => {
+  it("prefers the exact registered identity and records sorted collision claimants", () => {
+    registerOpenAINameMappings(["coverage.identity.tool", "coverage_identity_tool", "coverage.identity_tool"]);
+    expect(fromOpenAIName("coverage_identity_tool")).toBe("coverage_identity_tool");
+    registerOpenAINameMappings(["coverage.identity.tool", "coverage_identity_tool"]);
+    expect(fromOpenAIName("coverage_identity_tool")).toBe("coverage_identity_tool");
+    expect(listAmbiguousOpenAINames()).toContainEqual({ providerName: "coverage_identity_tool",
+      internalNames: ["coverage.identity.tool", "coverage.identity_tool", "coverage_identity_tool"] });
+  });
+});
+
+
+it("preserves queued steering metadata when draining a tool-round boundary", () => {
+  const steering = new SteeringController();
+  steering.steer("provider text", { displayContent: "visible text", queuedMessageId: "queued-coverage" });
+  expect(steering.hasPending).toBe(true);
+  expect(steering.drain()).toEqual([{ message: "provider text", displayContent: "visible text", queuedMessageId: "queued-coverage" }]);
+  expect(steering.hasPending).toBe(false);
+  expect(steering.drain()).toEqual([]);
 });

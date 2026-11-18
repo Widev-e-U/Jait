@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry, type ToolRegistryDeps } from "./index.js";
+import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import { ToolRegistry } from "./registry.js";
 
 function context() {
@@ -223,7 +224,7 @@ describe("ToolRegistry discovery ranking", () => {
     expect(registry.search("deploy", { disabledTools: new Set(["deploy.preferred"]) })[0]?.name).toBe("deploy.basic");
   });
 
-  it("keeps critical helpers and discovery tools visible to MCP clients", () => {
+  it("exposes helpers, plugin tools and bridged MCP server tools to MCP clients but keeps other core tools internal", () => {
     const registry = new ToolRegistry();
     registerDiscoveryTool(registry, "todo", "Track multi-step work", { tier: "core" });
     registerDiscoveryTool(registry, "user.ask", "Ask the user for a decision", { tier: "core" });
@@ -234,6 +235,8 @@ describe("ToolRegistry discovery ranking", () => {
     registerDiscoveryTool(registry, "plugin.deploy", "Deploy through a plugin", { tier: "external", source: "plugin:deploy" });
     registerDiscoveryTool(registry, "mcp.github.issue", "Create a GitHub issue", { tier: "external", source: "mcp" });
 
+    // Every provider gets every tool the user connected to Jait, including
+    // servers added through `mcp.add_server` (source "mcp").
     expect(registry.listForMcp().map((tool) => tool.name)).toEqual([
       "todo",
       "user.ask",
@@ -241,7 +244,30 @@ describe("ToolRegistry discovery ranking", () => {
       "tools.search",
       "preview.open",
       "plugin.deploy",
+      "mcp.github.issue",
     ]);
+    // Bridged tools remain as disableable as any other tool.
+    expect(registry.listForMcp(new Set(["mcp.github.issue"])).map((tool) => tool.name)).not.toContain("mcp.github.issue");
+  });
+
+  it("lets MCP clients discover bridged server tools with tools.search and tools.list", async () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "mcp.opengym.get_workout_history", "Get the user's workout history", {
+      tier: "external",
+      source: "mcp",
+    });
+    registerDiscoveryTool(registry, "read", "Read project files", { tier: "core" });
+    const mcpContext = { ...context(), requestedBy: "mcp-client" };
+
+    const search = await createToolsSearchTool(registry).execute({ query: "workout history" }, mcpContext);
+    expect(search.data).toMatchObject({
+      matches: [{ name: "mcp.opengym.get_workout_history", openai_name: "mcp_opengym_get_workout_history" }],
+    });
+
+    // The bridged tool is listed; the internal core `read` tool still is not.
+    const list = await createToolsListTool(registry).execute({}, mcpContext);
+    expect(list.data).toMatchObject({ total: 1 });
+    expect((list.data as { catalogue: string }).catalogue).toContain("mcp.opengym.get_workout_history");
   });
 });
 
@@ -273,4 +299,91 @@ it("ranks a query containing constructor without reading inherited synonyms", ()
   registerDiscoveryTool(registry, "file.read", "Read constructor source files");
   expect(() => registry.rankSearch("inspect constructor source")).not.toThrow();
   expect(registry.search("constructor")[0]?.name).toBe("file.read");
+});
+
+
+describe("bounded tool discovery", () => {
+  it("handles recovered prompts and large tool descriptions within a bounded CPU budget", () => {
+    const registry = new ToolRegistry();
+    const context = Array.from({ length: 8000 }, (_, index) => `context${index}`).join(" ");
+    for (let index = 0; index < 300; index++) {
+      registerDiscoveryTool(registry, `tool${index}.inspect`, context);
+    }
+    registerDiscoveryTool(registry, "network.scan", "Discover reachable network hosts");
+    const started = performance.now();
+    const matches = registry.search(`scan network ${context} scan network`, { limit: 10 });
+    expect(matches).toHaveLength(10);
+    // A generous budget catches the multi-minute freeze without relying on
+    // small timing differences between CI machines.
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  it("keeps discovery keywords at both ends of a long prompt", () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "network.scan", "Discover network hosts");
+    registerDiscoveryTool(registry, "preview.open", "Open an application preview");
+    const context = Array.from({ length: 8000 }, (_, index) => `context${index}`).join(" ");
+    const names = registry.search(`scan network ${context} open preview`).map(tool => tool.name);
+    expect(names).toContain("network.scan");
+    expect(names).toContain("preview.open");
+  });
+
+  it("does not fuzzy-match giant tokens and still finds a trailing typo", () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "preview.open", "Open the application preview");
+    expect(registry.search(`${"x".repeat(500000)} prevew`)[0]?.name).toBe("preview.open");
+  });
+
+  it("does lexical ranking once and preserves limits during semantic fallback", async () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "file.read", "Read files");
+    registerDiscoveryTool(registry, "file.list", "List files");
+    const rank = vi.spyOn(registry, "rankSearch");
+    const fetcher = vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const matches = await registry.rankSearchWithSystemOne("files", { limit: 1 }, { JEV_API_KEY: "bounded-search-regression" });
+      expect(rank).toHaveBeenCalledTimes(1);
+      expect(matches).toHaveLength(1);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+
+describe("public browser lifecycle tools", () => {
+  it("registers browser handoffs only with both services and retains preview compatibility", () => {
+    const registry = createToolRegistry(new SurfaceRegistry(), { userQuestionService: {}, previewService: {} } as any);
+    expect(registry.get("browser.handoff")).toBeDefined();
+    for (const [legacy, canonical] of [["preview.open", "browser.open"], ["preview.stop", "browser.close"], ["preview.restart", "browser.restart"], ["preview.status", "browser.status"], ["preview.logs", "browser.logs"]]) {
+      expect(registry.get(canonical)).toBeDefined();
+      expect(registry.get(legacy)).toBeDefined();
+      expect(registry.get(canonical)?.description).not.toMatch(/preview\.(open|stop|restart|status|logs)/);
+    }
+    expect(registry.get("preview.inspect")).toBeDefined();
+    expect(createToolRegistry(new SurfaceRegistry(), { userQuestionService: {} } as any).get("browser.handoff")).toBeUndefined();
+  });
+});
+
+describe("GitHub tool identity wiring", () => {
+  it("defaults to the owning persona only inside that user's thread", async () => {
+    const service = { list: vi.fn(() => []), get: vi.fn(() => null), publicBaseUrl: () => "https://jait.invalid", webhookSecret: () => undefined };
+    const threads = { getById: vi.fn(() => ({ userId: "owner", personaAgentId: "persona" })), getPersonaAgent: vi.fn(() => ({ id: "persona" })) };
+    const registry = createToolRegistry(new SurfaceRegistry(), { agentGithubAppService: service, threadService: threads } as any);
+    const tool = registry.get("agent.github")!;
+    const own = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    expect(own.data).toMatchObject({ currentAgentId: "persona" });
+    expect(service.get).toHaveBeenCalledWith("owner", "persona");
+    service.get.mockClear();
+    const other = await tool.execute({ action: "status" }, { ...context(), userId: "other", threadId: "thread" });
+    expect(other.data).toMatchObject({ currentAgentId: null });
+    expect(service.get).not.toHaveBeenCalled();
+    const chat = await tool.execute({ action: "status" }, { ...context(), userId: "owner" });
+    expect(chat.data).toMatchObject({ currentAgentId: null });
+    threads.getPersonaAgent.mockReturnValueOnce(null as any);
+    const deleted = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    expect(deleted.data).toMatchObject({ currentAgentId: null });
+  });
 });

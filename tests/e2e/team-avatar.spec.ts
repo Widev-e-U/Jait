@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+import path from 'node:path'
+
+const shotDir = path.resolve(__dirname, '../../.jait/shots')
 
 for (const kind of ['sessions', 'threads'] as const) {
 test(`team identity reflects membership and confirmed ${kind} execution, respects reduced motion`, async ({ page }) => {
@@ -7,7 +10,7 @@ test(`team identity reflects membership and confirmed ${kind} execution, respect
   let unavailable = false
   const room = { id: 'fixture-room', name: 'Avatar team', rootAgentId: 'agent-0', goal: null }
   const deliveries = [{ id: 'delivery', roomId: room.id, messageId: 'message', agentId: 'agent-0', sessionId: 'work', threadId: kind === 'threads' ? 'work-thread' : undefined, status: 'running', error: null }]
-  await page.route('**/api/team-rooms/fixture-room', route => route.fulfill({ json: { room, members, messages: [], deliveries } }))
+  await page.route('**/api/team-rooms/fixture-room?*', route => route.fulfill({ json: { room, members, messages: [], deliveries } }))
   await page.route(`**/api/${kind}/${kind === 'threads' ? 'work-thread' : 'work'}/runtime`, route => route.fulfill(unavailable ? { status: 503, json: {} } : { json: { running, startedAt: null } }))
   await page.goto('/team-chat.html')
   const avatar = page.getByRole('img', { name: /^Team:/ })
@@ -18,7 +21,7 @@ test(`team identity reflects membership and confirmed ${kind} execution, respect
   await expect(avatar.locator('.agent-creature-working')).toHaveCount(0)
   const body = avatar.locator('[data-member-id="agent-0"] .agent-creature-body')
   await expect.poll(() => body.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
-  await page.screenshot({ path: 'test-results/team-avatar-cluster.png' })
+  await page.screenshot({ path: path.join(shotDir, 'team-avatar-cluster.png') })
   running = true
   await expect(avatar.locator('.agent-creature-working')).toHaveCount(1)
   await expect.poll(() => body.evaluate(element => getComputedStyle(element).animationName)).toBe('agent-work')
@@ -36,7 +39,7 @@ test(`team identity reflects membership and confirmed ${kind} execution, respect
   await page.setViewportSize({ width: 375, height: 812 })
   await expect(avatar).toBeVisible()
   expect(await avatar.evaluate(element => element.getBoundingClientRect().width)).toBe(48)
-  await page.screenshot({ path: 'test-results/team-avatar-mobile.png' })
+  await page.screenshot({ path: path.join(shotDir, 'team-avatar-mobile.png') })
   members = []
   await expect(avatar).toHaveAccessibleName('Team: no members')
 })

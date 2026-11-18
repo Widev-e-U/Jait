@@ -74,12 +74,29 @@ export function normalizeMessageSegments(raw: unknown): MessageSegment[] {
         : []
       if (callIds.length > 0) out.push({ type: 'toolGroup', callIds })
     } else if (type === 'steering') {
+      // Defensive: internal steers must never render even if an old or
+      // hand-built payload carries one into persisted history.
+      if ((seg as { hidden?: unknown }).hidden === true) continue
       const content = (seg as { content?: unknown }).content
       const displayContent = (seg as { displayContent?: unknown }).displayContent
+      const queuedMessageId = (seg as { queuedMessageId?: unknown }).queuedMessageId
+      const deferred = (seg as { deferred?: unknown }).deferred
+      const rawAttachments = (seg as { attachments?: unknown }).attachments
+      const attachments = Array.isArray(rawAttachments)
+        ? rawAttachments.filter((item): item is { name: string; mimeType: string; data: string } => (
+          !!item && typeof item === 'object'
+          && typeof (item as { name?: unknown }).name === 'string'
+          && typeof (item as { mimeType?: unknown }).mimeType === 'string'
+          && typeof (item as { data?: unknown }).data === 'string'
+        ))
+        : []
       out.push({
         type: 'steering',
         content: typeof content === 'string' ? content : String(content ?? ''),
         ...(typeof displayContent === 'string' ? { displayContent } : {}),
+        ...(attachments.length ? { attachments } : {}),
+        ...(typeof queuedMessageId === 'string' && queuedMessageId ? { queuedMessageId } : {}),
+        ...(deferred === true ? { deferred } : {}),
       })
     }
     // Unknown segment types are dropped rather than rendered, which keeps a

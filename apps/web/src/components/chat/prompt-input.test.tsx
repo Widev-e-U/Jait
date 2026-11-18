@@ -128,6 +128,40 @@ describe('PromptInput footer selectors', () => {
     expect(markup).not.toContain('aria-label="Provider ')
   })
 })
+describe('PromptInput messenger composer row', () => {
+  const messengerProps = {
+    variant: 'messenger' as const,
+    onChange: () => {},
+    onSubmit: () => {},
+    onVoiceInput: () => {},
+    onVoiceStop: () => {},
+    placeholder: 'Write a message…',
+  }
+
+  it('renders attach, emoji and text input in one left-to-right row', () => {
+    const markup = renderToStaticMarkup(<PromptInput {...messengerProps} value="" />)
+    const attach = markup.indexOf('aria-label="Attach files"')
+    const emoji = markup.indexOf('aria-label="Emoji"')
+    const input = markup.indexOf('role="textbox"')
+    expect(attach).toBeGreaterThan(-1)
+    expect(emoji).toBeGreaterThan(attach)
+    expect(input).toBeGreaterThan(emoji)
+    // Each control appears exactly once — the assistant footer must not double up.
+    expect(markup.split('aria-label="Attach files"')).toHaveLength(2)
+    expect(markup.split('aria-label="Emoji"')).toHaveLength(2)
+  })
+
+  it('shows the microphone while empty and swaps to send once text is typed', () => {
+    const empty = renderToStaticMarkup(<PromptInput {...messengerProps} value="" />)
+    expect(empty).toContain('aria-label="Dictate"')
+    expect(empty).not.toContain('aria-label="Send message"')
+
+    const typed = renderToStaticMarkup(<PromptInput {...messengerProps} value="hi" />)
+    expect(typed).toContain('aria-label="Send message"')
+    expect(typed).not.toContain('aria-label="Dictate"')
+  })
+})
+
 describe('PromptInput edit attachments', () => {
   it('shows existing image and file attachments in the edit composer', () => {
     const markup = renderToStaticMarkup(

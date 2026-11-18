@@ -22,6 +22,8 @@ export function getTerminalOutputSlice(
   // wants the recent tail.
   const boundedSlice = typeof outputEndOffset === "number" && Number.isFinite(outputEndOffset);
   const startIndex = boundedSlice ? offsetIndex : Math.max(offsetIndex, endIndex - lines);
+  // An empty range has no output to reconnect to a preceding partial line.
+  if (startIndex === endIndex) return "";
   let output = outputBuffer.slice(startIndex, endIndex).join("");
 
   // The end offset can point *into* the chunk that carries the OSC 633;D

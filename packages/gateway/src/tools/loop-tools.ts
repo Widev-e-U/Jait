@@ -1,0 +1,68 @@
+import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import type { ChatLoopService } from "../services/chat-loops.js";
+
+const ACTIONS: Record<string, string> = { "loop.goal": "Loop goal set.", "loop.check": "Loop checked.", "loop.pause": "Loop paused.", "loop.resume": "Loop resumed." };
+const clip = (text: string, max = 240) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
+/** Human-readable loop summary for tool cards; the full state stays in data. */
+export function describeLoop(tool: string, loop: unknown): string {
+  const action = ACTIONS[tool];
+  if (!loop || typeof loop !== "object") return action ? `${action} No loop goal is set for this chat.` : "No loop goal is set for this chat.";
+  const state = loop as { goal?: string; criteria?: unknown[]; status?: string; iteration?: number; revision?: number; summary?: string; nextMessage?: string; evidence?: unknown[] };
+  const lines = [
+    `${action ? `${action} ` : ""}Status: ${state.status ?? "unknown"} · revision ${state.revision ?? 0} · turn ${state.iteration ?? 0}`,
+    `Goal: ${clip(state.goal ?? "")}`,
+    `Criteria: ${state.criteria?.length ?? 0} · evidence: ${state.evidence?.length ?? 0}`,
+  ];
+  if (state.summary) lines.push(`Progress: ${clip(state.summary)}`);
+  if (state.nextMessage) lines.push(`Next: ${clip(state.nextMessage)}`);
+  return lines.join("\n");
+}
+
+export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
+  type LoopInput = { goal: string; criteria: string[]; executionCriteria?: number[]; revision: number; outcome: "continue" | "complete" | "waiting"; summary: string; nextMessage?: string; evidence?: string[]; executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }> };
+  const execute = (tool: string, run: (input: LoopInput, context: ToolContext) => unknown) => async (input: unknown, context: ToolContext): Promise<ToolResult> => {
+    try {
+      if (!context.userId || (context.threadId && context.threadId !== context.sessionId)) throw new Error("Loop tools require an authenticated chat; thread workers cannot start chat loops");
+      const data = await run(input as LoopInput, context);
+      return { ok: true, message: describeLoop(tool, data), data };
+    } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "Loop operation failed" }; }
+  };
+  const base = { page: "chat" as const, risk: "low" as const, defaultConsentLevel: "none" as const, tier: "standard" as const, category: "meta" as const, source: "builtin" as const };
+  return [
+    {
+      ...base, name: "loop.goal", displayName: "Chat loop goal",
+      description: "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until a real user.ask Q&A request, an explicit user stop, a provider error. Verified completion prompts a Q&A handoff instead of stopping automatically. For criteria that can be verified by a terminal command, set executionCriteria to their zero-based indices; completion then requires successful session-tracked execution references. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
+      parameters: { type: "object", properties: {
+        goal: { type: "string", minLength: 1, maxLength: 8000 },
+        criteria: { type: "array", minItems: 1, maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
+        executionCriteria: { type: "array", maxItems: 20, description: "Zero-based indices of criteria requiring a successful tracked terminal execution at completion. Use only for criteria verifiable by a terminal command.", items: { type: "number" } },
+      }, required: ["goal", "criteria"] },
+      execute: execute("loop.goal", (input, ctx) => service.goal(ctx.sessionId, input.goal, input.criteria, ctx.userId, input.executionCriteria)),
+    },
+    {
+      ...base, name: "loop.status", displayName: "Chat loop status",
+      description: "Read this chat's loop goal, acceptance criteria, current revision, progress, next message and verification evidence.",
+      parameters: { type: "object", properties: {} },
+      execute: execute("loop.status", (_input, ctx) => service.get(ctx.sessionId, ctx.userId)),
+    },
+    {
+      ...base, name: "loop.check", displayName: "Check loop goal",
+      description: "Evaluate the active goal before ending each turn. On continuation, report concrete new progress and supporting evidence, including integrated code, a passing focused regression, or a resolved blocker even if overall completion counts are unchanged. Distinguish provider capacity failures from work blockers. Continue with a concrete next message, wait for user input, or report verified completion with one evidence entry per criterion and then hand off through user.ask. Completion alone does not stop the loop. The waiting outcome requires a pending user.ask request; the gateway can also choose a brief automatic wait between turns. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, while review failures and repeated stalls do not pause continuation. Inspect the returned status and monitor.",
+      parameters: { type: "object", properties: {
+        executionRefs: { type: "array", maxItems: 20, description: "Optional tracked terminal executions supporting criteria; criterion is the zero-based criterion index. Completion rejects missing or unsuccessful executions. A successful exit does not establish relevance or workspace freshness.", items: { type: "object", required: ["criterion", "terminalId", "executionId"], properties: { criterion: { type: "number" }, terminalId: { type: "string" }, executionId: { type: "string" } } } },
+        revision: { type: "number" }, outcome: { type: "string", enum: ["continue", "complete", "waiting"] },
+        summary: { type: "string", minLength: 1, maxLength: 8000 },
+        nextMessage: { type: "string", maxLength: 8000 },
+        evidence: { type: "array", maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
+      }, required: ["revision", "outcome", "summary"] },
+      execute: execute("loop.check", (input, ctx) => service.checkMonitored(ctx.sessionId, input, ctx.userId, ctx.apiKeys, ctx.signal)),
+    },
+    {
+      ...base, name: "loop.resume", displayName: "Resume chat loop",
+      description: "Resume this chat's saved goal loop after the user requests continuation. Does not bypass pending questions or approvals.",
+      parameters: { type: "object", properties: {} },
+      execute: execute("loop.resume", (_input, ctx) => service.control(ctx.sessionId, "resume", ctx.userId)),
+    },
+  ];
+}

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { getApiUrl } from '@/lib/gateway-url'
+import { describeResetCredits, describeUsageReset, quotaLabel, type UsageResetCredits } from '@/lib/usage-resets'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -22,24 +24,37 @@ interface ProviderUsageSnapshot {
   status: string | null
   utilization: number | null
   resetsAt: string | null
+  resetSource: string | null
+  windowDurationMins: number | null
+  /** Unused "reset buttons" the provider granted (Codex's rate limit reset credits). */
+  resetCredits?: UsageResetCredits | null
   isUsingOverage: boolean
   updatedAt: string
+  accountLabel?: string | null
+  quotaRefreshMissing?: boolean
 }
 
-const RATE_LIMIT_LABELS: Record<string, string> = {
-  five_hour: 'Session limit',
-  seven_day: 'Weekly limit',
-  seven_day_opus: 'Opus weekly limit',
-  seven_day_sonnet: 'Sonnet weekly limit',
-  monthly: 'Monthly limit',
-  overage: 'Extra usage',
+const PROVIDER_LABELS: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  'opencode-go': 'OpenCode Go',
+  ollama: 'Ollama',
 }
 
-function formatResetsAt(iso: string | null): string | null {
-  if (!iso) return null
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return null
-  return `Resets ${date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+const PROVIDER_HINTS: Record<string, string> = {
+  'claude-code': 'Session and weekly subscription limits, reported live by Claude Code during a chat.',
+  codex: 'Session and weekly subscription limits, read from the Codex app server when you open or refresh the Usage modal.',
+  'opencode-go': 'Rolling, weekly, and monthly limits reported by OpenCode Go.',
+  ollama: 'Session, weekly, and monthly quota from your Ollama Cloud server.',
+}
+
+function providerLabel(providerType: string): string {
+  const known = PROVIDER_LABELS[providerType]
+  if (known) return known
+  return providerType
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 export function UsageSettings({ token }: { token: string | null }) {
@@ -78,65 +93,108 @@ export function UsageSettings({ token }: { token: string | null }) {
     )
   }
 
-  const claudeAccounts = accounts.filter((account) => account.providerType === 'claude-code')
-  const codexAccounts = accounts.filter((account) => account.providerType === 'codex')
+  // One card per provider that has an account or a usage row, in first-seen order.
+  const providerTypes = [
+    ...new Set([...accounts.map((account) => account.providerType), ...usage.map((row) => row.providerType)]),
+  ]
+  const groups = providerTypes.map((providerType) => ({
+    providerType,
+    accounts: accounts.filter((account) => account.providerType === providerType),
+    rows: usage.filter((row) => row.providerType === providerType),
+  }))
+  const empty = groups.every((group) => group.accounts.length === 0 && group.rows.length === 0)
 
   return (
     <div className="space-y-4">
-      <Card className="p-5 space-y-4">
-        <div>
-          <h2 className="text-base font-medium">Claude Code</h2>
-          <p className="text-sm text-muted-foreground">
-            Session and weekly subscription limits, reported live by Claude Code during a chat.
-          </p>
-        </div>
-        {claudeAccounts.length === 0 && (
-          <p className="text-sm text-muted-foreground">No Claude Code accounts configured.</p>
-        )}
-        {claudeAccounts.map((account) => {
-          const rows = usage.filter((row) => row.accountId === account.id)
-          return (
-            <div key={account.id} className="space-y-3">
-              <div className="text-sm font-medium">{account.label}</div>
-              {rows.length === 0 && (
-                <p className="text-xs text-muted-foreground">No usage reported yet — send a message in a Claude Code chat to populate this.</p>
-              )}
-              {rows.map((row) => {
-                const pct = row.utilization !== null ? Math.round(row.utilization * 100) : null
-                const resetText = formatResetsAt(row.resetsAt)
-                return (
-                  <div key={row.rateLimitType} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{RATE_LIMIT_LABELS[row.rateLimitType] ?? row.rateLimitType}</span>
-                      <span className="tabular-nums text-muted-foreground">{pct !== null ? `${pct}% used` : row.status ?? '—'}{resetText ? ` · ${resetText}` : ''}</span>
-                    </div>
-                    {pct !== null && (
-                      <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            pct >= 90 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+      {empty && (
+        <Card className="p-5 text-sm text-muted-foreground">
+          No provider accounts or usage reported yet.
+        </Card>
+      )}
+      {groups.map((group) => {
+        // Usage rows can belong to a server rather than a saved account (Ollama).
+        const orphanRows = group.rows.filter(
+          (row) => !group.accounts.some((account) => account.id === row.accountId),
+        )
+        return (
+          <Card key={group.providerType} className="p-5 space-y-4">
+            <div>
+              <h2 className="text-base font-medium">{providerLabel(group.providerType)}</h2>
+              <p className="text-sm text-muted-foreground">
+                {PROVIDER_HINTS[group.providerType] ?? 'Subscription limits reported by the provider.'}
+              </p>
             </div>
-          )
-        })}
-      </Card>
+            {group.accounts.length === 0 && orphanRows.length === 0 && (
+              <p className="text-sm text-muted-foreground">No accounts configured.</p>
+            )}
+            {group.accounts.map((account) => {
+              const accountRows = group.rows.filter((row) => row.accountId === account.id)
+              const resetCredits = describeResetCredits(
+                accountRows.find((row) => row.resetCredits)?.resetCredits,
+              )
+              return (
+              <div key={account.id} className="space-y-3">
+                <div className="text-sm font-medium">{account.label}</div>
+                {resetCredits && (
+                  <TooltipHint content={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}>
+                    <p
+                      className="text-xs text-emerald-600 dark:text-emerald-400"
+                    >
+                      ↺ {resetCredits.text}
+                    </p>
+                  </TooltipHint>
+                )}
+                {accountRows.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No usage reported yet.</p>
+                )}
+                {accountRows.map((row) => <UsageRow key={row.rateLimitType} row={row} />)}
+              </div>
+              )
+            })}
+            {orphanRows.length > 0 && (
+              <div className="space-y-3">
+                {orphanRows[0].accountLabel && (
+                  <div className="text-sm font-medium">{orphanRows[0].accountLabel}</div>
+                )}
+                {orphanRows.map((row) => <UsageRow key={row.rateLimitType} row={row} />)}
+              </div>
+            )}
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
 
-      <Card className="p-5 space-y-2">
-        <div>
-          <h2 className="text-base font-medium">Codex</h2>
-          <p className="text-sm text-muted-foreground">
-            Jait reads Codex subscription limits directly when you open or refresh the Usage modal.
-            {codexAccounts.length > 0 ? ' Open Usage from the avatar menu for session and weekly limits.' : ' No Codex accounts configured.'}
-          </p>
+function UsageRow({ row }: { row: ProviderUsageSnapshot }) {
+  const pct = row.utilization !== null ? Math.round(row.utilization * 100) : null
+  // A missing refresh channel means the deadline cannot be trusted, like the modal.
+  const reset = row.quotaRefreshMissing ? null : describeUsageReset(row.resetsAt, row.resetSource)
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{quotaLabel(row.rateLimitType)}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {pct !== null ? `${pct}% used` : row.status ?? '—'}
+          {reset && (
+            <TooltipHint content={reset.title}>
+              <span>
+                {' · '}{reset.text}{reset.estimated ? ' · est.' : ''}
+              </span>
+            </TooltipHint>
+          )}
+        </span>
+      </div>
+      {pct !== null && (
+        <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              pct >= 90 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+            }`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
         </div>
-      </Card>
+      )}
     </div>
   )
 }

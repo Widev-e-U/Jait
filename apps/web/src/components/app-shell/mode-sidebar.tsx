@@ -1,14 +1,18 @@
 import { BarChart3, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, Network, type LucideIcon } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { OverflowSidebarNavigation } from './overflow-sidebar-navigation'
+import { allocateRailSections } from './rail-allocation'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
 import { JaitIcon } from '@/components/icons/model-icons'
 import type { ThemeMode } from '@/hooks/useAuth'
+
+const ISSUE_URL = 'https://github.com/Widev-e-U/Jait/issues/new?title=' + encodeURIComponent('[Jait] ')
 
 export interface ModeSidebarItem {
   id: string
@@ -27,6 +31,7 @@ export interface SidebarAccount {
   loading: boolean
   onLogin: () => void
   onLogout: () => void
+  agentControl?: (collapsed: boolean) => ReactNode
   updateControl?: (collapsed: boolean) => ReactNode
   themeMode: ThemeMode
   onThemeModeChange: (mode: ThemeMode) => void
@@ -39,16 +44,99 @@ interface ModeSidebarProps {
   header?: (collapsed: boolean) => ReactNode
   account?: SidebarAccount
   onOpenSettings: () => void
+  /** When set, main navigation items can be dragged into a new order; receives the full new id order. */
+  onReorderNavigation?: (ids: string[]) => void
 }
 
-export function ModeSidebar({ items, navigationItems = [], bottomItems = [], header, account, onOpenSettings }: ModeSidebarProps) {
+export function ModeSidebar({ items, navigationItems = [], bottomItems = [], header, account, onOpenSettings, onReorderNavigation }: ModeSidebarProps) {
   const [usageModalOpen, setUsageModalOpen] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropId, setDropId] = useState<string | null>(null)
+  const reorderable = (id: string) => !!onReorderNavigation && navigationItems.some(item => item.id === id)
+  const finishDrag = () => {
+    if (dragId && dropId && dragId !== dropId) {
+      const ids = navigationItems.map(item => item.id).filter(id => id !== dragId)
+      const from = navigationItems.findIndex(item => item.id === dragId)
+      const to = navigationItems.findIndex(item => item.id === dropId)
+      ids.splice(from < to ? ids.indexOf(dropId) + 1 : ids.indexOf(dropId), 0, dragId)
+      onReorderNavigation?.(ids)
+    }
+    setDragId(null)
+    setDropId(null)
+  }
   const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('jait.navigationSidebarCollapsed') === 'true')
 
   useEffect(() => {
     window.localStorage.setItem('jait.navigationSidebarCollapsed', String(collapsed))
   }, [collapsed])
+
+  // Both overflow sections share one measured rail area. The shared allocator
+  // (rail-allocation.ts) deals the real pixel height between them, so a
+  // three-dot button only appears when its section's items genuinely cannot
+  // fit — never while the rail still has room for more buttons.
+  const railRef = useRef<HTMLDivElement>(null)
+  const [railHeight, setRailHeight] = useState<number | null>(null)
+
+  useLayoutEffect(() => {
+    const rail = railRef.current
+    if (!rail) return
+    const measure = () => setRailHeight(rail.getBoundingClientRect().height)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(rail)
+    return () => observer.disconnect()
+  }, [])
+
+  // Rail buttons get their height from CSS (the ui Button size variants can
+  // override the item's h-* class), so the fit calculation must not assume a
+  // fixed size. The off-screen sample renders plain and description items
+  // through renderItem — the exact markup the sections use — and is measured
+  // the same way the rail is.
+  const sampleRef = useRef<HTMLDivElement>(null)
+  const [buttonHeights, setButtonHeights] = useState<{ regular: number; description: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const sample = sampleRef.current
+    if (!sample) return
+    const measure = () => {
+      const [regularEl, descriptionEl] = Array.from(sample.children) as HTMLElement[]
+      if (!regularEl) return
+      const regular = regularEl.getBoundingClientRect().height
+      const description = descriptionEl ? descriptionEl.getBoundingClientRect().height : regular
+      setButtonHeights(previous => previous?.regular === regular && previous.description === description ? previous : { regular, description })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(sample)
+    return () => observer.disconnect()
+  }, [collapsed])
+
+  const heightFor = (item: ModeSidebarItem) =>
+    buttonHeights === null ? 36 : (!collapsed && item.description ? buttonHeights.description : buttonHeights.regular)
+  const navigationHeights = navigationItems.map(heightFor)
+  const toolsHeights = items.map(heightFor)
+  // Wrapper chrome around each section's content: the separated nav adds
+  // pb-2 + border-b (9px), the plain nav py-2 (16px).
+  const wrapperChrome = (navigationItems.length > 0 ? 9 : 0) + (items.length > 0 ? 16 : 0)
+  const availableContent = railHeight === null ? Number.POSITIVE_INFINITY : Math.max(0, railHeight - wrapperChrome)
+  const [navigationAllocation, toolsAllocation] = allocateRailSections(
+    [{ itemHeights: navigationHeights }, { itemHeights: toolsHeights }],
+    availableContent,
+    buttonHeights?.regular ?? 36,
+  )
+
+  const menuDragProps = (item: ModeSidebarItem) => reorderable(item.id) ? {
+    draggable: true,
+    // Deferred so the browser snapshots the drag image (the item the cursor
+    // holds) before the source is dimmed.
+    onDragStart: (event: DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); setTimeout(() => setDragId(item.id), 0) },
+    onDragOver: (event: DragEvent) => { if (dragId) { event.preventDefault(); setDropId(item.id) } },
+    onDrop: (event: DragEvent) => { event.preventDefault(); finishDrag() },
+    onDragEnd: () => { setDragId(null); setDropId(null) },
+    dragging: dragId === item.id,
+    dropTarget: !!dragId && dropId === item.id && dragId !== item.id,
+  } : undefined
 
   const renderItem = (item: ModeSidebarItem) => {
     const Icon = item.icon
@@ -57,7 +145,14 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         key={item.id}
         variant={item.active ? 'secondary' : 'ghost'}
         size="sm"
-        className={`${!collapsed && item.description ? 'h-12' : 'h-9'} w-full shrink-0 ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} rounded-md`}
+        className={`${!collapsed && item.description ? 'h-12' : 'h-9'} w-full shrink-0 ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'} rounded-md ${dragId === item.id ? 'opacity-40' : ''} ${dragId && dropId === item.id && dragId !== item.id ? 'ring-2 ring-primary/60' : ''}`}
+        {...(reorderable(item.id) ? {
+          draggable: true,
+          onDragStart: (event: DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); setDragId(item.id) },
+          onDragOver: (event: DragEvent) => { if (dragId) { event.preventDefault(); setDropId(item.id) } },
+          onDrop: (event: DragEvent) => { event.preventDefault(); finishDrag() },
+          onDragEnd: () => { setDragId(null); setDropId(null) },
+        } : {})}
         onClick={item.onSelect}
         disabled={item.disabled}
         aria-label={item.label}
@@ -66,7 +161,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         <span className="relative shrink-0">
           <Icon className="h-4 w-4" />
           {!!item.badge && (
-            <span className="absolute -right-2 -top-2 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">
+            <span className="absolute -right-2 -top-1.5 z-10 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none tabular-nums text-primary-foreground">
               {item.badge > 99 ? '99+' : item.badge}
             </span>
           )}
@@ -78,8 +173,8 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
   }
 
   return (
-    <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
-      <div className={`mb-3 flex ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'} px-1`}>
+    <aside data-browser-sidebar aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
+      <div className={`mb-3 flex shrink-0 ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'} px-1`}>
         {collapsed ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -101,13 +196,32 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         )}
         <JaitIcon size={22} className="shrink-0" />
       </div>
-      {header && <div className={collapsed ? 'flex flex-col items-center gap-1 pb-3' : 'px-1 pb-3'}>{header(collapsed)}</div>}
-      {navigationItems.length > 0 && <nav aria-label="Main navigation" className="flex flex-col gap-1 border-b pb-3">{navigationItems.map(renderItem)}</nav>}
-      <nav aria-label="Workspace tools" className="flex min-h-0 flex-col gap-1 overflow-y-auto py-3">{items.map(renderItem)}</nav>
-      <div className="flex-1" />
-      <div className="flex flex-col gap-1 border-t pt-2">
+      {header && <div className={collapsed ? 'flex shrink-0 flex-col items-center gap-1 pb-3' : 'shrink-0 px-1 pb-3'}>{header(collapsed)}</div>}
+      <div ref={railRef} className="flex min-h-0 flex-1 flex-col">
+        {navigationItems.length > 0 && <OverflowSidebarNavigation label="Main navigation" moreLabel="More navigation options" items={navigationItems} collapsed={collapsed} renderItem={renderItem} visibleCount={navigationAllocation.visibleCount} separated menuDragProps={menuDragProps} />}
+        {items.length > 0 && <OverflowSidebarNavigation label="Workspace tools" moreLabel="More workspace tools" items={items} collapsed={collapsed} renderItem={renderItem} visibleCount={toolsAllocation.visibleCount} />}
+      </div>
+      <div className="flex shrink-0 flex-col gap-1 border-t pt-2">
         {account?.updateControl?.(collapsed)}
         {bottomItems.map(renderItem)}
+        {account?.agentControl?.(collapsed)}
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" aria-label="GitHub" className={`h-9 w-full shrink-0 text-muted-foreground ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'}`}>
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.32-3.79-1.32-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.73 1.16 1.73 1.16 1 1.72 2.63 1.22 3.27.93.1-.73.39-1.22.71-1.5-2.5-.29-5.13-1.25-5.13-5.57 0-1.23.44-2.24 1.16-3.03-.12-.28-.5-1.43.11-2.99 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16.61 1.56.23 2.71.11 2.99.72.79 1.16 1.8 1.16 3.03 0 4.33-2.64 5.28-5.15 5.56.4.35.76 1.03.76 2.08v3.12c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z" /></svg>
+                  {!collapsed && <span>GitHub</span>}
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            {collapsed && <TooltipContent side="right">GitHub</TooltipContent>}
+          </Tooltip>
+          <DropdownMenuContent side={collapsed ? 'right' : 'top'} align="start" sideOffset={8}>
+            <DropdownMenuItem asChild><a href="https://github.com/Widev-e-U/Jait" target="_blank" rel="noopener noreferrer">Who am I</a></DropdownMenuItem>
+            <DropdownMenuItem asChild><a href={ISSUE_URL} target="_blank" rel="noopener noreferrer">Report an issue</a></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {account && (account.loading ? (
           <div className="h-10 animate-pulse rounded-md bg-muted" aria-label="Loading account" />
         ) : account.username ? (
@@ -115,7 +229,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className={`h-12 w-full ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'}`} aria-label="Account menu">
+                  <Button variant="ghost" className={`h-12 w-full shrink-0 ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'}`} aria-label="Account menu">
                     <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="text-xs">{account.initial}</AvatarFallback></Avatar>
                     {!collapsed && <span className="min-w-0 truncate text-left">{account.username}</span>}
                   </Button>
@@ -148,6 +262,11 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         ) : (
           <Button variant="ghost" className={`h-10 w-full ${collapsed ? 'justify-center px-0' : 'justify-start px-3'}`} onClick={account.onLogin} aria-label="Sign in">{collapsed ? <LogIn className="h-4 w-4" /> : 'Sign in'}</Button>
         ))}
+      </div>
+      {/* Off-screen sample used to measure real rail button heights. */}
+      <div ref={sampleRef} aria-hidden="true" className="pointer-events-none absolute left-[-9999px] top-0 flex flex-col gap-1">
+        {renderItem({ id: 'rail-measure-regular', label: 'Measure', icon: Sun, onSelect: () => {} })}
+        {renderItem({ id: 'rail-measure-description', label: 'Measure', description: 'Measure', icon: Sun, onSelect: () => {} })}
       </div>
       <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
       <CatalogueModal open={catalogueModalOpen} onOpenChange={setCatalogueModalOpen} />

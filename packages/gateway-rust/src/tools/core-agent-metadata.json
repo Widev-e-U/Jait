@@ -1,0 +1,32 @@
+{
+  "name": "agent",
+  "description": "Launch a sub-agent for complex, multi-step tasks. It gets its own tools, works autonomously, and returns a single result. Provide a detailed prompt specifying exactly what to do and return. To run work in parallel, emit several agent calls in the SAME reply \u2014 they start concurrently, one visible sub-agent each. One call per independent piece of work; only split across replies when a task needs an earlier sub-agent's output.",
+  "tier": "core",
+  "category": "agent",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Detailed task description for the agent."
+      },
+      "description": {
+        "type": "string",
+        "description": "Short (3-5 word) task label."
+      },
+      "details": {
+        "type": "string",
+        "description": "Additional context and expected return format."
+      },
+      "allowedTools": {
+        "type": "string",
+        "description": "Comma-separated tool names (default: read,search,execute,web)."
+      }
+    },
+    "required": [
+      "prompt",
+      "description"
+    ]
+  }
+}

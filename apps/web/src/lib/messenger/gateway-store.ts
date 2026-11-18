@@ -1,0 +1,567 @@
+import { messengerNotificationPreview } from '@jait/shared';
+import type { MessengerStoreApi, MessengerLogin } from './store';
+import { getApiUrl } from '@/lib/gateway-url';
+import { getAuthToken } from '@/lib/auth-token';
+import { triggerSystemNotification } from '@/lib/system-notifications';
+import { messengerReadLink } from './notification-actions';
+import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
+import { cachedBlob, clearBlobCache } from './blob-cache';
+
+/** Bridge-generated IDs are not useful as notification sender names. */
+function notificationSenderName(value?: string): string | undefined {
+  const name = value?.trim();
+  if (!name || /^@[^:]+:[^:]+$/.test(name) || /^(?:@?[^:]*?)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?::[^\s]+)?$/i.test(name)) return undefined;
+  return name;
+}
+
+/** Id prefix for messages that only exist locally until the gateway confirms. */
+const LOCAL_ECHO_PREFIX = '~local:';
+
+/** How many of the newest chats are kept warm in the message cache. */
+const PREFETCH_ROOMS = 8;
+
+/** Thin authenticated view of a gateway-owned Matrix device. Disposing a view never logs Matrix out. */
+export class GatewayMessengerStore implements MessengerStoreApi {
+  private remoteSnapshot: MessengerSnapshot = {
+    status: 'disconnected',
+    error: null,
+    session: null,
+    rooms: [],
+    messages: [],
+    selectedRoomId: null,
+    notifications: false,
+    assistantAccess: false,
+    loaded: false,
+  };
+  private remoteListeners = new Set<() => void>();
+  private stopped = false;
+  private pollTimer?: ReturnType<typeof setTimeout>;
+  private roomCache = new Map<string, MessengerMessage[]>();
+  /** Room activity timestamp each cached room was fetched at. */
+  private cachedAt = new Map<string, number>();
+  private prefetching = false;
+  private requestGeneration = 0;
+  private visible: string | null = null;
+  private started = false;
+  private notificationKey: string | null = null;
+  /** Last ready snapshot for this account, retained across reconnections. */
+  private notificationRooms: Map<string, MessengerRoom> | null = null;
+  private pausedReads = new Set<string>();
+  private activeSearch = '';
+  /**
+   * Messages shown before the gateway confirms them. The gateway snapshot only
+   * contains confirmed timeline events, so without this overlay an outgoing
+   * message stays invisible for a full round trip (send + sync + poll).
+   */
+  private optimistic = new Map<
+    string,
+    { roomId: string; message: MessengerMessage }
+  >();
+  private optimisticIds = 0;
+  private searchResults: Array<{
+    roomId: string;
+    roomName: string;
+    message: MessengerMessage;
+  }> = [];
+  private async refreshSearch(query: string) {
+    const result = await this.request(
+      '/search?query=' + encodeURIComponent(query),
+    );
+    if (query === this.activeSearch) {
+      this.searchResults = result.results;
+      this.publish({});
+    }
+  }
+  private onStorage = (event: StorageEvent) => {
+    try {
+      if (event.storageArea === window.localStorage &&
+          event.key === this.notificationKey && this.notificationKey) {
+        this.publish({ notifications: event.newValue === '1' });
+      }
+    } catch { /* Storage may be unavailable. */ }
+  };
+  constructor(private owner: string) {}
+  private preferenceKey(session: MessengerSnapshot['session']) {
+    if (!session) return null;
+    return 'jait.messenger.notifications.' +
+      [this.owner, session.homeserver, session.userId].map(encodeURIComponent).join('.');
+  }
+  private readNotificationPreference(key: string | null) {
+    if (!key) return false;
+    // On unless the user muted it explicitly.
+    try { return window.localStorage.getItem(key) !== '0'; } catch { return true; }
+  }
+  subscribe = (listener: () => void) => {
+    this.remoteListeners.add(listener);
+    return () => {
+      this.remoteListeners.delete(listener);
+    };
+  };
+  getSnapshot = () => this.remoteSnapshot;
+  private publish(patch: Partial<MessengerSnapshot>) {
+    if (this.stopped) return;
+    this.remoteSnapshot = { ...this.remoteSnapshot, ...patch };
+    this.remoteListeners.forEach((listener) => listener());
+  }
+  /** Server messages plus local echoes the gateway has not delivered yet. */
+  private withOptimistic(roomId: string, messages: MessengerMessage[]) {
+    const known = new Set(messages.map((message) => message.id));
+    const merged = [...messages];
+    for (const [id, entry] of this.optimistic) {
+      if (entry.roomId !== roomId) continue;
+      if (known.has(entry.message.id)) {
+        // The gateway reports the real event now, so drop the local copy.
+        this.optimistic.delete(id);
+        continue;
+      }
+      let index = merged.length;
+      while (index > 0 && merged[index - 1]!.timestamp > entry.message.timestamp)
+        index--;
+      merged.splice(index, 0, entry.message);
+    }
+    return merged;
+  }
+  private publishMessages(roomId: string) {
+    if (this.remoteSnapshot.selectedRoomId !== roomId) return;
+    // Fall back to what is on screen when the room cache is still empty (for
+    // example right after selecting a room), ignoring other local echoes so
+    // withOptimistic() does not see them twice.
+    const base =
+      this.roomCache.get(roomId) ??
+      this.remoteSnapshot.messages.filter(
+        (message) => !message.id.startsWith(LOCAL_ECHO_PREFIX),
+      );
+    this.publish({ messages: this.withOptimistic(roomId, base) });
+  }
+  /**
+   * Show an outgoing message immediately, then swap its local id for the
+   * gateway event id once the send resolves. Failures drop the local echo so
+   * the caller can restore the draft.
+   */
+  private async sendOptimistic(
+    roomId: string,
+    body: string,
+    request: () => Promise<{ eventId?: string }>,
+    replyTo?: MessengerMessage['replyTo'],
+  ) {
+    const localId =
+      LOCAL_ECHO_PREFIX + roomId + ':' + ++this.optimisticIds + ':' + Date.now();
+    this.optimistic.set(localId, {
+      roomId,
+      message: {
+        id: localId,
+        sender: this.remoteSnapshot.session?.userId ?? 'You',
+        body,
+        timestamp: Date.now(),
+        own: true,
+        encrypted: false,
+        unableToDecrypt: false,
+        pending: true,
+        failed: false,
+        ...(replyTo ? { replyTo } : {}),
+      },
+    });
+    this.publishMessages(roomId);
+    let eventId: string | undefined;
+    try {
+      eventId = (await request()).eventId;
+    } catch (error) {
+      this.dropOptimistic(localId);
+      throw error;
+    }
+    const current = this.optimistic.get(localId);
+    if (current) {
+      if (eventId)
+        this.optimistic.set(localId, {
+          roomId,
+          message: { ...current.message, id: eventId, pending: false },
+        });
+      else this.optimistic.delete(localId);
+      this.publishMessages(roomId);
+    }
+    void this.refreshRemote().catch(() => {});
+  }
+  private dropOptimistic(localId: string) {
+    const entry = this.optimistic.get(localId);
+    if (!entry) return;
+    this.optimistic.delete(localId);
+    this.publishMessages(entry.roomId);
+  }
+  private forgetRoom(roomId: string) {
+    for (const [id, entry] of this.optimistic)
+      if (entry.roomId === roomId) this.optimistic.delete(id);
+    this.roomCache.delete(roomId);
+    this.cachedAt.delete(roomId);
+  }
+  private async request(path: string, method = 'GET', body?: unknown) {
+    const token = getAuthToken();
+    if (!token) throw new Error('Sign in to Jait to use Messenger.');
+    const response = await fetch(getApiUrl() + '/api/messenger' + path, {
+      method,
+      credentials: 'include',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok)
+      throw new Error(
+        'The gateway could not complete the Matrix request. Check your connection and credentials.',
+      );
+    return response.json();
+  }
+  private async refreshRemote() {
+    const generation = ++this.requestGeneration;
+    const roomId = this.remoteSnapshot.selectedRoomId;
+    const result = await this.request(
+      roomId ? '?roomId=' + encodeURIComponent(roomId) : '',
+    );
+    if (this.stopped || generation !== this.requestGeneration) return;
+    const snapshot: MessengerSnapshot = result.snapshot;
+    const key = this.preferenceKey(snapshot.session);
+    const sameAccount = key !== null && key === this.notificationKey;
+    const notifications = sameAccount
+      ? this.remoteSnapshot.notifications
+      : this.readNotificationPreference(key);
+    if (!sameAccount) this.notificationRooms = null;
+    if (snapshot.status === 'ready' && key && this.notificationRooms && notifications) {
+      for (const room of snapshot.rooms) {
+        if (room.hidden) continue;
+        const old = this.notificationRooms.get(room.id);
+        const focused = this.visible === room.id &&
+          document.visibilityState === 'visible' &&
+          document.hasFocus();
+        // Reactions never raise unread counts, so they get their own signal.
+        if (old && !focused && (room.reactionsToMe ?? 0) > (old.reactionsToMe ?? 0)) {
+          void triggerSystemNotification({
+            id: 'matrix-reaction:' + room.id + ':' + room.reactionsToMe,
+            title: room.name,
+            body: messengerNotificationPreview(room.latestReaction
+              ? room.latestReaction.emoji + ' Reacted to your message: ' + room.latestReaction.messageBody
+              : 'Reacted to your message'),
+            independentOfAttention: true,
+            link: '/messenger?roomId=' + encodeURIComponent(room.id),
+            ...(room.latestReaction?.latestEventId && snapshot.session
+              ? {
+                  markReadLink: messengerReadLink(
+                    room.id,
+                    room.latestReaction.latestEventId,
+                    snapshot.session.userId,
+                    snapshot.session.homeserver,
+                  ),
+                }
+              : {}),
+          }).catch(() => {});
+        }
+        if (
+          (old && room.timestamp <= old.timestamp) ||
+          (old ? room.unread <= old.unread : !room.unread) ||
+          (this.visible === room.id &&
+            document.visibilityState === 'visible' &&
+            document.hasFocus())
+        )
+          continue;
+        const message = snapshot.messages.at(-1);
+        const sender = notificationSenderName(room.latestSender);
+        const peerName = notificationSenderName(room.peer?.name);
+        void triggerSystemNotification({
+          id: room.latestEventId ? 'matrix-message:' + room.latestEventId : 'matrix-room-event:' + room.id + ':' + room.timestamp,
+          replaceId: 'matrix-room:' + room.id,
+          title: room.peer ? sender ?? peerName ?? room.name : room.name,
+          body: messengerNotificationPreview(!room.peer && sender ? `${sender}: ${room.preview || 'New message'}` : room.preview || 'New message'),
+          independentOfAttention: true,
+          link: '/messenger?roomId=' + encodeURIComponent(room.id),
+          ...(message && snapshot.selectedRoomId === room.id && snapshot.session
+            ? {
+                markReadLink: messengerReadLink(
+                  room.id,
+                  message.id,
+                  snapshot.session.userId,
+                  snapshot.session.homeserver,
+                ),
+              }
+            : {}),
+        }).catch(() => {});
+      }
+    }
+    if (this.activeSearch)
+      void this.refreshSearch(this.activeSearch).catch(() => {});
+    if (snapshot.status === 'ready' && key) {
+      this.notificationRooms = new Map(snapshot.rooms.map(room => [room.id, room]));
+    }
+    this.notificationKey = key;
+    if (roomId) {
+      this.roomCache.set(roomId, snapshot.messages);
+      const room = snapshot.rooms.find((entry) => entry.id === roomId);
+      if (room) this.cachedAt.set(roomId, room.timestamp);
+    }
+    void this.prefetchRecent(snapshot).catch(() => {});
+    this.publish({
+      ...snapshot,
+      messages: roomId
+        ? this.withOptimistic(roomId, snapshot.messages)
+        : snapshot.messages,
+      selectedRoomId: roomId,
+      notifications,
+      loaded: true,
+    });
+  }
+  /**
+   * Warm the message cache for the newest chats so opening one renders
+   * instantly. Fetches at most one room per poll and only when its latest
+   * activity changed since it was cached, so idle accounts cost nothing.
+   */
+  private async prefetchRecent(snapshot: MessengerSnapshot) {
+    if (this.prefetching || snapshot.status !== 'ready') return;
+    const next = snapshot.rooms
+      .filter(
+        (room) =>
+          !room.hidden &&
+          room.id !== snapshot.selectedRoomId &&
+          this.cachedAt.get(room.id) !== room.timestamp,
+      )
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, PREFETCH_ROOMS)[0];
+    if (!next) return;
+    this.prefetching = true;
+    try {
+      const result = await this.request(
+        '?roomId=' + encodeURIComponent(next.id),
+      );
+      // Selecting the room meanwhile means refreshRemote owns its cache.
+      if (this.stopped || this.remoteSnapshot.selectedRoomId === next.id) return;
+      this.roomCache.set(next.id, result.snapshot.messages);
+      this.cachedAt.set(next.id, next.timestamp);
+    } finally {
+      this.prefetching = false;
+    }
+  }
+  async resume() {
+    if (this.started) return;
+    this.started = true;
+    if (typeof window !== 'undefined') window.addEventListener('storage', this.onStorage);
+    // Chrome only shows the permission prompt from a user gesture.
+    if (typeof window !== 'undefined' && 'Notification' in window && !window.jaitDesktop?.notify && Notification.permission === 'default')
+      window.addEventListener('pointerdown', () => { void Notification.requestPermission().catch(() => {}); }, { once: true });
+    const poll = async () => {
+      try {
+        await this.refreshRemote();
+      } catch {
+        this.publish({
+          status: 'reconnecting',
+          error: 'Gateway connection interrupted. Retrying.',
+        });
+      }
+      if (!this.stopped) this.pollTimer = setTimeout(() => void poll(), 2000);
+    };
+    await poll();
+  }
+  async connect(input: MessengerLogin) {
+    this.publish({ status: 'connecting', error: null });
+    try {
+      await this.request('', 'POST', input);
+      await this.refreshRemote();
+    } catch (error) {
+      this.publish({
+        status: 'error',
+        error:
+          'Matrix sign-in failed. Check credentials and homeserver availability.',
+      });
+      throw error;
+    }
+  }
+  private async action(body: unknown) {
+    const result = await this.request('/command', 'POST', body);
+    await this.refreshRemote();
+    return result;
+  }
+  selectRoom(id: string | null) {
+    ++this.requestGeneration;
+    if (id) this.pausedReads.delete(id);
+    this.publish({
+      selectedRoomId: id,
+      typing: [],
+      messages: id ? this.withOptimistic(id, this.roomCache.get(id) ?? []) : [],
+    });
+    void this.refreshRemote().catch(() => {});
+  }
+  async send(roomId: string, text: string, replyTo?: NonNullable<MessengerMessage['replyTo']>) {
+    const body = text.trim();
+    if (!body) return;
+    await this.sendOptimistic(
+      roomId,
+      body,
+      () =>
+        this.request('/command', 'POST', {
+          action: 'send',
+          roomId,
+          text: body,
+          ...(replyTo ? { replyToEventId: replyTo.id } : {}),
+        }),
+      replyTo,
+    );
+  }
+  async edit(roomId: string, eventId: string, text: string) {
+    await this.action({ action: 'edit', roomId, eventId, text });
+  }
+  async react(roomId: string, eventId: string, key: string) {
+    await this.action({ action: 'react', roomId, eventId, key });
+  }
+  async remove(roomId: string) {
+    await this.request('/command', 'POST', { action: 'remove', roomId });
+    this.forgetRoom(roomId);
+    if (this.remoteSnapshot.selectedRoomId === roomId) this.selectRoom(null);
+    await this.refreshRemote();
+  }
+  /** Hidden state lives in Matrix account data, so every client of the account sees it. */
+  async setHidden(roomId: string, hidden: boolean) {
+    const rooms = this.remoteSnapshot.rooms.map((room) => room.id === roomId ? { ...room, hidden } : room);
+    this.publish({ rooms });
+    try {
+      await this.request('/command', 'POST', { action: hidden ? 'hide' : 'unhide', roomId });
+    } finally {
+      await this.refreshRemote().catch(() => {});
+    }
+  }
+  async join(roomId: string) {
+    await this.action({ action: 'join', roomId });
+  }
+  async leave(roomId: string) {
+    await this.action({ action: 'leave', roomId });
+    this.forgetRoom(roomId);
+  }
+  async openDirect(userId: string, select = true) {
+    const result = await this.action({ action: 'open', userId });
+    if (select) this.selectRoom(result.roomId);
+    return result.roomId as string;
+  }
+  async loadEarlier() {
+    if (this.remoteSnapshot.selectedRoomId)
+      await this.action({
+        action: 'earlier',
+        roomId: this.remoteSnapshot.selectedRoomId,
+      });
+  }
+  async markRead(
+    roomId = this.remoteSnapshot.selectedRoomId,
+    eventId?: string,
+    _automatic = false,
+  ) {
+    if (!roomId || (_automatic && this.pausedReads.has(roomId))) return;
+    if (eventId) this.pausedReads.add(roomId);
+    await this.action({
+      action: 'read',
+      roomId,
+      ...(eventId ? { eventId } : {}),
+    });
+  }
+  async markUnread(roomId: string) {
+    this.pausedReads.add(roomId);
+    await this.action({ action: 'unread', roomId });
+  }
+  setVisibleRoom(id: string | null) {
+    this.visible = id;
+  }
+  setAssistantAccess(enabled: boolean) {
+    void this.action({ action: 'assistantAccess', enabled }).catch(() => {});
+  }
+  async assistantCommand(): Promise<
+    import('@jait/shared').MessengerToolResponse
+  > {
+    return {
+      ok: false,
+      message: 'Assistant commands are executed by the gateway.',
+    };
+  }
+  searchLoadedMessages(query: string) {
+    if (query !== this.activeSearch) {
+      this.activeSearch = query;
+      this.searchResults = [];
+      if (query.trim()) void this.refreshSearch(query).catch(() => {});
+    }
+    return this.searchResults;
+  }
+  async enableNotifications(enabled: boolean) {
+    const key = this.notificationKey;
+    if (!key) throw new Error('Connect to Matrix first.');
+    if (
+      enabled &&
+      'Notification' in window &&
+      !window.jaitDesktop?.notify &&
+      (await Notification.requestPermission()) !== 'granted'
+    )
+      throw new Error('Allow notifications in your device settings first.');
+    if (key !== this.notificationKey) throw new Error('The Matrix account changed.');
+    try { window.localStorage.setItem(key, enabled ? '1' : '0'); } catch { /* Keep the preference for this session. */ }
+    this.publish({ notifications: enabled });
+  }
+  async sendAttachment(
+    roomId: string,
+    file: File,
+    options: { caption?: string; viewOnce?: boolean } = {},
+  ) {
+    if (file.size > 20 * 1024 * 1024)
+      throw new Error('Attachments must be 20 MB or smaller.');
+    const caption = options.caption?.trim();
+    await this.sendOptimistic(roomId, caption || file.name, async () => {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]!);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      return this.request('/command', 'POST', {
+        action: 'attachment',
+        roomId,
+        data,
+        name: file.name,
+        mime: file.type,
+        ...(caption ? { caption } : {}),
+        ...(options.viewOnce ? { viewOnce: true } : {}),
+      });
+    });
+  }
+  async attachmentBlob(
+    attachment: NonNullable<MessengerMessage['attachment']>,
+  ) {
+    return cachedBlob(`att:${attachment.url}`, async () => {
+      const result = await this.request('/media', 'POST', {
+        url: attachment.url,
+        file: attachment.file,
+      });
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      return new Blob([bytes], { type: attachment.mime });
+    });
+  }
+  async avatarBlob(mxcUrl: string) {
+    return cachedBlob(`avatar:${mxcUrl}`, async () => {
+      const result = await this.request('/media', 'POST', { url: mxcUrl });
+      const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      return new Blob([bytes]);
+    });
+  }
+  async restoreKeys(recoveryKey: string) {
+    await this.request('/keys', 'POST', { recoveryKey });
+    await this.refreshRemote();
+  }
+  async disconnect() {
+    ++this.requestGeneration;
+    await this.request('', 'DELETE');
+    clearBlobCache();
+    this.roomCache.clear();
+    this.cachedAt.clear();
+    this.optimistic.clear();
+    await this.refreshRemote();
+  }
+  dispose() {
+    if (typeof window !== 'undefined') window.removeEventListener('storage', this.onStorage);
+    this.stopped = true;
+    ++this.requestGeneration;
+    clearTimeout(this.pollTimer);
+    this.roomCache.clear();
+    this.optimistic.clear();
+    this.remoteListeners.clear();
+  }
+}

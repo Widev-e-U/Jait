@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mermaid from 'mermaid'
-import { Loader2, RefreshCw, Download, Copy, Check, Sparkles, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { Loader2, RefreshCw, Download, Copy, Check, ZoomIn, ZoomOut, Maximize2, Bot } from 'lucide-react'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 /* ------------------------------------------------------------------ */
@@ -285,7 +285,7 @@ export function ArchitecturePanel({
             onClick={onGenerate}
             className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            <Sparkles className="h-3.5 w-3.5" />
+            <Bot className="h-3.5 w-3.5" />
             Generate Architecture Diagram
           </button>
         )}

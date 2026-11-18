@@ -1,0 +1,1659 @@
+{
+  "format": 1,
+  "source_sha256": "6a5c9c35b52c25b583d245ee324707704e0f1a9e37f4a34aa7b86d1cdd5c62f7",
+  "repair_source_sha256": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
+  "repairs": {
+    "agent_threads": {
+      "persona_agent_id": "TEXT",
+      "kind": "TEXT NOT NULL DEFAULT 'delivery'",
+      "reasoning_effort": "TEXT",
+      "pr_url": "TEXT",
+      "pr_number": "INTEGER",
+      "pr_title": "TEXT",
+      "pr_base_branch": "TEXT",
+      "pr_state": "TEXT",
+      "execution_node_id": "TEXT",
+      "execution_node_name": "TEXT",
+      "skill_ids": "TEXT",
+      "routing_plan": "TEXT",
+      "change_files": "INTEGER",
+      "change_insertions": "INTEGER",
+      "change_deletions": "INTEGER"
+    },
+    "user_settings": {
+      "disabled_tools": "TEXT",
+      "stt_provider": "TEXT NOT NULL DEFAULT 'simulated'",
+      "chat_provider": "TEXT NOT NULL DEFAULT 'jait'",
+      "selected_model": "TEXT",
+      "reasoning_effort": "TEXT",
+      "project_picker_path": "TEXT",
+      "project_picker_node_id": "TEXT"
+    },
+    "messages": {
+      "tool_calls": "TEXT",
+      "segments": "TEXT"
+    },
+    "sessions": {
+      "user_id": "TEXT",
+      "project_id": "TEXT"
+    },
+    "automation_repositories": {
+      "device_id": "TEXT",
+      "github_url": "TEXT",
+      "strategy": "TEXT"
+    }
+  },
+  "migrations": [
+    {
+      "id": 1,
+      "name": "baseline_schema",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS sessions (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          name TEXT,\n          workspace_path TEXT,\n          created_at TEXT NOT NULL,\n          last_active_at TEXT NOT NULL,\n          status TEXT DEFAULT 'active',\n          metadata TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status, last_active_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS users (\n          id TEXT PRIMARY KEY,\n          username TEXT NOT NULL UNIQUE,\n          password_hash TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS user_settings (\n          user_id TEXT PRIMARY KEY,\n          theme TEXT NOT NULL DEFAULT 'system',\n          api_keys TEXT,\n          stt_provider TEXT NOT NULL DEFAULT 'simulated',\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS audit_log (\n          id TEXT PRIMARY KEY,\n          timestamp TEXT NOT NULL,\n          session_id TEXT,\n          surface_type TEXT,\n          device_id TEXT,\n          action_id TEXT UNIQUE,\n          action_type TEXT,\n          tool_name TEXT,\n          inputs TEXT,\n          outputs TEXT,\n          side_effects TEXT,\n          signature TEXT,\n          parent_action_id TEXT,\n          status TEXT,\n          consent_method TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_audit_action_id ON audit_log(action_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id, timestamp DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_audit_surface ON audit_log(surface_type, timestamp DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_log(device_id, timestamp DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS trust_levels (\n          action_type TEXT PRIMARY KEY,\n          approved_count INTEGER DEFAULT 0,\n          reverted_count INTEGER DEFAULT 0,\n          current_level INTEGER DEFAULT 0\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS consent_log (\n          id TEXT PRIMARY KEY,\n          action_id TEXT NOT NULL,\n          tool_name TEXT NOT NULL,\n          decision TEXT NOT NULL,\n          decided_at TEXT NOT NULL,\n          decided_via TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS consent_session_approvals (\n          session_id TEXT PRIMARY KEY,\n          approve_all INTEGER NOT NULL DEFAULT 1,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS memories (\n          id TEXT PRIMARY KEY,\n          scope TEXT NOT NULL,\n          content TEXT NOT NULL,\n          source_type TEXT NOT NULL,\n          source_id TEXT NOT NULL,\n          source_surface TEXT NOT NULL,\n          embedding TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          expires_at TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS messages (\n          id TEXT PRIMARY KEY,\n          session_id TEXT NOT NULL,\n          role TEXT NOT NULL,\n          content TEXT NOT NULL,\n          tool_calls TEXT,\n          created_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS scheduled_jobs (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          name TEXT NOT NULL,\n          cron TEXT NOT NULL,\n          tool_name TEXT NOT NULL,\n          input TEXT,\n          session_id TEXT,\n          workspace_root TEXT,\n          enabled INTEGER NOT NULL DEFAULT 1,\n          last_run_at TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_user_updated ON scheduled_jobs(user_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "legacy_column_additions",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE sessions ADD COLUMN user_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN tool_calls TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "user_settings_disabled_tools",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN disabled_tools TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "session_state_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS session_state (\n          session_id TEXT NOT NULL,\n          key TEXT NOT NULL,\n          value TEXT,\n          updated_at TEXT NOT NULL,\n          PRIMARY KEY (session_id, key)\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_session_state_session ON session_state(session_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "user_settings_stt_provider",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN stt_provider TEXT NOT NULL DEFAULT 'simulated'",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "messages_segments_column",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN segments TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "agent_threads_tables",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS agent_threads (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          session_id TEXT,\n          title TEXT NOT NULL,\n          provider_id TEXT NOT NULL,\n          model TEXT,\n          runtime_mode TEXT NOT NULL DEFAULT 'full-access',\n          kind TEXT NOT NULL DEFAULT 'delivery',\n          working_directory TEXT,\n          branch TEXT,\n          status TEXT NOT NULL DEFAULT 'idle',\n          provider_session_id TEXT,\n          error TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_threads_user ON agent_threads(user_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_threads_session ON agent_threads(session_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_threads_status ON agent_threads(status)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_threads_updated ON agent_threads(updated_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS agent_thread_activities (\n          id TEXT PRIMARY KEY,\n          thread_id TEXT NOT NULL,\n          kind TEXT NOT NULL,\n          summary TEXT NOT NULL,\n          payload TEXT,\n          created_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_thread ON agent_thread_activities(thread_id, created_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "user_settings_chat_provider",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN chat_provider TEXT NOT NULL DEFAULT 'jait'",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "agent_threads_pr_metadata",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN pr_url TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN pr_number INTEGER",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN pr_title TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN pr_state TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "automation_repositories_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS automation_repositories (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          name TEXT NOT NULL,\n          default_branch TEXT NOT NULL DEFAULT 'main',\n          local_path TEXT NOT NULL,\n          github_token TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_repos_user ON automation_repositories(user_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "automation_repositories_device_id",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repositories ADD COLUMN device_id TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "automation_repositories_github_url",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repositories ADD COLUMN github_url TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "agent_threads_kind",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN kind TEXT NOT NULL DEFAULT 'delivery'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE agent_threads SET kind = 'delivery' WHERE kind IS NULL OR kind = ''",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "automation_plans_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS automation_plans (\n          id TEXT PRIMARY KEY,\n          repo_id TEXT NOT NULL,\n          user_id TEXT,\n          title TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'draft',\n          tasks TEXT NOT NULL DEFAULT '[]',\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_plans_repo ON automation_plans(repo_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_plans_user ON automation_plans(user_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "network_hosts_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS network_hosts (\n          ip TEXT PRIMARY KEY,\n          mac TEXT,\n          hostname TEXT,\n          os_version TEXT,\n          open_ports TEXT NOT NULL DEFAULT '[]',\n          ssh_reachable INTEGER NOT NULL DEFAULT 0,\n          agent_status TEXT NOT NULL DEFAULT 'not-installed',\n          providers TEXT,\n          first_seen_at TEXT NOT NULL,\n          last_seen_at TEXT NOT NULL,\n          scanned_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_network_hosts_last_seen ON network_hosts(last_seen_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "scheduled_job_runs_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS scheduled_job_runs (\n          id TEXT PRIMARY KEY,\n          job_id TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'running',\n          triggered_by TEXT NOT NULL DEFAULT 'schedule',\n          output TEXT,\n          error TEXT,\n          plan_id TEXT,\n          started_at TEXT NOT NULL,\n          completed_at TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_job_runs_job ON scheduled_job_runs(job_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_job_runs_started ON scheduled_job_runs(started_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "agent_threads_execution_node",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN execution_node_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN execution_node_name TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "user_settings_workspace_picker_location",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN workspace_picker_path TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN workspace_picker_node_id TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "automation_repositories_strategy",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repositories ADD COLUMN strategy TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "architecture_diagrams_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS architecture_diagrams (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          workspace_root TEXT NOT NULL,\n          diagram TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_architecture_diagrams_user_workspace ON architecture_diagrams(user_id, workspace_root)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_updated ON architecture_diagrams(updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "workspaces_and_workspace_state",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS workspaces (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          title TEXT,\n          root_path TEXT,\n          node_id TEXT,\n          created_at TEXT NOT NULL,\n          last_active_at TEXT NOT NULL,\n          status TEXT DEFAULT 'active',\n          metadata TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_workspaces_user_status ON workspaces(user_id, status, last_active_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_workspaces_user_root ON workspaces(user_id, root_path, node_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS workspace_state (\n          workspace_id TEXT NOT NULL,\n          key TEXT NOT NULL,\n          value TEXT,\n          updated_at TEXT NOT NULL,\n          PRIMARY KEY (workspace_id, key)\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_workspace_state_workspace ON workspace_state(workspace_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE sessions ADD COLUMN workspace_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "backfill_workspaces"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "user_settings_jait_backend",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN jait_backend TEXT NOT NULL DEFAULT 'openai'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN recent_models TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "assistant_profiles_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS assistant_profiles (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          name TEXT NOT NULL,\n          description TEXT,\n          system_prompt TEXT,\n          runtime_mode TEXT,\n          tool_profile TEXT,\n          enabled_skills TEXT,\n          enabled_plugins TEXT,\n          is_default INTEGER NOT NULL DEFAULT 0,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_assistant_profiles_user ON assistant_profiles(user_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "browser_collaboration_tables",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS browser_sessions (\n          id TEXT PRIMARY KEY,\n          name TEXT NOT NULL,\n          workspace_root TEXT,\n          target_url TEXT,\n          preview_url TEXT,\n          preview_session_id TEXT,\n          browser_id TEXT,\n          mode TEXT NOT NULL DEFAULT 'shared',\n          origin TEXT NOT NULL DEFAULT 'direct',\n          controller TEXT NOT NULL DEFAULT 'agent',\n          status TEXT NOT NULL DEFAULT 'ready',\n          secret_safe INTEGER NOT NULL DEFAULT 0,\n          storage_profile TEXT,\n          created_by TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_sessions_browser ON browser_sessions(browser_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_sessions_preview ON browser_sessions(preview_session_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_sessions_user_updated ON browser_sessions(created_by, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS browser_interventions (\n          id TEXT PRIMARY KEY,\n          browser_session_id TEXT NOT NULL,\n          thread_id TEXT,\n          chat_session_id TEXT,\n          kind TEXT NOT NULL DEFAULT 'custom',\n          reason TEXT NOT NULL,\n          instructions TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'open',\n          secret_safe INTEGER NOT NULL DEFAULT 0,\n          allow_user_note INTEGER NOT NULL DEFAULT 1,\n          requested_by TEXT,\n          resolved_by TEXT,\n          user_note TEXT,\n          requested_at TEXT NOT NULL,\n          resolved_at TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_interventions_session ON browser_interventions(browser_session_id, requested_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_interventions_status ON browser_interventions(status, requested_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "plugins_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS plugins (\n          id TEXT PRIMARY KEY,\n          display_name TEXT NOT NULL,\n          version TEXT NOT NULL,\n          description TEXT,\n          author TEXT,\n          path TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'installed',\n          config TEXT NOT NULL DEFAULT '{}',\n          error TEXT,\n          installed_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "messages_context_flow_column",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN context_flow TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "agent_threads_pr_base_branch",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN pr_base_branch TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "name": "agent_threads_skill_ids",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN skill_ids TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "name": "messages_thinking_column",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN thinking TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "name": "agent_threads_routing_plan",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN routing_plan TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "name": "agent_threads_diff_stats",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN change_files INTEGER",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN change_insertions INTEGER",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN change_deletions INTEGER",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "name": "automation_repo_proposals_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS automation_repo_proposals (\n          id TEXT PRIMARY KEY,\n          repo_id TEXT NOT NULL,\n          user_id TEXT,\n          message TEXT NOT NULL,\n          status TEXT NOT NULL DEFAULT 'open',\n          priority TEXT NOT NULL DEFAULT 'normal',\n          due_date TEXT,\n          tags TEXT NOT NULL DEFAULT '[]',\n          source_thread_id TEXT,\n          source_thread_title TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_repo ON automation_repo_proposals(repo_id, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_user ON automation_repo_proposals(user_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "automation_repo_proposals_todo_metadata",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN status TEXT NOT NULL DEFAULT 'open'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN due_date TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "reminders_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS reminders (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          workspace_id TEXT,\n          session_id TEXT,\n          content TEXT NOT NULL,\n          source_type TEXT NOT NULL DEFAULT 'agent',\n          source_id TEXT,\n          source_surface TEXT NOT NULL DEFAULT 'chat',\n          status TEXT NOT NULL DEFAULT 'active',\n          tags TEXT NOT NULL DEFAULT '[]',\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_reminders_user_status ON reminders(user_id, status, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_reminders_workspace ON reminders(workspace_id, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_reminders_session ON reminders(session_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "automation_repo_proposals_completion_history",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN completed_at TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE automation_repo_proposals ADD COLUMN completion_history TEXT NOT NULL DEFAULT '[]'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_completed ON automation_repo_proposals(repo_id, completed_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "user_secrets_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS user_secrets (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          type TEXT NOT NULL,\n          key TEXT NOT NULL,\n          label TEXT NOT NULL,\n          encrypted_value TEXT NOT NULL,\n          iv TEXT NOT NULL,\n          auth_tag TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          last_used_at TEXT\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_secrets_unique ON user_secrets(user_id, type, key)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_user_secrets_user_type ON user_secrets(user_id, type, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "rename_workspace_to_project",
+      "operations": [
+        {
+          "kind": "rename_projects"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "name": "reminders_usage_metadata",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE reminders ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE reminders ADD COLUMN last_retrieved_at TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_reminders_retrieved ON reminders(user_id, last_retrieved_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "session_search_fts",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(\n          body,\n          role UNINDEXED,\n          session_id UNINDEXED,\n          message_id UNINDEXED,\n          created_at UNINDEXED\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE VIRTUAL TABLE IF NOT EXISTS agent_thread_activities_fts USING fts5(\n          body,\n          kind UNINDEXED,\n          thread_id UNINDEXED,\n          activity_id UNINDEXED,\n          created_at UNINDEXED\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "DELETE FROM messages_fts",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)\n        SELECT rowid, content, role, session_id, id, created_at\n        FROM messages\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "DELETE FROM agent_thread_activities_fts",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)\n        SELECT\n          rowid,\n          summary || CASE WHEN payload IS NOT NULL AND payload != '' THEN ' ' || payload ELSE '' END,\n          kind,\n          thread_id,\n          id,\n          created_at\n        FROM agent_thread_activities\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS messages_fts_ai\n        AFTER INSERT ON messages\n        BEGIN\n          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)\n          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS messages_fts_ad\n        AFTER DELETE ON messages\n        BEGIN\n          DELETE FROM messages_fts WHERE rowid = old.rowid;\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS messages_fts_au\n        AFTER UPDATE ON messages\n        BEGIN\n          DELETE FROM messages_fts WHERE rowid = old.rowid;\n          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)\n          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_ai\n        AFTER INSERT ON agent_thread_activities\n        BEGIN\n          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)\n          VALUES (\n            new.rowid,\n            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,\n            new.kind,\n            new.thread_id,\n            new.id,\n            new.created_at\n          );\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_ad\n        AFTER DELETE ON agent_thread_activities\n        BEGIN\n          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_au\n        AFTER UPDATE ON agent_thread_activities\n        BEGIN\n          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;\n          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)\n          VALUES (\n            new.rowid,\n            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,\n            new.kind,\n            new.thread_id,\n            new.id,\n            new.created_at\n          );\n        END\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "name": "channels_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS channels (\n          id TEXT PRIMARY KEY,\n          enabled INTEGER NOT NULL DEFAULT 0,\n          config TEXT NOT NULL DEFAULT '{}',\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "email_accounts_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS email_accounts (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          provider TEXT NOT NULL,\n          email TEXT NOT NULL,\n          display_name TEXT NOT NULL DEFAULT '',\n          status TEXT NOT NULL DEFAULT 'connected',\n          error TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_email_accounts_unique ON email_accounts(user_id, provider, email)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_email_accounts_user ON email_accounts(user_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "name": "user_settings_reasoning_effort",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN reasoning_effort TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "name": "provider_accounts",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS provider_accounts (\n          id TEXT PRIMARY KEY,\n          user_id TEXT NOT NULL,\n          provider_type TEXT NOT NULL,\n          label TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_user_type_label ON provider_accounts(user_id, provider_type, label)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_provider_accounts_user ON provider_accounts(user_id, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE user_settings SET chat_provider = 'jait' WHERE chat_provider = 'codex'",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE session_state SET value = '\"jait\"' WHERE key = 'chat.provider' AND value = '\"codex\"'",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "name": "provider_accounts_node_scope",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE provider_accounts ADD COLUMN node_id TEXT NOT NULL DEFAULT 'gateway'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "DROP INDEX IF EXISTS idx_provider_accounts_user_type_label",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_user_node_type_label ON provider_accounts(user_id, node_id, provider_type, label)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "name": "provider_usage",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS provider_usage (\n          account_id TEXT NOT NULL,\n          rate_limit_type TEXT NOT NULL,\n          provider_type TEXT NOT NULL,\n          status TEXT,\n          utilization REAL,\n          resets_at TEXT,\n          is_using_overage INTEGER NOT NULL DEFAULT 0,\n          raw_json TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_usage_account_type ON provider_usage(account_id, rate_limit_type)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "name": "user_settings_last_selected",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN last_selected_project_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN last_selected_session_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN last_selected_at TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "name": "code_graph_indexes",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS code_graph_indexes (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          repository_id TEXT,\n          project_root TEXT NOT NULL,\n          provider TEXT NOT NULL DEFAULT 'graphify',\n          status TEXT NOT NULL DEFAULT 'missing',\n          graph_path TEXT,\n          graph_version TEXT,\n          source_revision TEXT,\n          graphify_version TEXT,\n          stats TEXT,\n          graphrag_status TEXT NOT NULL DEFAULT 'not-prepared',\n          graphrag_path TEXT,\n          error TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_code_graph_indexes_user_project ON code_graph_indexes(user_id, project_root)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_code_graph_indexes_repository ON code_graph_indexes(repository_id, updated_at DESC)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_code_graph_indexes_status ON code_graph_indexes(status, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "name": "calendar_accounts_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS calendar_accounts (\n          id TEXT PRIMARY KEY,\n          user_id TEXT,\n          provider TEXT NOT NULL,\n          email TEXT NOT NULL,\n          display_name TEXT NOT NULL DEFAULT '',\n          status TEXT NOT NULL DEFAULT 'connected',\n          error TEXT,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_accounts_unique ON calendar_accounts(user_id, provider, email)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_calendar_accounts_user ON calendar_accounts(user_id, updated_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "name": "device_calendar_snapshots",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS device_calendar_snapshots (\n          account_id TEXT PRIMARY KEY,\n          user_id TEXT,\n          calendars TEXT NOT NULL DEFAULT '[]',\n          events TEXT NOT NULL DEFAULT '[]',\n          synced_at TEXT NOT NULL,\n          FOREIGN KEY (account_id) REFERENCES calendar_accounts(id) ON DELETE CASCADE\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_device_calendar_snapshots_user ON device_calendar_snapshots(user_id, synced_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "name": "mobile_push_registrations",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS mobile_push_registrations (\n          device_id TEXT PRIMARY KEY,\n          user_id TEXT NOT NULL,\n          token TEXT NOT NULL,\n          platform TEXT NOT NULL DEFAULT 'android',\n          enabled INTEGER NOT NULL DEFAULT 1,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          last_seen_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_mobile_push_token ON mobile_push_registrations(token)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_mobile_push_user_enabled ON mobile_push_registrations(user_id, enabled, last_seen_at DESC)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "name": "sessions_viewed_at",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE sessions ADD COLUMN viewed_at TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "name": "message_context_metadata",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS message_context_metadata (\n          message_id TEXT PRIMARY KEY,\n          has_memory_provenance INTEGER NOT NULL DEFAULT 0,\n          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        INSERT OR IGNORE INTO message_context_metadata (message_id, has_memory_provenance)\n        SELECT\n          id,\n          CASE\n            WHEN instr(context_flow, '\"injectedIds\":[') > 0\n              AND instr(context_flow, '\"injectedIds\":[]') = 0\n            THEN 1\n            ELSE 0\n          END\n        FROM messages\n        WHERE context_flow IS NOT NULL\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "name": "project_folders",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE projects ADD COLUMN parent_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE projects ADD COLUMN instructions TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE projects ADD COLUMN description TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE projects ADD COLUMN color TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'workspace'",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE projects SET kind = 'folder'\n           WHERE (root_path IS NULL OR TRIM(root_path) = '') AND kind <> 'folder'",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_projects_parent\n           ON projects(user_id, parent_id, status, last_active_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "name": "memories_drop_embedding",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE memories DROP COLUMN embedding",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "name": "agent_threads_reasoning_effort",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN reasoning_effort TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "name": "memories_restore_legacy_embedding",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE memories ADD COLUMN embedding TEXT NOT NULL DEFAULT '{}'",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "name": "session_search_filter_activity_noise",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "DROP TRIGGER IF EXISTS agent_thread_activities_fts_ai",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "DROP TRIGGER IF EXISTS agent_thread_activities_fts_ad",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "DROP TRIGGER IF EXISTS agent_thread_activities_fts_au",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE VIRTUAL TABLE IF NOT EXISTS agent_thread_activities_fts USING fts5(\n          body,\n          kind UNINDEXED,\n          thread_id UNINDEXED,\n          activity_id UNINDEXED,\n          created_at UNINDEXED\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER agent_thread_activities_fts_ai\n        AFTER INSERT ON agent_thread_activities\n        WHEN new.kind IN ('message', 'tool.result', 'tool.error', 'error')\n        BEGIN\n          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)\n          VALUES (\n            new.rowid,\n            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,\n            new.kind,\n            new.thread_id,\n            new.id,\n            new.created_at\n          );\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER agent_thread_activities_fts_ad\n        AFTER DELETE ON agent_thread_activities\n        BEGIN\n          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;\n        END\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER agent_thread_activities_fts_au\n        AFTER UPDATE ON agent_thread_activities\n        BEGIN\n          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;\n          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)\n          SELECT\n            new.rowid,\n            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,\n            new.kind,\n            new.thread_id,\n            new.id,\n            new.created_at\n          WHERE new.kind IN ('message', 'tool.result', 'tool.error', 'error');\n        END\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "name": "database_retention_indexes",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_kind_created_at ON agent_thread_activities(kind, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "DROP TRIGGER IF EXISTS messages_fts_au",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TRIGGER messages_fts_au\n        AFTER UPDATE OF content, role, session_id, id, created_at ON messages\n        BEGIN\n          DELETE FROM messages_fts WHERE rowid = old.rowid;\n          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)\n          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);\n        END\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "name": "node_permissions_tables",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS nodes (\n          node_id TEXT PRIMARY KEY,\n          name TEXT,\n          platform TEXT,\n          role TEXT,\n          first_seen_at TEXT NOT NULL,\n          last_seen_at TEXT NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_nodes_last_seen ON nodes(last_seen_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS node_permissions (\n          node_id TEXT NOT NULL,\n          capability TEXT NOT NULL,\n          granted INTEGER NOT NULL DEFAULT 0,\n          updated_at TEXT NOT NULL,\n          PRIMARY KEY (node_id, capability)\n        )\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "name": "sub_agent_history",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS sub_agent_history (\n          sub_agent_id TEXT PRIMARY KEY,\n          session_id TEXT,\n          message_id TEXT,\n          content TEXT,\n          performative TEXT,\n          rounds INTEGER,\n          duration_ms INTEGER,\n          segments TEXT,\n          tool_calls TEXT,\n          created_at TEXT NOT NULL\n        )\n      ",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_sub_agent_history_session ON sub_agent_history(session_id, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_sub_agent_history_message ON sub_agent_history(message_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "name": "session_events_table",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE TABLE IF NOT EXISTS session_events (\n          session_id TEXT NOT NULL,\n          log_id INTEGER NOT NULL,\n          type TEXT NOT NULL,\n          payload TEXT NOT NULL,\n          created_at INTEGER NOT NULL,\n          PRIMARY KEY (session_id, log_id)\n        )\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "name": "automation_repositories_unique_path",
+      "operations": [
+        {
+          "kind": "deduplicate_repositories"
+        },
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_repos_user_path\n        ON automation_repositories(COALESCE(user_id, ''), local_path)\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "name": "sessions_status_index",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "\n        CREATE INDEX IF NOT EXISTS idx_sessions_status\n        ON sessions(status, last_active_at DESC)\n      ",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "name": "user_settings_chat_streaming_action",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN chat_streaming_action TEXT NOT NULL DEFAULT 'steer'",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "name": "persona_agents_and_thread_link",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS persona_agents (\n        id TEXT PRIMARY KEY,\n        user_id TEXT NOT NULL,\n        data TEXT NOT NULL,\n        updated_at TEXT NOT NULL\n      )",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_persona_agents_user ON persona_agents(user_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE agent_threads ADD COLUMN persona_agent_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_threads_persona_agent ON agent_threads(persona_agent_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "control_identity_and_invitations",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE nodes ADD COLUMN user_id TEXT",
+          "ignore_errors": true
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE nodes SET user_id = (SELECT id FROM users ORDER BY created_at, id LIMIT 1) WHERE user_id IS NULL",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS node_credentials (token_hash TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS account_invitations (token_hash TEXT PRIMARY KEY, created_by TEXT NOT NULL, expires_at TEXT NOT NULL)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "name": "security_tcp_assessment_records",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS security_scopes (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS security_assessment_runs (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, started_at TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_security_scopes_operator ON security_scopes(operator_id, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_security_runs_operator ON security_assessment_runs(operator_id, started_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "name": "security_workbench_evidence_findings",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS security_check_runs (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, scope_id TEXT NOT NULL, started_at TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS security_findings (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, scope_id TEXT NOT NULL, updated_at TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS security_artifacts (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, operator_id TEXT NOT NULL, sha256 TEXT NOT NULL, content_type TEXT NOT NULL, raw TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_security_check_owner ON security_check_runs(operator_id, started_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_security_finding_owner ON security_findings(operator_id, updated_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "name": "persistent_team_rooms",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS team_rooms (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, root_agent_id TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_team_room_root ON team_rooms(user_id, root_agent_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS team_room_messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, client_key TEXT NOT NULL, data TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_team_message_key ON team_room_messages(room_id, client_key)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS team_room_deliveries (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, message_id TEXT NOT NULL, agent_id TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_team_delivery_status ON team_room_deliveries(status)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "name": "thread_restart_recovery",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS thread_recovery (thread_id TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 1, stale_provider_session_id TEXT)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "name": "chat_persona_attribution",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN persona TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "name": "multiple_team_chats",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "DROP INDEX IF EXISTS idx_team_room_root",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX idx_team_room_root ON team_rooms(user_id, root_agent_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "name": "chat_streaming_action_defaults_to_queue",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "UPDATE user_settings SET chat_streaming_action = 'queue' WHERE chat_streaming_action = 'steer'",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "name": "agent_github_apps",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_github_apps (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent_id TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_github_app_agent ON agent_github_apps(user_id, agent_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_agent_github_app_status ON agent_github_apps(status)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "name": "agent_control_hard_stop",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_control (user_id TEXT PRIMARY KEY, halted INTEGER NOT NULL DEFAULT 0, reason TEXT, halted_at TEXT, updated_at TEXT NOT NULL)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "name": "browser_workflows",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS browser_workflows (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, project_root TEXT NOT NULL, revision INTEGER NOT NULL, definition TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_workflows_owner ON browser_workflows(user_id, project_root, updated_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS browser_workflow_runs (id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, user_id TEXT NOT NULL, project_root TEXT NOT NULL, session_id TEXT NOT NULL, revision INTEGER NOT NULL, definition TEXT NOT NULL, status TEXT NOT NULL, next_step INTEGER NOT NULL, progress TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_browser_workflow_runs_owner ON browser_workflow_runs(user_id, project_root, created_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "name": "github_intake_observation",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS github_intake_policies (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent_id TEXT NOT NULL, rules TEXT NOT NULL, updated_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_github_intake_policy_owner ON github_intake_policies(user_id, agent_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS github_intake_decisions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent_id TEXT NOT NULL, delivery_id TEXT NOT NULL, event TEXT NOT NULL, action TEXT NOT NULL, repository TEXT NOT NULL, sender TEXT NOT NULL, result TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_github_intake_delivery ON github_intake_decisions(user_id, agent_id, delivery_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_github_intake_history ON github_intake_decisions(user_id, agent_id, created_at)",
+          "ignore_errors": false
+        }
+      ]
+    }
+  ]
+}

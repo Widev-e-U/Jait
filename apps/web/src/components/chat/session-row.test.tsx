@@ -1,3 +1,5 @@
+import type { SessionWait, SessionWaitKind } from '@jait/shared'
+import { sessionWaitLabel } from '@jait/shared'
 import type { HTMLAttributes } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -51,6 +53,25 @@ describe('SessionRow', () => {
     expect(html).not.toContain('animate-spin')
     expect(html).not.toContain('lucide-message-square-x')
     expect(renderRow({ isStreaming: true, isWaitingForApproval: false })).toContain('animate-spin')
+  })
+
+  it('shows the question mark ahead of streaming, approval and errors', () => {
+    const html = renderRow({
+      isAwaitingAnswer: true,
+      isStreaming: true,
+      isWaitingForApproval: true,
+      session: { id: 'chat', metadata: JSON.stringify({ chat: { lastError: 'Old error' } }) },
+    })
+    expect(html).toContain('data-testid="session-row-question"')
+    expect(html).toContain('aria-label="Waiting for your answer"')
+    expect(html).not.toContain('lucide-shield-question')
+    expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('lucide-message-square-x')
+  })
+
+  it('drops the question mark once the answer arrives', () => {
+    expect(renderRow()).not.toContain('data-testid="session-row-question"')
+    expect(renderRow({ isAwaitingAnswer: false })).not.toContain('data-testid="session-row-question"')
   })
 
   it('renders the session name and a non-empty relative time', () => {
@@ -142,5 +163,88 @@ describe('SessionRow', () => {
     })
     expect(html).toContain('draggable="true"')
     expect(html).toContain('data-longpress="true"')
+  })
+})
+
+describe('SessionRow wait reasons', () => {
+  const wait = (kind: SessionWaitKind, overrides: Partial<SessionWait> = {}): SessionWait => ({
+    key: `${kind}:1`,
+    kind,
+    sessionId: 'chat-1',
+    label: sessionWaitLabel(kind),
+    blocking: true,
+    ...overrides,
+  })
+
+  it('shows one icon per wait reason instead of a single Q&A badge', () => {
+    for (const kind of ['question', 'consent', 'secret', 'browser', 'terminal'] as const) {
+      const html = renderRow({ wait: wait(kind) })
+      expect(html).toContain(`data-testid="session-row-wait-${kind}"`)
+      expect(html).toContain(`aria-label="${sessionWaitLabel(kind)}"`)
+      // Exactly one status icon, never the plain chat icon as well.
+      expect(html.match(/session-row-wait-/g)).toHaveLength(1)
+    }
+  })
+
+  it('takes precedence over approval, streaming and legacy question flags', () => {
+    const html = renderRow({
+      wait: wait('browser'),
+      isAwaitingAnswer: true,
+      isWaitingForApproval: true,
+      isStreaming: true,
+    })
+    expect(html).toContain('data-testid="session-row-wait-browser"')
+    expect(html).toContain('aria-label="Paused — you have browser control"')
+    expect(html).not.toContain('data-testid="session-row-question"')
+    expect(html).not.toContain('lucide-shield-question')
+    expect(html).not.toContain('animate-spin')
+  })
+
+  it('appends detail to the tooltip when the wait has some', () => {
+    expect(renderRow({ wait: wait('terminal', { detail: 'bun run dev' }) }))
+      .toContain('aria-label="Waiting for terminal input — bun run dev"')
+  })
+
+  it('ignores a background wait so a working chat keeps its normal icon', () => {
+    // A running background command is the agent's own reminder, not a wait on
+    // the user, so it must not badge the row — neither blocked nor pulsing.
+    for (const blocking of [true, false]) {
+      const idle = renderRow({ wait: wait('background', { blocking }) })
+      expect(idle).not.toContain('session-row-wait-')
+      expect(idle).not.toContain('animate-pulse')
+      expect(idle).toContain('lucide-message-square')
+    }
+    const streaming = renderRow({ wait: wait('background'), isStreaming: true })
+    expect(streaming).not.toContain('session-row-wait-')
+    expect(streaming).toContain('animate-spin')
+  })
+
+  it('keeps blocking waits steady and amber', () => {
+    const html = renderRow({ wait: wait('terminal') })
+    expect(html).toContain('text-amber-500')
+    expect(html).not.toContain('animate-pulse')
+  })
+
+  it('falls back to the legacy Q&A badge when no wait is passed', () => {
+    expect(renderRow({ isAwaitingAnswer: true, wait: undefined }))
+      .toContain('data-testid="session-row-question"')
+  })
+})
+describe('goal loop sidebar status', () => {
+  const metadata = (status: 'running' | 'waiting' | 'paused' | 'completed') => JSON.stringify({ loop: {
+    id: 'goal', goal: 'Fix the issue', criteria: ['Regression passes'], status, iteration: 2,
+    revision: 4, checkedIteration: 1, summary: '', nextMessage: '', evidence: [], updatedAt: '2026-10-22T00:00:00Z',
+  } })
+  it('keeps the infinity spinner between turns and gives questions precedence', () => {
+    const session = { id: 'goal-chat', metadata: metadata('running') }
+    expect(renderRow({ session })).toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session })).toContain('animate-spin')
+    expect(renderRow({ session, isAwaitingAnswer: true })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session, isWaitingForApproval: true })).not.toContain('data-testid="session-row-loop"')
+  })
+  it('stops spinning when paused or completed and shows waiting questions', () => {
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('paused') } })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('completed') } })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('waiting') } })).toContain('Loop waiting for your answer')
   })
 })

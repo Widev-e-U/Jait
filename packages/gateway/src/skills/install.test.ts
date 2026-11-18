@@ -39,17 +39,17 @@ describe("rendered SKILL.md", () => {
 
 describe("writeUserSkill", () => {
   let home: string;
-  let previousHome: string | undefined;
+  let previousStateDirectory: string | undefined;
 
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), "jait-skills-"));
-    previousHome = process.env["HOME"];
-    process.env["HOME"] = home;
+    previousStateDirectory = process.env["JAIT_STATE_DIR"];
+    process.env["JAIT_STATE_DIR"] = join(home, ".jait");
   });
 
   afterEach(async () => {
-    if (previousHome === undefined) delete process.env["HOME"];
-    else process.env["HOME"] = previousHome;
+    if (previousStateDirectory === undefined) delete process.env["JAIT_STATE_DIR"];
+    else process.env["JAIT_STATE_DIR"] = previousStateDirectory;
     await rm(home, { recursive: true, force: true });
   });
 

@@ -40,3 +40,29 @@ for (const width of [1280, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
+
+for (const missingSnapshot of [false, true]) {
+  test(`failed Junie account remains removable (missing snapshot: ${missingSnapshot})`, async ({ page }) => {
+    let removed = false
+    const account = { id: 'junie-account', providerType: 'junie', nodeId: 'gateway', label: 'Personal Junie', userId: 'tester', createdAt: '', updatedAt: '' }
+    const provider = { id: account.id, providerType: 'junie', name: 'Junie — Personal Junie', description: '', available: false, installed: true, modes: ['full-access'], unavailableReason: 'Unable to start Junie', auth: { login: false, logout: false, deviceCode: false, authenticated: null } }
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/provider-accounts/junie-account' && route.request().method() === 'DELETE') {
+        removed = true
+        return route.fulfill({ json: { ok: true } })
+      }
+      if (path === '/api/provider-accounts') return route.fulfill({ json: { accounts: removed ? [] : [account], providerTypes: [{ providerType: 'junie', name: 'Junie', description: 'Coding agent' }] } })
+      if (path === '/api/providers') return route.fulfill({ json: { providers: removed || missingSnapshot ? [] : [provider], remoteProviders: [] } })
+      return route.fulfill({ json: { env_set: {}, sources: {}, effective: {}, nodes: [], devices: [], policies: [], accounts: [], providers: [], remoteProviders: [] } })
+    })
+    await page.goto('/opencode-go-settings.html', { waitUntil: 'domcontentloaded' })
+    const remove = page.getByRole('button', { name: 'Remove Personal Junie', exact: true })
+    await expect(remove).toBeVisible()
+    await expect(page.getByText(missingSnapshot ? 'Provider is unavailable. Refresh providers or remove this account.' : 'Unable to start Junie', { exact: true })).toBeVisible()
+    page.once('dialog', dialog => dialog.accept())
+    await remove.click()
+    await expect.poll(() => removed).toBe(true)
+    await expect(remove).toHaveCount(0)
+  })
+}

@@ -216,3 +216,38 @@ describe("RemoteTerminalSurface", () => {
     });
   });
 });
+
+
+describe("remote shell readiness", () => {
+  it("recognizes bracketed paste separately from shell prompt readiness", async () => {
+    const surface = new RemoteTerminalSurface("term-paste", new FakeWs() as unknown as WsControlPlane, "node-1");
+    expect(surface.bracketedPasteEnabled).toBe(false);
+    surface.ingestOutput("\x1b[?2004h");
+    expect(surface.bracketedPasteEnabled).toBe(true);
+    expect(surface.shellIntegrationReady).toBe(false);
+    surface.ingestOutput("\x1b[?2004h\x1b]633;B\x07");
+    expect(surface.shellIntegrationReady).toBe(true);
+    await surface.waitForPrompt();
+  });
+});
+
+describe("remote terminal exit observers", () => {
+  it("notifies remaining observers once per exit even when one throws", () => {
+    const surface = new RemoteTerminalSurface("term-exit", new FakeWs() as unknown as WsControlPlane, "node-1");
+    const removed = vi.fn();
+    const observer = vi.fn();
+    surface.addExitListener(removed);
+    surface.removeExitListener(removed);
+    surface.addExitListener(() => { throw new Error("observer failure"); });
+    surface.addExitListener(observer);
+    surface.ingestExit(7, "SIGTERM");
+    expect(observer).toHaveBeenLastCalledWith(7);
+    expect(removed).not.toHaveBeenCalled();
+    expect(surface.state).toBe("stopped");
+    expect(surface.getRecentOutput()).toContain("with code 7, signal SIGTERM");
+    const output = surface.getRecentOutput();
+    surface.ingestExit();
+    expect(observer).toHaveBeenLastCalledWith(null);
+    expect(surface.getRecentOutput()).toBe(output);
+  });
+});
