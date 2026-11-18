@@ -275,6 +275,38 @@ describe("validation and plans", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
+  it("runs the same plan more than once without overwriting the history of earlier runs", async () => {
+    const plans = new PlanService(db);
+    const plan = plans.create({
+      repoId: "repo-1",
+      userId: USER,
+      title: "Plan",
+      tasks: [{ id: "A", title: "Task A", description: "", status: "approved", verification: [gate()] }],
+    });
+    const executor: TaskExecutor = { execute: async (input) => report(input, { summary: `result of ${input.runId}` }) };
+    const service = makeService(executor);
+
+    const first = service.createRun(USER, { planId: plan.id });
+    await service.settle();
+    const second = service.createRun(USER, { planId: plan.id });
+    await service.settle();
+
+    expect(second.id).not.toBe(first.id);
+    expect(service.listRuns(USER).map((run) => run.id).sort()).toEqual([first.id, second.id].sort());
+    for (const run of [first, second]) {
+      const view = service.getRun(USER, run.id);
+      expect(view.planId).toBe(plan.id);
+      expect(view.status).toBe("passed");
+      expect(view.tasks[0]?.result?.summary).toBe(`result of ${run.id}`);
+    }
+    const firstAttempts = service.getTaskAttempts(USER, first.id, "A");
+    const secondAttempts = service.getTaskAttempts(USER, second.id, "A");
+    expect(firstAttempts).toHaveLength(1);
+    expect(secondAttempts).toHaveLength(1);
+    expect(firstAttempts[0]?.id).not.toBe(secondAttempts[0]?.id);
+    expect(firstAttempts[0]?.result?.summary).toBe(`result of ${first.id}`);
+  });
+
   it("starts from a stored plan and keeps the run's snapshot when the plan changes", async () => {
     const plans = new PlanService(db);
     const plan = plans.create({
