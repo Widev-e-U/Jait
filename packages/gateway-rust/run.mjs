@@ -49,12 +49,41 @@ function memoryBudgetGiB() {
   return Math.min(free, readCgroupGiB('memory.high'), readCgroupGiB('memory.max'));
 }
 
+// The tighter of the cgroup's throttle point and hard cap; Infinity when the process is not in a limited scope.
+const cgroupLimitGiB = () => Math.min(readCgroupGiB('memory.high'), readCgroupGiB('memory.max'));
+
+// Below this cgroup limit the single-crate gateway build needs the two guards below.
+const SMALL_CGROUP_GIB = 16;
+
+// A build that includes the lib unit-test target peaks near 6.4 GiB in rustc alone (the front end plus the
+// concurrent LLVM workers). Under a 6 GiB memory.high, 4 jobs overran it and stalled in
+// mem_cgroup_handle_over_high (peak 6.6 GB, ~100k throttle events and 3% CPU); 2 jobs peaked at 6.44 GB with no
+// throttling (206 s, 2595 unit tests). Builds that do not compile the lib tests (single --test targets, check,
+// clippy) keep the memory-derived job count, e.g. 17 integration binaries peaked at 4.4 GB with 4 jobs.
+const LIB_TEST_JOB_CAP = 2;
+
+function includesLibTests() {
+  if (mode !== 'test') return false;
+  const targeted = args.some((arg) => ['--test', '--bin', '--bins', '--example', '--examples', '--bench', '--benches', '--doc'].includes(arg));
+  return args.includes('--lib') || args.includes('--all-targets') || !targeted;
+}
+
 function buildJobs() {
   const requested = process.env.CARGO_BUILD_JOBS ?? process.env.JAIT_BUILD_JOBS;
   if (requested) return requested;
   const cores = availableParallelism();
   const byMemory = Math.floor((memoryBudgetGiB() - GIB_RESERVED) / GIB_PER_JOB);
-  return String(Math.max(1, Math.min(cores - 1, byMemory)));
+  const jobs = Math.max(1, Math.min(cores - 1, byMemory));
+  return String(cgroupLimitGiB() < SMALL_CGROUP_GIB && includesLibTests() ? Math.min(jobs, LIB_TEST_JOB_CAP) : jobs);
+}
+
+// Incremental compilation holds the whole query dependency graph in memory and serializes it at the end.
+// On a cold cache that overran a 6 GiB memory.high and was throttled for hours (clippy --all-targets 55 min,
+// test --lib still unfinished after 3.5 h), while CARGO_INCREMENTAL=0 built the same lib-test target in
+// 2m10s at a 6.5 GB peak. Below the small-cgroup limit, default to non-incremental; an explicit CARGO_INCREMENTAL wins.
+function incrementalOverride() {
+  if (process.env.CARGO_INCREMENTAL !== undefined) return {};
+  return cgroupLimitGiB() < SMALL_CGROUP_GIB ? { CARGO_INCREMENTAL: '0' } : {};
 }
 
 const jobs = buildJobs();
@@ -63,7 +92,7 @@ const cargoArgs = mode === 'fmt'
   : [mode, '--locked', '--manifest-path', manifest, ...args];
 const child = spawn(cargo, cargoArgs, {
   cwd: root, stdio: 'inherit',
-  env: { ...process.env, CARGO_TARGET_DIR: target, CARGO_BUILD_JOBS: jobs, CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
+  env: { ...process.env, ...incrementalOverride(), CARGO_TARGET_DIR: target, CARGO_BUILD_JOBS: jobs, CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
 });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
 child.on('error', error => { console.error(error.message); process.exitCode = 1; });
