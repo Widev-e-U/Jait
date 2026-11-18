@@ -165,6 +165,13 @@ function renderMarkdown(): string {
       lines.push(`| ${tool} | ${stats.calls} | ${stats.p50} ms | ${stats.p95} ms | ${stats.sumPerRun} ms |` + (previous ? ` ${previous.byTool[tool]?.p50 ?? "—"} ms |` : ""));
     }
     lines.push("", "Slowest steps (p50):", "", ...summary.slowestSteps.map(step => `- ${step.name}: ${step.p50} ms`));
+    const raw = report.raw?.stepP50;
+    if (raw) {
+      const overhead = Object.entries(summary.stepP50)
+        .map(([name, p50]) => ({ name, extra: Math.round(p50 - (raw[name] ?? 0)) }))
+        .sort((a, b) => b.extra - a.extra).slice(0, 12);
+      lines.push("", "Largest overhead vs raw Playwright (p50 difference):", "", ...overhead.map(step => `- ${step.name}: +${step.extra} ms`));
+    }
   }
   if (report.live) {
     for (const [runtime, steps] of Object.entries(report.live)) {

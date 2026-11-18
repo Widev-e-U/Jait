@@ -34,13 +34,19 @@ async function clickWithVisibleCursor(page, selector, signal, guard) {
     let opensNewTab = false;
     if (page.mouse && page.locator) {
       const target = handle || page.locator(selector).first();
-      if (!handle) await target.waitFor({ state: 'visible', timeout: 30000 });
       // One page round trip scrolls the target into view, draws the agent
       // cursor at its center and reports whether the click opens a new tab.
-      const prepared = await target.evaluate(prepareCursorClick);
+      let prepared = await target.evaluate(prepareCursorClick);
+      if (!handle && !prepared.point) {
+        // Present but not rendered yet: wait until it shows, then draw the cursor.
+        await target.waitFor({ state: 'visible', timeout: 30000 });
+        prepared = await target.evaluate(prepareCursorClick);
+      }
       checkCancelled();
       opensNewTab = prepared.opensNewTab;
-      if (prepared.point) await page.mouse.move(prepared.point.x, prepared.point.y);
+      // page.click moves the pointer itself. Guarded clicks move first so the
+      // identity re-check below also covers changes made during the move.
+      if (handle && prepared.point) await page.mouse.move(prepared.point.x, prepared.point.y);
     }
     checkCancelled();
     // Links with target=_blank open a tab asynchronously. Wait for it so the
@@ -145,14 +151,14 @@ function collectPageSnapshot(requestedTarget) {
   const guessRole = (el, tag) =>
     el.getAttribute("role")
     ?? (tag === "a" ? "link" : tag === "textarea" ? "textbox" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
-  const getName = (el) => normalize(
+  // innerText lays out the subtree, so read it at most once per element.
+  const getName = (el, inner) => normalize(
     el.getAttribute("aria-label")
       ?? el.getAttribute("aria-labelledby")
       ?? el.getAttribute("name")
       ?? el.getAttribute("title")
       ?? el.getAttribute("placeholder")
-      ?? el.innerText
-      ?? el.textContent
+      ?? (inner !== undefined ? inner : el.innerText ?? el.textContent)
       ?? "",
   ).slice(0, 200);
   const buildSelectors = (el, tag, role, name) => {
@@ -181,8 +187,9 @@ function collectPageSnapshot(requestedTarget) {
   const serializeElement = (el) => {
     const tag = el.tagName.toLowerCase();
     const role = guessRole(el, tag);
-    const name = getName(el);
-    const text = normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
+    const inner = el.innerText ?? el.textContent ?? "";
+    const name = getName(el, inner);
+    const text = normalize(inner).slice(0, 200);
     const id = el.getAttribute("id") ?? undefined;
     const testId = el.getAttribute("data-testid") ?? undefined;
     const placeholder = el.getAttribute("placeholder") ?? undefined;

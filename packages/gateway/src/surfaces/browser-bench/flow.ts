@@ -199,5 +199,6 @@ export function summarizeRuns(runs: FlowRun[]) {
     }])),
     slowestSteps: [...byStep].map(([name, values]) => ({ name, p50: round(percentile(values, 50)) }))
       .sort((a, b) => b.p50 - a.p50).slice(0, 10),
+    stepP50: Object.fromEntries([...byStep].map(([name, values]) => [name, round(percentile(values, 50))])),
   };
 }
