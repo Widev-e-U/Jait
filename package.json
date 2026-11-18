@@ -38,6 +38,8 @@
     "test:contract:source": "node tests/contract/run.mjs source-review",
     "test:contract:fmt": "node tests/contract/run.mjs fmt",
     "test:contract:lint": "node tests/contract/run.mjs clippy --all-targets -- -D warnings",
+    "build:libs": "bun run --filter '@jait/shared' build && bun run --filter '@jait/api-client' build && bun run --filter '@jait/screen-share' build",
+    "setup:e2e": "bun install --frozen-lockfile && bun run build:libs && npm --prefix tests/e2e ci --include=dev && JAIT_E2E_NO_STUB_PROVIDER_CLI=1 bash scripts/setup-e2e-env.sh",
     "test:e2e": "bash scripts/run-e2e.sh",
     "test:e2e:ui": "bash scripts/run-e2e.sh --config playwright.ui.config.ts",
     "test:smoke": "npm --prefix tests/e2e test -- core-basics.spec.ts manager-pages.spec.ts chat-streaming-auth.spec.ts message-attachment-regressions.spec.ts security-workbench.spec.ts conversation-viewport-layout.spec.ts",

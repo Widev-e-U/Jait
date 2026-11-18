@@ -45,6 +45,7 @@ Run from repository root unless noted.
 - `bun run lint`: run `oxlint` across repo.
 - `bun run healthcheck`: run the release guard, typecheck, build, tests, and lint in CI order.
 - `node scripts/release.mjs --bump patch`: the supported way to do a version up — bump, regenerate `CHANGELOG.md`, recapture `tests/contract/interfaces.json`, run the release guard, commit, and push so CI tags and publishes. Use `--dry-run` to preview; never bump versions by hand.
+- `bun run setup:e2e`: prepare a fresh checkout for Playwright. On Debian or Ubuntu, missing Chromium libraries can be extracted into `.jait/artifacts/` without sudo.
 - `bun run test:e2e`: run the Playwright suite from the repo root.
 - `bun run test:e2e:ui`: run the isolated UI fixture checks with two workers and a frontend only. Keep API-backed tests in the standard single-worker suite; use `--workers=1` to compare timings. The two-worker UI suite and production builds need an explicit, bounded terminal memory budget above the default 1.5 GiB throttle / 2 GiB cap (the measured UI suite peaked at 3.3 GiB). Use a temporary 6 GiB high / 8 GiB max budget for these checks and restore it afterward; raising Node's heap alone does not raise the cgroup limit.
 
