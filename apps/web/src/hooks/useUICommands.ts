@@ -444,10 +444,11 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // Gateway is asking us to run an interactive terminal operation on this node.
         void handleTerminalOpRequest(msg.payload as { requestId?: string; op: string; [key: string]: unknown })
       } else if (msg.type === 'notification') {
-        // Cross-platform notification from the gateway
-        void handleGatewayNotification(msg.payload as {
-          id: string; title: string; body: string; level: 'info' | 'success' | 'warning' | 'error'; link?: string
-        })
+        // Cross-platform notification from the gateway. Typed as the full input
+        // so the originating agent's identity (agentId/agentName/agentRole/
+        // agentAvatar) stays part of the contract: the in-app identity toast
+        // reads those fields, and the gateway sends them on completion.
+        void handleGatewayNotification(msg.payload as SystemNotificationInput)
       } else if (msg.type === 'notification.cleared') {
         notificationSyncRef.current?.receive(msg.payload)
       } else if (msg.type === 'notification.snapshot') {

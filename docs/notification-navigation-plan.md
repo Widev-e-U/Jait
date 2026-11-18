@@ -85,3 +85,26 @@ Validation completed: workspace TypeScript checks; lint; 31 focused TypeScript t
 Validation limits: the complete Windows shell cross-build stops in the existing ring dependency because this host's C toolchain lacks stdalign.h. The isolated Windows API check does not prove the complete installer or activation on Windows. Real installed Windows and Android drawer/Notification Center smoke tests remain required. Native package updates are required; gateway-only deployment cannot add native tap handling. No release, publish, or installation on the user's devices was performed.
 
 Deferred beyond this first delivery: new Windows reply/approval buttons, notification preview/category preferences, shared cross-device completion read state, and new Windows background delivery while the app is fully closed.
+
+## Agent identity on notification surfaces (support matrix, 2026-09-22)
+
+A notification should say which agent it came from. Identity travels as optional fields on the existing payload (`agentId`, `agentName`, `agentRole`, `agentAvatar` in `packages/shared/src/notifications.ts`); a payload that carries none is unchanged, and the existing title/body text stays byte-identical.
+
+The matrix is checked-in data, not documentation only. Source of truth: `NOTIFICATION_PLATFORM_MATRIX` in `packages/shared/src/notifications.ts`, with `notificationPlatformSupportsAgentIcon` and `notificationPlatformNeedsAgentIdentityFallback`. The table below mirrors that constant; a test asserts every row has a transport, note and fallback, unique ids, exactly one surface admitting a per-agent icon, and that unknown surfaces are treated as unsupported. The `PLATFORM-LIMITS.md` investigation artifact is a superseded copy.
+
+| Surface | Transport used in this repo | Per-agent icon | Identity fallback |
+| --- | --- | --- | --- |
+| In-app toast (every platform) | sonner toast in `apps/web/src/lib/system-notifications.ts` (`emitToast`) | Yes — draws the same `AgentAvatar` SVG as the rest of the UI | This surface *is* the fallback |
+| Browser Notification API (desktop Chromium, macOS Safari) | `new Notification(title, options)` with a fixed `icon: '/apple-touch-icon.png'` | No — one static app icon per notification | In-app identity toast |
+| Desktop shell, Linux | `notify-send <title> <body>` (`apps/desktop/src-tauri/src/shell.rs`) | No — two arguments only, no `-i/--icon` | In-app identity toast |
+| Desktop shell, macOS | `osascript -e 'display notification "<body>" with title "<title>"'` | No — the call shape has no image parameter | In-app identity toast |
+| Desktop shell, Windows | ToastGeneric XML (`apps/desktop/src-tauri/src/notification.rs`) | No — exactly two `<text>` elements and one protocol `<action>`, no `<image>` | In-app identity toast |
+| Android AgentOverlay bridge | `AgentOverlay.notify({ id, title, body })` | No — the notify contract takes id/title/body only | In-app identity toast |
+| Capacitor LocalNotifications (WebView / Windows / Android shell plugins) | `LocalNotifications.schedule({ notifications: [{ id, title, body, schedule }] })` | No — the schedule payload carries no image field | In-app identity toast |
+| FCM push (Android device, no live client) | FCM `data: Record<string, string>` (`packages/gateway/src/services/mobile-push.ts`) | No — a string map carries identity as text, not as an image | In-app identity toast |
+
+How the fallback works: `triggerSystemNotification` resolves the surface it is about to use (`notificationTransportPlatform`) and, when that surface cannot draw the agent, renders a card that shows the agent avatar, name and role with the notification text. When the transport is not identifiable — including when another client on the machine owns the OS toast — the platform is reported as `unknown` and the in-app identity is kept, so an unproven surface is never assumed to draw the agent. When the payload names no agent, the existing plain toast path is used unchanged.
+
+Verified in this checkout: each transport claim above is read from the named call site. Not verified: whether a given browser or OS actually paints the `icon` option it is given, and how any surface renders identity once a native client is installed on macOS, Windows or Android — that needs real-device smoke testing. No such testing was performed, so only the in-app DOM surface is claimed to render a per-agent icon.
+
+Validation for this addition: `packages/shared` and `apps/web` TypeScript checks pass; focused Vitest runs cover the matrix helpers, the identity predicate, the fallback selection per surface, and the rendered toast (avatar, name, role, initial-badge case, markup escaping, and link sanitization). The identity and fallback tests were mutation-checked: disabling the identity path fails 6 tests and forcing a single avatar for all agents fails the per-agent avatar assertions.

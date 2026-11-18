@@ -1,0 +1,90 @@
+/* In-app identity toast: the fallback surface for platforms that cannot render
+   a per-agent icon. Kept deliberately small and self-contained. */
+.agent-identity-toast {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  width: 22rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-left-width: 3px;
+  background: var(--jait-surface, #111827);
+  color: inherit;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.28);
+}
+
+.agent-identity-toast[data-level='success'] { border-left-color: #34d399; }
+.agent-identity-toast[data-level='warning'] { border-left-color: #fbbf24; }
+.agent-identity-toast[data-level='error'] { border-left-color: #fb7185; }
+.agent-identity-toast[data-level='info'] { border-left-color: #60a5fa; }
+
+.agent-identity-toast-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+}
+
+.agent-identity-toast-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  background: rgba(96, 165, 250, 0.22);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.agent-identity-toast-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-identity-toast-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.agent-identity-toast-role {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+
+.agent-identity-toast-title {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  line-height: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.agent-identity-toast-body {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+.agent-identity-toast-action {
+  margin-top: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.agent-identity-toast-action:hover {
+  background: rgba(148, 163, 184, 0.16);
+}
