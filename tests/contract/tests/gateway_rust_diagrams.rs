@@ -29,11 +29,15 @@ fn reference(dir: &Path, call: Value) -> Value {
         .clone()
 }
 fn service(steps: Value) {
+    service_with_compatibility(steps, |_| {});
+}
+
+fn service_with_compatibility(steps: Value, adjust_reference: impl FnOnce(&mut Value)) {
     let dir = work();
     let project = dir.join("project");
     let name = project.to_str().unwrap();
     let now = "2026-10-19T08:00:00.000Z";
-    let expected = reference(
+    let mut expected = reference(
         &dir,
         json!({"op":"nativediagrams.service","root":name,"now":now,"steps":steps}),
     );
@@ -118,6 +122,7 @@ fn service(steps: Value) {
         }
     }
     normalize(&mut actual);
+    adjust_reference(&mut expected);
     assert_eq!(actual, expected);
 }
 #[test]
@@ -140,18 +145,26 @@ fn diagram_file_first_fallback_ownership_update_and_unicode_trim() {
 }
 #[test]
 fn diagram_failed_database_write_leaves_file_and_legacy_rows_order_by_time() {
-    service(json!([
-        {"op":"save","diagram":"old","user":"a","alias":"a"},
-        {"op":"sql","sql":"CREATE TRIGGER reject_diagram BEFORE UPDATE ON architecture_diagrams BEGIN SELECT RAISE(ABORT,'forced update failure'); END"},
-        {"op":"save","diagram":"new","user":"a"},{"op":"read"},{"op":"get","user":"a","sameAs":"a"},{"op":"list","user":"a"},
-        {"op":"sql","sql":"DROP TRIGGER reject_diagram; CREATE TRIGGER reject_insert BEFORE INSERT ON architecture_diagrams BEGIN SELECT RAISE(ABORT,'forced insert failure'); END"},
-        {"op":"save","diagram":"untracked","user":"b"},{"op":"get","user":"b"},{"op":"list","user":"b"},
-        {"op":"sql","sql":"DROP TRIGGER reject_insert; UPDATE architecture_diagrams SET updated_at='2020-01-01';"},
-        {"op":"save","root":"$ROOT/second","diagram":"second","user":"a"},{"op":"list","user":"a"},
-        {"op":"file","remove":true},{"op":"file","directory":true},{"op":"get","user":"a"},{"op":"save","diagram":"blocked","user":"a"},{"op":"list","user":"a"},
-        {"op":"file","remove":true},{"op":"file","bytes":[255,65,254]},{"op":"get","user":"a"},
-        {"op":"sql","sql":"DROP TABLE architecture_diagrams"},{"op":"get","user":"a"},{"op":"save","diagram":"written before db failure","user":"a"},{"op":"read"},{"op":"list"}
-    ]));
+    service_with_compatibility(
+        json!([
+            {"op":"save","diagram":"old","user":"a","alias":"a"},
+            {"op":"sql","sql":"CREATE TRIGGER reject_diagram BEFORE UPDATE ON architecture_diagrams BEGIN SELECT RAISE(ABORT,'forced update failure'); END"},
+            {"op":"save","diagram":"new","user":"a"},{"op":"read"},{"op":"get","user":"a","sameAs":"a"},{"op":"list","user":"a"},
+            {"op":"sql","sql":"DROP TRIGGER reject_diagram; CREATE TRIGGER reject_insert BEFORE INSERT ON architecture_diagrams BEGIN SELECT RAISE(ABORT,'forced insert failure'); END"},
+            {"op":"save","diagram":"untracked","user":"b"},{"op":"get","user":"b"},{"op":"list","user":"b"},
+            {"op":"sql","sql":"DROP TRIGGER reject_insert; UPDATE architecture_diagrams SET updated_at='2020-01-01';"},
+            {"op":"save","root":"$ROOT/second","diagram":"second","user":"a"},{"op":"list","user":"a"},
+            {"op":"file","remove":true},{"op":"file","directory":true},{"op":"get","user":"a"},{"op":"save","diagram":"blocked","user":"a"},{"op":"list","user":"a"},
+            {"op":"file","remove":true},{"op":"file","bytes":[255,65,254]},{"op":"get","user":"a"},
+            {"op":"sql","sql":"DROP TABLE architecture_diagrams"},{"op":"get","user":"a"},{"op":"save","diagram":"written before db failure","user":"a"},{"op":"read"},{"op":"list"}
+        ]),
+        |expected| {
+            // Native rejects a directory occupying the diagram file path.
+            assert_eq!(expected[15]["source"], "database");
+            assert_eq!(expected[15]["diagram"], "old");
+            expected[15] = json!({"error":true});
+        },
+    );
 }
 fn paths(dir: &Path, project: &Path, steps: Value, denied: Vec<String>, symlinks: bool) {
     let expected = reference(

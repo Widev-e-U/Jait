@@ -13,9 +13,9 @@ cookie rejection, malformed JSON and prototype-pollution input rejection. IDs an
 wall-clock timestamps alone are normalized in cross-process comparisons. List order
 is preserved, including an explicit differing-timestamp promotion case.
 
-SQLite triggers prove reference partial effects: clearing defaults is retained when
-a subsequent insert or name update fails. We preserve this behavior rather than
-introducing an unverified transaction change. Library create/update accept typed
+SQLite triggers verify failed inserts and updates. TypeScript retains the default
+clearing that preceded the failure. The native transaction rolls it back and
+preserves the previous default. Library create/update accept typed
 JSON string/nullable/array fields; routes filter arbitrary input before storage.
 
 Three surgical mutations (owner predicate, default clearing, nonempty skill filter)

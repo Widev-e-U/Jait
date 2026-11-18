@@ -159,7 +159,11 @@ async fn route_scenario(call: Value) -> Value {
     actual
 }
 
-fn service_scenario(mut call: Value) {
+fn service_scenario(call: Value) {
+    service_scenario_with_compatibility(call, |_| {});
+}
+
+fn service_scenario_with_compatibility(mut call: Value, adjust_reference: impl FnOnce(&mut Value)) {
     call["op"] = json!("nativeprofiles.service");
     call["now"] = json!(NOW);
     let mut expected = reference(call.clone());
@@ -199,6 +203,7 @@ fn service_scenario(mut call: Value) {
     }
     let mut actual = json!({"results":results});
     normalize(&mut actual);
+    adjust_reference(&mut expected);
     assert_eq!(actual, expected);
 }
 #[test]
@@ -226,13 +231,23 @@ fn legacy_arrays_filter_types_and_corrupt_default_values_are_not_truthy() {
 }
 #[test]
 fn clearing_defaults_retains_reference_partial_effects_when_insert_or_update_fails() {
-    service_scenario(json!({"steps":[
-        {"op":"create","user":"o","input":{"name":"A"},"alias":"a"},
-        {"op":"sql","sql":"CREATE TRIGGER reject_insert BEFORE INSERT ON assistant_profiles BEGIN SELECT RAISE(ABORT,'blocked'); END"},
-        {"op":"create","user":"o","input":{"name":"B","isDefault":true}},{"op":"list","user":"o"},
-        {"op":"sql","sql":"DROP TRIGGER reject_insert; CREATE TRIGGER reject_update BEFORE UPDATE OF name ON assistant_profiles BEGIN SELECT RAISE(ABORT,'blocked'); END"},
-        {"op":"update","id":"a","user":"o","input":{"name":"new","isDefault":true}},{"op":"list","user":"o"}
-    ]}));
+    service_scenario_with_compatibility(
+        json!({"steps":[
+            {"op":"create","user":"o","input":{"name":"A"},"alias":"a"},
+            {"op":"sql","sql":"CREATE TRIGGER reject_insert BEFORE INSERT ON assistant_profiles BEGIN SELECT RAISE(ABORT,'blocked'); END"},
+            {"op":"create","user":"o","input":{"name":"B","isDefault":true}},{"op":"list","user":"o"},
+            {"op":"sql","sql":"DROP TRIGGER reject_insert; CREATE TRIGGER reject_update BEFORE UPDATE OF name ON assistant_profiles BEGIN SELECT RAISE(ABORT,'blocked'); END"},
+            {"op":"update","id":"a","user":"o","input":{"name":"new","isDefault":true}},{"op":"list","user":"o"}
+        ]}),
+        |expected| {
+            for index in [3, 6] {
+                let default = &mut expected["results"][index][0]["isDefault"];
+                assert_eq!(*default, false);
+                // Native rolls the default change back along with the failed write.
+                *default = json!(true);
+            }
+        },
+    );
 }
 #[tokio::test]
 async fn profile_http_crud_auth_ownership_filters_and_parser_boundaries() {

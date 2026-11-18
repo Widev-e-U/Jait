@@ -283,6 +283,19 @@ async fn scenario(seed: &str, steps: Value, options: Value) -> Value {
     let mut expected = expected;
     normalize(&mut actual);
     normalize(&mut expected);
+    if options["checkCallerScopedTools"] == true {
+        // Legacy tool endpoints returned foreign sessions to authenticated callers.
+        let sessions = expected["results"][1]["body"]["sessions"]
+            .as_array_mut()
+            .unwrap();
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0]["userId"], "owner");
+        assert_eq!(sessions[1]["id"], "foreign");
+        assert_eq!(sessions[1]["userId"], "other");
+        sessions.pop();
+        assert_eq!(expected["results"][6]["body"]["id"], "foreign");
+        expected["results"][6] = expected["results"][4].clone();
+    }
     if actual != expected {
         fn difference(a: &Value, b: &Value, path: &str) -> String {
             match (a, b) {
@@ -577,8 +590,9 @@ async fn read_only_agent_helpers_preserve_global_gate_and_query_validation() {
         {"method":"GET","path":"/api/tools/sessions.status","user":"owner"},
         {"method":"GET","path":"/api/tools/sessions.status?sessionId=s","user":"owner"},
         {"method":"GET","path":"/api/tools/sessions.status?sessionId=missing","user":"owner"},
-        {"method":"GET","path":"/api/tools/sessions.status?sessionId=s&sessionId=s","user":"owner"}
-    ]),json!({})).await;
+        {"method":"GET","path":"/api/tools/sessions.status?sessionId=s&sessionId=s","user":"owner"},
+        {"method":"GET","path":"/api/tools/sessions.status?sessionId=foreign","user":"owner"}
+    ]),json!({"checkCallerScopedTools":true})).await;
 }
 #[tokio::test]
 async fn partial_storage_failures_keep_reference_effect_order() {

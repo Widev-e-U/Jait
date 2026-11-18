@@ -111,13 +111,20 @@ fn normalize(v: &mut Value, aliases: &HashMap<String, String>) {
         _ => {}
     }
 }
-async fn compare(mut call: Value) -> Value {
+async fn compare(call: Value) -> Value {
+    compare_with_compatibility(call, |_| {}).await
+}
+
+async fn compare_with_compatibility(
+    mut call: Value,
+    adjust_reference: impl FnOnce(&mut Value),
+) -> Value {
     call["op"] = json!("nativecalendarhttp.run");
     let dir = root()
         .join(".jait/artifacts/gateway-rust/calendar-http")
         .join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&dir).unwrap();
-    let expected =
+    let mut expected =
         internal_driver::call(&root(), &dir, json!({"version":1,"calls":[call]}), &|| {
             false
         })
@@ -331,6 +338,7 @@ async fn compare(mut call: Value) -> Value {
     task.await.unwrap().unwrap();
     service.shutdown().await.unwrap();
     auth.shutdown().await.unwrap();
+    adjust_reference(&mut expected);
     if actual != expected {
         fs::write(
             dir.join("actual.json"),
@@ -410,7 +418,15 @@ async fn snapshot_validation_size_boundaries_and_failed_storage() {
         json!({"sql":"CREATE TRIGGER fail_snapshot BEFORE INSERT ON device_calendar_snapshots BEGIN SELECT RAISE(ABORT,'snapshot failure');END;"}),
         json!({"method":"POST","path":"/api/calendar/device/sync","user":"owner","body":snapshot()}),
     ]);
-    compare(json!({"steps":steps})).await;
+    compare_with_compatibility(json!({"steps":steps}), |expected| {
+        let accounts = expected["accounts"].as_array_mut().unwrap();
+        assert_eq!(accounts.len(), 2);
+        assert_eq!(accounts[0]["email"], "device:boundary");
+        assert_eq!(accounts[1]["email"], "device:phone");
+        // Native rolls back the new account if its snapshot cannot be written.
+        accounts.pop();
+    })
+    .await;
 }
 #[tokio::test]
 async fn oauth_callback_public_html_escapes_errors_and_consumes_state() {

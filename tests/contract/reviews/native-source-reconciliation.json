@@ -153,7 +153,7 @@
     {
       "path": "packages/gateway/src/services/node-credentials.ts",
       "sha256": "81100ba4f9e6eeb5bd4de131870c4e032b612e75c85492f4a3da20e5948d341f",
-      "review": "Memory and SQLite ownership/binding, foreign claims, random credential shape, SHA256-only storage, rejection of unknown tokens, per-node revocation, reopen and owner revalidation; missing-node database behavior is retained. No native node transport is exposed yet.",
+      "review": "Memory and SQLite ownership/binding, foreign claims, random credential shape, SHA256-only storage, rejection of unknown tokens, per-node revocation, reopen and owner revalidation; The native database binding rejects unregistered nodes, while the reference reports success without creating a binding. No native node transport is exposed yet.",
       "cases": [
         {
           "id": "trust_thresholds_reverts_resets_and_action_isolation_match_in_memory_and_sqlite",
@@ -2678,7 +2678,7 @@
     {
       "path": "packages/gateway/src/services/assistant-profiles.ts",
       "sha256": "73c113215dc824a598fc33e0618f47b3612d487439692cfe98f39694a8661f49",
-      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and failed-write partial effects; three restored mutations. See native-profiles.md.",
+      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and explicit failed-write behavior (native rolls back default changes and the reference retains them); three restored mutations. See native-profiles.md.",
       "cases": [
         {
           "id": "profiles_preserve_defaults_owner_filters_null_patches_and_string_arrays",
@@ -2710,7 +2710,7 @@
     {
       "path": "packages/gateway/src/routes/assistant-profiles.ts",
       "sha256": "7bb8c719525ec5d28ebd75046b4995f9ce67acff0a9dbddf033cdb5d96164ff6",
-      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and failed-write partial effects; three restored mutations. See native-profiles.md.",
+      "review": "Native SQLite and real HTTP profile CRUD, owner scopes, default promotion, filtered arrays, nullable patches, legacy JSON and explicit failed-write behavior (native rolls back default changes and the reference retains them); three restored mutations. See native-profiles.md.",
       "cases": [
         {
           "id": "profiles_preserve_defaults_owner_filters_null_patches_and_string_arrays",
@@ -2890,7 +2890,7 @@
     {
       "path": "packages/gateway/src/services/architecture-diagrams.ts",
       "sha256": "83189ae84787a5f1685ee2240f646c1ae36988016ba80e6780af8fd2b6c798c8",
-      "review": "Real file-first storage, SQLite fallback/ownership, update identity and partial effects from failed file/database writes.",
+      "review": "Real file-first storage, SQLite fallback/ownership, update identity and partial effects from failed file/database writes. Native rejects a directory at the diagram path and the reference falls back to SQLite.",
       "cases": [
         {
           "id": "diagram_file_first_fallback_ownership_update_and_unicode_trim",
@@ -3322,7 +3322,7 @@
     {
       "path": "packages/gateway/src/routes/calendar.ts",
       "sha256": "50ffb532cfddae9b653ae5ffa022ec950d4f01f85170e86be613c9ac5fc69046",
-      "review": "Explicit native calendar HTTP API with real Fastify/native loopback comparisons, authenticated account isolation, credential and snapshot validation, callback HTML, OAuth and provider failures, persisted effects, parseInt coercion, fail-then-pass NaN regression and three restored mutations. Focused compatibility boundaries documented.",
+      "review": "Explicit native calendar HTTP API with real Fastify/native loopback comparisons, authenticated account isolation, credential and snapshot validation, callback HTML, OAuth and provider failures, persisted effects including native account rollback on snapshot write failure, parseInt coercion, fail-then-pass NaN regression and three restored mutations. Focused compatibility boundaries documented.",
       "cases": [
         {
           "id": "authentication_redirect_headers_configuration_and_validation",

@@ -1,5 +1,23 @@
 # Gateway migration to Rust
 
+## Native compatibility checks for ownership and failed writes
+
+The Rust session tool endpoints return only the authenticated caller's sessions
+and report foreign sessions as missing. The TypeScript tools retain their legacy
+global lookup. `binary_session_routes` checks native ownership through the binary.
+The TypeScript node binding returns success for an unregistered node without
+creating a binding. Native returns false. `binary_node_credentials` checks that
+native storage also rejects conflicting owners.
+
+Native assistant-profile writes roll back default changes when the profile write
+fails. Native calendar device sync rolls back a newly created account when the
+snapshot insert fails. The TypeScript reference retains those partial writes.
+The calendar differential tests check the HTTP failure and resulting rows. The
+profile differential tests check rollback with SQLite triggers. A directory at
+the native diagram file path fails closed, while the reference loads the stored
+SQLite diagram. The diagram differential checks both behaviors and still compares
+file and database write ordering.
+
 ## Direct tool execution and remote project authority — 2026-11-16
 
 The Rust direct tool endpoint, MCP tool execution, and chat and thread turn admission refuse execution if the owned session's project

@@ -173,6 +173,11 @@ fn credentials_scenario(memory: bool, seed: &str, steps: Vec<Value>) {
         results.push(value);
     }
     for (index, step) in steps.iter().enumerate() {
+        if let Some(reference_bind) = step.get("referenceBind") {
+            // The persisted native binding requires a registered node row.
+            assert_eq!(&reference["results"][index], reference_bind);
+            reference["results"][index] = json!(false);
+        }
         if step["op"] == "issue" {
             normalize_token(&mut results[index]);
             normalize_token(&mut reference["results"][index]);
@@ -245,7 +250,7 @@ fn persisted_node_credentials_survive_reopen_and_recheck_current_ownership() {
             json!({"op":"resolve","slot":0}),
             json!({"op":"mutate","sql":"UPDATE nodes SET user_id='owner' WHERE node_id='n1'"}),
             json!({"op":"resolve","slot":0}),
-            json!({"op":"bind","node":"missing","user":"owner"}),
+            json!({"op":"bind","node":"missing","user":"owner","referenceBind":true}),
             json!({"op":"owner","node":"missing"}),
             json!({"op":"issue","node":"missing","user":"owner"}),
             json!({"op":"issue","node":"n1","user":"owner"}),
