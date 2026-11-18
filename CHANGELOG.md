@@ -4,6 +4,121 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.973](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.973) — 2026-11-18
+
+- chore(contract): reconcile coverage with current source evidence — 252120b8
+- test(contract): verify native ownership and rollback semantics — 646524ee
+- fix(web): preserve composer caret during paste and emoji insertion — 1f260962
+- fix(contract): reconcile model refresh and Chromium evidence — 2483932a
+- feat: integrate gateway, orchestration, and app updates — 5c586bea
+- feat(gateway-rust): count client-only API routes in the inventory — 744783cd
+- feat(gateway-rust): serve composed routers through the binary with black-box tests — 1906bbed
+- feat(gateway): wire plan recovery and halt into the server — aa9b4739
+- feat(gateway): sub-agent executor for plan tasks — b3d637d3
+- fix(gateway): run only human-approved plan tasks — dc7d5a21
+- feat(gateway): plan orchestration core for dependency-ordered runs — e5c1b3ac
+- fix(gateway): expose connected MCP tools to providers — edfe0248
+- feat(gateway-rust): consent, tool policy and project ownership across routes — 755b3afc
+- feat(gateway): browser task, chat control, and project chat tools — 5f6aa990
+- test(e2e): cover notification deck, diff feedback, and messenger teams — 8d80738c
+- feat(web): notification center, diff feedback, and messenger UI updates — ef43b955
+- feat(mobile): chat notification dismiss receiver and image previews — 29f089e5
+- chore(scripts): teams bridge tenant adapter and local deploy updates — c4361756
+- chore(deps): refresh lockfile and web/mobile dependency pins — a7ab67c9
+- docs: browser recording, messenger, and System One model guides — ac550be7
+- fix(gateway): make Refresh models resolve the latest Claude adapter — 4adca396
+- test(gateway-rust): cover mobile and terminal binary routes — 18a1ba14
+- feat(gateway-rust): connect reminder project and thread data — 767108df
+- fix(gateway-rust): serialize device changes with chat turns — 653369c6
+- fix(gateway-rust): restore baseline build and tests — c603a4c9
+- fix(gateway-rust): connect session runtime events — 6bee76f8
+- test(gateway-rust): allow time for provider checks — 483d59b4
+- test(gateway-rust): cover session approval ownership — ed249ee3
+- test(gateway-rust): cover code graph project ownership — cb5cfecd
+- fix(gateway-rust): stage option-like filenames literally — 8acc91d2
+- test(gateway-rust): cover project selection ownership — 9ea1bc2f
+- test(gateway-rust): cover thread halt race — 6dd47d5b
+- fix(gateway-rust): block thread creation when halted — 29fee1de
+- test(gateway-rust): cover control and plugin boundaries — eeaefa72
+- fix(gateway-rust): enforce team thread ownership — f1f08bf4
+- test(gateway-rust): exercise node credentials and update boundary — c3f27096
+- fix(gateway-rust): protect architecture diagram storage — f3d88555
+- test(gateway-rust): cover profile default ownership — 170bfa5a
+- test(gateway-rust): audit environment snapshot mount — 74bbc05a
+- test(gateway-rust): wait for session subscription acknowledgement — 526cf116
+- test(gateway-rust): update voice status auth expectation — 1c8840a4
+- style(gateway-rust): format binary route tests — a9b41bc8
+- fix(gateway-rust): protect voice assistant status — 8e651780
+- fix(gateway-rust): authenticate voice routes — 1795e59a
+- fix(gateway-rust): match project list limit parsing — cd3ce6f8
+- feat(gateway-rust): mount skill store in the binary, fail closed without host consent — c67993e3
+- test(gateway-rust): binary evidence for network and security routes — 587b9b35
+- test(gateway-rust): binary evidence for voice routes — 1dbaad6e
+- test(gateway-rust): binary evidence for terminal routes — 03546567
+- test(gateway-rust): binary evidence for provider routes — 951f625a
+- test(gateway-rust): binary evidence for plan routes — 6ba6997b
+- test(gateway-rust): binary evidence for secret routes — 11205921
+- test(gateway-rust): binary evidence for calendar routes — 8aab64df
+- test(gateway-rust): binary evidence for scheduled job routes — 140657b6
+- test(gateway-rust): binary evidence for threads and persona agents — dc61fede
+- test(gateway-rust): binary evidence for mobile devices and consent — 842f3068
+- test(gateway-rust): binary evidence for filesystem, user-questions, skills, todo routes — a954a2b9
+- test(gateway-rust): binary evidence for session sub-routes; scope session tool routes to caller — 50c85eeb
+- test(gateway-rust): binary evidence for project filesystem routes — a7eb21d0
+- test(gateway-rust): binary evidence for session move, project search, trust reset — 233ce17a
+- test(gateway-rust): binary evidence for repository CRUD and strategy — a3b67c07
+- fix(gateway-rust): enforce project ownership on project sessions; binary evidence for state, consent, trust — c7501c49
+- test(gateway-rust): binary evidence for session and project CRUD ownership — e0f1a652
+- test(gateway-rust): record binary evidence for auth, terminals, tools, reminders, mobile discovery — 1eb81370
+- fix(gateway-rust): kill ACP agent descendants on shutdown — a2bf61ba
+- fix(gateway-rust): approve-all consents under ownership lease — 44dcf63d
+- fix(gateway-rust): decide HTTP/WS consents under ownership lease — 7866b1f8
+- fix(gateway-rust): decide mobile consents atomically under ownership lease — 92a0a236
+- test(gateway-rust): measure binary-tested API candidates — 77dadc37
+- feat(gateway-rust): deliver pending consent snapshots — b7bb4f47
+- fix(gateway-rust): surface consent bridge startup failures — ea7e4e0c
+- test(gateway-rust): composed websocket auth and subscribe — 587ef4b7
+- test(gateway-rust): consent routes mounted and fail closed with settings chat — c6683f35
+- test(gateway-rust): composed router reachability through production router — b9ba72c8
+- feat(gateway-rust): ws, consent, terminals and application updates — 67a5341d
+- docs(gateway-rust): inventory background services — 7994d2f7
+- docs(gateway-rust): inventory client path candidates and route status — 8214b323
+- docs(gateway-rust): inventory WebSocket client messages — 0160308f
+- feat(gateway-rust): honor clientMessageId on chat admission — f15588cb
+- chore: commit remaining web, gateway and gateway-rust changes — 8234818a
+- fix(gateway-rust): identify local filesystem node — 99d9516e
+- test(gateway-rust): cover composed filesystem browsing — 1321185c
+- fix(gateway-rust): report active streaming sessions — 8ab98869
+- test(gateway-rust): cover architecture router validation — acc88bd1
+- docs(gateway-rust): refresh route inventory — ec0bff25
+- test(gateway-rust): cover git request disconnect cancellation — ff3f4af2
+- test(gateway-rust): cover model cancellation and git errors — 64d2ea5c
+- fix(gateway-rust): disable external diff for commit generation — 721cd240
+- test(gateway-rust): cover initial git generation boundaries — e7b2cbb7
+- feat(gateway-rust): generate git messages with configured model — 448e6c0d
+- test(gateway-rust): stabilize and extend regressions — e446f50a
+- fix(gateway-rust): avoid overstating inventory test coverage — 2b66990e
+- feat(gateway-rust): scope session events and wire user questions — 83e85fdf
+- fix(gateway-rust): clean up cancelled user questions — 0d779ba8
+- fix(gateway-rust): retain synchronous question answers — ecb13bd5
+- fix(gateway-rust): notify detached question waiters safely — 9e71d181
+- fix(gateway-rust): align route validation and events — 5b8c4713
+- feat(messenger): improve reply actions and message status — f186e97d
+- feat(gateway-rust): native session loop pause/resume; fix inventory mount detection (307/428 native-tested) — fbc52964
+- feat: update messenger integration and workspace behavior — 740a81e9
+- fix(web): correct message loading and image reactions — 9fb656c0
+- docs(gateway-rust): clarify inventory match labels — 361f7f19
+- fix(messenger): show sender profile photos — 10de86e6
+- chore: remove tracked generated artifacts — 5d41628b
+- chore: stop tracking generated artifacts — 4c34b059
+- style(gateway-rust): format messenger service — ef9b505a
+- feat: improve todo and workspace workflows — b5c0da7b
+- fix(web): preserve agent identity completion toast fallback — 38018823
+- fix(gateway): make uuidv7 ids monotonic so same-millisecond delivery settlement is truthful — a15edcc2
+- Add rootless e2e env bootstrap and drop the stale Vite config — 60701e0e
+- feat(notifications): render originating agent identity in-app, add in-repo platform support matrix — 1324ed45
+- feat(notifications): carry originating agent identity through chat-completion notifications — 8f46f517
+
 ## [v0.1.972](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.972) — 2026-11-12
 
 - fix(web): toast close button no longer overlaps action buttons; restyle toast actions — 95c2733c
