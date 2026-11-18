@@ -8,6 +8,8 @@ import {
   resolveBrowserRuntimeMode,
   selectInitialBrowserPage,
   selectVisibleBrowserPage,
+  selectPageAfterClose,
+  isReusableBootstrapPageUrl,
 } from "./browser.js";
 
 const originalPlatform = process.platform;
@@ -350,5 +352,37 @@ describe("visible browser tab selection", () => {
     popup.evaluate.mockRejectedValue(new Error("Tab closed"));
     expect(await selectVisibleBrowserPage([original, popup], original)).toBe(original);
     expect(await bridge.selectVisiblePage([original, popup], original)).toBe(original);
+  });
+});
+
+describe("search engine start page and closing tabs", () => {
+  const page = (url: string, closed = false) => ({ url: () => url, isClosed: () => closed });
+
+  it("reuses the search engine start page a fresh Debian Chromium opens instead of leaving it as a tab", async () => {
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(import.meta.url)("./playwright-node-bridge.cjs");
+    const startPage = page("https://start.duckduckgo.com/");
+    const newPage = vi.fn();
+    await expect(selectInitialBrowserPage({ pages: () => [startPage], newPage })).resolves.toBe(startPage);
+    expect(newPage).not.toHaveBeenCalled();
+    for (const check of [isReusableBootstrapPageUrl, bridge.isReusableBootstrapPageUrl]) {
+      expect(check("https://start.duckduckgo.com/")).toBe(true);
+      expect(check("https://duckduckgo.com/?q=teams")).toBe(false);
+    }
+  });
+
+  it("returns to the opener after a sign-in popup closes, not to the first tab", async () => {
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(import.meta.url)("./playwright-node-bridge.cjs");
+    const startPage = page("https://start.duckduckgo.com/");
+    const app = page("https://partner.microsoft.com/dashboard");
+    const popup = page("https://login.microsoftonline.com/common/oauth2", true);
+    for (const select of [selectPageAfterClose, bridge.selectPageAfterClose]) {
+      expect(select(popup, [app, popup], [startPage, app])).toBe(app);
+      // Without history, still prefer a real page over a stray start page.
+      expect(select(popup, [], [startPage, app])).toBe(app);
+      expect(select(popup, [], [startPage])).toBe(startPage);
+      expect(select(popup, [popup], [])).toBeUndefined();
+    }
   });
 });

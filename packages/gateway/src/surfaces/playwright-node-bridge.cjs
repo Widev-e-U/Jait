@@ -247,12 +247,37 @@ async function selectInitialPage(context) {
   return blankPage || await context.newPage();
 }
 
+// Chromium shows the default search engine's start page as the new tab page
+// when that engine is not Google (Debian's Chromium defaults to DuckDuckGo).
+// A fresh browser opens one; reuse it instead of leaving it behind as a tab
+// that later surfaces when the agent's tab closes.
+const SEARCH_START_PAGES = new Set([
+  "https://start.duckduckgo.com/",
+  "https://www.bing.com/chrome/newtab",
+  "https://search.brave.com/chrome_newtab",
+  "https://www.ecosia.org/newtab/",
+  "https://www.privacywall.org/newtab/",
+  "https://www.qwant.com/newtab?client=cs-chrome-newtab",
+  "chrome://new-tab-page-third-party/",
+]);
+
 function isReusableBootstrapPageUrl(url) {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized === "about:blank"
     || normalized === "chrome://newtab/"
     || normalized === "chrome://new-tab-page/"
-    || normalized === "edge://newtab/";
+    || normalized === "edge://newtab/"
+    || SEARCH_START_PAGES.has(normalized);
+}
+
+// Tab to continue in after the active one closes: the most recently used open
+// tab (a popup's opener), never a stray start page if a real one exists.
+function selectPageAfterClose(closed, recent, open) {
+  const usable = (candidate) => candidate !== closed && !isPageClosed(candidate) && open.includes(candidate);
+  for (let i = recent.length - 1; i >= 0; i--) if (usable(recent[i])) return recent[i];
+  const pageUrl = (candidate) => { try { return candidate.url(); } catch { return undefined; } };
+  return open.find((candidate) => usable(candidate) && !isReusableBootstrapPageUrl(pageUrl(candidate)))
+    ?? open.find(usable);
 }
 
 function isPageClosed(page) {
@@ -326,6 +351,15 @@ async function main() {
   // Presenting is a CDP round trip (or a fullscreen request in compact view);
   // only repeat it when the automated tab actually changes.
   let presentedPage = null;
+  // Most recently used tabs, newest last, for returning from closed popups.
+  const recentPages = [];
+  const rememberPage = (targetPage) => {
+    const index = recentPages.indexOf(targetPage);
+    if (index >= 0 && index === recentPages.length - 1) return;
+    if (index >= 0) recentPages.splice(index, 1);
+    recentPages.push(targetPage);
+    if (recentPages.length > 20) recentPages.shift();
+  };
   const presentOnce = async (targetPage) => {
     if (targetPage === presentedPage) return;
     await presentPage(targetPage);
@@ -417,16 +451,19 @@ async function main() {
       const openPages = typeof context.pages === "function"
         ? context.pages().filter((candidate) => !isPageClosed(candidate))
         : [];
-      if (openPages.length > 0) {
-        page = openPages[0];
-        void presentPage(page).catch(() => {});
+      const nextPage = selectPageAfterClose(targetPage, recentPages, openPages);
+      if (nextPage) {
+        page = nextPage;
+        rememberPage(page);
+        void presentOnce(page).catch(() => {});
         attachPageEvents(page);
         return;
       }
       context.newPage()
         .then((nextPage) => {
           page = nextPage;
-          return presentPage(nextPage).then(() => attachPageEvents(nextPage));
+          rememberPage(nextPage);
+          return presentOnce(nextPage).then(() => attachPageEvents(nextPage));
         })
         .catch((err) => {
           pushRuntimeEvent(events, {
@@ -440,6 +477,7 @@ async function main() {
   let presentingPage = Promise.resolve();
   context.on("page", (nextPage) => {
     page = nextPage;
+    rememberPage(nextPage);
     attachPageEvents(nextPage);
     presentingPage = presentOnce(nextPage);
     void presentingPage.catch(() => {});
@@ -452,6 +490,7 @@ async function main() {
     else await presentingPage;
     if (page && !isPageClosed(page)) {
       attachPageEvents(page);
+      rememberPage(page);
       await presentOnce(page);
       return page;
     }
@@ -868,7 +907,7 @@ async function main() {
   });
 }
 
-module.exports = { selectVisiblePage };
+module.exports = { selectVisiblePage, selectPageAfterClose, isReusableBootstrapPageUrl };
 
 if (require.main === module) main().catch((err) => {
   send({ event: "fatal", error: normalizeText(errorMessage(err)) });

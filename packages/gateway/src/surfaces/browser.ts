@@ -828,12 +828,36 @@ export async function selectVisibleBrowserPage<T extends {
   return visible >= 0 ? candidates[visible]! : fallback;
 }
 
-function isReusableBootstrapPageUrl(url: string | undefined): boolean {
+// Chromium shows the default search engine's start page as the new tab page
+// when that engine is not Google (Debian's Chromium defaults to DuckDuckGo).
+// A fresh browser opens one; reuse it instead of leaving it behind as a tab
+// that later surfaces when the agent's tab closes.
+const SEARCH_START_PAGES = new Set([
+  "https://start.duckduckgo.com/",
+  "https://www.bing.com/chrome/newtab",
+  "https://search.brave.com/chrome_newtab",
+  "https://www.ecosia.org/newtab/",
+  "https://www.privacywall.org/newtab/",
+  "https://www.qwant.com/newtab?client=cs-chrome-newtab",
+  "chrome://new-tab-page-third-party/",
+]);
+
+export function isReusableBootstrapPageUrl(url: string | undefined): boolean {
   const normalized = url?.trim().toLowerCase();
   return normalized === "about:blank"
     || normalized === "chrome://newtab/"
     || normalized === "chrome://new-tab-page/"
-    || normalized === "edge://newtab/";
+    || normalized === "edge://newtab/"
+    || (normalized !== undefined && SEARCH_START_PAGES.has(normalized));
+}
+
+/** Tab to continue in after the active one closes: the most recently used open tab (a popup's opener), never a stray start page if a real one exists. */
+export function selectPageAfterClose<T extends { isClosed?: () => boolean; url?: () => string }>(closed: T, recent: T[], open: T[]): T | undefined {
+  const usable = (candidate: T) => candidate !== closed && !isBrowserPageClosed(candidate) && open.includes(candidate);
+  for (let i = recent.length - 1; i >= 0; i--) if (usable(recent[i]!)) return recent[i];
+  const pageUrl = (candidate: T) => { try { return candidate.url?.(); } catch { return undefined; } };
+  return open.find(candidate => usable(candidate) && !isReusableBootstrapPageUrl(pageUrl(candidate)))
+    ?? open.find(usable);
 }
 
 function isBrowserPageClosed(page: { isClosed?: () => boolean } | null | undefined): boolean {
@@ -958,6 +982,15 @@ async function createInProcessPlaywrightDriver(
   let presentingPage: Promise<void> = Promise.resolve();
   // bringToFront is a CDP round trip; repeat it only when the tab changes.
   let frontPage: PlaywrightPage | null = null;
+  // Most recently used tabs, newest last, for returning from closed popups.
+  const recentPages: PlaywrightPage[] = [];
+  const rememberPage = (targetPage: PlaywrightPage): void => {
+    const index = recentPages.indexOf(targetPage);
+    if (index === recentPages.length - 1 && index >= 0) return;
+    if (index >= 0) recentPages.splice(index, 1);
+    recentPages.push(targetPage);
+    if (recentPages.length > 20) recentPages.shift();
+  };
   const bringToFrontOnce = async (targetPage: PlaywrightPage): Promise<void> => {
     if (targetPage === frontPage) return;
     await targetPage.bringToFront?.();
@@ -1011,8 +1044,10 @@ async function createInProcessPlaywrightDriver(
     targetPage.on?.("close", () => {
       if (!browserAvailable || targetPage !== activePage) return;
       const openPages = activeContext.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
-      if (openPages.length > 0) {
-        activePage = openPages[0]!;
+      const nextPage = selectPageAfterClose(targetPage, recentPages, openPages);
+      if (nextPage) {
+        activePage = nextPage;
+        rememberPage(nextPage);
         attachPageEvents(activePage);
         return;
       }
@@ -1033,6 +1068,7 @@ async function createInProcessPlaywrightDriver(
   activeContext.on?.("page", (nextPage: PlaywrightPage) => {
     if (!browserAvailable) return;
     activePage = nextPage;
+    rememberPage(nextPage);
     attachPageEvents(nextPage);
     presentingPage = bringToFrontOnce(nextPage);
     void presentingPage.catch(() => {});
@@ -1047,6 +1083,7 @@ async function createInProcessPlaywrightDriver(
     else await presentingPage;
     if (!isBrowserPageClosed(activePage)) {
       attachPageEvents(activePage);
+      rememberPage(activePage);
       await bringToFrontOnce(activePage);
       return activePage;
     }
