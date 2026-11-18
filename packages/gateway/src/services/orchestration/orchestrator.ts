@@ -26,6 +26,23 @@ import { type NormalizedPlanTask, type PlanGraphIssue, validatePlanGraph } from 
 import type { ResourceClaims } from "./resources.js";
 import { computeDependencyChanges, type SchedulableTask, selectDispatch } from "./scheduler.js";
 import { type AttemptOutcome, type NewTask, OrchestrationStore, type RunRow, type TaskRow } from "./store.js";
+import {
+  WorkflowWorkspaces,
+  type WorkspaceProvider,
+  WorkspaceConflictError,
+  WorkspaceError,
+  type WorkspaceRef,
+} from "./workspace.js";
+
+/**
+ * Where an attempt may work. `write` means an isolated worktree on the task
+ * branch, which is merged into the integration branch after it passes. `read`
+ * means the integration worktree, which is never written to.
+ */
+export interface TaskWorkspace {
+  path: string;
+  mode: "read" | "write";
+}
 
 export interface TaskExecutionInput {
   runId: string;
@@ -47,6 +64,8 @@ export interface TaskExecutionInput {
   }>;
   /** Failure context from the previous attempt, for repair attempts. */
   previousAttempt: { error: string; verification: VerificationOutcome[] | null } | null;
+  /** Null when the task declares no resources. */
+  workspace: TaskWorkspace | null;
   timeoutSeconds: number;
   recordAgentRef?: (agentRef: string) => void;
   signal: AbortSignal;
@@ -64,6 +83,8 @@ export interface VerificationRunInput {
   runId: string;
   taskId: string;
   attemptId: string;
+  /** Workspace the gate runs in (worktree path), or null for the repository root. */
+  workspacePath: string | null;
   signal: AbortSignal;
 }
 
@@ -84,6 +105,11 @@ export interface OrchestrationServiceOptions {
   verifier?: VerificationRunner;
   /** Owner halt state; normally AgentControlService.isHalted. */
   isHalted?: (userId: string) => boolean;
+  /**
+   * Workspaces for tasks that declare resources. Defaults to WorkflowWorkspaces
+   * without repositories, which refuses such tasks (fail closed).
+   */
+  workspaces?: WorkspaceProvider;
   /** Process-wide cap on concurrent attempts across all runs. */
   globalMaxWorkers?: number;
   /** Cap on concurrent attempts per owner. */
@@ -155,6 +181,28 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Settles with `work`, or rejects as soon as the attempt is stopped. A gate that
+ * waits on a consent prompt therefore never holds up a halt or cancel.
+ */
+function raceAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error("attempt stopped"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("attempt stopped"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 function parseDefinition(raw: string): RunDefinition {
   return JSON.parse(raw) as RunDefinition;
 }
@@ -222,9 +270,13 @@ export class OrchestrationService {
   private readonly globalMaxWorkers: number;
   private readonly perUserMaxWorkers: number;
   private readonly clock: () => Date;
+  private readonly workspaces: WorkspaceProvider;
+  /** Tail of the workspace and integration work queue for each run. Git merges in one run never interleave. */
+  private readonly serialChains = new Map<string, Promise<void>>();
 
   constructor(private readonly options: OrchestrationServiceOptions) {
     this.store = new OrchestrationStore(options.db);
+    this.workspaces = options.workspaces ?? new WorkflowWorkspaces();
     this.verifier = options.verifier ?? refusingVerificationRunner;
     this.isHalted = options.isHalted ?? (() => false);
     this.globalMaxWorkers = options.globalMaxWorkers ?? DEFAULT_GLOBAL_WORKERS;
@@ -239,6 +291,16 @@ export class OrchestrationService {
     const source = this.resolveSource(userId, input);
     const graph = validatePlanGraph(source.tasks);
     if (!graph.ok) throw new OrchestrationValidationError(graph.issues);
+    // Tasks with resources work in git worktrees, so they need a repository. Refuse before anything is persisted.
+    if (graph.tasks.some((task) => task.claims.writes.length > 0 || task.claims.reads.length > 0)) {
+      try {
+        this.workspaces.assertRunHost(userId, source.repoId);
+      } catch (error) {
+        throw new OrchestrationValidationError([
+          { code: "workspace_required", taskId: null, message: errorMessage(error) },
+        ]);
+      }
+    }
     const maxWorkers = readWorkers(input.maxWorkers);
     const runId = uuidv7();
     const definition: RunDefinition = { order: graph.order, tasks: graph.tasks };
@@ -510,9 +572,30 @@ export class OrchestrationService {
   // ── Attempt lifecycle ──────────────────────────────────────────────
 
   private async runAttempt(attempt: ActiveAttempt, def: NormalizedPlanTask): Promise<void> {
+    let workspace: TaskWorkspace | null;
+    try {
+      workspace = await this.prepareWorkspace(attempt, def);
+    } catch (error) {
+      if (attempt.controller.signal.aborted) return;
+      if (error instanceof WorkspaceConflictError) {
+        // The sync with integration conflicted. Retrying unchanged work would conflict again, so hold the task.
+        this.finish(attempt, {
+          to: "interrupted",
+          outcome: "interrupted",
+          error: boundText(
+            `sync with integration conflicts in ${error.files.length} file(s); held for inspection`,
+            MAX_ERROR,
+          ),
+        });
+        return;
+      }
+      this.failAttempt(attempt, def, boundText(redactSecrets(errorMessage(error)), MAX_ERROR), null, null);
+      return;
+    }
+    if (attempt.controller.signal.aborted) return;
     let raw: unknown;
     try {
-      raw = await this.options.executor.execute(this.buildInput(attempt, def));
+      raw = await this.options.executor.execute(this.buildInput(attempt, def, workspace));
     } catch (error) {
       if (!attempt.controller.signal.aborted) {
         this.finish(attempt, {
@@ -524,10 +607,15 @@ export class OrchestrationService {
       return;
     }
     if (attempt.controller.signal.aborted) return;
-    await this.handleReport(attempt, def, raw);
+    await this.handleReport(attempt, def, raw, workspace);
   }
 
-  private async handleReport(attempt: ActiveAttempt, def: NormalizedPlanTask, raw: unknown): Promise<void> {
+  private async handleReport(
+    attempt: ActiveAttempt,
+    def: NormalizedPlanTask,
+    raw: unknown,
+    workspace: TaskWorkspace | null,
+  ): Promise<void> {
     const parsed = parseAgentTaskReport(raw, { taskId: attempt.taskId, attemptId: attempt.attemptId });
     if (!parsed.ok) {
       this.failAttempt(attempt, def, `invalid agent report: ${parsed.reason}`, null, null);
@@ -560,8 +648,18 @@ export class OrchestrationService {
       return;
     }
     const outcomes: VerificationOutcome[] = [];
+    if (workspace?.mode === "write") {
+      // Deterministic scope gate: a writer may only change what its claims declare.
+      const scope = await this.checkScopeGate(workspace.path, def.claims.writes);
+      if (attempt.controller.signal.aborted) return;
+      outcomes.push(scope);
+      if (!scope.passed) {
+        this.failAttempt(attempt, def, "verification failed: changes stay inside the declared writes", report, outcomes);
+        return;
+      }
+    }
     for (const gate of def.verification) {
-      const verdict = await this.runGate(attempt, gate);
+      const verdict = await this.runGate(attempt, gate, workspace?.path ?? null);
       if (attempt.controller.signal.aborted) return;
       outcomes.push({
         gateId: gate.id,
@@ -573,6 +671,10 @@ export class OrchestrationService {
     }
     const failedRequired = outcomes.filter((outcome) => outcome.required && !outcome.passed);
     if (failedRequired.length === 0) {
+      if (workspace?.mode === "write") {
+        await this.integrateAndFinish(attempt, def, report, outcomes);
+        return;
+      }
       this.finish(attempt, { to: "passed", outcome: "passed", error: null, result: report, verification: outcomes });
       return;
     }
@@ -585,22 +687,148 @@ export class OrchestrationService {
     );
   }
 
-  private async runGate(attempt: ActiveAttempt, gate: VerificationGate): Promise<{ passed: boolean; detail: string }> {
+  private async runGate(
+    attempt: ActiveAttempt,
+    gate: VerificationGate,
+    workspacePath: string | null,
+  ): Promise<{ passed: boolean; detail: string }> {
     try {
       const run = this.requireRunRow(attempt.userId, attempt.runId);
-      const verdict = await this.verifier.run({
-        userId: run.userId,
-        repoId: run.repoId,
-        check: gate.check,
-        runId: attempt.runId,
-        taskId: attempt.taskId,
-        attemptId: attempt.attemptId,
-        signal: attempt.controller.signal,
-      });
+      const verdict = await raceAbort(
+        this.verifier.run({
+          userId: run.userId,
+          repoId: run.repoId,
+          check: gate.check,
+          runId: attempt.runId,
+          taskId: attempt.taskId,
+          attemptId: attempt.attemptId,
+          workspacePath,
+          signal: attempt.controller.signal,
+        }),
+        attempt.controller.signal,
+      );
       return { passed: verdict.passed === true, detail: boundText(redactSecrets(String(verdict.detail)), MAX_DETAIL) };
     } catch (error) {
       return { passed: false, detail: boundText(`verifier error: ${errorMessage(error)}`, MAX_DETAIL) };
     }
+  }
+
+  /** Workspace for this attempt, or null when the task declares no resources. Runs before the agent starts. */
+  private async prepareWorkspace(attempt: ActiveAttempt, def: NormalizedPlanTask): Promise<TaskWorkspace | null> {
+    const { writes, reads } = def.claims;
+    if (writes.length === 0 && reads.length === 0) return null;
+    const ref = this.workspaceRef(attempt);
+    return this.serialize<TaskWorkspace>(attempt.runId, async () => {
+      if (attempt.controller.signal.aborted) throw new WorkspaceError("attempt was stopped before its workspace was ready");
+      if (writes.length === 0) {
+        const location = await this.workspaces.prepareRead(ref);
+        return { path: location.path, mode: "read" };
+      }
+      const location = await this.workspaces.prepareWrite(ref, writes);
+      if (!this.store.recordWorkspace(attempt, location.path)) {
+        throw new WorkspaceError("workflow attempt no longer owns its task");
+      }
+      return { path: location.path, mode: "write" };
+    });
+  }
+
+  /** The scope gate's outcome. A changed path outside the declared writes fails it. */
+  private async checkScopeGate(path: string, writes: readonly string[]): Promise<VerificationOutcome> {
+    const label = "changes stay inside the declared writes";
+    try {
+      const scope = await this.workspaces.checkScope(path, writes);
+      const detail = scope.ok
+        ? `${scope.changed.length} changed file(s) inside scope`
+        : `outside scope: ${scope.outside.slice(0, 20).join(", ")}`;
+      return { gateId: "system:scope", label, required: true, passed: scope.ok, detail: boundText(redactSecrets(detail), MAX_DETAIL) };
+    } catch (error) {
+      return {
+        gateId: "system:scope",
+        label,
+        required: true,
+        passed: false,
+        detail: boundText(`scope check error: ${errorMessage(error)}`, MAX_DETAIL),
+      };
+    }
+  }
+
+  /**
+   * Commits and merges a verified writer into the integration branch, then records
+   * the outcome. A conflict or unknown failure holds the task as interrupted instead
+   * of retrying it. Dependents only see the work after it lands in integration.
+   */
+  private async integrateAndFinish(
+    attempt: ActiveAttempt,
+    def: NormalizedPlanTask,
+    report: AgentTaskReport,
+    outcomes: VerificationOutcome[],
+  ): Promise<void> {
+    if (attempt.controller.signal.aborted) return;
+    const ref = this.workspaceRef(attempt);
+    const label = "merged into the run's integration branch";
+    try {
+      const result = await this.serialize(attempt.runId, () => {
+        if (attempt.controller.signal.aborted) throw new WorkspaceError("stopped before integration");
+        return this.workspaces.integrate(ref, def.claims.writes, `workflow ${attempt.runId}: ${def.id}`);
+      });
+      outcomes.push({
+        gateId: "system:integration",
+        label,
+        required: true,
+        passed: true,
+        detail: result.integrated
+          ? `integrated at ${result.head}`
+          : `nothing new to integrate; integration head ${result.head}`,
+      });
+      this.finish(attempt, { to: "passed", outcome: "passed", error: null, result: report, verification: outcomes });
+    } catch (error) {
+      if (attempt.controller.signal.aborted) return;
+      const conflict = error instanceof WorkspaceConflictError;
+      outcomes.push({
+        gateId: "system:integration",
+        label,
+        required: true,
+        passed: false,
+        detail: boundText(
+          redactSecrets(conflict ? `conflicting files: ${error.files.slice(0, 50).join(", ")}` : errorMessage(error)),
+          MAX_DETAIL,
+        ),
+      });
+      this.finish(attempt, {
+        to: "interrupted",
+        outcome: "interrupted",
+        error: boundText(
+          redactSecrets(
+            conflict
+              ? `integration conflict in ${error.files.length} file(s); held for inspection`
+              : `integration failed: ${errorMessage(error)}; held for inspection`,
+          ),
+          MAX_ERROR,
+        ),
+        result: report,
+        verification: outcomes,
+      });
+    }
+  }
+
+  /** Identifies the attempt's workspace. The owner and repository come from the run, never from the agent. */
+  private workspaceRef(attempt: ActiveAttempt): WorkspaceRef {
+    const run = this.requireRunRow(attempt.userId, attempt.runId);
+    return { userId: attempt.userId, repoId: run.repoId, runId: attempt.runId, taskId: attempt.taskId };
+  }
+
+  /** Runs workspace and integration steps for one run one at a time. Merges in one worktree must not interleave. */
+  private serialize<T>(runId: string, work: () => Promise<T>): Promise<T> {
+    const next = (this.serialChains.get(runId) ?? Promise.resolve()).then(work);
+    const tail = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.serialChains.set(runId, tail);
+    void tail.then(() => {
+      if (this.serialChains.get(runId) === tail) this.serialChains.delete(runId);
+    });
+    return next;
   }
 
   /** Failed attempt: retry while budget remains, otherwise the task is failed. */
@@ -662,7 +890,7 @@ export class OrchestrationService {
     });
   }
 
-  private buildInput(attempt: ActiveAttempt, def: NormalizedPlanTask): TaskExecutionInput {
+  private buildInput(attempt: ActiveAttempt, def: NormalizedPlanTask, workspace: TaskWorkspace | null): TaskExecutionInput {
     const rows = new Map(this.store.getTasks(attempt.runId).map((row) => [row.taskId, row] as const));
     const dependencyResults = def.dependsOn.flatMap((depId) => {
       const row = rows.get(depId);
@@ -687,6 +915,7 @@ export class OrchestrationService {
       verification: def.verification,
       dependencyResults,
       previousAttempt,
+      workspace,
       timeoutSeconds: def.timeoutSeconds,
       signal: attempt.controller.signal,
       recordAgentRef: (agentRef) => {

@@ -10,7 +10,7 @@
  */
 import type { VerificationGate, VerificationOutcome } from "@jait/shared/types";
 import { boundText, redactSecrets } from "./agent-report.js";
-import type { TaskExecutionInput, TaskExecutor } from "./orchestrator.js";
+import type { TaskExecutionInput, TaskExecutor, TaskWorkspace } from "./orchestrator.js";
 import { PROJECT_ROOT_KEY, type ResourceClaims } from "./resources.js";
 
 const MAX_DEPENDENCY_NOTES = 20;
@@ -28,6 +28,8 @@ export interface SubAgentRunRequest {
   attemptId: string;
   prompt: string;
   claims: ResourceClaims;
+  /** Isolated workspace for the attempt, or null when the task declares no resources. */
+  workspace: TaskWorkspace | null;
   timeoutMs: number;
   recordAgentRef?: (agentRef: string) => void;
   signal: AbortSignal;
@@ -58,6 +60,7 @@ export function buildTaskPrompt(input: TaskExecutionInput): string {
     "",
     describeWrites(input.claims),
     describeReads(input.claims),
+    describeWorkspace(input.workspace),
     "",
     "Success checks. The orchestrator runs these after you report. You cannot change, skip or claim them:",
     ...input.verification.map(describeGate),
@@ -97,6 +100,7 @@ export class SubAgentTaskExecutor implements TaskExecutor {
       attemptId: input.attemptId,
       prompt: buildTaskPrompt(input),
       claims: input.claims,
+      workspace: input.workspace,
       timeoutMs: input.timeoutSeconds * 1000,
       signal: input.signal,
       recordAgentRef: input.recordAgentRef,
@@ -125,6 +129,14 @@ function describeWrites(claims: ResourceClaims): string {
 function describeReads(claims: ResourceClaims): string {
   if (claims.reads.length === 0) return "Declared reads: none.";
   return `Declared reads: ${claims.reads.map(displayKey).join(", ")}.`;
+}
+
+function describeWorkspace(workspace: TaskWorkspace | null): string {
+  if (!workspace) return "Workspace: none. Work from the task description only.";
+  if (workspace.mode === "read") {
+    return "Workspace: a read-only snapshot of the integrated project. Do not try to change it.";
+  }
+  return "Workspace: an isolated git worktree of the project that only you use. Your changes are committed and merged into the run's integration branch after the checks pass. Use project-relative paths.";
 }
 
 function describeGate(gate: VerificationGate): string {

@@ -4,6 +4,7 @@ import type { PlanTask } from "@jait/shared";
 import { loadConfig } from "../config.js";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { inertWorkspaces } from "../services/orchestration/inert-workspaces.js";
 import { OrchestrationService } from "../services/orchestration/orchestrator.js";
 import { createServer } from "../server.js";
 import type { UserService } from "../services/users.js";
@@ -46,6 +47,7 @@ describe("plan run routes", () => {
     planId = planService.create({ userId: owner, repoId: repo.id, title: "Plan", tasks: [task] }).id;
     orchestration = new OrchestrationService({
       db: database.db,
+      workspaces: inertWorkspaces,
       isHalted: () => halted,
       executor: {
         execute: ({ signal, recordAgentRef, attemptNo }) => {
@@ -98,6 +100,8 @@ describe("plan run routes", () => {
   it("requires a valid inspection decision before resuming an interrupted attempt", async () => {
     const headers = await auth(owner);
     const run = orchestration.createRun(owner, { planId });
+    // Wait until the worker has started, so the halt interrupts a running attempt with its worker identity.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     orchestration.stopForUser(owner);
     await orchestration.settle();
     const request = { method: "POST" as const, url: `/api/plan-runs/${run.id}/resume`, headers };
@@ -107,6 +111,8 @@ describe("plan run routes", () => {
     expect(resumed.statusCode).toBe(200);
     expect(resumed.json().run.tasks).toMatchObject([{ taskId: task.id, state: "running", attemptCount: 2 }]);
     const url = `/api/plan-runs/${run.id}/tasks/${task.id}/attempts`;
+    // The resumed attempt prepares its workspace before the worker starts, so let that step finish first.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const history = await app.inject({ url, headers });
     expect(history.statusCode).toBe(200);
     expect(history.json().attempts).toMatchObject([
@@ -115,6 +121,16 @@ describe("plan run routes", () => {
     ]);
     expect((await app.inject({ url, headers: await auth("outsider") })).statusCode).toBe(404);
     expect((await app.inject({ url: `/api/plan-runs/${run.id}/tasks/missing/attempts`, headers })).statusCode).toBe(404);
+  });
+
+  it("lists only the owner's runs", async () => {
+    const headers = await auth(owner);
+    const run = orchestration.createRun(owner, { planId });
+    const listed = await app.inject({ url: "/api/plan-runs", headers });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().runs.map((item: { id: string }) => item.id)).toContain(run.id);
+    const others = await app.inject({ url: "/api/plan-runs", headers: await auth("outsider") });
+    expect(others.json().runs).toEqual([]);
   });
 });
 

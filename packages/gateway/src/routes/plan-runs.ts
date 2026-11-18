@@ -50,6 +50,12 @@ export function registerPlanRunRoutes(app: FastifyInstance, config: AppConfig, o
     }) }), 201);
   });
 
+  app.get("/api/plan-runs", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    return respond(reply, () => ({ runs: orchestration.listRuns(user.id) }));
+  });
+
   app.get<{ Params: RunParams }>("/api/plan-runs/:runId", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;

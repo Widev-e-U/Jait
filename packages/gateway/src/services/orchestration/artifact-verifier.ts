@@ -6,7 +6,7 @@ import { isNamedResourceKey, normalizeResourceKey, PROJECT_ROOT_KEY } from "./re
 
 export function createArtifactVerifier(repositories: Pick<RepositoryService, "getById">): VerificationRunner {
   return {
-    async run({ userId, repoId, check, signal }) {
+    async run({ userId, repoId, check, signal, workspacePath }) {
       signal.throwIfAborted();
       if (check.kind !== "artifact") {
         return { passed: false, detail: "command verification requires a configured consent-aware runner" };
@@ -20,7 +20,8 @@ export function createArtifactVerifier(repositories: Pick<RepositoryService, "ge
         return { passed: false, detail: "an owned gateway-local repository is required" };
       }
       try {
-        const root = await realpath(repository.localPath);
+        // A task workspace is checked when present; it is a gateway-managed worktree of the same repository.
+        const root = await realpath(workspacePath ?? repository.localPath);
         const artifact = await realpath(resolve(root, path));
         const fromRoot = relative(root, artifact);
         if (!fromRoot || fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {

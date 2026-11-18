@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
 import type { SqliteDatabase } from "../../db/sqlite-shim.js";
 import { AgentHaltedError } from "../agent-control.js";
+import { inertWorkspaces } from "./inert-workspaces.js";
 import {
   OrchestrationConflictError,
   OrchestrationNotFoundError,
@@ -66,6 +67,7 @@ function makeService(executor: TaskExecutor, extra: { globalMaxWorkers?: number 
     db,
     executor,
     verifier: passingVerifier,
+    workspaces: inertWorkspaces,
     isHalted: (userId) => halted.has(userId),
     ...extra,
   });
@@ -92,6 +94,7 @@ describe("halt", () => {
     const { executor, attempts } = holdingExecutor();
     const service = makeService(executor);
     const run = service.createRun(USER, { title: "halt", tasks: [task("A", { maxAttempts: 3 })] });
+    await flush();
     expect(attempts).toHaveLength(1);
 
     halted.add(USER);
@@ -110,6 +113,7 @@ describe("halt", () => {
     await flush();
 
     service.resumeRun(USER, run.id, [retry("A")]);
+    await flush();
     expect(attempts).toHaveLength(2);
     expect(attempts[1]?.input.attemptNo).toBe(2);
     attempts[1]?.resolve(report(attempts[1].input));
@@ -123,6 +127,7 @@ describe("cancel", () => {
     const { executor, attempts } = holdingExecutor();
     const service = makeService(executor);
     const run = service.createRun(USER, { title: "cancel", tasks: [task("A"), task("B", { dependsOn: ["A"] })] });
+    await flush();
     const cancelled = service.cancelRun(USER, run.id, "operator stop");
     expect(attempts[0]?.input.signal.aborted).toBe(true);
     expect(cancelled.status).toBe("cancelled");
@@ -142,6 +147,7 @@ describe("restart", () => {
     const crashed = holdingExecutor();
     const before = makeService(crashed.executor);
     const run = before.createRun(USER, { title: "restart", tasks: [task("A"), task("B", { dependsOn: ["A"] })] });
+    await flush();
     expect(crashed.attempts).toHaveLength(1);
 
     const executed: TaskExecutionInput[] = [];
@@ -223,6 +229,7 @@ describe("ownership and worker limits", () => {
     const service = makeService(executor, { globalMaxWorkers: 1 });
     service.createRun(USER, { title: "one", tasks: [task("A")] });
     service.createRun(USER, { title: "two", tasks: [task("B")] });
+    await flush();
     expect(attempts).toHaveLength(1);
 
     attempts[0]?.resolve(report(attempts[0].input));

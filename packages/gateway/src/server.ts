@@ -98,9 +98,10 @@ import type { ProjectStateService } from "./services/project-state.js";
 import type { ThreadService } from "./services/threads.js";
 import { AgentControlService, type AgentStopResult } from "./services/agent-control.js";
 import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestration/executor.js";
-import { createArtifactVerifier } from "./services/orchestration/artifact-verifier.js";
+import { createWorkflowVerifier } from "./services/orchestration/command-verifier.js";
 import { createInProcessWorkflowWorker } from "./services/orchestration/in-process-worker.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
+import { WorkflowWorkspaces } from "./services/orchestration/workspace.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
 import type { PlanService } from "./services/plans.js";
@@ -329,14 +330,18 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     })
     : undefined;
   // Keep restart recovery available when the worker dependencies are missing.
+  // Workers and command gates use the consent-aware executor, so every tool call and command keeps its approval path.
   const workflowWorker = deps.userService && deps.toolRegistry
-    ? createInProcessWorkflowWorker(config, deps.userService, deps.toolRegistry)
+    ? createInProcessWorkflowWorker(config, deps.userService, deps.toolRegistry, deps.toolExecutor)
     : undefined;
   const orchestration: OrchestrationService | undefined = deps.db && agentControl
     ? new OrchestrationService({
       db: deps.db,
       executor: new SubAgentTaskExecutor(workflowWorker ?? unboundSubAgentRunner),
-      verifier: deps.repoService ? createArtifactVerifier(deps.repoService) : undefined,
+      verifier: deps.repoService
+        ? createWorkflowVerifier({ repositories: deps.repoService, toolExecutor: deps.toolExecutor })
+        : undefined,
+      workspaces: new WorkflowWorkspaces({ repositories: deps.repoService }),
       isHalted: userId => agentControl.isHalted(userId),
     })
     : undefined;

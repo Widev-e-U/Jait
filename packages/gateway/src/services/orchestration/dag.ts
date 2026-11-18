@@ -26,7 +26,8 @@ export type PlanGraphIssueCode =
   | "missing_verification"
   | "invalid_verification"
   | "invalid_workers"
-  | "task_not_approved";
+  | "task_not_approved"
+  | "workspace_required";
 
 export interface PlanGraphIssue {
   code: PlanGraphIssueCode;

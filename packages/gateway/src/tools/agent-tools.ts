@@ -145,6 +145,11 @@ export interface AgentSpawnDeps {
   toolRegistry: ToolRegistry;
   /** Internal allowlist for an in-process worker. An empty list disables tools. */
   restrictedTools?: readonly string[];
+  /**
+   * Runs the sub-agent's tool calls instead of toolRegistry.execute. Workflow
+   * workers pass the consent-aware executor. Ordinary sub-agents leave it unset.
+   */
+  executeTool?: (name: string, input: unknown, context: ToolContext, audit?: AuditWriter) => Promise<ToolResult>;
   onInProcessStart?: (subAgentId: string) => void;
   audit?: AuditWriter;
   /** LLM config resolver — gets config per request (supports per-user API keys) */
@@ -401,6 +406,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           swarmRoundId,
           swarmParticipant: swarmRoundId ? input.description : undefined,
         };
+        if (deps.executeTool) return deps.executeTool(name, args, subContext, audit);
         return toolRegistry.execute(name, args, subContext, audit);
       };
 

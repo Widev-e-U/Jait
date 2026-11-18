@@ -217,6 +217,24 @@ export class OrchestrationStore {
     });
   }
 
+  /** Records the isolated workspace an attempt works in. Fenced like recordAgentRef. */
+  recordWorkspace(input: { runId: string; taskId: string; attemptId: string }, worktreeRef: string): boolean {
+    return this.db.transaction((tx) => {
+      const updated = tx.update(orchestrationTaskRuns)
+        .set({ worktreeRef })
+        .where(and(
+          taskKey(input.runId, input.taskId),
+          eq(orchestrationTaskRuns.currentAttemptId, input.attemptId),
+          eq(orchestrationTaskRuns.state, "running"),
+        ))
+        .run();
+      if (updated.changes !== 1) return false;
+      tx.update(orchestrationAttempts).set({ worktreeRef })
+        .where(eq(orchestrationAttempts.id, input.attemptId)).run();
+      return true;
+    });
+  }
+
   /** running -> verifying for the current attempt only. A valid report never passes a task by itself. */
   markVerifying(input: { runId: string; taskId: string; attemptId: string; result: AgentTaskReport; now: string }): boolean {
     return this.db.transaction((tx) => {

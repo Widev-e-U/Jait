@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
 import type { SqliteDatabase } from "../../db/sqlite-shim.js";
 import { PlanService } from "../plans.js";
+import { inertWorkspaces } from "./inert-workspaces.js";
 import {
   OrchestrationService,
   OrchestrationValidationError,
@@ -56,7 +57,7 @@ function stateOf(view: { tasks: Array<{ taskId: string; state: string }> }, task
 }
 
 function makeService(executor: TaskExecutor, verifier: VerificationRunner = passingVerifier): OrchestrationService {
-  return new OrchestrationService({ db, executor, verifier });
+  return new OrchestrationService({ db, executor, verifier, workspaces: inertWorkspaces });
 }
 
 it("keeps the trusted worker identity on an attempt after cancellation and rejects late updates", async () => {
@@ -176,8 +177,12 @@ describe("attempts and verification", () => {
     expect(final.status).toBe("passed");
     expect(inputs).toHaveLength(2);
     expect(inputs[1]?.previousAttempt?.error).toContain("verification failed");
-    expect(inputs[1]?.previousAttempt?.verification?.[0]).toMatchObject({ passed: false, detail: "file missing" });
-    expect(final.tasks[0]?.verification).toEqual([expect.objectContaining({ passed: true })]);
+    expect(inputs[1]?.previousAttempt?.verification).toContainEqual(
+      expect.objectContaining({ passed: false, detail: "file missing" }),
+    );
+    // Scope, the plan's gate and integration are all recorded, and all of them passed.
+    expect(final.tasks[0]?.verification).toHaveLength(3);
+    expect(final.tasks[0]?.verification?.every((outcome) => outcome.passed)).toBe(true);
   });
 
   it("never passes a task on a report it cannot validate", async () => {
@@ -197,12 +202,12 @@ describe("attempts and verification", () => {
 
   it("fails closed when no verification runner is configured", async () => {
     const executor: TaskExecutor = { execute: async (input) => report(input) };
-    const service = new OrchestrationService({ db, executor });
+    const service = new OrchestrationService({ db, executor, workspaces: inertWorkspaces });
     const run = service.createRun(USER, { title: "closed", tasks: [task("A", { maxAttempts: 1 })] });
     await service.settle();
     const final = service.getRun(USER, run.id);
     expect(final.status).toBe("failed");
-    expect(final.tasks[0]?.verification?.[0]?.detail).toContain("no verification runner");
+    expect(final.tasks[0]?.verification?.map((outcome) => outcome.detail).join("\n")).toContain("no verification runner");
   });
 
   it("allows one operator retry after the attempt budget is spent", async () => {

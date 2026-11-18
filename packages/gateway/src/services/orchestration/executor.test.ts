@@ -10,6 +10,7 @@ import {
   type SubAgentRunRequest,
   unboundSubAgentRunner,
 } from "./executor.js";
+import { inertWorkspaces } from "./inert-workspaces.js";
 import { OrchestrationService, type TaskExecutionInput, type VerificationRunner } from "./orchestrator.js";
 
 const USER = "user-1";
@@ -195,6 +196,7 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
       db,
       executor: new SubAgentTaskExecutor(runner),
       verifier: passingVerifier,
+      workspaces: inertWorkspaces,
     });
     const run = service.createRun(USER, { title: "agent run", tasks: [task] });
     await service.settle();
@@ -207,6 +209,7 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
       db,
       executor: new SubAgentTaskExecutor(runner),
       verifier: passingVerifier,
+      workspaces: inertWorkspaces,
     });
     const run = service.createRun(USER, { title: "prose", tasks: [{ ...task, maxAttempts: 2 }] });
     await service.settle();
@@ -222,6 +225,7 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
       db,
       executor: new SubAgentTaskExecutor(unboundSubAgentRunner),
       verifier: passingVerifier,
+      workspaces: inertWorkspaces,
     });
     const run = service.createRun(USER, { title: "unbound", tasks: [task] });
     await service.settle();
