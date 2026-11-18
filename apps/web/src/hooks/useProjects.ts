@@ -579,7 +579,11 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }).catch(() => { /* best-effort */ })
   }, [token])
 
-  const createSession = useCallback(async (projectIdOverride?: string | null, name?: string) => {
+  const createSession = useCallback(async (
+    projectIdOverride?: string | null,
+    name?: string,
+    { activate = true }: { activate?: boolean } = {},
+  ) => {
     if (!token) {
       onLoginRequired?.()
       return null
@@ -615,11 +619,13 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       } else {
         setPersonalSessions((prev) => [session, ...prev.filter((entry) => entry.id !== session.id)])
       }
-      selectionVersionRef.current++
-      projectDraftRef.current = null
-      setActiveProjectId(targetProjectId ?? null)
-      setActiveSessionId(session.id)
-      persistSelection(targetProjectId ?? null, session.id)
+      if (activate) {
+        selectionVersionRef.current++
+        projectDraftRef.current = null
+        setActiveProjectId(targetProjectId ?? null)
+        setActiveSessionId(session.id)
+        persistSelection(targetProjectId ?? null, session.id)
+      }
       return session
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -688,20 +694,6 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     persistSelection(projectId, sessionId)
     persistActiveSelectionToCache(projectId, sessionId)
   }, [persistActiveSelectionToCache, persistSelection, projects])
-
-  /**
-   * A "new chat" in a project that does not exist yet: the project is active
-   * but no chat is. Sending the first message creates the chat (the composer
-   * falls back to `createSession` without an active chat), so merely looking
-   * leaves nothing behind. Not persisted — a reload returns to the last chat.
-   */
-  const startProjectDraft = useCallback((projectId: string) => {
-    initialRouteSelectionRef.current = null
-    selectionVersionRef.current++
-    projectDraftRef.current = projectId
-    setActiveProjectId(projectId)
-    setActiveSessionId(null)
-  }, [])
 
   // Keep acknowledgments across stale list responses and out-of-order WS events.
   const readReceiptsRef = useRef(new Map<string, string>())
@@ -1449,7 +1441,6 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     createSession,
     forkSession,
     switchProject,
-    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,

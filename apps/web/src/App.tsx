@@ -593,7 +593,6 @@ function App() {
     fetchProjectSubtree,
     assignProjectRepository,
     switchProject,
-    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,
@@ -2730,24 +2729,33 @@ function App() {
     projectId: string,
     sessionId?: string,
     focusChatOnMobile = false,
-    /** Show the project's empty "new chat" view without creating a chat yet. */
-    draft = false,
+    { createChat = false }: { createChat?: boolean } = {},
   ) => {
+    const requestId = ++projectSwitchRequestRef.current
+    const sourceSessionId = activeSessionIdRef.current
     const project = projects.find((entry) => entry.id === projectId) ?? ( await loadProject(projectId))
-    if (!project) return
+    if (!project || requestId !== projectSwitchRequestRef.current) return
+
+    // An explicit chat wins over the project's most recently active chat.
+    let nextSessionId = sessionId ?? getLatestProjectSessionId(project)
+    if (createChat) {
+      const session = await createSession(projectId, undefined, { activate: false })
+      if (requestId !== projectSwitchRequestRef.current || activeSessionIdRef.current !== sourceSessionId) return
+      if (!session) {
+        toast.error('Could not create a chat in this project. Please try again.')
+        return
+      }
+      nextSessionId = session.id
+      setCurrentView('chat')
+    }
 
     if (isMobile) {
       setShowSidebar(false)
     }
 
-    // Determine which session to activate (mirrors switchProject logic) —
-    // an explicit sessionId (e.g. picked from the sidebar's recent-sessions
-    // list) wins over the project's most-recently-active session.
-    const nextSessionId = draft ? null : sessionId ?? getLatestProjectSessionId(project)
     if (nextSessionId) {
       setParallelChats((current) => closeSecondaryChatPanel(current, nextSessionId))
     }
-    const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
     const cachedProjectProvider = readProjectProviderSelection(projectId)
     // These eager sets give the switch immediate feedback (no flash of the
@@ -2788,9 +2796,7 @@ function App() {
     setProjectFiles([])
     setActiveProjectFileId(null)
     handleAvailableFilesForMentionChange([])
-    if (draft) {
-      startProjectDraft(projectId)
-    } else if (nextSessionId) {
+    if (nextSessionId) {
       switchSession(projectId, nextSessionId)
     } else {
       switchProject(projectId)
@@ -2799,7 +2805,6 @@ function App() {
     // Open the project directory on the gateway and directly hydrate from the
     // response rather than relying on the WS `project.open` event, which is
     // session-scoped and may arrive before the WS re-subscribes to the new session.
-    // A draft has no chat yet, and the gateway scopes an open project to a chat.
     if (project.rootPath && nextSessionId) {
       try {
         const openPanel = resolveProjectPanelOpenAfterChatSelection({
@@ -2844,7 +2849,7 @@ function App() {
           : 'Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, startProjectDraft, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
+  }, [projects, loadProject, createSession, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     setPrimaryChatPanelHidden(false)
@@ -4791,19 +4796,9 @@ function App() {
     void createSession()
   }, [createSession])
 
-  /**
-   * Sidebar project/folder click: the project's empty "new chat" view. The
-   * chat itself is only created when the first message is sent, so browsing
-   * projects leaves no blank chats behind.
-   */
-  const handleNewChatInProject = useCallback(async (projectId: string) => {
-    // Already looking at this project's new-chat view.
-    if (projectId === activeProjectId && !activeSessionId) {
-      if (isMobile) setShowSidebar(false)
-      return
-    }
-    await handleSwitchProject(projectId, undefined, false, true)
-  }, [activeProjectId, activeSessionId, handleSwitchProject, isMobile])
+  const handleNewChatInProject = useCallback((projectId: string) => {
+    return handleSwitchProject(projectId, undefined, true, { createChat: true })
+  }, [handleSwitchProject])
 
   const handleStartNewChatInTab = useCallback(() => {
     void openNewChatSurface('tab')

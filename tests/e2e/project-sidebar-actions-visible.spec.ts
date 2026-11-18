@@ -88,6 +88,44 @@ function assertWithinBounds(
 }
 
 test.describe('project sidebar actions', () => {
+  test('creates and opens a project chat from the plus button before any message is sent', async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile'), 'desktop project sidebar')
+    test.setTimeout(90_000)
+
+    const projectTitle = 'Project chat creation'
+    const { token, username, password } = await registerUser(request)
+    const { projectId, sessionId } = await createProjectAndSession(request, token, projectTitle)
+    await page.addInitScript((gatewayUrl) => {
+      localStorage.setItem('jait-gateway-url', gatewayUrl)
+      localStorage.setItem('jait.viewMode', 'developer')
+      localStorage.setItem('showSessionsSidebar', 'true')
+      localStorage.setItem('developerSidebarView', 'projects')
+    }, API_URL)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await loginInBrowser(page, username, password)
+
+    const sessionRow = (id: string) => page.locator(`[data-dnd-key="session:${id}"]`)
+    const activeRowClass = /cursor-default/
+    await expect(sessionRow(sessionId)).toHaveClass(activeRowClass)
+    const plus = page.getByRole('button', { name: `New chat in ${projectTitle}`, exact: true })
+
+    let previousSessionId = sessionId
+    for (let click = 0; click < 2; click++) {
+      const created = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/projects/${projectId}/sessions`
+        && response.request().method() === 'POST',
+      )
+      await plus.click()
+      const response = await created
+      expect(response.status()).toBe(201)
+      const { id } = await response.json() as { id: string }
+      expect(id).not.toBe(previousSessionId)
+      await expect(sessionRow(id)).toHaveClass(activeRowClass)
+      await expect(sessionRow(previousSessionId)).not.toHaveClass(activeRowClass)
+      previousSessionId = id
+    }
+  })
+
   test('keeps project action buttons fully visible in the sidebar', async ({ page, request }, testInfo) => {
     test.setTimeout(90_000)
     test.skip(testInfo.project.name.startsWith('mobile'), 'desktop sidebar regression only')

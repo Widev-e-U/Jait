@@ -28,7 +28,7 @@ describe('useProjects selection race', () => {
   })
 
   it('bumps the selection version on every explicit selection change', () => {
-    for (const name of ['createSession', 'switchSession', 'switchProject', 'startProjectDraft']) {
+    for (const name of ['createSession', 'switchSession', 'switchProject']) {
       const start = source.indexOf(`const ${name} = useCallback(`)
       expect(start, `${name} should exist`).toBeGreaterThan(-1)
       const next = source.indexOf('\n  const ', start + 1)
