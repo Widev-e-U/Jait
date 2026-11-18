@@ -137,6 +137,34 @@ describe("plan run routes", () => {
     const others = await app.inject({ url: "/api/plan-runs", headers: await auth("outsider") });
     expect(others.json().runs).toEqual([]);
   });
+
+  it("shows task dependencies, the running worker and a pending dependent over HTTP, and cancels cleanly", async () => {
+    const headers = await auth(owner);
+    const repo = new RepositoryService(database.db).create({ userId: owner, name: "chain", localPath: process.cwd() });
+    const chained = planService.create({
+      userId: owner,
+      repoId: repo.id,
+      title: "Chain",
+      tasks: [task, { ...task, id: "write", title: "Write report", dependsOn: ["analyze"] }],
+    });
+    const start = await app.inject({ method: "POST", url: `/api/plans/${chained.id}/runs`, headers, payload: {} });
+    expect(start.statusCode).toBe(201);
+    const runId = start.json().run.id;
+    await expect.poll(async () => (await app.inject({ url: `/api/plan-runs/${runId}`, headers })).json().run.tasks[0].agentRef).toBe("worker-1");
+
+    const view = (await app.inject({ url: `/api/plan-runs/${runId}`, headers })).json().run;
+    expect(view.tasks).toMatchObject([
+      { taskId: "analyze", state: "running", dependsOn: [], agentRef: "worker-1" },
+      { taskId: "write", state: "pending", dependsOn: ["analyze"], agentRef: null },
+    ]);
+    const attempts = await app.inject({ url: `/api/plan-runs/${runId}/tasks/analyze/attempts`, headers });
+    expect(attempts.json().attempts).toMatchObject([{ attemptNo: 1, state: "running", agentRef: "worker-1" }]);
+
+    const cancelled = await app.inject({ method: "POST", url: `/api/plan-runs/${runId}/cancel`, headers });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json().run).toMatchObject({ status: "cancelled" });
+    expect(cancelled.json().run.tasks.map((item: { state: string }) => item.state)).toEqual(["cancelled", "cancelled"]);
+  });
 });
 
 
