@@ -101,6 +101,7 @@ import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestr
 import { createWorkflowVerifier } from "./services/orchestration/command-verifier.js";
 import { createInProcessWorkflowWorker } from "./services/orchestration/in-process-worker.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
+import { createPlanRunTools } from "./tools/plan-run-tools.js";
 import { WorkflowWorkspaces } from "./services/orchestration/workspace.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
@@ -343,6 +344,17 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
         : undefined,
       workspaces: new WorkflowWorkspaces({ repositories: deps.repoService }),
       isHalted: userId => agentControl.isHalted(userId),
+      // The worker's provider: the owner's chat provider and in-process backend, as the in-process worker reads them.
+      providerKeyFor: userId => {
+        const settings = deps.userService?.getSettings(userId);
+        return `${settings?.chatProvider ?? "none"}:${settings?.jaitBackend ?? "default"}`;
+      },
+      listPendingApprovals: sessionId => (deps.consentManager?.listPending(sessionId) ?? []).map((request) => ({
+        id: request.id,
+        toolName: request.toolName,
+        summary: request.summary,
+        createdAt: request.createdAt,
+      })),
     })
     : undefined;
   let recoveredOrchestration: OrchestrationService | undefined;
@@ -355,6 +367,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     } catch (error) {
       app.log.error({ error }, "plan orchestration recovery failed");
     }
+  }
+  // Chat tools use the same service as the plan-run routes, and are offered only when those routes are.
+  if (recoveredOrchestration && workflowWorker && deps.toolRegistry) {
+    for (const tool of createPlanRunTools(recoveredOrchestration)) deps.toolRegistry.register(tool);
   }
   if (agentControl) {
     if (deps.ws) deps.ws.getAgentControlState = userId => agentControl.getState(userId);

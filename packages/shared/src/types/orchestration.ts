@@ -124,6 +124,14 @@ export interface OrchestrationAttemptView {
   verification: VerificationOutcome[] | null;
 }
 
+/** A consent prompt raised by a worker. It blocks that worker until the owner answers, or it is cancelled. */
+export interface OrchestrationPendingApproval {
+  id: string;
+  toolName: string;
+  summary: string;
+  createdAt: string;
+}
+
 export interface OrchestrationRunView {
   id: string;
   planId: string | null;
@@ -136,5 +144,9 @@ export interface OrchestrationRunView {
   createdAt: string;
   updatedAt: string;
   finishedAt: string | null;
+  /** Session that holds the workers' consent prompts (`workflow:<runId>`), not the chat that started the run. */
+  workerSessionId: string;
+  /** Approvals the workers wait on now. Answer them in the worker session or they time out. */
+  pendingApprovals: OrchestrationPendingApproval[];
   tasks: OrchestrationTaskView[];
 }

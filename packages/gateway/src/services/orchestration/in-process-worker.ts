@@ -5,6 +5,7 @@ import { resolveJaitLlmConfig } from "../jait-llm.js";
 import type { JaitBackend, UserService } from "../users.js";
 import type { ToolExecutorFn } from "./command-verifier.js";
 import type { SubAgentRunner } from "./executor.js";
+import { workflowSessionId } from "./orchestrator.js";
 import { allowedWorkflowTools, authorizeWorkflowToolCall } from "./workflow-tool-guard.js";
 
 /**
@@ -59,7 +60,7 @@ export function createInProcessWorkflowWorker(
       });
       const result = await worker.execute({ prompt, description: "Workflow task" }, {
         userId,
-        sessionId: `workflow:${runId}`,
+        sessionId: workflowSessionId(runId),
         actionId: attemptId,
         requestedBy: "workflow",
         projectRoot: scope?.path ?? "",

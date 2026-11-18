@@ -195,6 +195,8 @@ export class ConsentAwareExecutor {
       },
       sessionId: context.sessionId,
       timeoutMs: options.consentTimeoutMs,
+      // Workflow attempts are stopped by halt, cancel or timeout; their pending approval must not outlive them.
+      signal: context.requestedBy === "workflow" ? context.signal : undefined,
     });
 
     if (!decision.approved) {

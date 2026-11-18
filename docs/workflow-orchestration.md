@@ -21,6 +21,7 @@ The engine is general-purpose. It has no built-in knowledge of Rust, TypeScript 
 | `agent-report.ts` | Report validation, redaction and bounds. |
 | `store.ts` | Transactional, fenced persistence (compare-and-set on the attempt id). |
 | `routes/plan-runs.ts` | HTTP surface. |
+| `tools/plan-run-tools.ts` | Chat tools `plan.run.*` over the same service as the HTTP surface. |
 
 ## Model
 
@@ -78,11 +79,17 @@ Gates run in this order before a task can advance:
 
 A required gate that fails fails the attempt. Optional gates are recorded but do not block. Verification evidence is stored with each attempt.
 
+**Command gates finish or stop, and never guess.** A gate's command runs in the foreground until it finishes or hits the gate's timeout. The result is its own exit code, from the shell's completion marker (OSC 633 `D`). A prompt-looking line is never treated as completion, and a command that yields to the background never passes. A shell without shell integration therefore runs its command to the deadline, and the gate fails.
+
+**Stopping reaches the command.** Cancel, halt, timeout and an abort during the gate all send Ctrl+C. If the command is still running after 2 seconds, its terminal is stopped, which ends the shell and its children. The attempt keeps its worker and claims until the terminal reports its exit, so a late write from a stopped command cannot overlap the next attempt. If the terminal never reports an exit, the worker stays held until a restart, as with any executor that ignores its stop.
+
+**Approvals of a stopped attempt are denied.** A workflow approval still pending when its attempt stops is denied at once and its prompt disappears. Ordinary chat approvals are unchanged.
+
 Command gates can write files too. The scope check runs again at integration, so an unignored file outside the declared writes that a command leaves behind blocks integration and holds the task. Build outputs that git ignores do not count.
 
 ## Scheduling
 
-- `selectDispatch` starts ready tasks by priority, then definition order. It respects `maxWorkers` per run, a process-wide cap and a per-owner cap.
+- `selectDispatch` starts ready tasks by priority, then definition order. It respects `maxWorkers` per run, a process-wide cap, a per-owner cap and a per-owner, per-provider cap (`perProviderMaxWorkers`, default 2). The provider is the owner's worker backend, which is the in-process Jait provider today. Only workflow attempts count toward it, so ordinary chats are not throttled.
 - Resource claims: `writes` conflicts with any overlapping `reads` or `writes`. `reads` never conflict with each other. Paths overlap by segment (`src` covers `src/lib.rs`, not `srcx`). `name:<id>` resources match exactly.
 - A task without a `resources` field claims the whole project for writing and therefore runs alone. `resources: {}` declares no claims.
 - Tasks holding a worker keep their claims until their executor actually settles, even if the stored state says `interrupted`.
@@ -126,6 +133,22 @@ Writing tasks never touch the user's checkout or branch.
 - `GET /api/plan-runs/:runId/tasks/:taskId/attempts` returns the attempt history, with worker IDs, workspace paths, reports and gate outcomes.
 - `POST /api/plan-runs/:runId/cancel` cancels the run. Running attempts are signalled, and their late reports are ignored.
 - `POST /api/plan-runs/:runId/resume` takes `decisions` for interrupted tasks: `taskId`, `decision` (`retry` or `fail`) and an inspection `note`.
+- The run view also carries `workerSessionId` (`workflow:<runId>`, where the workers' consent prompts appear) and `pendingApprovals` (the prompts the workers wait on now).
+
+## Chat tools
+
+The same service backs these tools. They are offered only when the HTTP controls are.
+
+| Tool | Purpose |
+| --- | --- |
+| `plan.run.start` | Start an approved plan. Workers still ask for each tool call. |
+| `plan.run.resume` | Resume an interrupted run with one decision per interrupted task. |
+| `plan.run.list`, `plan.run.status`, `plan.run.attempts` | Read runs, tasks, workers, errors and pending approvals. |
+| `plan.run.cancel` | Stop a run. Stopping is the safe direction. |
+
+Consent: the tools are not in the reviewed permission profiles (`tool-profiles.ts`), so the security profile treats every call as dangerous and asks each time. That includes the read tools. Listing them in the profiles would change a pinned source-review contract (`profile-minimal`, `profile-coding`, `profile-full`), so it needs a reviewed update, together with the Rust side. Until then, the prompts are the safe default and the read tools are slower to use than they need to be.
+
+Every tool is scoped to the calling owner. A refusal from the service comes back as a failed result, not an exception.
 
 ## Limits
 
@@ -136,6 +159,7 @@ Writing tasks never touch the user's checkout or branch.
 | `maxAttempts` per task | 1–5 | 2 (plus one operator retry) |
 | `timeoutSeconds` per attempt | 1–86400 | 1800 |
 | `priority` | −10…10 | 0 |
+| Concurrent attempts per owner and provider | service option (`perProviderMaxWorkers`) | 2 |
 | Verification gates per task | 1–20 (at least one required) | — |
 | Changed paths per attempt | max 5000 | — |
 
@@ -149,13 +173,16 @@ Writing tasks never touch the user's checkout or branch.
 
 ## Not built yet
 
-- **Agent tools and UI for plan-run controls.** The HTTP routes above are the current surface. Chat tools and a UI panel are not built.
+- **UI panel for plan runs.** The chat tools and HTTP routes are the surfaces. No panel exists in the web app.
 - **Workspace-aware ACP workers.** The in-process adapter is the only worker. ACP is not yet bound to worktrees.
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
 - **Automatic worktree cleanup.** Worktrees are retained for review.
 - **Post-integration verification.** Gates run in the writer's workspace before integration. The integration head is verified only when a later task runs its gates on it.
-- **Consent visibility.** Consent prompts for workers appear under the session `workflow:<runId>`, not under the chat that started the run.
-- **Process-level limits.** Zombie executors that ignore abort keep their slot until they settle. Child-process termination is not confirmed.
+- **Consent visibility.** Consent prompts for workers still appear under the session `workflow:<runId>`, not under the chat that started the run. The run view and `plan.run.status` name that session and list the pending prompts, but the starting chat does not show them.
+- **Process-level limits.** A zombie executor that ignores abort keeps its slot until it settles or the gateway restarts. Command gates stop their terminal, but worker tools that spawn processes outside a gate are not covered. The in-process worker has no such tool.
+- **Provider limits beyond concurrency.** The cap counts attempts. Quota windows reported by provider accounts are not read, and the in-process Jait backend reports none.
+- **Tests that agents weaken.** Command gates come from the approved plan, so an agent cannot swap them. The scope gate limits what a writer may change to its declared writes, but it does not tell a weakened test from a fixed one. A writer that declares a test file can still edit it, so review changed tests in the integration branch.
+- **Interface manifest.** `tests/contract/interfaces.json` was last captured at v0.1.973 and has drifted since, in files this work did not touch. Migration 79 itself is unchanged: its `db_migration` fingerprint matches the pin. Recapturing is a reviewed baseline change. It must wait until unrelated working-tree edits are committed, or the baseline would include them.
 - **Single writer assumption.** One gateway process per database. Recovery is not safe against a second live process.
 - **Pre-existing:** ordinary sub-agents still call the tool registry directly and do not pass through the consent executor. This change does not alter that path.
 

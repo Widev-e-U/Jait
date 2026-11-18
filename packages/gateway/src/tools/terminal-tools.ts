@@ -709,6 +709,19 @@ function isSshSecretPrompt(command: string, prompt: string): boolean {
 }
 
 /** Race a promise against an AbortSignal */
+/** Workflow commands get Ctrl+C first, then this grace period before the terminal is stopped. */
+const WORKFLOW_STOP_GRACE_MS = 2_000;
+
+/**
+ * Stop policy for a workflow command. `hardStop` tears the terminal down, which
+ * is the only stop that reaches children that ignore Ctrl+C. It resolves `false`
+ * when the terminal was already gone, so nothing can still be running.
+ */
+export interface WorkflowCommandStop {
+  hardStop: () => Promise<boolean>;
+  graceMs: number;
+}
+
 function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) return Promise.reject(new Error("Cancelled"));
   return new Promise<T>((resolve, reject) => {
@@ -950,7 +963,7 @@ const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
  * they execute atomically in the current scope — PSReadLine otherwise
  * treats each \n as a separate Enter keystroke, garbling execution order.
  */
-function executeInTerminal(
+export function executeInTerminal(
   surface: ManagedTerminalSurface,
   command: string,
   timeoutMs: number,
@@ -960,6 +973,7 @@ function executeInTerminal(
   signal?: AbortSignal,
   requestInteractiveSecret?: (prompt: string) => Promise<string | null>,
   onWaitTimeout?: (state: { raw: string; completionToken?: string; cleanup: () => void }) => boolean,
+  workflowStop?: WorkflowCommandStop,
 ): Promise<{ output: string; exitCode: number | null; timedOut: boolean; interactionRequired?: boolean; pagerEscaped?: boolean; outputFilter?: string | null }> {
   return new Promise((resolve) => {
     if (signal?.aborted) { resolve({ output: "Cancelled", exitCode: null, timedOut: false }); return; }
@@ -987,6 +1001,9 @@ function executeInTerminal(
     let settleExitCode: number | null = null;
 
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // Workflow commands: the process deadline was reached (reported as timedOut), and the pending hard stop.
+    let deadlineReached = false;
+    let hardStopTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Pager watchdog: pagers block waiting on the PTY, so a wedged command
     // would otherwise sit until the full timeout and then get Ctrl+C — which
@@ -1026,10 +1043,31 @@ function executeInTerminal(
       }, 5000);
     }, 10_000);
 
+    // Workflow stop: Ctrl+C first, then the hard stop after the grace period.
+    // Settling waits for the terminal's exit (or proof it was already gone), so
+    // the caller never releases its worker while the command may still run.
+    const scheduleHardStop = (stop: WorkflowCommandStop) => {
+      if (settled || hardStopTimer) return;
+      hardStopTimer = setTimeout(() => {
+        hardStopTimer = null;
+        if (settled) return;
+        void stop.hardStop().then((stopped) => {
+          if (!stopped) finish(deadlineReached, null);
+        }, () => undefined);
+      }, stop.graceMs);
+    };
+
     const armTimer = () => {
       if (timeoutMs <= 0 || settled) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
+        if (workflowStop) {
+          // A workflow command has no background hand-off: its deadline is the process deadline.
+          deadlineReached = true;
+          try { surface.write("\x03"); } catch { /* terminal already gone */ }
+          scheduleHardStop(workflowStop);
+          return;
+        }
         // A wait deadline is not a process deadline: hand the live execution
         // to the background monitor before releasing this listener.
         const scriptToClean = tmpFile;
@@ -1122,7 +1160,9 @@ function executeInTerminal(
       // Some sessions have a working interactive shell but no OSC 633
       // completion markers.  A returned prompt is still enough to know a
       // simple command has finished, so fall back to prompt detection.
-      if (!dMatch && hasShellPrompt(raw, shell)) {
+      // Workflow commands never take this path: a prompt-looking line can be an echo, and an inferred
+      // exit code would let a gate pass while the command still runs. They finish on D+B, exit or stop.
+      if (!workflowStop && !dMatch && hasShellPrompt(raw, shell)) {
         settleExitCode = inferFallbackExitCode(raw);
         settleTimer = setTimeout(() => finish(false, settleExitCode), 100);
       }
@@ -1135,6 +1175,7 @@ function executeInTerminal(
       clearTimeout(watchdogStartupTimer);
       stopPagerWatchdog();
       if (settleTimer) clearTimeout(settleTimer);
+      if (hardStopTimer) clearTimeout(hardStopTimer);
       signal?.removeEventListener("abort", onAbort);
       surface.removeOutputListener(listener);
       surface.removeExitListener?.(exitListener);
@@ -1209,7 +1250,7 @@ function executeInTerminal(
 
       output = truncateTerminalToolOutput(body);
 
-      resolve({ output: output || "(no output)", exitCode, timedOut, interactionRequired, pagerEscaped, outputFilter: outputFilterNote });
+      resolve({ output: output || "(no output)", exitCode, timedOut: timedOut || deadlineReached, interactionRequired, pagerEscaped, outputFilter: outputFilterNote });
     };
 
     // Actual shell exit is authoritative even when no prompt/OSC marker follows.
@@ -1225,6 +1266,8 @@ function executeInTerminal(
 
     const onAbort = () => {
       surface.write("\x03");
+      // A workflow command settles only once its terminal has exited (see scheduleHardStop).
+      if (workflowStop) { scheduleHardStop(workflowStop); return; }
       setTimeout(() => finish(false, null), 500);
     };
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -1407,6 +1450,9 @@ export function createTerminalRunTool(
       const { terminalId: preferredId, isBackground } = input;
       const timeout = resolveCommandTimeoutMs(input.timeout);
       const yieldTimeMs = resolveCommandYieldMs(input.yieldTimeMs, timeout);
+      // Workflow commands (gates) run in the foreground to completion or deadline: a yielded
+      // command would be reported as ok while it still runs, and its stop would not be confirmed.
+      const workflowRun = context.requestedBy === "workflow";
       let command = input.command;
 
       if (input.elevated) {
@@ -1619,10 +1665,13 @@ export function createTerminalRunTool(
           // Prefixing makes them behave like a non-interactive pipe. Human
           // keystrokes in the same terminal are unaffected.
           const shell = String(surface.snapshot().metadata?.shell ?? "");
+          const workflowStop: WorkflowCommandStop | undefined = workflowRun
+            ? { hardStop: () => registry.stopSurface(terminalId).catch(() => false), graceMs: WORKFLOW_STOP_GRACE_MS }
+            : undefined;
           const execPromise = executeInTerminal(
             surface,
             buildAgentCommand(command, shell, await resolveAgentCommandEnv(resolveAgentEnv, context)),
-            yieldTimeMs,
+            workflowRun ? timeout : yieldTimeMs,
             shell,
             context.projectRoot,
             context.onOutputChunk,
@@ -1673,9 +1722,12 @@ export function createTerminalRunTool(
               }
               return movedToBackground;
             },
+            workflowStop,
           );
 
-          result = context.signal
+          // A workflow command must not be raced against its abort: the caller would
+          // release its worker while the process may still run. Its abort settles on the exit.
+          result = context.signal && !workflowRun
             ? await raceAbort(execPromise, context.signal)
             : await execPromise;
           outputEndOffset = getTerminalCommandDoneEndOffset(surface, outputOffset)

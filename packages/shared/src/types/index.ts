@@ -160,6 +160,7 @@ export {
 export type {
   AgentReportStatus,
   AgentTaskReport,
+  OrchestrationPendingApproval,
   OrchestrationRunState,
   OrchestrationRunView,
   OrchestrationAttemptView,

@@ -9,7 +9,7 @@ import { isAbsolute } from "node:path";
 import type { ToolContext, ToolResult } from "../../tools/contracts.js";
 import type { RepositoryService } from "../repositories.js";
 import { createArtifactVerifier } from "./artifact-verifier.js";
-import type { VerificationRunInput, VerificationRunner } from "./orchestrator.js";
+import { type VerificationRunInput, type VerificationRunner, workflowSessionId } from "./orchestrator.js";
 
 export type ToolExecutorFn = (
   toolName: string,
@@ -63,7 +63,7 @@ export function createCommandVerifier(options: WorkflowVerifierOptions): Verific
         "terminal.run",
         { command: input.check.command, timeout: seconds * 1000 },
         {
-          sessionId: `workflow:${input.runId}`,
+          sessionId: workflowSessionId(input.runId),
           actionId: input.attemptId,
           projectRoot: cwd,
           requestedBy: "workflow",
@@ -72,7 +72,12 @@ export function createCommandVerifier(options: WorkflowVerifierOptions): Verific
         },
       );
       if (input.signal.aborted) {
-        return { passed: false, detail: "command gate cancelled before it finished" };
+        return { passed: false, detail: "command gate cancelled; the command was stopped before it finished" };
+      }
+      // A yielded or backgrounded command has no verdict yet. It must never pass a gate.
+      const state = result.data as { yielded?: unknown; isBackground?: unknown } | undefined;
+      if (state?.yielded === true || state?.isBackground === true) {
+        return { passed: false, detail: "command did not finish before its deadline, so the gate cannot pass" };
       }
       const detail = typeof result.message === "string" && result.message.trim() ? result.message : "no output";
       return {

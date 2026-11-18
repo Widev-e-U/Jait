@@ -65,6 +65,8 @@ interface PendingEntry {
   request: ConsentRequest;
   resolve: (decision: ConsentDecision) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** Removes the abort listener registered by requestConsent, if any. */
+  detach?: () => void;
 }
 
 // ── ConsentManager ───────────────────────────────────────────────────
@@ -98,6 +100,11 @@ export class ConsentManager {
     policy: ConsentRequestPolicy;
     sessionId: string;
     timeoutMs?: number;
+    /**
+     * When the waiting action is stopped first, the request is denied at once and
+     * its prompt disappears. Without a signal the request waits for a decision or timeout.
+     */
+    signal?: AbortSignal;
   }): Promise<ConsentDecision> {
     const timeout = params.timeoutMs ?? this.defaultTimeoutMs;
     const now = new Date();
@@ -122,10 +129,22 @@ export class ConsentManager {
         this.handleTimeout(request.id);
       }, timeout);
 
-      this.pending.set(request.id, { request, resolve, timer });
+      const entry: PendingEntry = { request, resolve, timer };
+      this.pending.set(request.id, entry);
+      const signal = params.signal;
+      if (signal) {
+        const onAbort = () => {
+          this.decide(request.id, false, "auto", "cancelled: the action was stopped before a decision");
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        entry.detach = () => signal.removeEventListener("abort", onAbort);
+      }
 
       // Notify listeners (e.g. WS broadcast)
       this.onRequest?.(request);
+      if (signal?.aborted) {
+        this.decide(request.id, false, "auto", "cancelled: the action was stopped before a decision");
+      }
     });
   }
 
@@ -211,6 +230,7 @@ export class ConsentManager {
     if (!entry) return false;
 
     clearTimeout(entry.timer);
+    entry.detach?.();
 
     const decision: ConsentDecision = {
       requestId,
@@ -241,6 +261,7 @@ export class ConsentManager {
   private handleTimeout(requestId: string): void {
     const entry = this.pending.get(requestId);
     if (!entry) return;
+    entry.detach?.();
 
     const decision: ConsentDecision = {
       requestId,

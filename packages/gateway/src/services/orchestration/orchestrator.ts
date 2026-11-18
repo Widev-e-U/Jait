@@ -14,6 +14,7 @@ import type {
   OrchestrationTaskView,
   VerificationCheck,
   VerificationGate,
+  OrchestrationPendingApproval,
   VerificationOutcome,
 } from "@jait/shared/types";
 import { eq } from "drizzle-orm";
@@ -105,6 +106,8 @@ export interface OrchestrationServiceOptions {
   verifier?: VerificationRunner;
   /** Owner halt state; normally AgentControlService.isHalted. */
   isHalted?: (userId: string) => boolean;
+  /** Consent prompts waiting in a session; normally ConsentManager.listPending. Shown on the run view. */
+  listPendingApprovals?: (sessionId: string) => OrchestrationPendingApproval[];
   /**
    * Workspaces for tasks that declare resources. Defaults to WorkflowWorkspaces
    * without repositories, which refuses such tasks (fail closed).
@@ -114,6 +117,13 @@ export interface OrchestrationServiceOptions {
   globalMaxWorkers?: number;
   /** Cap on concurrent attempts per owner. */
   perUserMaxWorkers?: number;
+  /**
+   * Cap on concurrent attempts per owner and provider, so workflow fan-out stays
+   * within a provider's concurrency budget. Only workflow attempts are counted.
+   */
+  perProviderMaxWorkers?: number;
+  /** Provider key of the owner's workers, e.g. the in-process Jait backend. Defaults to one shared key. */
+  providerKeyFor?: (userId: string) => string;
   now?: () => Date;
 }
 
@@ -163,6 +173,7 @@ interface ActiveAttempt {
   runId: string;
   taskId: string;
   userId: string;
+  providerKey: string;
   controller: AbortController;
   timer: ReturnType<typeof setTimeout> | null;
 }
@@ -173,6 +184,7 @@ const MAX_ERROR = 2000;
 const MAX_DETAIL = 2000;
 const DEFAULT_GLOBAL_WORKERS = 4;
 const DEFAULT_USER_WORKERS = 4;
+const DEFAULT_PROVIDER_WORKERS = 2;
 const TIMEOUT_REASON = "attempt timed out; outcome unknown, not retried automatically";
 const HALT_REASON = "stopped by agent halt; outcome unknown, not retried automatically";
 const RESTART_REASON = "gateway restarted before the attempt finished; outcome unknown, not retried automatically";
@@ -182,25 +194,11 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Settles with `work`, or rejects as soon as the attempt is stopped. A gate that
- * waits on a consent prompt therefore never holds up a halt or cancel.
+ * The session that carries a run's worker tool calls and command gates, and so
+ * its consent prompts. It is not the chat that started the run.
  */
-function raceAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(new Error("attempt stopped"));
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(new Error("attempt stopped"));
-    signal.addEventListener("abort", onAbort, { once: true });
-    work.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
+export function workflowSessionId(runId: string): string {
+  return `workflow:${runId}`;
 }
 
 function parseDefinition(raw: string): RunDefinition {
@@ -269,6 +267,8 @@ export class OrchestrationService {
   private readonly isHalted: (userId: string) => boolean;
   private readonly globalMaxWorkers: number;
   private readonly perUserMaxWorkers: number;
+  private readonly perProviderMaxWorkers: number;
+  private readonly providerKeyFor: (userId: string) => string;
   private readonly clock: () => Date;
   private readonly workspaces: WorkspaceProvider;
   /** Tail of the workspace and integration work queue for each run. Git merges in one run never interleave. */
@@ -281,6 +281,8 @@ export class OrchestrationService {
     this.isHalted = options.isHalted ?? (() => false);
     this.globalMaxWorkers = options.globalMaxWorkers ?? DEFAULT_GLOBAL_WORKERS;
     this.perUserMaxWorkers = options.perUserMaxWorkers ?? DEFAULT_USER_WORKERS;
+    this.perProviderMaxWorkers = options.perProviderMaxWorkers ?? DEFAULT_PROVIDER_WORKERS;
+    this.providerKeyFor = options.providerKeyFor ?? (() => "default");
     this.clock = options.now ?? (() => new Date());
   }
 
@@ -509,9 +511,11 @@ export class OrchestrationService {
         inFlight: inFlight.has(row.taskId),
       });
     }
+    const providerKey = this.providerKeyFor(run.userId);
     const externalCapacity = Math.min(
       this.globalMaxWorkers - this.active.size,
       this.perUserMaxWorkers - this.activeCountForUser(run.userId),
+      this.perProviderMaxWorkers - this.activeCountForProvider(run.userId, providerKey),
     );
     const decision = selectDispatch({
       tasks,
@@ -521,7 +525,7 @@ export class OrchestrationService {
     });
     for (const taskId of decision.start) {
       const def = defs.get(taskId);
-      if (def) this.startAttempt(runId, run.userId, def);
+      if (def) this.startAttempt(runId, run.userId, providerKey, def);
     }
   }
 
@@ -538,7 +542,7 @@ export class OrchestrationService {
     });
   }
 
-  private startAttempt(runId: string, userId: string, def: NormalizedPlanTask): void {
+  private startAttempt(runId: string, userId: string, providerKey: string, def: NormalizedPlanTask): void {
     const attemptId = uuidv7();
     if (!this.store.claimTask({ runId, taskId: def.id, attemptId, now: this.nowIso() })) return;
     const attempt: ActiveAttempt = {
@@ -546,6 +550,7 @@ export class OrchestrationService {
       runId,
       taskId: def.id,
       userId,
+      providerKey,
       controller: new AbortController(),
       timer: null,
     };
@@ -694,19 +699,19 @@ export class OrchestrationService {
   ): Promise<{ passed: boolean; detail: string }> {
     try {
       const run = this.requireRunRow(attempt.userId, attempt.runId);
-      const verdict = await raceAbort(
-        this.verifier.run({
-          userId: run.userId,
-          repoId: run.repoId,
-          check: gate.check,
-          runId: attempt.runId,
-          taskId: attempt.taskId,
-          attemptId: attempt.attemptId,
-          workspacePath,
-          signal: attempt.controller.signal,
-        }),
-        attempt.controller.signal,
-      );
+      // Not raced against the abort: a stopped gate can still have a command running. The
+      // attempt keeps its worker and claims until the verifier settles, and verifiers settle
+      // only after their processes have exited (see command-verifier and terminal-tools).
+      const verdict = await this.verifier.run({
+        userId: run.userId,
+        repoId: run.repoId,
+        check: gate.check,
+        runId: attempt.runId,
+        taskId: attempt.taskId,
+        attemptId: attempt.attemptId,
+        workspacePath,
+        signal: attempt.controller.signal,
+      });
       return { passed: verdict.passed === true, detail: boundText(redactSecrets(String(verdict.detail)), MAX_DETAIL) };
     } catch (error) {
       return { passed: false, detail: boundText(`verifier error: ${errorMessage(error)}`, MAX_DETAIL) };
@@ -947,6 +952,8 @@ export class OrchestrationService {
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
       finishedAt: run.finishedAt,
+      workerSessionId: workflowSessionId(run.id),
+      pendingApprovals: this.options.listPendingApprovals?.(workflowSessionId(run.id)) ?? [],
       tasks,
     };
   }
@@ -1018,6 +1025,14 @@ export class OrchestrationService {
     let count = 0;
     for (const attempt of this.active.values()) {
       if (attempt.userId === userId) count += 1;
+    }
+    return count;
+  }
+
+  private activeCountForProvider(userId: string, providerKey: string): number {
+    let count = 0;
+    for (const attempt of this.active.values()) {
+      if (attempt.userId === userId && attempt.providerKey === providerKey) count += 1;
     }
     return count;
   }

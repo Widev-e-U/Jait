@@ -74,6 +74,29 @@ describe("command gates", () => {
     expect(verdict.detail).toContain("rejected");
   });
 
+  it("never passes a command that yielded to the background, because it has no verdict yet", async () => {
+    const executor: ToolExecutorFn = async () => ({
+      ok: true,
+      message: "Command is still running after the 10000ms initial wait.",
+      data: { yielded: true, isBackground: true, executionId: "exec-1" },
+    });
+    const verdict = await createCommandVerifier({ repositories, toolExecutor: executor }).run(input());
+    expect(verdict.passed).toBe(false);
+    expect(verdict.detail).toContain("did not finish");
+  });
+
+  it("reports a stopped command as cancelled and never passes it, even when it exited 0", async () => {
+    const controller = new AbortController();
+    const executor: ToolExecutorFn = async () => {
+      controller.abort();
+      return { ok: true, message: "exit 0" };
+    };
+    const verdict = await createCommandVerifier({ repositories, toolExecutor: executor })
+      .run(input({ signal: controller.signal }));
+    expect(verdict.passed).toBe(false);
+    expect(verdict.detail).toContain("cancelled");
+  });
+
   it("fails closed without a consent-aware executor and never runs anything", async () => {
     const verdict = await createCommandVerifier({ repositories }).run(input());
     expect(verdict.passed).toBe(false);
