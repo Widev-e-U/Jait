@@ -192,14 +192,12 @@ const wsEntries = websocketCandidates(
 );
 // The only Rust evidence for a WS type is a lexical handler arm or emitted type in the Rust hub:
 // native-untested until a reviewed binary test is mapped in binary-test-evidence.json.
-// The composed runtime clears config.terminals and config.consent (runtime/application.rs), so these
-// handlers are inert there and terminal output never reaches a subscriber. Their fail-closed contract
-// is pinned by tests/binary_ws_messages.rs; they are not native until the controls are supervised and mounted.
-const WS_FAIL_CLOSED = new Set([
-  'client-to-server-candidate terminal.subscribe', 'client-to-server-candidate terminal.unsubscribe',
-  'client-to-server-candidate terminal.input', 'client-to-server-candidate terminal.resize',
-  'client-to-server-candidate consent.approve', 'client-to-server-candidate consent.reject',
-]);
+// A WS control the composed runtime leaves unmounted (inert, fail-closed) is listed here and can never count
+// as native, whatever the manifest says. The composed runtime now mounts the supervised, owner-scoped terminal
+// controls and the consent decision handler (runtime/application.rs), both exercised by
+// tests/binary_ws_messages.rs, so nothing is listed. Add a `<direction> <type>` key again if a control is
+// ever mounted fail-closed.
+const WS_FAIL_CLOSED = new Set();
 for (const w of wsEntries) w.status = w.rustReference && !WS_FAIL_CLOSED.has(`${w.direction} ${w.type}`) ? 'native-untested' : 'missing';
 
 // Node and client-only routes share one status ladder: an unmounted, fail-closed or incomplete Rust

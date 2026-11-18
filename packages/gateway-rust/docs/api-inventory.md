@@ -6,16 +6,16 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 
 ```json
 {
-  "httpTotal": 446,
-  "missing": 38,
+  "httpTotal": 448,
+  "missing": 40,
   "mounted-fail-closed": 104,
-  "native-untested": 131,
-  "native-tested": 166,
+  "native-tested": 198,
+  "native-untested": 99,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 66.6,
-  "nativeTested": 169,
-  "nativeTestedDenominator": 528,
-  "nativeTestedPct": 32.01,
+  "nativeRouteReferencePct": 66.3,
+  "nativeTested": 211,
+  "nativeTestedDenominator": 530,
+  "nativeTestedPct": 39.81,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,14 +26,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 166,
-    "native-untested": 131,
-    "missing": 149
+    "native-tested": 198,
+    "native-untested": 99,
+    "missing": 151
   },
   "wsRustStatus": {
-    "native-tested": 3,
+    "native-tested": 13,
     "native-untested": 0,
-    "missing": 71
+    "missing": 61
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -50,10 +50,10 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | ALL | `/preview/:previewToken/proxy/:port` | missing | missing |  | server.ts |
 | ALL | `/preview/:previewToken/proxy/:port/*` | missing | missing |  | server.ts |
 | DELETE | `/api/agents/:agentId/github-app` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
-| DELETE | `/api/assistants/profiles/:id` | native-untested | native-untested |  | routes/assistant-profiles.ts |
+| DELETE | `/api/assistants/profiles/:id` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | DELETE | `/api/calendar/accounts/:id` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
-| DELETE | `/api/consent/pending/:sessionId/approve-all` | native-untested | native-untested |  | routes/consent.ts |
+| DELETE | `/api/consent/pending/:sessionId/approve-all` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | DELETE | `/api/email/accounts/:id` | missing | mounted-fail-closed |  | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | DELETE | `/api/jobs/:id` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
@@ -61,7 +61,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | DELETE | `/api/messenger/bridge-accounts/teams` | missing | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-reauth/teams` | missing | missing |  | routes/messenger.ts |
 | DELETE | `/api/mobile/push-devices/:deviceId` | missing | mounted-fail-closed |  | routes/mobile.ts |
-| DELETE | `/api/nodes/:id/credential` | native-untested | native-untested |  | server.ts |
+| DELETE | `/api/nodes/:id/credential` | native-tested | native-tested | `tests/binary_misc_routes.rs::node_credentials_enforce_ownership_and_revocation_through_binary` | server.ts |
 | DELETE | `/api/persona-agents/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | DELETE | `/api/plans/:id` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | DELETE | `/api/plugins/:id` | missing | mounted-fail-closed |  | routes/plugins.ts |
@@ -83,9 +83,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/agent-control` | missing | mounted-fail-closed |  | routes/agent-control.ts |
 | GET | `/api/agents/:agentId/github-app` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | GET | `/api/agents/:agentId/github-app/intake` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
-| GET | `/api/architecture` | native-untested | native-untested |  | routes/architecture.ts |
-| GET | `/api/assistants/profiles` | native-untested | native-untested |  | routes/assistant-profiles.ts |
-| GET | `/api/assistants/profiles/:id` | native-untested | native-untested |  | routes/assistant-profiles.ts |
+| GET | `/api/architecture` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/architecture.ts |
+| GET | `/api/assistants/profiles` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
+| GET | `/api/assistants/profiles/:id` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | GET | `/api/auth/me` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/auth/settings` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/auth/settings/env-status` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
@@ -95,18 +95,18 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/calendar/calendars` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/config` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/connect/google` | native-untested | native-untested |  | routes/calendar.ts |
-| GET | `/api/calendar/events` | native-untested | native-untested |  | routes/calendar.ts |
+| GET | `/api/calendar/events` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/oauth/callback` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/channels` | missing | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/setup` | missing | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/status` | missing | mounted-fail-closed |  | routes/channels.ts |
-| GET | `/api/code-graph` | native-untested | native-untested |  | routes/code-graph.ts |
-| GET | `/api/code-graph/snapshot` | native-untested | native-untested |  | routes/code-graph.ts |
+| GET | `/api/code-graph` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
+| GET | `/api/code-graph/snapshot` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
 | GET | `/api/consent/:id` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/count` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/pending` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
-| GET | `/api/consent/pending/:sessionId` | native-untested | native-untested |  | routes/consent.ts |
-| GET | `/api/consent/pending/:sessionId/approve-all` | native-untested | native-untested |  | routes/consent.ts |
+| GET | `/api/consent/pending/:sessionId` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
+| GET | `/api/consent/pending/:sessionId/approve-all` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/policy` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/dev-file/:encodedPath` | native-untested | native-untested |  | server.ts |
 | GET | `/api/dev-file/:encodedPath/*` | native-untested | native-untested |  | server.ts |
@@ -149,7 +149,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/network/scan/latest` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | GET | `/api/network/topology` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | GET | `/api/persona-agents` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
+| GET | `/api/plan-runs` | missing | missing |  | routes/plan-runs.ts |
 | GET | `/api/plan-runs/:runId` | missing | missing |  | routes/plan-runs.ts |
+| GET | `/api/plan-runs/:runId/tasks/:taskId/attempts` | missing | missing |  | routes/plan-runs.ts |
 | GET | `/api/plans/:id` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | GET | `/api/plugins` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | GET | `/api/plugins/:id` | missing | mounted-fail-closed |  | routes/plugins.ts |
@@ -169,9 +171,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
-| GET | `/api/projects/:id/subtree` | native-untested | native-untested |  | routes/projects.ts |
+| GET | `/api/projects/:id/subtree` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/archived` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| GET | `/api/projects/last-active` | native-untested | native-untested |  | routes/projects.ts |
+| GET | `/api/projects/last-active` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/search` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/projects.ts |
 | GET | `/api/provider-accounts` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/provider-usage` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
@@ -221,8 +223,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/store/skills` | native-untested | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills/:slug` | native-untested | native-untested |  | routes/store.ts |
 | GET | `/api/surfaces` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
-| GET | `/api/team-rooms` | native-untested | native-untested |  | routes/team-chat.ts |
-| GET | `/api/team-rooms/:id` | native-untested | native-untested |  | routes/team-chat.ts |
+| GET | `/api/team-rooms` | native-tested | native-tested | `tests/binary_misc_routes.rs::team_rooms_enforce_thread_ownership_and_persist_messages` | routes/team-chat.ts |
+| GET | `/api/team-rooms/:id` | native-tested | native-tested | `tests/binary_misc_routes.rs::team_rooms_enforce_thread_ownership_and_persist_messages` | routes/team-chat.ts |
 | GET | `/api/terminals` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | GET | `/api/terminals/:id` | native-tested | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
 | GET | `/api/terminals/shells` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
@@ -249,7 +251,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/preview/:previewToken/file/:encodedPath` | native-untested | native-untested |  | server.ts |
 | GET | `/preview/:previewToken/file/:encodedPath/*` | native-untested | native-untested |  | server.ts |
 | GET | `/preview/:previewToken/live/:port/focus` | missing | mounted-fail-closed |  | server.ts |
-| PATCH | `/api/assistants/profiles/:id` | native-untested | native-untested |  | routes/assistant-profiles.ts |
+| PATCH | `/api/assistants/profiles/:id` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | PATCH | `/api/auth/settings` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | PATCH | `/api/auth/settings/tools` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | PATCH | `/api/channels/:id/config` | missing | mounted-fail-closed |  | routes/channels.ts |
@@ -259,7 +261,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | PATCH | `/api/plans/:id` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | PATCH | `/api/plugins/:id/config` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | PATCH | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| PATCH | `/api/projects/:id/state` | native-untested | native-untested |  | routes/projects.ts |
+| PATCH | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/projects.ts |
 | PATCH | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
 | PATCH | `/api/reminders/:id` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | PATCH | `/api/repo-proposals/:id` | native-untested | native-untested |  | routes/repo-proposals.ts |
@@ -277,7 +279,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/agents/:agentId/github-app/setup` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | POST | `/api/agents/:agentId/github-app/test` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | POST | `/api/agents/:agentId/github-app/verify` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
-| POST | `/api/assistants/profiles` | native-untested | native-untested |  | routes/assistant-profiles.ts |
+| POST | `/api/assistants/profiles` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | POST | `/api/auth/invitations` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | POST | `/api/auth/login` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | POST | `/api/auth/logout` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
@@ -294,11 +296,11 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/code-graph/graphrag/prepare` | native-untested | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/index` | native-untested | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/path` | native-untested | native-untested |  | routes/code-graph.ts |
-| POST | `/api/code-graph/query` | native-untested | native-untested |  | routes/code-graph.ts |
+| POST | `/api/code-graph/query` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
 | POST | `/api/consent/:id/approve` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/:id/approve-all` | native-untested | native-untested |  | routes/consent.ts |
 | POST | `/api/consent/:id/reject` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
-| POST | `/api/consent/pending/:sessionId/approve-all` | native-untested | native-untested |  | routes/consent.ts |
+| POST | `/api/consent/pending/:sessionId/approve-all` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/email/accounts` | missing | mounted-fail-closed |  | routes/email.ts |
 | POST | `/api/email/config/:provider` | missing | mounted-fail-closed |  | routes/email.ts |
 | POST | `/api/email/images` | missing | mounted-fail-closed |  | routes/email.ts |
@@ -327,7 +329,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/git/remove-worktree` | missing | mounted-fail-closed |  | routes/git.ts |
 | POST | `/api/git/run-commit-flow` | missing | missing |  | routes/git.ts |
 | POST | `/api/git/run-stacked-action` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/stage` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/stage` | native-tested | native-tested | `tests/binary_repos.rs::stage_option_like_filename_does_not_stage_other_files` | routes/git.ts |
 | POST | `/api/git/status` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/sync` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/unstage` | native-untested | native-untested |  | routes/git.ts |
@@ -352,7 +354,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/network/scan` | native-untested | native-untested |  | routes/network.ts |
 | POST | `/api/network/ssh/enable` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | POST | `/api/network/ssh/test` | missing | missing |  | routes/network.ts |
-| POST | `/api/nodes/:id/credential` | native-untested | native-untested |  | server.ts |
+| POST | `/api/nodes/:id/credential` | native-tested | native-tested | `tests/binary_misc_routes.rs::node_credentials_enforce_ownership_and_revocation_through_binary` | server.ts |
 | POST | `/api/plan-runs/:runId/cancel` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plan-runs/:runId/resume` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plans/:id/generate` | native-untested | native-untested |  | routes/plans.ts |
@@ -384,11 +386,11 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/project/undo-all` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/project/write` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/projects` | native-tested | native-tested | `tests/binary_reminders.rs::reminder_projects_use_owned_live_project_data` | routes/projects.ts |
-| POST | `/api/projects/:id/move` | native-untested | native-untested |  | routes/projects.ts |
-| POST | `/api/projects/:id/repository` | native-untested | native-untested |  | routes/projects.ts |
-| POST | `/api/projects/:id/restore` | native-untested | native-untested |  | routes/projects.ts |
+| POST | `/api/projects/:id/move` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
+| POST | `/api/projects/:id/repository` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery` | routes/projects.ts |
+| POST | `/api/projects/:id/restore` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
 | POST | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
-| POST | `/api/projects/select` | native-untested | native-untested |  | routes/projects.ts |
+| POST | `/api/projects/select` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | POST | `/api/provider-accounts` | native-untested | native-untested |  | routes/providers.ts |
 | POST | `/api/provider-accounts/:id/opencode-go` | native-untested | native-untested |  | routes/providers.ts |
 | POST | `/api/provider-usage/ollama/api-key` | native-untested | native-untested |  | routes/providers.ts |
@@ -409,7 +411,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/repos/:id/pull-requests/:number/resolve-conflicts` | native-untested | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/pull-requests/:number/reviews` | native-untested | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/strategy/generate` | native-untested | native-untested |  | routes/repositories.ts |
-| POST | `/api/repos/:repoId/todos` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| POST | `/api/repos/:repoId/todos` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | POST | `/api/repos/:repoId/todos/generate` | native-untested | native-untested |  | routes/repo-proposals.ts |
 | POST | `/api/screen-share/approve` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/capture` | missing | mounted-fail-closed |  | routes/screen-share.ts |
@@ -450,8 +452,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/sessions/:id/viewed` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | POST | `/api/skills/:id/install-tool` | native-untested | native-untested |  | routes/skills.ts |
 | POST | `/api/store/skills/:slug/install` | native-untested | native-untested |  | routes/store.ts |
-| POST | `/api/team-rooms` | native-untested | native-untested |  | routes/team-chat.ts |
-| POST | `/api/team-rooms/:id/messages` | native-untested | native-untested |  | routes/team-chat.ts |
+| POST | `/api/team-rooms` | native-tested | native-tested | `tests/binary_misc_routes.rs::team_rooms_enforce_thread_ownership_and_persist_messages` | routes/team-chat.ts |
+| POST | `/api/team-rooms/:id/messages` | native-tested | native-tested | `tests/binary_misc_routes.rs::team_rooms_enforce_thread_ownership_and_persist_messages` | routes/team-chat.ts |
 | POST | `/api/terminals` | native-tested | native-tested | `tests/binary_terminal.rs::explicit_gateway_terminal_is_local_and_remote_ids_are_denied` | routes/terminals.ts |
 | POST | `/api/terminals/:id/execute` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | POST | `/api/terminals/:id/resize` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
@@ -460,9 +462,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/threads/:id/approve` | native-untested | native-untested |  | routes/threads.ts |
 | POST | `/api/threads/:id/create-pr` | missing | missing |  | routes/threads.ts |
 | POST | `/api/threads/:id/interrupt` | native-untested | native-untested |  | routes/threads.ts |
-| POST | `/api/threads/:id/resume` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/resume` | native-tested | native-tested | `tests/binary_thread_routes.rs::halt_interrupts_running_acp_thread_through_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/send` | native-untested | native-untested |  | routes/threads.ts |
-| POST | `/api/threads/:id/start` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/start` | native-tested | native-tested | `tests/binary_thread_routes.rs::halt_interrupts_running_acp_thread_through_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/steer` | native-untested | native-untested |  | routes/threads.ts |
 | POST | `/api/threads/:id/stop` | native-untested | native-untested |  | routes/threads.ts |
 | POST | `/api/tools/execute` | native-tested | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/terminals.ts |
@@ -481,7 +483,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/mcp/messages` | missing | mounted-fail-closed |  | routes/mcp-server.ts |
 | POST | `/mcp/sse` | missing | mounted-fail-closed |  | routes/mcp-server.ts |
 | PUT | `/api/agents/:agentId/github-app/intake` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
-| PUT | `/api/architecture` | native-untested | native-untested |  | routes/architecture.ts |
+| PUT | `/api/architecture` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary`, `tests/binary_architecture.rs::architecture_refuses_linked_storage_outside_project` | routes/architecture.ts |
 | PUT | `/api/messenger/presence` | missing | missing |  | routes/messenger.ts |
 | PUT | `/api/mobile/routines/:kind` | missing | mounted-fail-closed |  | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -769,8 +771,8 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 
 - client-to-server-candidate: `architecture.render-result` — missing — no binary test
 - client-to-server-candidate: `authenticate` — missing — no binary test
-- client-to-server-candidate: `consent.approve` — missing — no binary test
-- client-to-server-candidate: `consent.reject` — missing — no binary test
+- client-to-server-candidate: `consent.approve` — native-tested — `tests/binary_ws_messages.rs::consent_decisions_over_ws_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `consent.reject` — native-tested — `tests/binary_ws_messages.rs::consent_decisions_over_ws_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `fs.browse-response` — missing — no binary test
 - client-to-server-candidate: `fs.op-response` — missing — no binary test
 - client-to-server-candidate: `fs.register-node` — missing — no binary test
@@ -795,20 +797,20 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - client-to-server-candidate: `screen-share:stop-request` — missing — no binary test
 - client-to-server-candidate: `subscribe` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
 - client-to-server-candidate: `terminal.exit` — missing — no binary test
-- client-to-server-candidate: `terminal.input` — missing — no binary test
+- client-to-server-candidate: `terminal.input` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `terminal.op-response` — missing — no binary test
 - client-to-server-candidate: `terminal.output` — missing — no binary test
-- client-to-server-candidate: `terminal.resize` — missing — no binary test
-- client-to-server-candidate: `terminal.subscribe` — missing — no binary test
-- client-to-server-candidate: `terminal.unsubscribe` — missing — no binary test
+- client-to-server-candidate: `terminal.resize` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `terminal.subscribe` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `terminal.unsubscribe` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `tool.background-complete` — missing — no binary test
 - client-to-server-candidate: `tool.op-output` — missing — no binary test
 - client-to-server-candidate: `tool.op-response` — missing — no binary test
 - client-to-server-candidate: `ui.state` — missing — no binary test
 - server-to-client-candidate: `agent.halted` — missing — no binary test
 - server-to-client-candidate: `browser.updated` — missing — no binary test
-- server-to-client-candidate: `consent.pending-snapshot` — missing — no binary test
-- server-to-client-candidate: `error` — missing — no binary test
+- server-to-client-candidate: `consent.pending-snapshot` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
+- server-to-client-candidate: `error` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
 - server-to-client-candidate: `fs.browse-request` — missing — no binary test
 - server-to-client-candidate: `fs.node-disconnected` — missing — no binary test
 - server-to-client-candidate: `fs.node-registered` — missing — no binary test
@@ -830,9 +832,9 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `screen-share:start-request` — missing — no binary test
 - server-to-client-candidate: `screen-share:state-update` — missing — no binary test
 - server-to-client-candidate: `session-wait.snapshot` — missing — no binary test
-- server-to-client-candidate: `session.created` — missing — no binary test
+- server-to-client-candidate: `session.created` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
 - server-to-client-candidate: `session.streaming-snapshot` — missing — no binary test
-- server-to-client-candidate: `surface.connected` — missing — no binary test
+- server-to-client-candidate: `surface.connected` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
 - server-to-client-candidate: `surface.registry` — missing — no binary test
 - server-to-client-candidate: `terminal.execution` — missing — no binary test
 - server-to-client-candidate: `terminal.op-request` — missing — no binary test

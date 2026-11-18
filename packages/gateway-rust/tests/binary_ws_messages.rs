@@ -1,6 +1,5 @@
-//! WebSocket subscription messages through the production binary, the owner-scoped
-//! terminal controls the composed runtime mounts under supervision, and the fail-closed
-//! WebSocket consent controls it does not mount yet.
+//! WebSocket subscription messages through the production binary, plus the owner-scoped
+//! terminal controls and consent decisions the composed runtime mounts under supervision.
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader},
@@ -463,17 +462,18 @@ async fn terminal_controls_are_owner_scoped_through_the_binary() {
         .await;
 }
 
-/// The composed runtime does not mount WebSocket consent decisions (application.rs clears
-/// `config.consent`), so consent.approve and consent.reject leave the request pending. The
-/// HTTP consent routes remain the decision path. Re-point this test once WebSocket decisions
-/// are mounted under supervision.
+/// WebSocket consent decisions are the composed HTTP routes' own handler, so they take the
+/// same session-ownership check, leased claim and audit. The owner's socket approves or
+/// rejects a pending tool call; another account's socket cannot decide it.
 #[tokio::test]
-async fn consent_controls_are_fail_closed_in_the_composed_runtime() {
+async fn consent_decisions_over_ws_are_owner_scoped_through_the_binary() {
     let gateway = Gateway::start();
     let client = http_client();
     let owner = register(&client, &gateway.base, "owner", None).await;
+    let other = register_invited(&client, &gateway.base, &owner).await;
     let session_id = owned_session(&client, &gateway.base, &owner, &gateway.directory).await;
     let mut ws = WsClient::connect(&gateway.base, &owner).await;
+    let mut other_ws = WsClient::connect(&gateway.base, &other).await;
 
     let tool_call = |content: &str| {
         let client = client.clone();
@@ -496,51 +496,48 @@ async fn consent_controls_are_fail_closed_in_the_composed_runtime() {
     };
     let notes = || std::fs::read_to_string(gateway.directory.join("notes.txt")).unwrap();
 
+    // Another account's socket cannot approve the owner's request; it stays pending and the
+    // file is untouched.
     let approved = tool_call("ws-approved");
     let consent_id = pending_consent(&client, &gateway.base, &owner).await;
-    ws.send(json!({"type": "consent.approve", "requestId": consent_id}))
+    other_ws
+        .send(json!({"type": "consent.approve", "requestId": consent_id}))
         .await;
     tokio::time::sleep(QUIET).await;
     assert!(
         consent_still_pending(&client, &gateway.base, &owner, &consent_id).await,
-        "WebSocket approve must not decide consent"
+        "another account's WebSocket approve must not decide consent"
     );
     assert_eq!(notes(), "binary-policy-marker");
-    post_json(
-        &client,
-        &gateway.base,
-        &format!("/api/consent/{consent_id}/approve"),
-        &owner,
-        json!({}),
-    )
-    .await;
+
+    // The owner's socket approves it: the waiting tool call resumes and writes the file.
+    ws.send(json!({"type": "consent.approve", "requestId": consent_id}))
+        .await;
     let response = tokio::time::timeout(WAIT, approved)
         .await
-        .expect("approved tool resumes")
+        .expect("a WebSocket approve resumes the tool call")
         .unwrap();
     assert_eq!(response.status(), 200);
     assert_eq!(notes(), "ws-approved");
+    assert!(!consent_still_pending(&client, &gateway.base, &owner, &consent_id).await);
 
+    // The same split for a rejection: only the owner's socket decides, and a rejected write
+    // never reaches the file.
     let rejected = tool_call("ws-rejected");
     let consent_id = pending_consent(&client, &gateway.base, &owner).await;
-    ws.send(json!({"type": "consent.reject", "requestId": consent_id, "reason": "not today"}))
+    other_ws
+        .send(json!({"type": "consent.reject", "requestId": consent_id, "reason": "not mine"}))
         .await;
     tokio::time::sleep(QUIET).await;
     assert!(
         consent_still_pending(&client, &gateway.base, &owner, &consent_id).await,
-        "WebSocket reject must not decide consent"
+        "another account's WebSocket reject must not decide consent"
     );
-    post_json(
-        &client,
-        &gateway.base,
-        &format!("/api/consent/{consent_id}/reject"),
-        &owner,
-        json!({"reason": "not today"}),
-    )
-    .await;
+    ws.send(json!({"type": "consent.reject", "requestId": consent_id, "reason": "not today"}))
+        .await;
     tokio::time::timeout(WAIT, rejected)
         .await
-        .expect("rejected tool resumes")
+        .expect("a WebSocket reject resumes the tool call")
         .unwrap();
     assert_eq!(
         notes(),

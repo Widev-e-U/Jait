@@ -3,6 +3,20 @@
   "http": [
     {
       "method": "DELETE",
+      "path": "/api/assistants/profiles/:id",
+      "tests": [
+        {
+          "file": "tests/binary_assistant_profiles.rs",
+          "name": "assistant_profiles_are_persistent_and_owner_scoped"
+        },
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
       "path": "/api/auth/settings/archive",
       "tests": [
         {
@@ -53,6 +67,20 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/assistants/profiles/:id",
+      "tests": [
+        {
+          "file": "tests/binary_assistant_profiles.rs",
+          "name": "assistant_profiles_are_persistent_and_owner_scoped"
+        },
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
       "path": "/api/auth/settings",
       "tests": [
         {
@@ -68,6 +96,20 @@
         {
           "file": "tests/binary_auth.rs",
           "name": "binary_authentication_and_invitation_enforce_ownership"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/assistants/profiles",
+      "tests": [
+        {
+          "file": "tests/binary_assistant_profiles.rs",
+          "name": "assistant_profiles_are_persistent_and_owner_scoped"
+        },
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
         }
       ]
     },
@@ -488,6 +530,20 @@
         {
           "file": "tests/binary_repos.rs",
           "name": "repository_crud_and_strategy_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/architecture",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        },
+        {
+          "file": "tests/binary_architecture.rs",
+          "name": "architecture_refuses_linked_storage_outside_project"
         }
       ]
     },
@@ -1202,6 +1258,26 @@
       ]
     },
     {
+      "method": "DELETE",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/nodes/:id/credential",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "node_credentials_enforce_ownership_and_revocation_through_binary"
+        }
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/calendar/device/sync",
       "tests": [
@@ -1298,6 +1374,16 @@
         {
           "file": "tests/binary_plans_routes.rs",
           "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id/state",
+      "tests": [
+        {
+          "file": "tests/binary_project_files.rs",
+          "name": "project_files_are_confined_and_owned_through_the_binary"
         }
       ]
     },
@@ -1592,12 +1678,180 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/architecture",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assistants/profiles",
+      "tests": [
+        {
+          "file": "tests/binary_assistant_profiles.rs",
+          "name": "assistant_profiles_are_persistent_and_owner_scoped"
+        },
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assistants/profiles/:id",
+      "tests": [
+        {
+          "file": "tests/binary_assistant_profiles.rs",
+          "name": "assistant_profiles_are_persistent_and_owner_scoped"
+        },
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/chat",
       "tests": [
         {
           "file": "tests/binary_agent_tool_policy.rs",
           "name": "reenabled_tool_is_advertised_and_executed_in_new_chat"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/query",
+      "tests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "code_graph_routes_enforce_owned_project_boundaries"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/stage",
+      "tests": [
+        {
+          "file": "tests/binary_repos.rs",
+          "name": "stage_option_like_filename_does_not_stage_other_files"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/nodes/:id/credential",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "node_credentials_enforce_ownership_and_revocation_through_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/move",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/repository",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/restore",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/select",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/todos",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/team-rooms",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "team_rooms_enforce_thread_ownership_and_persist_messages"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/team-rooms/:id/messages",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "team_rooms_enforce_thread_ownership_and_persist_messages"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/resume",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "halt_interrupts_running_acp_thread_through_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/start",
+      "tests": [
+        {
+          "file": "tests/binary_thread_routes.rs",
+          "name": "halt_interrupts_running_acp_thread_through_binary"
         }
       ]
     },
@@ -1660,6 +1914,96 @@
           "name": "calendar_routes_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/events",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/code-graph",
+      "tests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "code_graph_routes_enforce_owned_project_boundaries"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/code-graph/snapshot",
+      "tests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "code_graph_routes_enforce_owned_project_boundaries"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending/:sessionId",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "state_trust_and_consent_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/subtree",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/last-active",
+      "tests": [
+        {
+          "file": "tests/binary_sessions_projects.rs",
+          "name": "sessions_and_projects_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/team-rooms",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "team_rooms_enforce_thread_ownership_and_persist_messages"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/team-rooms/:id",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "team_rooms_enforce_thread_ownership_and_persist_messages"
+        }
+      ]
     }
   ],
   "ws": [
@@ -1690,6 +2034,106 @@
         {
           "file": "tests/binary_ws_messages.rs",
           "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "terminal.subscribe",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "terminal_controls_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "terminal.input",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "terminal_controls_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "terminal.resize",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "terminal_controls_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "terminal.unsubscribe",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "terminal_controls_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "surface.connected",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "terminal_controls_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "session.created",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "error",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "consent.pending-snapshot",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "subscribe_and_resource_messages_are_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "consent.approve",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "consent_decisions_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "consent.reject",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "consent_decisions_over_ws_are_owner_scoped_through_the_binary"
         }
       ]
     }

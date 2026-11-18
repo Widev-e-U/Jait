@@ -1,5 +1,40 @@
 # Native Rust gateway
 
+## WebSocket consent decisions, evidence ledger and build note — 2026-11-18
+
+The composed runtime now mounts WebSocket `consent.approve` / `consent.reject`, replacing the earlier
+fail-closed behaviour. `Application` keeps the composed HTTP `ConsentRoutes` and installs them as the hub's
+`config.consent`, so a socket decision takes the same session-ownership check, leased claim and audit record
+as an HTTP one; a socket that does not own the session leaves the request pending and writes no audit entry.
+`consent_decisions_over_ws_are_owner_scoped_through_the_binary` (`tests/binary_ws_messages.rs`) passed 3/3 with
+the other tests in that file: the owner's socket approves one tool write and rejects another, another account's
+socket cannot decide either. In-crate, `websocket_mount_supervises_terminals_and_replaces_embedder_consent`
+covers the mount. The web UI decides consent over HTTP (`/api/consent/:id/approve|reject`), so this is parity for
+other clients, not a UI requirement.
+
+`tooling/binary-test-evidence.json` gained 32 HTTP and 10 WS mappings: `nativeTested` went from 169 of 528
+(32.01%) to 211 of 530 (39.81%); HTTP 198 of 448 and WS 13 of 74 are native-tested, and the 8 background
+services still have no mapping mechanism. Each mapping was checked against the test source for an authenticated
+request with an asserted, route-specific outcome and the 17 test files involved passed on the pre-edit tree
+(`binary_ws_messages` again after the edit). Routes that a test only proves return 401 or a 404 for an unknown id
+(unknown provider, secret request, skill and user-question ids, `GET /api/tools`, `POST /api/code-graph/index`,
+`generate-title`, `calendar/connect/google`) stay native-untested, as do routes covered only by the in-process
+`tests/application_mounts.rs`. A mapped test is limited evidence, not behavioural parity. The WS list is still
+lexical (it has no `project.updated` / `project.restored`, which `binary_project_repository_assignment` exercises).
+`tooling/api-inventory.mjs` no longer lists `terminal.*` or `consent.*` as fail-closed WS controls because both
+are mounted and tested.
+
+Build note: Jait runs terminal commands in a scope with `memory.high` 6 GiB. A cold incremental build of this one
+294k-line crate overran it and was throttled for hours (`cargo clippy --all-targets` 54m53s, `cargo test --lib`
+unfinished after 3.5 h, 18 million `memory.events high`). With `CARGO_INCREMENTAL=0` the lib-test build took 2m10s
+(peak 6.5 GB) and the 17 focused integration test binaries built and passed in 175 s (peak 4.4 GB, no
+throttling). With 4 jobs the lib-test compile can still stall when it runs in a scope that already holds page
+cache from an earlier build (peak 6.6 GB); with 2 jobs in a fresh scope it peaked at 6.44 GB with no throttling,
+and `cargo test --lib` then passed 2595 tests (4 ignored, 0 failed) in 206 s end to end. `run.mjs` therefore
+defaults, below a 16 GiB cgroup limit, to non-incremental builds and to at most 2 jobs for builds that compile
+the lib unit tests; set `CARGO_INCREMENTAL=1` or `CARGO_BUILD_JOBS` to override. Run each heavy build in its own
+terminal scope. Warm incremental builds remain faster on a host without that cap.
+
 ## Network git and GitHub forge consent — 2026-11-11
 
 Network git (`fetch`, `pull`, sync `push`) and the GitHub forge routes (`gh-status`, `gh-auth`,

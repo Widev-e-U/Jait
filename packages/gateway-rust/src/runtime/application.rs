@@ -320,6 +320,10 @@ pub struct Application {
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
     repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
+    /// WebSocket `consent.approve` / `consent.reject` handler: the composed HTTP consent
+    /// routes themselves, so a socket decision takes the same session-ownership check,
+    /// leased claim and audit record as an HTTP one.
+    consent_decisions: Option<Arc<dyn crate::ws::WsConsentControl>>,
     questions: crate::services::input_requests::UserQuestionService,
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
@@ -881,10 +885,11 @@ impl Application {
                     .with_state(auth.clone()),
             );
         }
+        let mut consent_decisions: Option<Arc<dyn crate::ws::WsConsentControl>> = None;
         if settings_chat {
-            router = router.merge(
-                super::consent_mount::composed_consent_routes(&auth, consent.clone()).router(),
-            );
+            let routes = super::consent_mount::composed_consent_routes(&auth, consent.clone());
+            consent_decisions = Some(Arc::new(routes.clone()));
+            router = router.merge(routes.router());
         }
         router = router
             .merge(super::mobile_mount::composed_mobile_routes(&auth, consent.clone()).router());
@@ -905,6 +910,7 @@ impl Application {
                 ws_transport: None,
                 repository_hub,
                 consent: settings_chat.then_some(consent),
+                consent_decisions,
                 questions,
                 preview_ports,
                 live_view_ports,
@@ -985,10 +991,10 @@ impl Application {
         config.token_verifier = Arc::new(crate::security::ws_verifier::JwtTokenVerifier::new(
             self.auth.signing_secret(),
         ));
-        // Consent decisions stay unmounted: their ownership is not leased through the
-        // decision yet. Terminal controls are always the supervised, owner-scoped ones
-        // below, whatever the embedder supplied.
-        config.consent = None;
+        // Consent decisions are the composed HTTP routes' own handler (session-ownership
+        // check, leased claim, audit), never one the embedder supplied. Terminal controls
+        // are always the supervised, owner-scoped ones below, whatever the embedder supplied.
+        config.consent = self.consent_decisions.clone();
         config.terminals = Some(Arc::new(
             crate::runtime::terminal_ws::SupervisedTerminalControl::new(self.terminals.clone()),
         ));
@@ -1152,7 +1158,7 @@ mod ownership_tests {
     }
 
     #[tokio::test]
-    async fn websocket_mount_supervises_terminals_and_keeps_consent_unmounted() {
+    async fn websocket_mount_supervises_terminals_and_replaces_embedder_consent() {
         struct Controls;
         impl crate::ws::WsConsentControl for Controls {
             fn decide(&self, _: &str, _: &str, _: bool, _: Option<String>) -> Result<bool, String> {
@@ -1196,6 +1202,8 @@ mod ownership_tests {
                 Duration::from_secs(1),
             )
             .unwrap();
+        // A plain application has no consent queue, so no decision control is mounted at
+        // all: the embedder's panicking one is dropped rather than kept.
         assert!(transport.hub().config().consent.is_none());
         // The embedder's control is replaced: an unknown terminal is refused by the
         // supervisor before it could reach `Controls`, which panics if it is called.
@@ -1210,6 +1218,49 @@ mod ownership_tests {
         drop(transport);
         drop(app);
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+
+        // With settings-backed chat the consent queue exists and socket decisions are the
+        // composed routes' own: a request that is not pending is refused by them before it
+        // could reach the embedder's `Controls`, which panics if it is called.
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let mut app = Application::bind_with_settings_chat(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let config = crate::ws::WsHubConfig {
+            consent: Some(Arc::new(Controls)),
+            ..Default::default()
+        };
+        let transport = app
+            .mount_websocket(
+                config,
+                std::num::NonZeroUsize::new(4).unwrap(),
+                Duration::from_secs(1),
+            )
+            .unwrap();
+        let consent = transport
+            .hub()
+            .config()
+            .consent
+            .clone()
+            .expect("composed consent control is mounted");
+        assert!(!consent.decide("nobody", "missing", true, None).unwrap());
+        drop(transport);
+        drop(app);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]
