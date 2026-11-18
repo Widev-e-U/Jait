@@ -15,7 +15,7 @@ describe('first-message startup', () => {
     const sendStart = chatSource.indexOf('const sendMessage = useCallback(async')
     const sendEnd = chatSource.indexOf('// --- Message queue', sendStart)
     const sendMessage = chatSource.slice(sendStart, sendEnd)
-    expect(sendMessage.indexOf('setState(prev => ({')).toBeLessThan(
+    expect(sendMessage.indexOf('setState(prev => {')).toBeLessThan(
       sendMessage.indexOf('await options.sessionIdPromise'),
     )
   })

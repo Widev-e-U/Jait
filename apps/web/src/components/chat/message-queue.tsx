@@ -3,8 +3,7 @@ import type { ChatAttachment } from '@/hooks/useChat'
 import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { createUserMessageEditSubmission } from './message-edit'
-import { getMessageEditPromptClassName, getUserMessageEditComposerShellClassName, getMobileUserMessageEditTop } from './message-edit-layout'
-import { useIsMobile } from '@/hooks/useIsMobile'
+import { getMessageEditPromptClassName } from './message-edit-layout'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -24,10 +23,17 @@ export interface QueuedMessage {
   queuedAt: number
   /** When true, the queue drain skips this message until the user unlocks it. */
   held?: boolean
+  /**
+   * A steer the gateway has accepted but not injected yet. It stays visible as
+   * an unsent row ("Queued") until the running loop reaches its round boundary
+   * and consumes it; the drain must never send it as its own turn.
+   */
+  pendingSteer?: boolean
 }
 
 interface MessageQueueProps {
   items: QueuedMessage[]
+  onEditingChange?: (editing: boolean) => void
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => void | Promise<void>
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
@@ -114,6 +120,8 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
 function QueueItem({
   item,
   index,
+  editing,
+  onEditingChange,
   onRemove,
   onEdit,
   onReorder,
@@ -130,6 +138,8 @@ function QueueItem({
 }: {
   item: QueuedMessage
   index: number
+  editing: boolean
+  onEditingChange: (id: string, editing: boolean) => void
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => void | Promise<void>
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
@@ -144,14 +154,12 @@ function QueueItem({
   dropAfter?: boolean
   onDragStart?: (id: string, event: React.PointerEvent<HTMLElement>) => void
 }) {
-  const [editing, setEditing] = useState(false)
+  const setEditing = useCallback((next: boolean) => onEditingChange(item.id, next), [item.id, onEditingChange])
   const [collapsed, setCollapsed] = useState(true)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const [draftSegments, setDraftSegments] = useState<UserMessageSegment[]>(item.displaySegments ?? [{ type: 'text', text: item.displayContent ?? item.content }])
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<PromptInputHandle>(null)
-  const isMobile = useIsMobile()
-  const [mobileEditTop, setMobileEditTop] = useState<number | null>(null)
   const showActions = editing || !dragActive
   const { cardRef, anchorToggle } = useToolCardToggleAnchor('top')
   const toggleCollapsed = () => {
@@ -162,16 +170,7 @@ function QueueItem({
   useEffect(() => {
     if (!editing) return
     inputRef.current?.focus()
-    if (!isMobile) return
-    const updateTop = () => setMobileEditTop(getMobileUserMessageEditTop(window.visualViewport, window.innerHeight))
-    updateTop()
-    window.visualViewport?.addEventListener('resize', updateTop)
-    window.visualViewport?.addEventListener('scroll', updateTop)
-    return () => {
-      window.visualViewport?.removeEventListener('resize', updateTop)
-      window.visualViewport?.removeEventListener('scroll', updateTop)
-    }
-  }, [editing, isMobile])
+  }, [editing])
 
   // Keep draft in sync if the item changes externally
   useEffect(() => {
@@ -194,12 +193,12 @@ function QueueItem({
     } finally {
       setSaving(false)
     }
-  }, [saving, draftSegments, item, onEdit])
+  }, [saving, draftSegments, item, onEdit, setEditing])
 
   const cancelEdit = useCallback(() => {
     setDraft(item.displayContent ?? item.content)
     setEditing(false)
-  }, [item.content, item.displayContent])
+  }, [item.content, item.displayContent, setEditing])
 
   return (
     <>
@@ -214,11 +213,12 @@ function QueueItem({
       className={cn(
         'group flex items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70',
         iconOnly && 'relative gap-1 pl-2 pr-1 py-2',
+        editing && 'border-primary/30 bg-background p-3',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
       )}
     >
       {/* Position indicator */}
-      <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
+      {!editing && <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
       <button
         type="button"
         data-no-drag="true"
@@ -235,9 +235,9 @@ function QueueItem({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
-      </TooltipHint>
+      </TooltipHint>}
 
-      {onReorder && !editing && (
+      {onReorder && !editing && !item.pendingSteer && (
         <TooltipHint content="Drag to reorder">
         <button
           type="button"
@@ -251,16 +251,26 @@ function QueueItem({
       )}
 
       {/* Content: read-only or editable */}
-      <div className={cn('flex-1 min-w-0', iconOnly && editing && 'pt-6')}>
+      <div className="flex-1 min-w-0">
         {!editing && (
           <span className={cn('mb-0.5 flex items-center gap-1.5', iconOnly && 'mb-3')}>
-            {index === 0 ? (
+            {item.pendingSteer ? (
+              <span className="text-2xs font-medium uppercase tracking-wider text-primary/70">
+                Queued #{index + 1}
+              </span>
+            ) : index === 0 ? (
               <span className="text-2xs font-medium uppercase tracking-wider text-primary/70">
                 Next
               </span>
             ) : (
               <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                 Queued #{index + 1}
+              </span>
+            )}
+            {item.pendingSteer && !editing && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-primary/15 px-1 py-px text-2xs font-medium uppercase tracking-wider text-primary">
+                <ArrowRight className="h-2.5 w-2.5" />
+                Sends after this step
               </span>
             )}
             {item.held && !editing && (
@@ -273,20 +283,23 @@ function QueueItem({
         )}
         {!editing && <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mb-1.5" />}
         {editing ? (
-          <div data-no-drag="true" data-queue-editor className={getUserMessageEditComposerShellClassName()}
-            style={isMobile && mobileEditTop != null ? { top: mobileEditTop } : undefined}
+          <div data-no-drag="true" data-queue-editor
             onKeyDown={event => {
               if (event.key === 'Escape' && !saving) { event.stopPropagation(); cancelEdit() }
             }}>
+            <div className="mb-2 flex items-center gap-2 text-2xs font-medium uppercase tracking-wider text-primary/70">
+              <ListPlus className="h-3.5 w-3.5" /> {index === 0 ? "Next" : `Queued #${index + 1}`}
+              <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground"><Pencil className="h-3 w-3" /> Editing</span>
+            </div>
             <PromptInput ref={inputRef} draftStateKey={`queue-edit:${item.id}`} value={draft}
               segments={draftSegments}
               initialAttachments={collectAttachments(item.attachments, item.displaySegments)}
               onChange={value => { setDraft(value); setDraftSegments(inputRef.current?.getSegments() ?? []) }}
               onSubmit={(_files, attachments, segments) => { void commitEdit(attachments, segments) }}
-              disabled={saving} controlsDisabled={saving} placeholder="Edit message..."
+              disabled={saving} controlsDisabled={saving} clearOnSubmit={false} submitLabel="Save changes" placeholder="Edit message..."
               availableFiles={[]}
-              footerTrailingContent={<Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-lg"
-                disabled={saving} onClick={cancelEdit} aria-label="Cancel editing message"><X className="h-3.5 w-3.5" /></Button>}
+              footerTrailingContent={<Button type="button" variant="ghost" size="sm"
+                disabled={saving} onClick={cancelEdit} aria-label="Cancel editing message">Cancel</Button>}
               className={getMessageEditPromptClassName()} />
           </div>
         ) : collapsed ? (
@@ -304,19 +317,19 @@ function QueueItem({
       )}>
         {editing ? null : (
           <>
-            {onEdit && (
+            {onEdit && !item.pendingSteer && (
               <TooltipHint content="Edit message">
               <button
                 type="button"
                 data-no-drag="true"
                 className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
-                onClick={() => { anchorToggle(); setEditing(true) }} aria-label="Edit message"
+                onClick={() => { anchorToggle('bottom'); setEditing(true) }} aria-label="Edit message"
               >
                 <Pencil className="h-3 w-3" />
               </button>
               </TooltipHint>
             )}
-            {onSteer && (
+            {onSteer && !item.pendingSteer && (
               <div className="inline-flex items-center" data-no-drag="true">
               <TooltipHint content="Steer with message">
               <button
@@ -385,7 +398,7 @@ function QueueItem({
               </button>
               </TooltipHint>
             )}
-            {onToggleHold && (
+            {onToggleHold && !item.pendingSteer && (
               <TooltipHint content={item.held ? 'Unlock — allow this message to be sent' : 'Hold — keep this message from being sent until you unlock it'}>
               <button
                 type="button"
@@ -428,7 +441,19 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onStopAndSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, iconOnly, className }: MessageQueueProps) {
+export function MessageQueue({ items, onEditingChange, onRemove, onEdit, onReorder, onSteer, onStopAndSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, iconOnly, className }: MessageQueueProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = editingId !== null && items.some(item => item.id === editingId)
+  const handleEditingChange = useCallback((id: string, active: boolean) => {
+    setEditingId(current => active ? id : current === id ? null : current)
+  }, [])
+  useEffect(() => {
+    onEditingChange?.(editing)
+    return () => { if (editing) onEditingChange?.(false) }
+  }, [editing, onEditingChange])
+  useEffect(() => {
+    if (editingId !== null && !items.some(item => item.id === editingId)) setEditingId(null)
+  }, [editingId, items])
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -576,6 +601,8 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSt
           key={item.id}
           item={item}
           index={i}
+          editing={editingId === item.id}
+          onEditingChange={handleEditingChange}
           onRemove={onRemove}
           onEdit={onEdit}
           onReorder={items.length > 1 ? onReorder : undefined}

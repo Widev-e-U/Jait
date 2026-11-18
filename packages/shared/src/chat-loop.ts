@@ -1,0 +1,55 @@
+import { z } from "zod";
+
+/** A loop belongs to one chat and never grants additional tool permissions. */
+export const ChatLoopSchema = z.object({
+  id: z.string().min(1),
+  goal: z.string().trim().min(1).max(8000),
+  criteria: z.array(z.string().trim().min(1).max(2000)).min(1).max(20),
+  status: z.enum(["running", "paused", "waiting", "completed", "error"]),
+  iteration: z.number().int().nonnegative(),
+  revision: z.number().int().nonnegative(),
+  checkedIteration: z.number().int().min(-1),
+  summary: z.string().max(8000),
+  nextMessage: z.string().max(8000),
+  evidence: z.array(z.string().max(2000)).max(20),
+  executionCriteria: z.array(z.number().int().nonnegative().max(19)).max(20).optional(),
+  executionEvidence: z.array(z.object({
+    criterion: z.number().int().nonnegative().max(19),
+    terminalId: z.string().min(1).max(200),
+    executionId: z.string().min(1).max(200),
+    status: z.enum(["completed", "failed", "timed_out", "cancelled", "running"]),
+    exitCode: z.number().int().nullable(),
+  })).max(20).optional(),
+  // Optional for persisted loops and clients predating gateway monitoring.
+  budgetStartIteration: z.number().int().nonnegative().optional(),
+  stalledChecks: z.number().int().nonnegative().optional(),
+  uncheckedTurns: z.number().int().nonnegative().optional(),
+  lastTurnDurationMs: z.number().nonnegative().optional(),
+  lastTurnSummary: z.string().max(4000).optional(),
+  continuation: z.object({
+    iteration: z.number().int().nonnegative(),
+    decision: z.enum(["follow", "verify", "reassess", "wait", "fallback"]),
+    reviewedAt: z.string(),
+    waitUntil: z.number().nonnegative().optional(),
+  }).optional(),
+  monitor: z.object({
+    status: z.enum(["accepted", "rejected", "unavailable", "disabled"]),
+    model: z.string().max(200).optional(),
+    reviewedRevision: z.number().int().nonnegative(),
+    reviewedAt: z.string(),
+    durationMs: z.number().nonnegative().optional(),
+    criteriaPassed: z.array(z.boolean()).max(20),
+    progress: z.enum(["progress", "stalled", "unknown"]),
+    reason: z.string().max(2000),
+  }).optional(),
+  updatedAt: z.string(),
+});
+export type ChatLoop = z.infer<typeof ChatLoopSchema>;
+
+export function readChatLoop(metadata: unknown): ChatLoop | null {
+  try {
+    const value = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+    const parsed = ChatLoopSchema.safeParse(value?.loop);
+    return parsed.success ? parsed.data : null;
+  } catch { return null; }
+}

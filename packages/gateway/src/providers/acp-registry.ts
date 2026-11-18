@@ -151,7 +151,9 @@ function parseRegistryAgent(value: unknown): AcpProviderConfig | null {
     ...(website ? { website } : {}),
     ...(repository ? { repository } : {}),
   };
-  const id = PROVIDER_ID_ALIASES[registryId] ?? registryId;
+  const id = Object.hasOwn(PROVIDER_ID_ALIASES, registryId)
+    ? PROVIDER_ID_ALIASES[registryId]!
+    : registryId;
 
   const npx = parsePackageDistribution(value.distribution.npx);
   if (npx) {

@@ -1,10 +1,11 @@
 import { useGitChangeCounts, refreshGitChangeCounts } from '@/lib/git-service'
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Editor, { loader } from '@monaco-editor/react'
-import { AlertCircle, Bot, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, Bot, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitectureWorkspace } from './architecture-workspace'
+import { canDetachTab, closeTodosTab, hasTodosTab, TODOS_TAB_ID, TODOS_TAB_PATH, upsertTodosTab } from './project-todos-tab'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -21,6 +22,7 @@ import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { ProjectImageViewer, isProjectImage } from './project-image-viewer'
+import { ProjectMarkdownView, ProjectPdfViewer, isProjectBinaryPreview, isProjectMarkdown, isProjectPdf } from './project-file-preview'
 import { cn } from '@/lib/utils'
 import { saveDetachedProjectTab, type DetachedProjectTabPayload } from '@/lib/detached-project-tab'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
@@ -43,6 +45,29 @@ import {
   ProjectPreviewInspectPanel,
   type PreviewInspectRenderState,
 } from './project-preview-inspect-panel'
+
+/*
+ * The Todos page is a large subtree (task lists, provider icons, editors) that the
+ * project panel — and everything importing it, such as the chat diff view — only needs
+ * once the Todos tab is actually opened. Loading it lazily keeps it out of the eager
+ * module graph of the editor/chat bundles and of their unit tests.
+ */
+const TodoPage = lazy(() => import('@/components/todo').then((module) => ({ default: module.TodoPage })))
+
+function TodosTabContent() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading...
+        </div>
+      }
+    >
+      <TodoPage />
+    </Suspense>
+  )
+}
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -175,6 +200,10 @@ export interface ProjectPanelHandle {
   openArchitectureTab: () => void
   /** Close the architecture tab, if any. */
   closeArchitectureTab: () => void
+  /** Open (or focus) the embedded Todos tab. */
+  openTodosTab: () => void
+  /** Close the embedded Todos tab, if any. */
+  closeTodosTab: () => void
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
   searchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<{ path: string; name: string }[]>
 }
@@ -283,8 +312,8 @@ async function scanDir(dirHandle: FileSystemDirectoryHandle, prefix: string): Pr
 
 async function readFileHandle(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
-  if (isProjectImage(file.name)) {
-    if (file.size > 20 * 1024 * 1024) throw new Error('Image exceeds 20 MB preview limit')
+  if (isProjectBinaryPreview(file.name)) {
+    if (file.size > 20 * 1024 * 1024) throw new Error('File exceeds 20 MB preview limit')
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))
@@ -433,7 +462,7 @@ async function remoteScanDir(
 async function remoteReadFile(filePath: string, surfaceId?: string | null): Promise<string> {
   const read = async (targetSurfaceId?: string | null) => {
     let url = `${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}`
-    if (isProjectImage(filePath)) url += '&format=image'
+    if (isProjectBinaryPreview(filePath)) url += '&format=image'
     if (targetSurfaceId) url += `&surfaceId=${encodeURIComponent(targetSurfaceId)}`
     return fetch(url)
   }
@@ -443,7 +472,7 @@ async function remoteReadFile(filePath: string, surfaceId?: string | null): Prom
   }
   if (!res.ok) throw new Error(`Failed to read file: ${res.statusText}`)
   const data = (await res.json()) as { content: string; size: number }
-  if (!isProjectImage(filePath) && data.size > 2 * 1024 * 1024) return '// File too large to preview'
+  if (!isProjectBinaryPreview(filePath) && data.size > 2 * 1024 * 1024) return '// File too large to preview'
   return data.content
 }
 
@@ -692,11 +721,12 @@ function collectSourceControlFilePaths(nodes: SourceControlTreeNode[]): string[]
 const gitApi = gitApiImport
 
 function isEditableProjectTab(tab: EditorTab | null): boolean {
-  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:') && !isProjectImage(tab.path))
+  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:') && !isProjectBinaryPreview(tab.path))
 }
 
 function getEditorTabTitle(tab: EditorTab): string {
   if (tab.type === 'architecture') return tab.label || 'Architecture'
+  if (tab.type === 'todos') return tab.label || 'Todos'
   if (tab.type === 'preview') return tab.label || 'Preview'
   if (tab.type !== 'diff') return tab.label
   const baseLabel = tab.label || (tab.path.split(/[\\/]/).pop() ?? tab.path)
@@ -709,7 +739,7 @@ function getEditorTabTitle(tab: EditorTab): string {
 
 interface EditorTab {
   id: string
-  type: 'file' | 'diff' | 'preview' | 'architecture'
+  type: 'file' | 'diff' | 'preview' | 'architecture' | 'todos'
   path: string
   label: string
   version?: number
@@ -1632,6 +1662,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   )
 
   const restoredTabsRootRef = useRef<string | null>(null)
+  /** Bumped by every explicit open-file request (see the tab restore effect). */
+  const explicitFileOpensRef = useRef(0)
   const restoringTabsRef = useRef(false)
   const waitingForPreviewRef = useRef(false)
   const lastPersistedTabsRef = useRef<string>('')
@@ -1862,6 +1894,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
     let cancelled = false
     restoringTabsRef.current = true
+    const explicitOpensAtStart = explicitFileOpensRef.current
     const restore = async () => {
       const restored: EditorTab[] = []
       for (const t of savedTabsState.tabs) {
@@ -1896,8 +1929,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
       // When the preview tab was the active tab before reload, skip
       // setting activeTabId to a file tab — the preview tab is activated
-      // directly above (or by the preview restoration flow).
-      if (active && !savedTabsState.activePreview) {
+      // directly above (or by the preview restoration flow). Likewise when a
+      // file was opened explicitly while this ran (e.g. tapping a path in chat
+      // mounts the panel on mobile): the restore must not steal its focus.
+      if (active && !savedTabsState.activePreview && explicitFileOpensRef.current === explicitOpensAtStart) {
         const activeFile = restored.find((t) => t.id === active)
         setActiveTabId(active)
         if (activeFile) {
@@ -2342,7 +2377,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [])
 
   const loadTabReviewBaseline = useCallback(async (tabId: string, filePath: string) => {
-    if (isProjectImage(filePath)) return
+    if (isProjectBinaryPreview(filePath)) return
     const gitOriginalContent = findWorkingTreeDiffEntry(filePath)?.original ?? null
     if (!surfaceId) {
       setTabOriginalContent(tabId, gitOriginalContent)
@@ -2353,7 +2388,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [findWorkingTreeDiffEntry, setTabOriginalContent, surfaceId])
 
   useEffect(() => {
-    if (activeTab?.type !== 'file' || isProjectImage(activeTab.path)) return
+    if (activeTab?.type !== 'file' || isProjectBinaryPreview(activeTab.path)) return
     const entry = findWorkingTreeDiffEntry(activeTab.path)
     if (!entry) return
     if (activeTab.originalContent === entry.original) return
@@ -3093,6 +3128,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [remoteRoot])
 
   const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
+    explicitFileOpensRef.current += 1
     const targetPath = normalizePath(path)
     ensureEditorVisible()
     const rootPath = remoteRoot ? normalizePath(remoteRoot) : null
@@ -3171,6 +3207,30 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setLoadingFile(false)
     return true
   }, [bumpTree, ensureEditorVisible, lazyTree, loadTabReviewBaseline, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
+
+  /** Markdown opens rendered (unless a review diff is shown); links in it open in the viewer. */
+  const renderFileEditor = (tab: EditorTab, editor: ReactNode) => {
+    if (!isProjectMarkdown(tab.path) || tab.originalContent != null) return editor
+    const baseDir = tab.path.replace(/\\/g, '/').replace(/\/[^/]*$/, '')
+    return (
+      <ProjectMarkdownView
+        key={`md:${tab.id}`}
+        content={tab.content ?? ''}
+        editor={editor}
+        onOpenPath={(target) => {
+          const normalized = target.replace(/\\/g, '/')
+          const joined = /^(?:[A-Za-z]:)?\//.test(normalized) ? normalized : `${baseDir}/${normalized}`
+          // Resolve `.` / `..` so `../src/a.ts` from docs/guide.md lands on src/a.ts.
+          const segments: string[] = []
+          for (const segment of joined.split('/')) {
+            if (segment === '..') segments.pop()
+            else if (segment !== '.') segments.push(segment)
+          }
+          void handleOpenFileByPath(segments.join('/'))
+        }}
+      />
+    )
+  }
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -3918,6 +3978,67 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     })
   }, [activeTabId])
 
+  const handleOpenTodosTab = useCallback(() => {
+    const nextTab: EditorTab = {
+      id: TODOS_TAB_ID,
+      type: 'todos',
+      path: TODOS_TAB_PATH,
+      label: 'Todos',
+    }
+
+    setOpenTabs((prev) => upsertTodosTab(prev, nextTab))
+    setActiveTabId(TODOS_TAB_ID)
+    setScDiffFile(null)
+    setActiveNativePath(null)
+    setPreviewContent(null)
+    setPreviewPath(TODOS_TAB_PATH)
+    setPreviewLanguage('plaintext')
+    onActiveFileChange('')
+  }, [onActiveFileChange])
+
+  const handleCloseTodosTab = useCallback(() => {
+    setOpenTabs((prev) => {
+      const closed = closeTodosTab(prev, activeTabId)
+      if (!closed.wasActive) return closed.tabs
+      const neighbor = closed.neighbor
+      setTimeout(() => {
+        setActiveTabId(closed.activeTabId)
+        if (!closed.activeTabId) {
+          setActiveNativePath(null)
+          setPreviewContent(null)
+          setScDiffFile(null)
+        } else if (neighbor?.type === 'file') {
+          setActiveNativePath(neighbor.path)
+          setPreviewContent(neighbor.content ?? null)
+          setPreviewLanguage(neighbor.language ?? 'plaintext')
+          setPreviewPath(neighbor.path)
+          setScDiffFile(null)
+        } else if (neighbor?.type === 'preview') {
+          setActiveNativePath(null)
+          setPreviewContent(null)
+          setPreviewLanguage('plaintext')
+          setPreviewPath(neighbor.previewTarget ?? neighbor.path)
+          setScDiffFile(null)
+        } else if (neighbor?.type === 'architecture') {
+          setActiveNativePath(null)
+          setPreviewContent(null)
+          setPreviewLanguage('plaintext')
+          setPreviewPath('__architecture__')
+          setScDiffFile(null)
+        } else if (neighbor?.type === 'todos') {
+          setActiveNativePath(null)
+          setPreviewContent(null)
+          setPreviewLanguage('plaintext')
+          setPreviewPath(TODOS_TAB_PATH)
+          setScDiffFile(null)
+        } else if (neighbor?.type === 'diff') {
+          setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
+        }
+      }, 0)
+      return closed.tabs
+    })
+  }, [activeTabId])
+
   const handleClosePreviewTarget = useCallback(() => {
     // The editor can unmount immediately after this callback. Stop the managed
     // browser now; removing its tab alone leaves the browser and dev server alive.
@@ -4103,8 +4224,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     refreshPreviewTarget: handleRefreshPreviewTarget,
     openArchitectureTab: handleOpenArchitectureTab,
     closeArchitectureTab: handleCloseArchitectureTab,
+    openTodosTab: handleOpenTodosTab,
+    closeTodosTab: handleCloseTodosTab,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteProject, handleOpenFileByPath, handleReadFileByPath, handleReadReferencePath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleRefreshPreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteProject, handleOpenFileByPath, handleReadFileByPath, handleReadReferencePath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleRefreshPreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleOpenTodosTab, handleCloseTodosTab, handleSearchFiles])
 
   useEffect(() => {
     if (!previewRequest) return
@@ -4364,7 +4487,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const handleDetachTab = useCallback(async (tabId: string) => {
     const tab = openTabs.find((entry) => entry.id === tabId) ?? null
     if (!tab) return false
-    if (tab.type === 'preview') return false
+    if (!canDetachTab(tab.type)) return false
 
     const detachedId = `detached-${tab.id}-${Date.now()}`
     const payload: DetachedProjectTabPayload = {
@@ -4461,6 +4584,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setPreviewContent(null)
       setPreviewLanguage('plaintext')
       setPreviewPath('__architecture__')
+      setScDiffFile(null)
+      onActiveFileChange('')
+    } else if (tab.type === 'todos') {
+      setActiveNativePath(null)
+      setPreviewContent(null)
+      setPreviewLanguage('plaintext')
+      setPreviewPath(TODOS_TAB_PATH)
       setScDiffFile(null)
       onActiveFileChange('')
     } else if (tab.type === 'diff') {
@@ -5145,6 +5275,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                         <GitStatusBadge status={tab.diffEntry.status} className="text-2xs" />
                       ) : tab.type === 'architecture' ? (
                         <Boxes className="h-3.5 w-3.5 shrink-0" />
+                      ) : tab.type === 'todos' ? (
+                        <List className="h-3.5 w-3.5 shrink-0" />
                       ) : tab.type === 'preview' ? (
                         <Globe className="h-3.5 w-3.5 shrink-0" />
                       ) : (
@@ -5183,6 +5315,26 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               )}
             </button>
           )
+          )}
+          {showEditorProp && (
+          <TooltipHint content={openTabs.some((tab) => tab.type === 'todos') ? 'Close Todos' : 'Open Todos'}>
+          <button
+            type="button"
+            onClick={() => {
+              if (openTabs.some((tab) => tab.type === 'todos')) handleCloseTodosTab()
+              else { handleOpenTodosTab(); selectMobileTab('editor') }
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors shrink-0 ${
+              activeTab?.type === 'todos' ? 'bg-primary/15 text-primary' : 'text-muted-foreground'
+            }`}
+            aria-label="Toggle Todos"
+            aria-pressed={activeTab?.type === 'todos'}
+            data-testid="mobile-project-tabbar-todos-toggle"
+          >
+            <List className="h-3.5 w-3.5" />
+            <span>Todos</span>
+          </button>
+          </TooltipHint>
           )}
           {effectiveMobileTab === 'editor' && activeTab?.type === 'preview' && (
             <>
@@ -5495,7 +5647,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 >
                   {commitMsgGenerating
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Sparkles className="h-3.5 w-3.5" />}
+                    : <Bot className="h-3.5 w-3.5" />}
                 </button>
                 </TooltipHint>
               </div>
@@ -5549,7 +5701,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 {activeTab.saveError}
               </div>
             )}
-            <div className="flex-1 min-h-0 overflow-auto">
+            <div className="relative flex-1 min-h-0 overflow-auto">
               {scDiffLoading ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -5594,14 +5746,20 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   theme={resolvedTheme}
                   onRenderResult={onArchitectureRenderResult}
                 />
+              ) : activeTab?.type === 'todos' ? (
+                <div className="h-full overflow-auto bg-background">
+                  <TodosTabContent />
+                </div>
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
                 </div>
+              ) : activeTab?.type === 'file' && isProjectPdf(activeTab.path) ? (
+                <ProjectPdfViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
               ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
                 <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
-              ) : activeTab?.type === 'file' ? (
+              ) : activeTab?.type === 'file' ? renderFileEditor(activeTab, (
                 <ReviewableEditor
                   key={activeTab.id}
                   path={activeTab.path}
@@ -5628,7 +5786,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     )))
                   }}
                 />
-              ) : editorFile ? (
+              )) : editorFile ? (
                 <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{editorFile.content}</code>
                 </pre>
@@ -5821,8 +5979,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   return (
     <aside
       className={cn(
-        'relative bg-muted/20 flex min-h-0',
-        panel.maxCollapsed ? 'flex-1' : 'shrink-0',
+        'relative bg-muted/20 flex min-h-0 flex-1',
         tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && showEditorProp && 'border-r',
       )}
       style={getDesktopProjectPanelStyle({
@@ -5838,6 +5995,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       {/* File explorer pane */}
       {showTreeProp && !tabMaximized && !panel.collapsed && (
       <div
+        data-browser-sidebar
         className={cn(
           'border-r bg-background transition-colors flex flex-col overflow-hidden',
           showEditorProp ? 'shrink-0' : 'flex-1 min-w-0',
@@ -6158,7 +6316,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               >
                 {commitMsgGenerating
                   ? <Loader2 className="h-3 w-3 animate-spin" />
-                  : <Sparkles className="h-3 w-3" />}
+                  : <Bot className="h-3 w-3" />}
               </button>
               </TooltipHint>
             </div>
@@ -6250,7 +6408,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId
               const gitStatus4tab = tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? tab.diffEntry.status : undefined
-              const canDetachTab = tab.type !== 'preview'
+              const isDetachableTab = canDetachTab(tab.type)
               return (
                 <TooltipHint key={tab.id} content={tab.path}>
                 <div
@@ -6266,9 +6424,9 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     setTabContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
                   }}
                   onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(tab.id) } }}
-                  draggable={canDetachTab}
+                  draggable={isDetachableTab}
                   onDragStart={(e) => {
-                    if (!canDetachTab) {
+                    if (!isDetachableTab) {
                       e.preventDefault()
                       return
                     }
@@ -6280,7 +6438,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     }
                   }}
                   onDragEnd={(e) => {
-                    if (!canDetachTab) return
+                    if (!isDetachableTab) return
                     handleDetachedTabDragEnd(e, tab.id)
                   }}
                   onDragOver={(e) => {
@@ -6310,6 +6468,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     <GitStatusBadge status={gitStatus4tab} className="text-2xs" />
                   ) : tab.type === 'architecture' ? (
                     <Boxes className="h-3.5 w-3.5 shrink-0" />
+                  ) : tab.type === 'todos' ? (
+                    <List className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.type === 'preview' ? (
                     <Globe className="h-3.5 w-3.5 shrink-0" />
                   ) : (
@@ -6334,6 +6494,23 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               )
             })}
           </div>
+          <TooltipHint content={hasTodosTab(openTabs) ? 'Close Todos' : 'Open Todos'}>
+          <button
+            type="button"
+            onClick={() => { if (hasTodosTab(openTabs)) handleCloseTodosTab(); else handleOpenTodosTab() }}
+            className={`flex items-center gap-1.5 text-xs transition-colors rounded px-2 py-0.5 shrink-0 ml-1 mr-1 ${
+              activeTab?.type === 'todos'
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+            aria-label="Toggle Todos"
+            aria-pressed={activeTab?.type === 'todos'}
+            data-testid="project-tabbar-todos-toggle"
+          >
+            <List className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Todos</span>
+          </button>
+          </TooltipHint>
           {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab) && (
             <div className="flex items-center shrink-0">
               {canMaximizeActiveTab && (
@@ -6418,7 +6595,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           </div>
         )}
         {/* Editor content area */}
-        <div className="flex-1 min-h-0">
+        <div className="relative flex-1 min-h-0">
         {scDiffLoading ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -6459,14 +6636,20 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             theme={resolvedTheme}
             onRenderResult={onArchitectureRenderResult}
           />
+        ) : activeTab?.type === 'todos' ? (
+          <div className="h-full overflow-auto bg-background">
+            <TodosTabContent />
+          </div>
         ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
+        ) : activeTab?.type === 'file' && isProjectPdf(activeTab.path) ? (
+          <ProjectPdfViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
         ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
           <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
-        ) : activeTab?.type === 'file' ? (
+        ) : activeTab?.type === 'file' ? renderFileEditor(activeTab, (
           <ReviewableEditor
             key={activeTab.id}
             path={activeTab.path}
@@ -6493,7 +6676,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               )))
             }}
           />
-        ) : editorFile ? (
+        )) : editorFile ? (
           <Editor
             height="100%"
             beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
@@ -6569,7 +6752,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         </button>
         <button
           className="ui-menu-item"
-          disabled={openTabs.find((tab) => tab.id === tabContextMenu.tabId)?.type === 'preview'}
+          disabled={(() => { const t = openTabs.find((tab) => tab.id === tabContextMenu.tabId)?.type; return t === 'preview' || t === 'todos' })()}
           onClick={() => { void handleDetachTab(tabContextMenu.tabId) }}
         >
           Move to New Window

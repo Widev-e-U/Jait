@@ -1,3 +1,4 @@
+import { ProviderUsageBadge } from '@/components/chat/provider-usage-badge'
 import { collectAttachments } from '@/components/chat/attachment-list'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
@@ -18,6 +19,11 @@ import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { TooltipHint } from '@/components/ui/tooltip'
+import {
+  getChatColumnClassName,
+  getChatComposerBoundaryClassName,
+  shouldShowNormalChatComposer,
+} from '@/components/chat/message-edit-layout'
 import { ChatPanelDivider } from './chat-panel-divider'
 
 export interface ParallelChatPrompt {
@@ -155,6 +161,7 @@ function ParallelChatPanelImpl({
   const handleLatestContentViewed = useCallback(() => {
     if (viewedActivityAt) onSessionViewed?.(session.id, viewedActivityAt)
   }, [onSessionViewed, session.id, viewedActivityAt])
+  const [editingQueue, setEditingQueue] = useState(false)
   const [draft, setDraft] = useState('')
   const [inputVersion, setInputVersion] = useState(0)
   const initialPromptSentRef = useRef(false)
@@ -305,18 +312,11 @@ function ParallelChatPanelImpl({
     if (!isLoading) return
     const content = draft.trim()
     const uploads = collectAttachments(attachments, displaySegments)
-    if (uploads.length) {
-      enqueueMessage({ content, attachments: uploads, displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads), referencedFiles })
-      setDraft('')
-      setInputVersion((version) => version + 1)
-      toast.info('Attachments queued for the next message')
-      return
-    }
-    if (!content) return
+    if (!content && uploads.length === 0) return
     const chipFiles = referencedFiles?.map(({ path, name }) => ({ path, name })) ?? []
-    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, attachments)
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, uploads)
     const displayContent = nextDisplaySegments ? undefined : content
-    recordSteeredMessage(content, displayContent)
+    recordSteeredMessage(content, displayContent, uploads)
     setDraft('')
     setInputVersion((version) => version + 1)
     void (async () => {
@@ -330,6 +330,7 @@ function ParallelChatPanelImpl({
           body: JSON.stringify({
             message: content,
             ...(chipFiles.length ? { referencedFiles: chipFiles } : {}),
+            ...(uploads.length ? { attachments: uploads } : {}),
             ...(nextDisplaySegments ? { displaySegments: nextDisplaySegments } : {}),
           }),
         })
@@ -338,7 +339,10 @@ function ParallelChatPanelImpl({
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to steer')
-        enqueueMessage({ content })
+        enqueueMessage({
+          content,
+          ...(uploads.length ? { attachments: uploads, displaySegments: nextDisplaySegments } : {}),
+        })
       }
     })()
   }, [draft, enqueueMessage, isLoading, recordSteeredMessage, session.id, token])
@@ -395,6 +399,7 @@ function ParallelChatPanelImpl({
           : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background'
       }
       style={isMobile ? undefined : { flex: 'var(--chat-panel-grow, 1) 1 0%' }}
+      data-browser-chat-scope
       aria-label="Secondary chat panel"
     >
       {showHideButton && (
@@ -412,6 +417,8 @@ function ParallelChatPanelImpl({
       )}
 
       <Conversation
+        sessionId={session.id}
+        authToken={token}
         onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
         className="min-h-0 flex-1"
         loading={isLoadingHistory}
@@ -433,6 +440,7 @@ function ParallelChatPanelImpl({
             kind={message.kind}
             content={message.content}
             steered={message.steered}
+            sendState={message.sendState}
             contextFlow={message.contextFlow}
             hasContextFlow={message.hasContextFlow}
             hasMemoryProvenance={message.hasMemoryProvenance}
@@ -453,16 +461,17 @@ function ParallelChatPanelImpl({
         ))}
       </Conversation>
 
-      <div className="relative z-30 isolate shrink-0 bg-background px-2 py-2 pb-3 sm:px-4">
+      <div data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
         {error && !isLoading && (
-          <div className="mx-auto mb-2 w-full max-w-4xl rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div className={getChatColumnClassName('mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive')}>
             {error}
           </div>
         )}
-        <div className="mx-auto w-full max-w-4xl space-y-1.5">
+        <div className={getChatColumnClassName('space-y-1.5')}>
         {messageQueue.length > 0 && (
           <MessageQueue
             items={messageQueue}
+            onEditingChange={setEditingQueue}
             onRemove={dequeueMessage}
             onEdit={updateQueueItem}
             onReorder={reorderQueueItem}
@@ -470,7 +479,8 @@ function ParallelChatPanelImpl({
             iconOnly={isMobile}
           />
         )}
-        <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+        <div hidden={!shouldShowNormalChatComposer(isMobile, null, editingQueue)} className="space-y-1.5">
+        <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20 overflow-hidden">
         <PromptInput
           merged
           value={draft}
@@ -509,6 +519,10 @@ function ParallelChatPanelImpl({
         </div>
         {composerControlRow}
         </div>
+        </div>
+      </div>
+      <div className="shrink-0 px-2 pb-1 empty:hidden">
+        <ProviderUsageBadge provider={panelProvider} model={panelModel} />
       </div>
     </section>
     </>

@@ -41,6 +41,7 @@ export function parseContextFlowEvent(data: Record<string, unknown>): LlmContext
 
   return {
     provider: String(data.provider ?? 'jait'),
+    ...(data.usageSummary && typeof data.usageSummary === "object" ? { usageSummary: data.usageSummary as LlmContextFlow["usageSummary"] } : {}),
     model: typeof data.model === 'string' ? data.model : undefined,
     rounds: Array.isArray(data.rounds) ? data.rounds as LlmContextFlow['rounds'] : [],
     note: typeof data.note === 'string' ? data.note : undefined,

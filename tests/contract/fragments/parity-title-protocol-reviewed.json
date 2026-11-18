@@ -1,0 +1,86 @@
+{
+  "lane": "title-protocol-current-source-review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/projects.test.ts:221:3",
+      "status": "verified",
+      "parity_review": "Refreshed current title-protocol regression declarations. Existing declaration names, suites and modifiers were matched to their moved line IDs; every existing generated Rust matcher rule is identical, checked in .jait/artifacts/source-review-authoring/title-drift-id-map.json and merge-title-selected.py. New parameterized cases preserve every original tag/payload input and exact fallback assertion, including the two independently checked empty/nonempty fallback results in the helper tests and HTTP result plus saved-session name in the route tests. The complete source-bound translated TypeScript reference report passes; declaration equivalence only, with source-runtime and native Rust migration acceptance separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_projects_test_ts_221_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_routes_projects_test_ts_221_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/thread-title.test.ts:35:3",
+      "status": "verified",
+      "parity_review": "Refreshed current title-protocol regression declarations. Existing declaration names, suites and modifiers were matched to their moved line IDs; every existing generated Rust matcher rule is identical, checked in .jait/artifacts/source-review-authoring/title-drift-id-map.json and merge-title-selected.py. New parameterized cases preserve every original tag/payload input and exact fallback assertion, including the two independently checked empty/nonempty fallback results in the helper tests and HTTP result plus saved-session name in the route tests. The complete source-bound translated TypeScript reference report passes; declaration equivalence only, with source-runtime and native Rust migration acceptance separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each7",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each8",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/thread-title.test.ts:50:3",
+      "status": "verified",
+      "parity_review": "Refreshed current title-protocol regression declarations. Existing declaration names, suites and modifiers were matched to their moved line IDs; every existing generated Rust matcher rule is identical, checked in .jait/artifacts/source-review-authoring/title-drift-id-map.json and merge-title-selected.py. The ordinary-title case preserves a tool marker inside meaningful title text with exact equality. The complete source-bound translated TypeScript reference report passes; declaration equivalence only, with source-runtime and native Rust migration acceptance separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_thread_title_test_ts_50_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        }
+      ]
+    }
+  ]
+}

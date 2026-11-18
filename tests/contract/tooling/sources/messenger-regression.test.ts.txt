@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest';
+import { createServer } from '../server.js';
+import { loadConfig } from '../config.js';
+import { signAuthToken } from '../security/http-auth.js';
+
+describe('gateway Messenger ownership', () => {
+  it('exposes the connection to a second authenticated client without a Matrix browser', async () => {
+    const config = { ...loadConfig(), logLevel: 'silent', jwtSecret: 'messenger-test-secret' };
+    const app = await createServer(config);
+    try {
+      const token = await signAuthToken({ id: 'alice', username: 'alice' }, config.jwtSecret);
+      const response = await app.inject({ method: 'GET', url: '/api/messenger', headers: { authorization: 'Bearer ' + token } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().snapshot.status).toBe('disconnected');
+    } finally { await app.close(); }
+  });
+});

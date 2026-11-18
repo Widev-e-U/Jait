@@ -20,7 +20,7 @@ interface JaitDesktop {
   onOpenFolder?: (callback: (event: unknown, folderPath: string) => void) => () => void
   getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
-  notify: (opts: { id?: string; title: string; body: string; link?: string; scope?: string; replaceId?: string }) => Promise<void>
+  notify: (opts: { id?: string; title: string; body: string; link?: string; markReadLink?: string; scope?: string; replaceId?: string }) => Promise<void>
   getPendingNotification?: () => Promise<{ activation?: import('@jait/shared').NotificationActivation | null }>
   acknowledgeNotification?: (input: { id: string }) => Promise<unknown>
   onNotificationOpen?: (callback: (activation: import('@jait/shared').NotificationActivation) => void) => () => void
@@ -88,3 +88,8 @@ declare global {
 }
 
 export {}
+
+declare module 'matrix-crypto-wasm-asset?url' {
+  const url: string
+  export default url
+}

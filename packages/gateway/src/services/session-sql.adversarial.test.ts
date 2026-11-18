@@ -42,6 +42,8 @@ async function service(): Promise<SessionSqlService> {
 }
 
 function seedFixtures(db: SqliteDatabase): void {
+  db.exec("CREATE TABLE updated_messages (id INTEGER PRIMARY KEY, note TEXT)");
+  db.prepare("INSERT INTO updated_messages (id, note) VALUES (1, 'probe')").run();
   db.exec("CREATE TABLE adv_big (id INTEGER PRIMARY KEY, filler TEXT)");
   const insertBig = db.prepare("INSERT INTO adv_big (id, filler) VALUES (?, ?)");
   for (let i = 1; i <= 250; i += 1) insertBig.run(i, `row-${i}`);

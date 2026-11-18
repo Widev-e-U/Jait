@@ -107,7 +107,7 @@ export function checkHttp(target: string, port: number, secure: boolean, signal:
     const abort = () => { output.conclusive = false; output.coverageGaps.push("HTTP check cancelled"); finish(); };
     signal.addEventListener("abort", abort, { once: true });
     req.setTimeout(3000, () => { output.conclusive = false; output.coverageGaps.push("HTTP request timed out"); finish(); });
-    req.once("error", () => { output.conclusive = false; output.coverageGaps.push("HTTP request failed"); finish(); });
+    req.once("error", () => { if (done) return; output.conclusive = false; output.coverageGaps.push("HTTP request failed"); finish(); });
     req.end();
   });
 }

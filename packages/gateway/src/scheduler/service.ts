@@ -1,3 +1,4 @@
+import { isValidCronExpression } from "./cron.js";
 import { eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/index.js";
 import { scheduledJobRuns, scheduledJobs } from "../db/schema.js";
@@ -99,6 +100,7 @@ function getCronDateParts(date: Date, timeZone?: string): { minute: number; hour
 }
 
 export function matchesCronMinute(cron: string, date: Date, timeZone?: string): boolean {
+  if (!isValidCronExpression(cron)) return false;
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return false;
 
@@ -310,6 +312,7 @@ export class SchedulerService {
     projectRoot?: string;
     enabled?: boolean;
   }): ScheduledJobRecord {
+    if (!isValidCronExpression(params.cron)) throw new Error("Invalid cron expression");
     const now = new Date().toISOString();
     const id = uuidv7();
     this.options.db.insert(scheduledJobs).values({
@@ -352,6 +355,8 @@ export class SchedulerService {
   ): ScheduledJobRecord | null {
     const existing = this.get(id, userId);
     if (!existing) return null;
+
+    if (patch.cron !== undefined && !isValidCronExpression(patch.cron)) throw new Error("Invalid cron expression");
 
     this.options.db.update(scheduledJobs).set({
       name: patch.name ?? existing.name,

@@ -1,12 +1,14 @@
 import { AttachmentList, collectAttachments } from './attachment-list'
 import { createInlineImageNode, createInlineNodeRef, readInlineImageNode } from './prompt-input-image'
+import { EmojiPickerPanel } from '../messenger/messenger-emoji-picker'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import { createPastedTextAttachment, isLongPaste } from '@/lib/pasted-text-attachment'
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp, Smile } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider, TooltipHint } from '@/components/ui/tooltip'
+import { DelegatedTooltip } from '@/components/ui/delegated-tooltip'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import {
   DropdownMenu,
@@ -20,6 +22,8 @@ import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { StyleSelector } from '@/components/chat/style-selector'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
+import { ChatNodeSelector } from '@/components/chat/chat-node-selector'
+import { usePersonalChatNode } from '@/hooks/usePersonalChatNode'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
@@ -32,6 +36,8 @@ import { cn } from '@/lib/utils'
 import { alternateStreamingAction, resolvePromptSubmitAction, type DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME, JAIT_CHAT_REF_MIME } from '@/lib/jait-dnd'
 import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
+import { API_URL } from '@/lib/gateway-url'
+import { getAuthToken } from '@/lib/auth-token'
 import {
   JAIT_REF_MIME,
   formatLineRange,
@@ -48,6 +54,7 @@ import {
   type UserImageAttachment,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
+import { COMPOSER_BULLET, bulletsToMarkdown, resolveListLineBreak, shouldAutoBullet } from '@/lib/prompt-list-format'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 import type { ResponseStyle } from '@jait/shared'
 
@@ -80,9 +87,18 @@ type PromptChipReference =
   | ({ type: 'skill' } & UserSkillReference)
 
 interface PromptInputProps {
+  /** Personal messaging keeps the editor, shortcuts and attachments without AI/project controls. */
+  variant?: 'assistant' | 'messenger'
+  /** Optional direct file transport, e.g. encrypted Matrix uploads (never the AI attachment path). */
+  onFilesSelected?: (files: File[]) => void
+
   value: string
   onChange: (value: string) => void
   onSubmit: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
+  /** Editors retain their draft until the parent finishes saving and closes them. */
+  clearOnSubmit?: boolean
+  /** Optional label for the submit action in an editor. */
+  submitLabel?: string
   onStop?: () => void
   /** Queue a message while the agent is busy. */
   onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
@@ -97,6 +113,8 @@ interface PromptInputProps {
   submitLoading?: boolean
   disabled?: boolean
   controlsDisabled?: boolean
+  /** Threads use their repository execution device rather than personal session settings. */
+  allowPersonalChatNode?: boolean
   placeholder?: string
   className?: string
   footerLeadingContent?: ReactNode
@@ -234,7 +252,7 @@ function createChipNode(file: PromptChipReference | ({ type: 'image' } & UserIma
     }
   }
   chip.className =
-    'inline-flex items-center gap-1.5 align-middle text-xs font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
+    'inline-flex items-center gap-1.5 align-middle text-xs font-medium leading-normal mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
 
   // Icon (file or folder)
   const icon = document.createElement('span')
@@ -255,7 +273,7 @@ function createChipNode(file: PromptChipReference | ({ type: 'image' } & UserIma
 
   // Name label
   const label = document.createElement('span')
-  label.className = 'truncate max-w-[180px]'
+  label.className = 'truncate max-w-[180px] -my-0.5 py-0.5'
   const lineRangeLabel = 'lineRange' in file ? formatLineRange(file.lineRange) : ''
   label.textContent = 'type' in file && file.type === 'skill'
     ? `/${file.name}`
@@ -294,6 +312,10 @@ function getVsFolderIconName(foldername: string): string {
 
 /** Extract plain text from the editable div, ignoring chip nodes. */
 function getTextFromEditable(el: HTMLElement): string {
+  return bulletsToMarkdown(collectEditableText(el))
+}
+
+function collectEditableText(el: HTMLElement): string {
   let text = ''
   const children = el.childNodes
   for (let i = 0; i < children.length; i++) {
@@ -309,11 +331,113 @@ function getTextFromEditable(el: HTMLElement): string {
         const isLast = i === children.length - 1
         if (!isLast) text += '\n'
       } else {
-        text += getTextFromEditable(node)
+        text += collectEditableText(node)
       }
     }
   }
   return text
+}
+
+/** Text of the caret's line up to the caret (chips count as one character). */
+function getLineBeforeCaret(el: HTMLElement): string | null {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!range.collapsed || (range.startContainer !== el && !el.contains(range.startContainer))) return null
+  const before = document.createRange()
+  before.selectNodeContents(el)
+  before.setEnd(range.startContainer, range.startOffset)
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (!(node instanceof HTMLElement)) return Array.from(node.childNodes).map(read).join('')
+    if (node.hasAttribute('data-chip-ref')) return '￼'
+    if (node.tagName === 'BR') return '\n'
+    return Array.from(node.childNodes).map(read).join('')
+  }
+  const text = read(before.cloneContents())
+  return text.slice(text.lastIndexOf('\n') + 1)
+}
+
+/** Insert a `<br>` (plus an optional list prefix) at the caret. */
+function insertLineBreakAtCaret(prefix: string) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const range = selection.getRangeAt(0)
+  range.deleteContents()
+  const br = document.createElement('br')
+  range.insertNode(br)
+  const caret = document.createRange()
+  if (prefix) {
+    const text = document.createTextNode(prefix)
+    br.after(text)
+    caret.setStart(text, prefix.length)
+  } else {
+    // Empty text nodes left by `insertNode` make Chrome snap the caret back to
+    // the previous line, and a trailing <br> renders no line of its own.
+    let next = br.nextSibling
+    while (next && next.nodeType === Node.TEXT_NODE && !next.textContent) {
+      const following = next.nextSibling
+      next.remove()
+      next = following
+    }
+    if (!next) br.after(document.createElement('br'))
+    caret.setStartAfter(br)
+  }
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+}
+
+/**
+ * Delete `count` characters directly before the caret without crossing a line
+ * break or chip (`selection.modify` would also swallow the preceding `<br>`).
+ */
+function deleteBeforeCaret(count: number): boolean {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || count <= 0) return false
+  const range = selection.getRangeAt(0)
+  let node: Node = range.startContainer
+  let offset = range.startOffset
+  if (node.nodeType !== Node.TEXT_NODE) {
+    const previous = node.childNodes[offset - 1]
+    if (!previous || previous.nodeType !== Node.TEXT_NODE) return false
+    node = previous
+    offset = previous.textContent?.length ?? 0
+  }
+  const text = node.textContent ?? ''
+  if (offset < count) return false
+  node.textContent = text.slice(0, offset - count) + text.slice(offset)
+  // An emptied last line after a <br> would not render; keep it alive.
+  // (`range.insertNode` leaves empty text nodes behind, so skip those.)
+  let next = node.nextSibling
+  while (next && next.nodeType === Node.TEXT_NODE && !next.textContent) next = next.nextSibling
+  if (!node.textContent && !next && node.previousSibling?.nodeName === 'BR') {
+    (node as Text).after(document.createElement('br'))
+  }
+  const caret = document.createRange()
+  caret.setStart(node, offset - count)
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+  return true
+}
+
+/** Swap the `- ` just typed at the start of a line for a bullet. */
+function replaceDashWithBullet() {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return false
+  const range = selection.getRangeAt(0)
+  const node = range.startContainer
+  const offset = range.startOffset
+  if (node.nodeType !== Node.TEXT_NODE || offset < 2) return false
+  const text = node.textContent ?? ''
+  node.textContent = `${text.slice(0, offset - 2)}${COMPOSER_BULLET} ${text.slice(offset)}`
+  const caret = document.createRange()
+  caret.setStart(node, offset)
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+  return true
 }
 
 /** Strip zero-width and invisible formatting characters. */
@@ -435,7 +559,20 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
   }
 
   for (const child of el.childNodes) visit(child)
-  return normalizeUserMessageSegments(segments)
+  // Bullets only become markdown at the start of a line, never after a chip.
+  let atLineStart = true
+  return normalizeUserMessageSegments(segments).map((segment) => {
+    if (segment.type !== 'text') {
+      atLineStart = false
+      return segment
+    }
+    const firstBreak = segment.text.indexOf('\n')
+    const text = atLineStart
+      ? bulletsToMarkdown(segment.text)
+      : firstBreak < 0 ? segment.text : segment.text.slice(0, firstBreak) + bulletsToMarkdown(segment.text.slice(firstBreak))
+    atLineStart = text.endsWith('\n')
+    return text === segment.text ? segment : { ...segment, text }
+  })
 }
 
 function readChipLineRange(node: HTMLElement): { lineRange: { startLine: number; endLine: number } } | Record<string, never> {
@@ -546,22 +683,24 @@ function insertSegmentsAtCursor(
   selection.addRange(nextRange)
 }
 
-function insertTextAtCursor(el: HTMLElement, text: string) {
+function insertTextAtCursor(el: HTMLElement, text: string): Text | undefined {
   if (!text) return
 
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) {
-    el.appendChild(document.createTextNode(text))
+    const textNode = document.createTextNode(text)
+    el.appendChild(textNode)
     moveCursorToEnd(el)
-    return
+    return textNode
   }
 
   const range = selection.getRangeAt(0)
   const ancestor = range.commonAncestorContainer
   if (ancestor !== el && !el.contains(ancestor)) {
-    el.appendChild(document.createTextNode(text))
+    const textNode = document.createTextNode(text)
+    el.appendChild(textNode)
     moveCursorToEnd(el)
-    return
+    return textNode
   }
 
   range.deleteContents()
@@ -573,6 +712,7 @@ function insertTextAtCursor(el: HTMLElement, text: string) {
   nextRange.collapse(true)
   selection.removeAllRanges()
   selection.addRange(nextRange)
+  return textNode
 }
 
 /** Move cursor to the end of a contentEditable element. */
@@ -664,6 +804,8 @@ function appendSegmentNodes(
 }
 
 export interface PromptInputHandle {
+  /** Clear the confirmed submission, including its local attachment draft. */
+  reset: () => void
   /** Insert a file chip into the input (used by project Send button). */
   insertChip: (file: ReferencedFile) => void
   /** Insert text and/or structured references into the composer. */
@@ -681,27 +823,27 @@ const COMPACT_FOOTER_CONTROLS_WIDTH = 560
 
 export function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
-  const visibleBars = compact ? bars.slice(-16) : bars
+  const visibleBars = bars
   const meterHeight = compact ? 24 : 30
 
   return (
     <span
       className={cn(
-        'flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-3 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
-        compact ? 'h-8 max-w-[210px]' : 'h-10 max-w-[320px]',
+        'relative flex min-w-0 shrink items-center justify-end gap-0.5 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-3 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
+        compact ? 'h-8 w-[136px] max-w-full' : 'h-10 w-[200px] max-w-full',
       )}
     >
+      <span aria-hidden className="absolute left-3 right-3 top-1/2 h-px bg-black/30 dark:bg-white/30" />
       {visibleBars.map((level, index) => (
         <span
           key={index}
           className={cn(
-            'block shrink-0 rounded-full bg-black/75 transition-[height,opacity,transform] duration-300 ease-out dark:bg-white/80',
+            'relative block shrink-0 rounded-full bg-black/75 transition-[height,opacity] duration-200 ease-linear dark:bg-white/80',
             compact ? 'w-[2px]' : 'w-[3px]',
           )}
           style={{
-            height: `${6 + level * meterHeight}px`,
+            height: `${1 + Math.max(0, (level - 0.05) / 0.95) * meterHeight}px`,
             opacity: 0.18 + level * 0.82,
-            transform: `translateY(${(1 - level) * 1.5}px)`,
           }}
         />
       ))}
@@ -838,9 +980,13 @@ function ComposerSendSplitButton({
 /* ------------------------------------------------------------------ */
 
 export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(function PromptInput({
+  variant = 'assistant',
+  onFilesSelected,
   value,
   onChange,
   onSubmit,
+  clearOnSubmit = true,
+  submitLabel,
   onStop,
   onQueue,
   onSteer,
@@ -850,6 +996,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   submitLoading,
   disabled,
   controlsDisabled,
+  allowPersonalChatNode = true,
   placeholder = 'Ask anything...',
   className,
   footerLeadingContent,
@@ -897,6 +1044,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
+  const isMessenger = variant === 'messenger'
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [compactFooterControls, setCompactFooterControls] = useState(false)
 
   const [dragging, setDragging] = useState(false)
@@ -962,14 +1111,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [searchResults, setSearchResults] = useState<ReferencedFile[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const searchAbort = useRef<AbortController | null>(null)
-  const composerDisabled = Boolean(disabled)
+  const personalChat = Boolean(variant === 'assistant' && allowPersonalChatNode && provider && onProviderChange && onCliModelChange && chatId && !projectId && !projectPath && !repoRuntime)
+  const personalNode = usePersonalChatNode(chatId, personalChat)
+  const composerDisabled = Boolean(disabled) || personalNode.busy
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
-  const selectorsDisabled = controlsLocked
-  const showProviderModelSelector = Boolean(provider && onProviderChange && onCliModelChange)
-  const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange)
-  const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
-  const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && sendTarget !== 'swarm' && (!provider || provider === 'jait'))
-  const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
+  const selectorsDisabled = controlsLocked || personalNode.busy
+  const showProviderModelSelector = variant === 'assistant' && Boolean(provider && onProviderChange && onCliModelChange)
+  const showResponseStyleSelector = variant === 'assistant' && Boolean(responseStyle && onResponseStyleChange)
+  const showProviderRuntimeSelector = variant === 'assistant' && Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
+  const showModeSelector = variant === 'assistant' && Boolean(mode && onModeChange && sendTarget !== 'thread' && sendTarget !== 'swarm' && (!provider || provider === 'jait'))
+  const shouldShowSendTargetSelector = variant === 'assistant' && showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
   const projectDisplayName = projectName?.trim() || projectPath?.trim() || null
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
   const hasFooterLeftContent = hasFooterControls
@@ -1138,6 +1289,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   /** Expose imperative methods for parent components. */
   useImperativeHandle(ref, () => ({
+    reset: resetComposer,
     insertChip: (file: ReferencedFile) => {
       const el = editableRef.current
       if (!el) return
@@ -1193,7 +1345,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       }
       setIsEmpty(false)
     },
-  }), [handleRemoveChip, segments, syncComposerSegments])
+  }), [handleRemoveChip, segments, syncComposerSegments, resetComposer])
 
   // Debounced search when mention query changes
   useEffect(() => {
@@ -1464,13 +1616,96 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setSlashQuery('')
   }, [handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments])
 
+  /**
+   * Line break inside the composer (Shift+Enter, or the soft keyboard's Enter
+   * on Android, which arrives as `insertParagraph`). On a list line it
+   * continues the list; on an empty item it ends the list instead. Inserting
+   * the `<br>` ourselves also keeps the browser from wrapping the new line in a
+   * `<div>` that the sanitizer would flatten away.
+   */
+  const applyLineBreak = useCallback((): boolean => {
+    const el = editableRef.current
+    if (!el) return false
+    const line = getLineBeforeCaret(el)
+    if (line === null) return false
+    pushUndoSnapshot(true)
+    const action = resolveListLineBreak(line)
+    if (action?.kind !== 'end' || !deleteBeforeCaret(action.markerLength)) {
+      insertLineBreakAtCaret(action?.kind === 'continue' ? action.prefix : '')
+    }
+    draftSegmentsRef.current = syncComposerSegments(el)
+    isSyncing.current = true
+    onChange(getTextFromEditable(el))
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
+    scrollCaretIntoView(el)
+    return true
+  }, [onChange, pushUndoSnapshot, syncComposerSegments])
+  const applyLineBreakRef = useRef(applyLineBreak)
+  applyLineBreakRef.current = applyLineBreak
+
+  // React's synthetic onBeforeInput never reports `insertParagraph`, which is
+  // what Android keyboards send for their Enter key — listen natively.
+  useEffect(() => {
+    const el = editableRef.current
+    if (!el) return
+    const handleBeforeInput = (event: InputEvent) => {
+      if (event.inputType !== 'insertParagraph' && event.inputType !== 'insertLineBreak') return
+      if (applyLineBreakRef.current()) event.preventDefault()
+    }
+    el.addEventListener('beforeinput', handleBeforeInput)
+    return () => el.removeEventListener('beforeinput', handleBeforeInput)
+  }, [syncComposerSegments, variant]) // same mount lifecycle as the input listener below
+
+  // Resolve only a complete UUID, and preserve edits made while the request is pending.
+  const resolveChatId = useCallback((text: string, pastedNode?: Text) => {
+    if (variant === 'messenger' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return
+    void fetch(`${API_URL}/api/sessions/${encodeURIComponent(text)}`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      signal: AbortSignal.timeout(5000),
+    }).then(async response => {
+      if (!response.ok) return
+      const session = await response.json() as { id?: string; name?: string; title?: string }
+      // The user may have edited, removed, or sent the paste while we looked it up.
+      const current = editableRef.current
+      if (session.id !== text || !current?.isConnected) return
+      const originalNodeIntact = !!pastedNode && current.contains(pastedNode) && pastedNode.data === text
+      // The first draft update can rebuild the editable, replacing the text node.
+      // Only recover it when the entire current draft still matches the paste.
+      const equivalentDraft = !hasChipRefs(current) && getTextFromEditable(current) === text
+      if (!originalNodeIntact && !equivalentDraft) return
+      const selection = window.getSelection()
+      const caretInPaste = selection?.isCollapsed && (selection.anchorNode === pastedNode || (equivalentDraft && current.contains(selection.anchorNode)))
+      const chip = createChipNode({ type: 'chat', sessionId: text, name: session.name || session.title || text }, handleRemoveChip)
+      if (originalNodeIntact && pastedNode) pastedNode.replaceWith(chip)
+      else current.replaceChildren(chip)
+      if (caretInPaste && selection) {
+        const range = document.createRange()
+        range.setStartAfter(chip)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+      draftSegmentsRef.current = syncComposerSegments(current)
+      isSyncing.current = true
+      onChange(getTextFromEditable(current))
+      isSyncing.current = false
+      setIsEmpty(false)
+    }).catch(() => { /* Keep the pasted text if the lookup fails. */ })
+  }, [variant, handleRemoveChip, onChange, syncComposerSegments])
+
   /** Handle input events on the contentEditable — uses a native listener
    *  because React's synthetic onInput doesn't fire reliably for contentEditable. */
   useEffect(() => {
     const el = editableRef.current
     if (!el) return
 
-    const handleNativeInput = () => {
+    const handleNativeInput = (event: Event) => {
+      const inputEvent = event as InputEvent
+      if (inputEvent.inputType?.startsWith('insert') && !inputEvent.isComposing) {
+        const line = getLineBeforeCaret(el)
+        if (line !== null && shouldAutoBullet(line)) replaceDashWithBullet()
+      }
       isSyncing.current = true
       sanitizeEditableContent(el)
       const text = getTextFromEditable(el)
@@ -1479,6 +1714,39 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       setIsEmpty(isTextEmpty(text) && !hasChipRefs(el))
       isSyncing.current = false
       pushUndoRef.current()
+      // Some mobile keyboards deliver a paste as a single insertText event.
+      if (variant !== 'messenger' && inputEvent.inputType?.startsWith('insert') && inputEvent.data) {
+        const segments = parseUserMessageMarkdown(inputEvent.data)
+        const selection = window.getSelection()
+        const node = selection?.anchorNode
+        const offset = selection?.anchorOffset ?? 0
+        const insertedAtCaret = selection?.isCollapsed && node?.nodeType === Node.TEXT_NODE && el.contains(node)
+          && (node.textContent ?? '').slice(offset - inputEvent.data.length, offset) === inputEvent.data
+        const entireDraft = text === inputEvent.data && !hasChipRefs(el)
+        if (segments.some(segment => segment.type === 'chat') && (insertedAtCaret || entireDraft)) {
+          if (insertedAtCaret && selection && node) {
+            const range = document.createRange()
+            range.setStart(node, offset - inputEvent.data.length)
+            range.setEnd(node, offset)
+            selection.removeAllRanges()
+            selection.addRange(range)
+            insertSegmentsAtCursor(el, segments, handleRemoveChip)
+          } else {
+            el.replaceChildren()
+            appendSegmentNodes(el, segments, handleRemoveChip)
+            moveCursorToEnd(el)
+          }
+          draftSegmentsRef.current = syncComposerSegments(el)
+          isSyncing.current = true
+          onChangeRef.current(getTextFromEditable(el))
+          isSyncing.current = false
+          setIsEmpty(false)
+          return
+        }
+        if (entireDraft) resolveChatId(inputEvent.data)
+      }
+
+      if (variant === 'messenger') return
 
       // Detect @ trigger — resolve cursor into a text node
       const sel = window.getSelection()
@@ -1562,7 +1830,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     el.addEventListener('input', handleNativeInput)
     return () => el.removeEventListener('input', handleNativeInput)
-  }, [syncComposerSegments]) // other dependencies are read from refs
+  }, [syncComposerSegments, variant, resolveChatId, handleRemoveChip]) // other dependencies are read from refs
 
   /**
    * Run one composer send action with the payload the caller already collected.
@@ -1594,6 +1862,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, [runSendAction, segments])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.isComposing) return
+    // Escape must dismiss the suggestion menus even while a send is in flight;
+    // the disabled-composer guard below used to swallow it and leave them open.
+    if (e.key === 'Escape' && (mentionOpen || slashOpen)) {
+      e.preventDefault()
+      e.stopPropagation()
+      setMentionOpen(false)
+      setSlashOpen(false)
+      return
+    }
+    if (composerDisabled || submitLoading) return
     // Intercept undo/redo to prevent browser native undo corruption
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       if (e.key === 'z' && !e.shiftKey) {
@@ -1715,6 +1994,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         }
       }
     }
+    if (e.key === 'Enter' && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (applyLineBreak()) e.preventDefault()
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       if (readingAttachments > 0) {
         e.preventDefault()
@@ -1744,15 +2027,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (action === 'submit') {
         if (!isLoading || sendTarget === 'thread') {
           const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
-          clearSubmittedAttachments()
+          if (clearOnSubmit) clearSubmittedAttachments()
           onSubmit(chips, submittedAttachments, nextSegments)
-          resetComposer()
+          if (clearOnSubmit) resetComposer()
         }
         return
       }
       runSendAction(action, { chips, segments: nextSegments })
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, defaultStreamingAction, onQueue, onSteer, onThreadSubmit, onAskInParallel, onSubmit, attachments, segments, resetComposer, clearSubmittedAttachments, restoreSnapshot, runSendAction, readingAttachments, syncComposerSegments])
+  }, [composerDisabled, submitLoading, mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, defaultStreamingAction, onQueue, onSteer, onThreadSubmit, onAskInParallel, onSubmit, clearOnSubmit, attachments, segments, resetComposer, clearSubmittedAttachments, restoreSnapshot, runSendAction, readingAttachments, syncComposerSegments, applyLineBreak])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -1774,6 +2057,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, [])
 
   const addFilesAsAttachments = useCallback(async (files: FileList | File[]) => {
+    if (composerDisabled) return
+    if (onFilesSelected) {
+      onFilesSelected(Array.from(files))
+      return
+    }
     const el = editableRef.current
     if (!el) return
     pushUndoSnapshot(true)
@@ -1834,7 +2122,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       setReadingAttachments(count => count - 1)
       if (el.isConnected) setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
     }
-  }, [readFileAsAttachment, handleRemoveChip, pushUndoSnapshot, syncComposerSegments])
+  }, [readFileAsAttachment, handleRemoveChip, pushUndoSnapshot, syncComposerSegments, onFilesSelected, composerDisabled])
 
   const removeAttachment = useCallback((name: string) => {
     setAttachments((prev) => {
@@ -1866,6 +2154,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       e.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(segments))
       const structured = serializeUserMessageSegmentsForClipboard(segments)
       if (structured) e.clipboardData.setData(JAIT_REF_MIME, structured)
+      // Native cut would only put the chip DOM on the clipboard, so paste would drop it.
+      if (e.type === 'cut') document.execCommand('delete')
     }
   }, [])
 
@@ -1885,14 +2175,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       return
     }
     if (!el) return
-    const structured = parseUserMessageClipboardPayload(e.clipboardData.getData(JAIT_REF_MIME))
+    const structured = variant === 'messenger' ? [] : parseUserMessageClipboardPayload(e.clipboardData.getData(JAIT_REF_MIME))
     const pastedText = e.clipboardData.getData('text/plain')
-    if (structured.length === 0 && isLongPaste(pastedText)) {
+    // Text-only clipboard payloads still need plain-text handling, including UUID lookup.
+    const hasStructuredReferences = structured.some(segment => segment.type !== 'text')
+    if (variant === 'assistant' && !hasStructuredReferences && isLongPaste(pastedText)) {
       e.preventDefault()
       setAttachments(previous => [...previous, createPastedTextAttachment(pastedText, previous)])
       return
     }
-    const markdownSegments = structured.length > 0 ? structured : parseUserMessageMarkdown(e.clipboardData.getData('text/plain'))
+    const markdownSegments = variant === 'messenger' ? [] : hasStructuredReferences ? structured : parseUserMessageMarkdown(pastedText)
     if (markdownSegments.length > 0) {
       e.preventDefault()
       pushUndoSnapshot(true)
@@ -1909,7 +2201,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const text = e.clipboardData.getData('text/plain')
     if (!text) return
     pushUndoSnapshot(true)
-    insertTextAtCursor(el, text)
+    const pastedNode = insertTextAtCursor(el, text)
     draftSegmentsRef.current = syncComposerSegments(el)
     const nextValue = getTextFromEditable(el)
     isSyncing.current = true
@@ -1917,7 +2209,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = false
     setIsEmpty(isTextEmpty(nextValue) && !hasChipRefs(el))
     scrollCaretIntoView(el)
-  }, [addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments])
+
+    resolveChatId(text, pastedNode)
+  }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments, resolveChatId])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {
@@ -1962,6 +2256,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       isSyncing.current = false
       setIsEmpty(false)
       return true
+    }
+
+    if (variant === 'messenger') {
+      if (e.dataTransfer.files?.length) void addFilesAsAttachments(e.dataTransfer.files)
+      return
     }
 
     // Handle project tree file/folder drop
@@ -2033,17 +2332,202 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         void addFilesAsAttachments(uploadable)
       }
     }
-  }, [onChange, handleRemoveChip, addFilesAsAttachments, syncComposerSegments])
+  }, [variant, onChange, handleRemoveChip, addFilesAsAttachments, syncComposerSegments])
+
+  // Insert an emoji from the composer picker at the caret and keep the draft in sync.
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = editableRef.current
+    if (!el) return
+    el.focus()
+    insertTextAtCursor(el, emoji)
+    draftSegmentsRef.current = syncComposerSegments(el)
+    isSyncing.current = true
+    const next = getTextFromEditable(el)
+    onChangeRef.current(next)
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(next) && !hasChipRefs(el))
+    pushUndoRef.current(true)
+    scrollCaretIntoView(el)
+  }, [syncComposerSegments])
+
+  const attachButton = (
+    <TooltipHint side="bottom" content="Attach files">
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        disabled={composerDisabled}
+        onClick={() => fileInputRef.current?.click()}
+        aria-label="Attach files"
+      >
+        <Paperclip className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+      </Button>
+    </TooltipHint>
+  )
+
+  const emojiButton = (
+    <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+      <PopoverAnchor asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+          disabled={composerDisabled}
+          aria-label="Emoji"
+          aria-expanded={emojiPickerOpen}
+          onClick={() => setEmojiPickerOpen(open => !open)}
+        >
+          <Smile className="h-[18px] w-[18px]" />
+        </Button>
+      </PopoverAnchor>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="z-[80] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-2 shadow-xl"
+      >
+        <EmojiPickerPanel className="h-[18rem]" actionLabel="Insert" onSelect={insertEmoji} />
+      </PopoverContent>
+    </Popover>
+  )
+
+  const dictateButton = onVoiceInput && !voiceRecording && !voiceTranscribing ? (
+    <TooltipHint side="bottom" content={isMessenger ? 'Dictate with your configured speech-to-text provider' : 'Voice input'}>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        disabled={composerDisabled}
+        onClick={onVoiceInput}
+        aria-label={isMessenger ? 'Dictate' : 'Voice input'}
+      >
+        <Mic className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+      </Button>
+    </TooltipHint>
+  ) : null
+
+  const sendButtonClass = cn('shrink-0', isMessenger ? 'h-9 w-9 rounded-full' : 'rounded-lg')
+
+  const sendRegion = isLoading && sendTarget !== 'thread' ? (
+    submitEmpty || !hasStreamingSendAction ? (
+      <TooltipHint side="bottom" content="Sending">
+        <Button
+          type="button"
+          size="icon"
+          className={sendButtonClass}
+          disabled aria-label="Sending"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </Button>
+      </TooltipHint>
+    ) : (
+      <ComposerSendSplitButton
+        primary={streamingSendPrimary}
+        options={streamingSendOptions}
+        disabled={composerDisabled}
+        loading={Boolean(submitLoading)}
+        onAction={handleSendAction}
+      />
+    )
+  ) : !isLoading || sendTarget === 'thread' ? (
+    <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
+      <Button
+        type="button"
+        size={submitLabel ? "sm" : "icon"}
+        className={sendButtonClass}
+        disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
+        aria-label={submitLabel ?? "Send message"}
+        onClick={() => {
+          const el = editableRef.current
+          const chips = el ? getChipFiles(el) : []
+          const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+          const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
+          if (clearOnSubmit) clearSubmittedAttachments()
+          onSubmit(chips, submittedAttachments, nextSegments)
+          if (clearOnSubmit) resetComposer()
+        }}
+      >
+        {submitLoading
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : submitLabel ?? <ArrowUp className="h-4 w-4" />}
+      </Button>
+    </TooltipHint>
+  ) : (
+    <TooltipHint side="bottom" content="Sending">
+      <Button
+        type="button"
+        size="icon"
+        className={sendButtonClass}
+        disabled aria-label="Sending"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    </TooltipHint>
+  )
+
+  // Mic and send share one slot: WhatsApp-style mic while the composer is empty,
+  // send as soon as there is text, a chip reference, or an attachment.
+  const showComposerMic = isMessenger && submitEmpty && Boolean(onVoiceInput) && !voiceRecording && !voiceTranscribing && !isLoading
+
+  const composerTrailingControls = (
+    <>
+      {voiceRecording && onVoiceStop && (
+        <div className="flex min-w-0 items-center gap-2">
+          {!isMobile && !isMessenger && <span className="shrink-0 text-xs font-medium text-foreground/80">Listening...</span>}
+          <VoiceLevelMeter levels={voiceLevels} compact={isMobile || isMessenger} />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn('h-7 shrink-0 rounded-lg text-xs', isMobile ? 'px-2' : 'px-2.5')}
+            onClick={onVoiceStop}
+            aria-label="Finish dictation"
+          >
+            <MicOff className={cn('h-3.5 w-3.5', !isMobile && 'mr-1')} />
+            {!isMobile && !isMessenger && 'Done'}
+          </Button>
+        </div>
+      )}
+      {voiceTranscribing && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {!isMessenger && 'Transcribing...'}
+        </div>
+      )}
+      {!isMessenger && footerTrailingContent}
+      {isLoading && sendTarget !== 'thread' && (
+        <TooltipHint side="bottom" content="Stop generating">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full')}
+            onClick={onStop} aria-label="Stop generating"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </Button>
+        </TooltipHint>
+      )}
+      {showComposerMic ? dictateButton : sendRegion}
+    </>
+  )
 
   return (
     <div
       ref={rootRef}
       data-testid="chat-composer"
+      data-chat-variant={variant}
       className={cn(
         'group relative z-10 flex flex-col',
         merged
           ? 'bg-transparent'
-          : 'rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+          : cn(
+              isMessenger ? 'rounded-[26px]' : 'rounded-2xl',
+              'border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20',
+            ),
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}
@@ -2062,10 +2546,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             {projectDisplayName}
           </span>
           {chatId && (
-            <TooltipHint side="bottom" content={`Copy chat id: ${chatId}`}>
+            <TooltipHint side="bottom" content={`Copy chat reference: [chat:${chatId}]`}>
             <button
               type="button"
-              aria-label="Copy chat id"
+              aria-label="Copy chat reference"
               // The box hugs the icon exactly — no padding or extra hit ring. The
               // global `button[aria-label] { min-width: 2.5rem }` mobile rule would
               // blow this tiny inline icon up to 40px wide, so override min-width
@@ -2074,7 +2558,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               onClick={async (e) => {
                 e.preventDefault()
                 try {
-                  await navigator.clipboard.writeText(chatId)
+                  await navigator.clipboard.writeText(serializeUserMessageSegmentsToMarkdown([{ type: 'chat', sessionId: chatId, name: chatId }]))
                   setChatIdCopied(true)
                   setTimeout(() => setChatIdCopied(false), 1200)
                 } catch {
@@ -2094,8 +2578,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       <input
         ref={fileInputRef}
         type="file"
+        aria-label="Attach a file"
+        disabled={composerDisabled}
         multiple
-        accept="image/*,.txt,.md,.ts,.tsx,.js,.jsx,.py,.json,.yaml,.yml,.toml,.css,.html,.xml,.csv,.log,.sh,.bat,.rs,.go,.java,.c,.cpp,.h,.hpp"
+        accept={variant === 'messenger' ? undefined : "image/*,.txt,.md,.ts,.tsx,.js,.jsx,.py,.json,.yaml,.yml,.toml,.css,.html,.xml,.csv,.log,.sh,.bat,.rs,.go,.java,.c,.cpp,.h,.hpp"}
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) {
@@ -2106,38 +2592,70 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       />
       {attachmentError && <p role="alert" className="px-3 pt-2 text-xs text-destructive">{attachmentError}</p>}
       {/* Editable area with inline references and images */}
-      <div className="relative px-3 pt-3 pb-1.5">
-        {isEmpty && (
-          <div className="absolute top-5 left-5 pointer-events-none text-muted-foreground leading-relaxed select-none [font-size:0.9rem]">
-            {placeholder}
+      <div
+        className={cn(
+          'relative',
+          // 8px/12px here plus the 1px box border and the `px-2` editable keeps
+          // the typed text on the transcript's 16px/20px gutter.
+          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1.5 pr-1.5' : 'px-2 pt-3 pb-1.5 sm:px-3',
+        )}
+      >
+        {isMessenger && (
+          <div className="flex shrink-0 items-center pb-0.5">
+            {attachButton}
+            {emojiButton}
           </div>
         )}
-        <div
-          ref={editableRef}
-          contentEditable={!composerDisabled}
-          role="textbox"
-          aria-multiline
-          suppressContentEditableWarning
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onCopy={handleCopy}
-          onDrop={(e) => { e.preventDefault() }}
-          onDragStart={(e) => { e.preventDefault() }}
-          onBeforeInput={(e) => {
-            const inputType = (e.nativeEvent as InputEvent).inputType
-            if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
-          }}
-          className={cn(
-            'min-h-[40px] max-h-[200px] overflow-y-auto leading-relaxed outline-none py-2 px-2 text-foreground [font-size:0.9rem]',
-            'whitespace-pre-wrap break-words',
-            composerDisabled && 'cursor-not-allowed opacity-50',
+        <div className="relative min-w-0 flex-1">
+          {isEmpty && (
+            <div
+              className={cn(
+                'pointer-events-none absolute select-none text-muted-foreground leading-relaxed [font-size:0.9rem]',
+                isMessenger ? 'top-2 left-1.5' : 'top-2 left-2',
+              )}
+            >
+              {placeholder}
+            </div>
           )}
-          style={{ wordBreak: 'break-word' }}
-        />
+          <div
+            ref={editableRef}
+            contentEditable={!composerDisabled}
+            role="textbox"
+            aria-label="Message"
+            aria-disabled={composerDisabled}
+            aria-multiline
+            suppressContentEditableWarning
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onCopy={handleCopy}
+            onCut={handleCopy}
+            onDrop={(e) => { e.preventDefault() }}
+            onDragStart={(e) => { e.preventDefault() }}
+            onBeforeInput={(e) => {
+              const inputType = (e.nativeEvent as InputEvent).inputType
+              if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
+            }}
+            className={cn(
+              'overflow-y-auto leading-relaxed outline-none text-foreground [font-size:0.9rem]',
+              isMessenger
+                ? 'min-h-[36px] max-h-[140px] py-2 px-1.5'
+                : 'min-h-[40px] max-h-[200px] py-2 px-2',
+              'whitespace-pre-wrap break-words',
+              composerDisabled && 'cursor-not-allowed opacity-50',
+            )}
+            style={{ wordBreak: 'break-word' }}
+          />
+          <DelegatedTooltip containerRef={editableRef} side="bottom" />
+        </div>
+        {isMessenger && (
+          <div className="flex max-w-[60%] shrink-0 items-center justify-end gap-0.5 pb-0.5">
+            {composerTrailingControls}
+          </div>
+        )}
       </div>
 
       {/* @ mention popup */}
-      <Popover open={mentionOpen}>
+      <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
         <PopoverAnchor asChild>
           <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
         </PopoverAnchor>
@@ -2189,7 +2707,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       </Popover>
 
       {/* `/` slash-command (skills) popup */}
-      <Popover open={slashOpen}>
+      <Popover open={slashOpen} onOpenChange={setSlashOpen}>
         <PopoverAnchor asChild>
           <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
         </PopoverAnchor>
@@ -2238,190 +2756,81 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </PopoverContent>
       </Popover>
 
-      <div className="flex min-w-0 items-start gap-2 px-3 pb-2.5 pt-0.5">
-        {hasFooterLeftContent && (
-          <div className="min-w-0 flex-1">
-            {hasFooterControls && (
-              <div className="min-w-0">
-                <div className="min-w-0 overflow-x-auto scrollbar-none">
-                  <div className="flex min-w-max items-center gap-1 pr-1">
-                    {footerLeadingContent}
-                    {showResponseStyleSelector && (
-                      <StyleSelector
-                        value={responseStyle!}
-                        onChange={onResponseStyleChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                      />
-                    )}
-                    {showProviderModelSelector && (
-                      <ProviderModelSelector
-                        provider={provider!}
-                        model={cliModel ?? null}
-                        onProviderChange={onProviderChange!}
-                        onModelChange={onCliModelChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                        repoRuntime={repoRuntime}
-                        onMoveToGateway={onMoveToGateway}
-                        sessionInfo={sessionInfo}
-                        projectNodeId={projectNodeId}
-                        projectId={projectId}
-                        reasoningEffort={reasoningEffort}
-                        onReasoningEffortChange={onReasoningEffortChange}
-                        tooltipSide="bottom"
-                      />
-                    )}
-                    {showProviderRuntimeSelector && (
-                      <ProviderRuntimeSelector
-                        provider={provider!}
-                        value={providerRuntimeMode!}
-                        onChange={onProviderRuntimeModeChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                      />
-                    )}
-                    {showModeSelector && (
-                      <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
-                    )}
+      {!isMessenger && (
+        <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5 sm:items-start">
+          {hasFooterLeftContent && (
+            <div className="min-w-0 flex-1">
+              {hasFooterControls && (
+                <div className="min-w-0">
+                  <div className="-mx-1 -my-1 min-w-0 overflow-x-auto px-1 py-1 scrollbar-none">
+                    <div className="flex min-w-max items-center gap-1 pr-1">
+                      {footerLeadingContent}
+                      {showResponseStyleSelector && (
+                        <StyleSelector
+                          value={responseStyle!}
+                          onChange={onResponseStyleChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                        />
+                      )}
+                      {showProviderModelSelector && personalChat && (
+                        <ChatNodeSelector nodeId={personalNode.nodeId} onChange={personalNode.selectNode} disabled={selectorsDisabled || isLoading} compact={compactFooterControls} error={personalNode.error} onRetry={personalNode.retry} />
+                      )}
+                      {showProviderModelSelector && (
+                        <ProviderModelSelector
+                          provider={provider!}
+                          model={cliModel ?? null}
+                          onProviderChange={onProviderChange!}
+                          onModelChange={onCliModelChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                          repoRuntime={repoRuntime}
+                          onMoveToGateway={onMoveToGateway}
+                          sessionInfo={sessionInfo}
+                          projectNodeId={personalChat ? personalNode.nodeId : projectNodeId}
+                          projectId={projectId}
+                          reasoningEffort={reasoningEffort}
+                          onReasoningEffortChange={onReasoningEffortChange}
+                          tooltipSide="bottom"
+                          separateEffortControl
+                        />
+                      )}
+                      {showProviderRuntimeSelector && (
+                        <ProviderRuntimeSelector
+                          provider={provider!}
+                          value={providerRuntimeMode!}
+                          onChange={onProviderRuntimeModeChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                        />
+                      )}
+                      {showModeSelector && (
+                        <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
+                      )}
+                    </div>
                   </div>
+                  {shouldShowSendTargetSelector && (
+                    <div className="mt-1.5">
+                      <SendTargetSelector
+                        target={sendTarget!}
+                        onChange={onSendTargetChange!}
+                        disabled={selectorsDisabled}
+                        compact={compactFooterControls}
+                      />
+                    </div>
+                  )}
                 </div>
-                {shouldShowSendTargetSelector && (
-                  <div className="mt-1.5">
-                    <SendTargetSelector
-                      target={sendTarget!}
-                      onChange={onSendTargetChange!}
-                      disabled={selectorsDisabled}
-                      compact={compactFooterControls}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
+          <div className={cn('flex shrink-0 items-center gap-1.5', isMessenger && 'gap-0.5', !isMessenger && hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
+            {attachButton}
+            {isMessenger && emojiButton}
+            {!isMessenger && dictateButton}
+            {composerTrailingControls}
           </div>
-        )}
-        <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
-          <TooltipHint side="bottom" content="Attach files">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="shrink-0 rounded-lg"
-            onClick={() => fileInputRef.current?.click()} aria-label="Attach files"
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          </TooltipHint>
-          {onVoiceInput && !voiceRecording && !voiceTranscribing && (
-            <TooltipHint side="bottom" content="Voice input">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="shrink-0 rounded-lg"
-              onClick={onVoiceInput} aria-label="Voice input"
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
-            </TooltipHint>
-          )}
-          {voiceRecording && onVoiceStop && (
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
-                <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
-                {!isMobile && 'Listening...'}
-              </span>
-              <VoiceLevelMeter levels={voiceLevels} compact={isMobile} />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={cn('h-7 shrink-0 rounded-lg text-xs', isMobile ? 'px-2' : 'px-2.5')}
-                onClick={onVoiceStop}
-              >
-                <MicOff className={cn('h-3.5 w-3.5', !isMobile && 'mr-1')} />
-                {!isMobile && 'Done'}
-              </Button>
-            </div>
-          )}
-          {voiceTranscribing && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Transcribing...
-            </div>
-          )}
-          {footerTrailingContent}
-          {isLoading && sendTarget !== 'thread' && (
-            <TooltipHint side="bottom" content="Stop generating">
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="shrink-0 rounded-lg"
-              onClick={onStop} aria-label="Stop generating"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </Button>
-            </TooltipHint>
-          )}
-          {isLoading && sendTarget !== 'thread' ? (
-            submitEmpty || !hasStreamingSendAction ? (
-              <TooltipHint side="bottom" content="Sending">
-              <Button
-                type="button"
-                size="icon"
-                className="shrink-0 rounded-lg"
-                disabled aria-label="Sending"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-              </Button>
-              </TooltipHint>
-            ) : (
-              <ComposerSendSplitButton
-                primary={streamingSendPrimary}
-                options={streamingSendOptions}
-                disabled={composerDisabled}
-                loading={Boolean(submitLoading)}
-                onAction={handleSendAction}
-              />
-            )
-          ) : !isLoading || sendTarget === 'thread' ? (
-            <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0 rounded-lg"
-              disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
-              aria-label="Send message"
-              onClick={() => {
-                const el = editableRef.current
-                const chips = el ? getChipFiles(el) : []
-                const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-                const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
-                clearSubmittedAttachments()
-                onSubmit(chips, submittedAttachments, nextSegments)
-                resetComposer()
-              }}
-            >
-              {submitLoading
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <ArrowUp className="h-4 w-4" />}
-            </Button>
-            </TooltipHint>
-          ) : (
-            <TooltipHint side="bottom" content="Sending">
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0 rounded-lg"
-              disabled aria-label="Sending"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </Button>
-            </TooltipHint>
-          )}
         </div>
-      </div>
+      )}
     </div>
   )
 })

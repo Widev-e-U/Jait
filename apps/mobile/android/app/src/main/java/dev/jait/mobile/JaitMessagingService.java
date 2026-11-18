@@ -62,12 +62,23 @@ public class JaitMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage message) {
         String type = message.getData().get("type");
+        if ("chat.notification-read".equals(type)) {
+            ChatNotifications.clear(this, message.getData().get("replaceId"), message.getData().get("id"));
+            return;
+        }
         if ("chat.completed".equals(type)) {
             String id = message.getData().get("id");
-            if (id != null) ChatNotifications.show(this, id,
-                message.getData().get("title"), message.getData().get("body"),
-                message.getData().get("replaceId"), message.getData().get("link"),
-                NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true);
+            if (id != null) {
+                String replaceId = message.getData().get("replaceId");
+                ChatNotifications.show(this, id,
+                    message.getData().get("title"), message.getData().get("body"),
+                    replaceId, message.getData().get("link"),
+                    NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true);
+                if ("true".equals(message.getData().get("imageAvailable"))) {
+                    NotificationImage.fetchNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
+                        id, message.getData().get("roomId"), message.getData().get("eventId"));
+                }
+            }
             return;
         }
         if ("alarm.schedule".equals(type)) {

@@ -1,3 +1,4 @@
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useState } from 'react'
 import {
   Search,
@@ -49,7 +50,7 @@ function InstalledPlugins({ token }: { token: string | null }) {
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useUrlSearchState('settings', 'extensionsQ')
   const [busy, setBusy] = useState<string | null>(null)
   const headers = useHeaders(token)
 

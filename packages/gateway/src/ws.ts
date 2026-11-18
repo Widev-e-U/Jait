@@ -1,5 +1,8 @@
 import { WebSocketServer, type WebSocket } from "ws";
-import type { WsEvent } from "@jait/shared";
+import { MessengerBridge } from "./services/messenger-bridge.js";
+import { ChatNotificationsService } from "./services/chat-notifications.js";
+import type { MessengerToolResponse } from "@jait/shared";
+import type { WsEvent, ChatNotificationState, NotificationContext, SessionWait } from "@jait/shared";
 import type { UICommandPayload } from "@jait/shared";
 import type {
   ScreenShareOffer,
@@ -94,8 +97,8 @@ export function nodeCapabilityForTool(
   args: Record<string, unknown> = {},
 ): NodeCapability | undefined {
   if (tool === "computer.session") return args.action === "stop" ? undefined : "input";
-  if (tool === "computer.act") return "input";
   if (tool === "computer.observe") return "screen";
+  if (tool.startsWith("computer.")) return "input";
   if (/^(terminal|shell|command)\./.test(tool)) return "terminal";
   if (/^(file|fs|read|write|search)\./.test(tool)) return "filesystem";
   if (/^(browser|web)\./.test(tool)) return "browser";
@@ -121,6 +124,20 @@ export function resolveSessionScopedClientTarget(
 }
 
 export class WsControlPlane {
+  readonly messenger = new MessengerBridge();
+  private chatNotifications: ChatNotificationsService;
+  onChatNotificationRead?: (state: ChatNotificationState, userId: string) => void;
+
+  publishChatNotification(userId: string, notification: { id: string; title: string; body: string } & NotificationContext) {
+    if (!notification.sessionId) return;
+    const sessionId = notification.sessionId;
+    this.chatNotifications.set(userId, {
+      id: notification.id, sessionId, replaceId: notification.replaceId ?? notification.id, read: false,
+    });
+    this.broadcastToUser(userId, {
+      type: "notification", sessionId, timestamp: new Date().toISOString(), payload: notification,
+    });
+  }
   private wss: WebSocketServer | null = null;
   private clients = new Map<string, ConnectedClient>();
   private jwtSecret: Uint8Array;
@@ -198,6 +215,15 @@ export class WsControlPlane {
   }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[]; hasMore?: boolean };
   getPendingConsents?: () => Array<{ id: string; sessionId: string }>;
+  /** Pending `user.ask` questions, so a reconnecting client can badge chats that still need an answer. */
+  getPendingQuestions?: () => Array<{ id: string; sessionId: string }>;
+  /**
+   * Every outstanding "this chat is stopped, here is why" state, so a
+   * reconnecting client can restore reason-aware chat icons (question, consent,
+   * secret, browser takeover, interactive terminal, background command).
+   */
+  getSessionWaits?: () => SessionWait[];
+  getAgentControlState?: (userId: string) => import("./services/agent-control.js").AgentControlState;
   getStreamingSessionIds?: (userId: string) => string[];
   getSurfaceSnapshot?: (userId?: string | null) => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
@@ -205,6 +231,7 @@ export class WsControlPlane {
   constructor(private config: AppConfig, db?: JaitDB) {
     if (!config.jwtSecret.trim()) throw new Error("JWT secret is not configured");
     this.jwtSecret = new TextEncoder().encode(config.jwtSecret);
+    this.chatNotifications = new ChatNotificationsService(db);
     this.nodePermissions = new NodePermissionsService(db ?? null);
     this.nodeCredentials = new NodeCredentialsService(db ?? null);
     this.canAccessNode = (id, userId) => Boolean(userId && (id === "gateway"
@@ -311,6 +338,7 @@ export class WsControlPlane {
       });
 
       ws.on("close", () => {
+        this.messenger.unregister(clientId);
         this.rejectPendingProviderOpsForClient(clientId);
         this.dropRemoteBackgroundCommandsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
@@ -319,6 +347,7 @@ export class WsControlPlane {
       });
 
       ws.on("error", () => {
+        this.messenger.unregister(clientId);
         this.rejectPendingProviderOpsForClient(clientId);
         this.dropRemoteBackgroundCommandsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
@@ -340,6 +369,7 @@ export class WsControlPlane {
   }
 
   private async authenticateClient(client: ConnectedClient, token: string): Promise<boolean> {
+    this.messenger.unregister(client.id);
     try {
       if (token.startsWith("jait-node-")) {
         const paired = this.nodeCredentials.resolve(token);
@@ -435,6 +465,28 @@ export class WsControlPlane {
         }
         break;
       }
+      case "notification.read": {
+        const sessionId = msg.sessionId;
+        const id = (msg.payload as { id?: unknown } | null)?.id;
+        if (typeof sessionId !== "string" || !sessionId || sessionId.length > 256
+            || typeof id !== "string" || !id || id.length > 512) {
+          this.denyControl(client, "BAD_REQUEST");
+          return;
+        }
+        if (!client.userId || !this.canAccessSession?.(sessionId, client.userId)) {
+          this.denyControl(client, "SESSION_FORBIDDEN");
+          return;
+        }
+        const entry = this.chatNotifications.get(sessionId);
+        if (!entry || entry.userId !== client.userId || entry.state.id !== id || entry.state.read) return;
+        entry.state = { ...entry.state, read: true };
+        this.chatNotifications.set(client.userId, entry.state);
+        this.broadcastToUser(client.userId, {
+          type: "notification.cleared", sessionId, timestamp: new Date().toISOString(), payload: entry.state,
+        });
+        this.onChatNotificationRead?.(entry.state, client.userId);
+        return;
+      }
       case "subscribe": {
         if (!client.authenticated) {
           this.send(client.ws, {
@@ -485,6 +537,15 @@ export class WsControlPlane {
           return;
         }
         const resource = (msg.payload as { resource?: string } | undefined)?.resource;
+        if (resource === "root:/chat-notifications") {
+          const notifications = this.chatNotifications.list(client.userId!)
+            .filter((state) => this.canAccessSession?.(state.sessionId, client.userId));
+          this.send(client.ws, {
+            type: "notification.snapshot", sessionId: "", timestamp: new Date().toISOString(),
+            payload: { notifications },
+          });
+          return;
+        }
         if (resource === "root:/nodes") {
           this.sendNodeRegistrySnapshot(client.ws);
           return;
@@ -517,6 +578,38 @@ export class WsControlPlane {
             sessionId: "",
             timestamp: new Date().toISOString(),
             payload: { requests },
+          });
+          return;
+        }
+        if (resource === "root:/agent-control") {
+          if (!client.userId || !this.getAgentControlState) return;
+          this.send(client.ws, {
+            type: "agent.halted", sessionId: "", timestamp: new Date().toISOString(),
+            payload: this.getAgentControlState(client.userId),
+          });
+          return;
+        }
+        if (resource === "root:/pending-questions") {
+          const requests = (this.getPendingQuestions?.() ?? []).filter((request) =>
+            !this.canAccessSession || this.canAccessSession(request.sessionId, client.userId),
+          );
+          this.send(client.ws, {
+            type: "user-question.pending-snapshot",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { requests },
+          });
+          return;
+        }
+        if (resource === "root:/session-wait") {
+          const waits = (this.getSessionWaits?.() ?? []).filter((wait) =>
+            !this.canAccessSession || this.canAccessSession(wait.sessionId, client.userId),
+          );
+          this.send(client.ws, {
+            type: "session-wait.snapshot",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { waits },
           });
           return;
         }
@@ -857,66 +950,72 @@ export class WsControlPlane {
       case "screen-share:offer": {
         const offer = msg.payload as ScreenShareOffer | undefined;
         if (offer) {
-          console.log(`[screen-share] WS offer from client.device=${client.deviceId} host=${offer.hostDeviceId}`);
-          // Offer is sent BY the host; relay to all viewers (everyone except the host)
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            console.log(`[screen-share]   → relaying offer to device=${c.deviceId}`);
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          console.log(`[screen-share] WS offer from client.device=${client.deviceId} host=${offer.hostDeviceId} session=${offer.sessionId?.slice(0, 8)}`);
+          // Offer is sent BY the host; relay only to this session's viewers.
+          this.relayShareSignal(offer.sessionId, client, msg);
         }
         break;
       }
       case "screen-share:answer": {
         const answer = msg.payload as ScreenShareAnswer | undefined;
         if (answer) {
-          console.log(`[screen-share] WS answer from client.device=${client.deviceId} viewer=${answer.viewerDeviceId}`);
-          // Answer is sent BY the viewer; relay to all non-sender (host)
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            console.log(`[screen-share]   → relaying answer to device=${c.deviceId}`);
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          console.log(`[screen-share] WS answer from client.device=${client.deviceId} viewer=${answer.viewerDeviceId} session=${answer.sessionId?.slice(0, 8)}`);
+          // Answer is sent BY the viewer; relay only to this session's host.
+          this.relayShareSignal(answer.sessionId, client, msg);
         }
         break;
       }
       case "screen-share:ice-candidate": {
         const ice = msg.payload as ScreenShareIceCandidate | undefined;
         if (ice) {
-          // Relay ICE to all non-sender
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          // ICE is relayed only within the session: connection details never
+          // reach clients that are not part of this share.
+          this.relayShareSignal(ice.sessionId, client, msg);
         }
         break;
       }
       case "screen-share:start-request": {
-        const startReq = msg.payload as { hostDeviceId: string; sessionId?: string; viewerDeviceIds?: string[] } | undefined;
-        if (startReq) {
-          console.log(`[screen-share] WS start-request relay from device=${client.deviceId} → host=${startReq.hostDeviceId}`);
-          const denied = this.permissionDeniedError(startReq.hostDeviceId, "screen");
-          if (denied) {
-            this.send(client.ws, {
-              type: "screen-share:start-error" as WsEvent["type"],
-              sessionId: startReq.sessionId ?? "",
-              timestamp: new Date().toISOString(),
-              payload: { error: denied.message, hostDeviceId: startReq.hostDeviceId },
-            });
-            break;
-          }
-          this.relayToDevice(startReq.hostDeviceId, client.deviceId, msg);
+        const startReq = msg.payload as {
+          hostDeviceId: string;
+          sessionId?: string;
+          viewerDeviceIds?: string[];
+          chatId?: string | null;
+          nodeId?: string | null;
+          initiatedBy?: "user" | "agent";
+          requireConsent?: boolean;
+          reason?: string | null;
+        } | undefined;
+        const share = startReq?.sessionId ? this.screenShareSessionLookup?.(startReq.sessionId) : null;
+        // Legacy client requests may only refer to an existing share and its
+        // own viewer seat. Never relay caller-supplied consent or chat fields.
+        if (!share || share.status !== "sharing" || !client.deviceId || !this.canAccessShare(client, share)
+          || startReq?.hostDeviceId !== share.hostDeviceId
+          || !share.viewers.some(viewer => viewer.deviceId === client.deviceId)) break;
+        const denied = this.permissionDeniedError(share.hostDeviceId, "screen");
+        if (denied) {
+          this.send(client.ws, {
+            type: "screen-share:start-error" as WsEvent["type"],
+            sessionId: share.id,
+            timestamp: new Date().toISOString(),
+            payload: { error: denied.message, hostDeviceId: share.hostDeviceId },
+          });
+          break;
         }
+        this.relayToDevice(share.hostDeviceId, client.deviceId, share, {
+          type: "screen-share:start-request",
+          payload: {
+            sessionId: share.id, hostDeviceId: share.hostDeviceId, viewerDeviceIds: [client.deviceId],
+            chatId: share.chatId, nodeId: share.nodeId, initiatedBy: share.initiatedBy,
+            requireConsent: Boolean(share.chatId) || share.initiatedBy === "agent" || share.pendingApproval === true,
+            reason: share.reason,
+          },
+        });
         break;
       }
       case "screen-share:stop-request": {
-        if (this.onScreenShareStop) {
-          const req = msg.payload as { sessionId: string } | undefined;
-          if (req) this.onScreenShareStop(req.sessionId);
-        }
+        const req = msg.payload as { sessionId?: string } | undefined;
+        const share = req?.sessionId ? this.screenShareSessionLookup?.(req.sessionId) : null;
+        if (share && client.deviceId === share.hostDeviceId && this.canAccessShare(client, share)) this.onScreenShareStop?.(share.id);
         break;
       }
       case "ui.state": {
@@ -937,6 +1036,26 @@ export class WsControlPlane {
             timestamp: new Date().toISOString(),
             payload: { message: "UI state target does not match the subscribed session", code: "SESSION_SCOPE_MISMATCH" },
           });
+        }
+        break;
+      }
+      case "messenger.register": {
+        if (!client.userId) break;
+        if ((msg.payload as { enabled?: unknown })?.enabled === true) {
+          this.messenger.register(client.id, {
+            userId: client.userId,
+            active: () => this.hasAuthority(client) && client.ws.readyState === 1,
+            send: request => this.send(client.ws, {
+              type: "messenger.request", sessionId: "", timestamp: new Date().toISOString(), payload: request,
+            }),
+          });
+        } else this.messenger.unregister(client.id);
+        break;
+      }
+      case "messenger.result": {
+        const payload = msg.payload as { requestId?: string; result?: MessengerToolResponse } | undefined;
+        if (client.userId && typeof payload?.requestId === "string" && payload.result) {
+          this.messenger.complete(client.id, client.userId, payload.requestId, payload.result);
         }
         break;
       }
@@ -1255,7 +1374,7 @@ export class WsControlPlane {
    */
   broadcastToUser(userId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
-      if (this.hasAuthority(client) && client.userId === userId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && !client.pairedNodeId && client.userId === userId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
     }
@@ -1419,6 +1538,13 @@ export class WsControlPlane {
   onScreenShareStart?: (hostDeviceId: string, viewerDeviceIds?: string[]) => void;
   /** Callback when a screen-share stop is requested via WS */
   onScreenShareStop?: (sessionId: string) => void;
+  /** Called after a node's owning connection has been removed. */
+  onNodeDisconnected?: (nodeId: string) => void;
+  /**
+   * Resolves a share session so signaling can be delivered to its members
+   * only. Wired to the screen-share service at startup.
+   */
+  screenShareSessionLookup?: (sessionId: string) => ScreenShareSessionState | null;
   /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
   onRemoteProviderEvent?: (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void;
   /** Callback when a remote node emits interactive terminal output. */
@@ -1467,17 +1593,22 @@ export class WsControlPlane {
 
   // ── Screen sharing helpers ────────────────────────────────────────
 
+  private canAccessShare(client: ConnectedClient, share: ScreenShareSessionState): boolean {
+    return this.hasAuthority(client) && (!share.chatId || this.canAccessSession?.(share.chatId, client.userId) === true);
+  }
+
   /** Relay a signaling message to a specific device ID */
   private relayToDevice(
     targetDeviceId: string,
     fromDeviceId: string | null,
+    share: ScreenShareSessionState,
     msg: { type: string; payload?: unknown },
   ) {
     let sent = false;
     for (const client of this.clients.values()) {
       if (client.deviceId === fromDeviceId) continue;
       if (client.ws.readyState !== 1) continue;
-      if (client.deviceId !== targetDeviceId) continue;
+      if (client.deviceId !== targetDeviceId || !this.canAccessShare(client, share)) continue;
       console.log(`[screen-share] relayToDevice: ${msg.type} from=${fromDeviceId} → ${targetDeviceId}`);
       this.send(client.ws, {
         type: msg.type as WsEvent["type"],
@@ -1493,14 +1624,70 @@ export class WsControlPlane {
     }
   }
 
-  /** Broadcast a screen-share state update to all connected clients */
+  /** Deliver chat-owned share state only to users who can access that chat. */
   broadcastScreenShareState(state: ScreenShareSessionState) {
-    this.broadcastAll({
-      type: "screen-share:state-update" as WsEvent["type"],
-      sessionId: "",
-      timestamp: new Date().toISOString(),
-      payload: state,
-    });
+    for (const client of this.clients.values()) {
+      if (!this.canAccessShare(client, state) || client.ws.readyState !== 1) continue;
+      this.send(client.ws, {
+        type: "screen-share:state-update" as WsEvent["type"],
+        sessionId: "", timestamp: new Date().toISOString(), payload: state,
+      });
+    }
+  }
+
+  /** Tell authorized surfaces who is driving the shared screen. */
+  broadcastScreenShareControlHandoff(sessionId: string, controlOwner: "user" | "agent") {
+    const share = this.screenShareSessionLookup?.(sessionId);
+    if (!share) return;
+    for (const client of this.clients.values()) {
+      if (!this.canAccessShare(client, share) || client.ws.readyState !== 1) continue;
+      this.send(client.ws, {
+        type: "screen-share:control-handoff" as WsEvent["type"],
+        sessionId: "", timestamp: new Date().toISOString(), payload: { sessionId, controlOwner },
+      });
+    }
+  }
+
+  /** Relay SDP/ICE only between approved, active participants of this share. */
+  private relayShareSignal(sessionId: string | null | undefined, sender: ConnectedClient, msg: { type: string; payload?: unknown }) {
+    const session = sessionId ? this.screenShareSessionLookup?.(sessionId) : null;
+    const fromDeviceId = sender.deviceId;
+    if (!session || session.status !== "sharing" || session.pendingApproval || !fromDeviceId || !this.canAccessShare(sender, session)) return;
+    const viewers = new Set(session.viewers.map((viewer) => viewer.deviceId));
+    const isHost = fromDeviceId === session.hostDeviceId;
+    if (!isHost && !viewers.has(fromDeviceId)) return;
+    const payload = msg.payload as Record<string, unknown> | undefined;
+    if (msg.type === "screen-share:offer" && (!isHost || payload?.hostDeviceId !== fromDeviceId)) return;
+    if (msg.type === "screen-share:answer" && (isHost || payload?.viewerDeviceId !== fromDeviceId)) return;
+    if (msg.type === "screen-share:ice-candidate" && payload?.fromDeviceId !== fromDeviceId) return;
+
+    // Each WebRTC peer has its own SDP and ICE. An older host may omit a
+    // destination for a single viewer; a multi-viewer share must name it.
+    const target = payload?.toDeviceId;
+    if (target !== undefined && (typeof target !== "string" || !target)) return;
+    let recipient: string;
+    if (isHost) {
+      if (typeof target === "string") {
+        if (!viewers.has(target)) return;
+        recipient = target;
+      } else {
+        if (viewers.size !== 1) return;
+        recipient = [...viewers][0]!;
+      }
+    } else {
+      if (target !== undefined && target !== session.hostDeviceId) return;
+      recipient = session.hostDeviceId;
+    }
+
+    for (const client of this.clients.values()) {
+      if (client.deviceId !== recipient || client.ws.readyState !== 1 || !this.canAccessShare(client, session)) continue;
+      this.send(client.ws, {
+        type: msg.type as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: msg.payload,
+      });
+    }
   }
 
   /**
@@ -1508,21 +1695,33 @@ export class WsControlPlane {
    * Used by tools/routes when the session is created server-side and the host
    * device needs to be told to begin capture (and viewers to prepare).
    */
-  sendScreenShareStartRequest(sessionId: string, hostDeviceId: string, viewerDeviceIds?: string[]) {
+  sendScreenShareStartRequest(
+    sessionId: string,
+    hostDeviceId: string,
+    viewerDeviceIds?: string[],
+    extras?: {
+      chatId?: string | null;
+      nodeId?: string | null;
+      initiatedBy?: "user" | "agent";
+      requireConsent?: boolean;
+      reason?: string | null;
+    },
+  ) {
     const targets = new Set<string>([hostDeviceId, ...(viewerDeviceIds ?? [])]);
     const allDeviceIds = [...this.clients.values()].map(c => c.deviceId).filter(Boolean);
-    console.log(`[screen-share] sendScreenShareStartRequest: session=${sessionId.slice(0, 8)} host=${hostDeviceId} viewers=[${(viewerDeviceIds ?? []).join(',')}] connected=[${allDeviceIds.join(',')}]`);
+    console.log(`[screen-share] sendScreenShareStartRequest: session=${sessionId.slice(0, 8)} host=${hostDeviceId} viewers=[${(viewerDeviceIds ?? []).join(',')}] connected=[${allDeviceIds.join(',')}] chat=${extras?.chatId ?? '-'} initiatedBy=${extras?.initiatedBy ?? 'user'}`);
     let sentCount = 0;
     for (const client of this.clients.values()) {
-      if (client.ws.readyState !== 1) continue;
+      if (client.ws.readyState !== 1 || !this.hasAuthority(client)) continue;
       if (!client.deviceId || !targets.has(client.deviceId)) continue;
+      if (extras?.chatId && this.canAccessSession?.(extras.chatId, client.userId) !== true) continue;
       console.log(`[screen-share]   → start-request to device=${client.deviceId}`);
       sentCount++;
       this.send(client.ws, {
         type: "screen-share:start-request" as WsEvent["type"],
         sessionId: "",
         timestamp: new Date().toISOString(),
-        payload: { sessionId, hostDeviceId, viewerDeviceIds },
+        payload: { sessionId, hostDeviceId, viewerDeviceIds, ...extras },
       });
     }
     console.log(`[screen-share]   sent to ${sentCount} client(s)`);
@@ -2053,6 +2252,7 @@ export class WsControlPlane {
   private broadcastDisconnectedNodes(clientId: string) {
     const removed = this.nodeStates.removeNodesByClientId(clientId);
     for (const node of removed) {
+      this.onNodeDisconnected?.(node.id);
       this.broadcastAll({
         type: "node.disconnected",
         sessionId: "",
@@ -2063,6 +2263,7 @@ export class WsControlPlane {
   }
 
   stop() {
+    this.messenger.stop();
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

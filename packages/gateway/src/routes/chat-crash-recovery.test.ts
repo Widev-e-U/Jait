@@ -108,6 +108,8 @@ describe("gateway crash chat recovery", () => {
       projectPath: "/workspace/project",
     });
     sessionState.set(session.id, {
+      "chat.provider": "codex",
+      "chat.cliModels": { codex: "gpt-5-codex" },
       "chat.activeTurn": {
         turnId: "turn-before-restart",
         startedAt: "2026-09-10T06:35:00.000Z",
@@ -149,7 +151,7 @@ describe("gateway crash chat recovery", () => {
     }
   });
 
-  it("records the interruption and automatically continues a durably marked turn", async () => {
+  it("stops and asks instead of choosing a provider when none was recorded", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
@@ -159,6 +161,7 @@ describe("gateway crash chat recovery", () => {
     const user = userService.createUser("crash-recovery-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Interrupted work" });
 
+    // The account default must never stand in for a user decision.
     userService.updateSettings(user.id, {
       jaitBackend: "openrouter",
       apiKeys: { OPENROUTER_API_KEY: "test-key" },
@@ -185,6 +188,88 @@ describe("gateway crash chat recovery", () => {
         startedAt: "2026-08-31T08:19:00.000Z",
         mode: "agent",
         responseStyle: "normal",
+        recoveryAttempts: 0,
+      },
+    });
+
+    const fetchSpy = vi.fn(async () => recoveredResponse());
+    globalThis.fetch = fetchSpy as typeof fetch;
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+      sessionState,
+    });
+
+    try {
+      const recover = (app as typeof app & {
+        recoverInterruptedChatTurns: () => Promise<number>;
+      }).recoverInterruptedChatTurns;
+      await expect(recover()).resolves.toBe(1);
+
+      expect(sessionState.get(session.id, ["chat.activeTurn"])["chat.activeTurn"]).toBeUndefined();
+      const persisted = db
+        .select()
+        .from(messages)
+        .where(eq(messages.sessionId, session.id))
+        .orderBy(messages.createdAt, messages.id)
+        .all();
+
+      const interruption = persisted.find((row) => row.id === "gateway-interruption-turn-before-oom");
+      expect(interruption?.content).toContain("Choose a provider and model");
+      expect(interruption?.content).not.toContain("automatically continuing");
+      expect(persisted.some((row) =>
+        row.role === "assistant" && row.content.includes("Recovered and finished.")
+      )).toBe(false);
+      // No provider request may be issued on the user's behalf.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(persisted.filter((row) => row.id === "gateway-interruption-turn-before-oom")).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("records the interruption and continues a durably marked turn on the recorded selection", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const user = userService.createUser("crash-recovery-selected-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Interrupted selected work" });
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: { OPENROUTER_API_KEY: "test-key" },
+    });
+    db.insert(messages).values([
+      {
+        id: "original-user",
+        sessionId: session.id,
+        role: "user",
+        content: "Implement the recovery feature",
+        createdAt: "2026-08-31T08:19:00.000Z",
+      },
+      {
+        id: "partial-assistant",
+        sessionId: session.id,
+        role: "assistant",
+        content: "I have started the implementation.",
+        createdAt: "2026-08-31T08:19:01.000Z",
+      },
+    ]).run();
+    sessionState.set(session.id, {
+      "chat.provider": "openrouter",
+      "chat.cliModels": { openrouter: "anthropic/claude-sonnet-4" },
+      "chat.activeTurn": {
+        turnId: "turn-before-oom",
+        startedAt: "2026-08-31T08:19:00.000Z",
+        mode: "agent",
+        responseStyle: "normal",
+        provider: "openrouter",
+        model: "anthropic/claude-sonnet-4",
         recoveryAttempts: 0,
       },
     });

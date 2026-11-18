@@ -60,7 +60,8 @@ export class ComputerControlSessionService {
     return session;
   }
 
-  private findByNode(nodeId: string): ComputerControlSession | undefined {
+  findByNode(nodeId: string): ComputerControlSession | undefined {
+    this.removeExpired();
     return [...this.sessions.values()].find((session) => session.nodeId === nodeId);
   }
 

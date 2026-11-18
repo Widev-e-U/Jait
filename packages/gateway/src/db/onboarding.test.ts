@@ -12,7 +12,7 @@ import { migrations } from "./migrations.js";
 import * as schema from "./schema.js";
 import type { SqliteDatabase } from "./sqlite-shim.js";
 import type { JaitDB } from "./connection.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNotNull } from "drizzle-orm";
 import { SessionSearchService } from "../services/session-search.js";
 
 let sqlite: SqliteDatabase;
@@ -435,7 +435,7 @@ describe("migration runner reliability", () => {
       expect(() => migrateDatabase(sqlite)).toThrow(
         /Database migration 10000 \(intentional_bad_ddl\) failed:.*messages/,
       );
-      expect(sqlite.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(failingMigration.id)).toBeUndefined();
+      expect(sqlite.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(failingMigration.id) ?? undefined).toBeUndefined();
     } finally {
       migrations.pop();
     }
@@ -520,7 +520,7 @@ describe("upgrade scenario — legacy DB without kind column", () => {
 
     // This would have crashed in v0.1.207
     expect(() => {
-      db.select().from(schema.agentThreads).where(eq(schema.agentThreads.status, "running")).all();
+      db.select().from(schema.agentThreads).where(and(eq(schema.agentThreads.status, "running"), isNotNull(schema.agentThreads.kind))).all();
     }).toThrow(); // Should throw because kind column is missing
 
     // Run verifySchema to repair
@@ -530,7 +530,7 @@ describe("upgrade scenario — legacy DB without kind column", () => {
     const rows = db
       .select()
       .from(schema.agentThreads)
-      .where(eq(schema.agentThreads.status, "running"))
+      .where(and(eq(schema.agentThreads.status, "running"), isNotNull(schema.agentThreads.kind)))
       .all();
 
     expect(rows).toHaveLength(1);

@@ -1,18 +1,54 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
-import { buildToolSchemas } from "./agent-loop.js";
+import { buildToolSchemas, buildTieredToolSchemas } from "./agent-loop.js";
 import { createToolRegistry } from "./index.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 
 describe("createPreviewOpenTool", () => {
-  it("exposes preview.open, not preview.start, through the schema path", () => {
+  it("exposes browser tools while retaining legacy execution without duplicate schemas", () => {
     const tools = createToolRegistry(new SurfaceRegistry());
     const schemas = buildToolSchemas(tools);
     const names = new Set(schemas.map((schema) => schema.function.name));
 
-    expect(names.has("preview_open")).toBe(true);
+    expect(names.has("browser_open")).toBe(true);
+    expect(names.has("browser_inspect")).toBe(false);
+    expect(tools.get("browser.inspect")).toBeDefined();
+    expect(names.has("browser_status")).toBe(false);
+    expect(tools.get("browser.status")).toBeDefined();
+    expect(tools.rankSearch("browser preview session startup", { limit: 1 })[0]?.tool.name).toBe("browser.open");
+    expect(names.has("preview_open")).toBe(false);
+    expect(tools.get("preview.open")).toBeDefined();
+    expect(tools.list().some(tool => tool.name.startsWith("preview."))).toBe(false);
     expect(names.has("preview_start")).toBe(false);
+    const resumed = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["preview.open"] });
+    expect(resumed.some(schema => schema.function.name === "browser_open")).toBe(true);
+    expect(resumed.some(schema => schema.function.name === "preview_open")).toBe(false);
+    expect(tools.isExecutable("browser.open", new Set(["preview.open"]))).toBe(false);
+    expect(tools.isExecutable("preview.open", new Set(["browser.open"]))).toBe(false);
+    expect(tools.isExecutable("browser.open", new Set(["browser.inspect"]))).toBe(false);
+    expect(tools.isExecutable("browser.inspect", new Set(["browser.open"]))).toBe(false);
+    const inspected = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["browser.inspect"] });
+    expect(inspected.some(schema => schema.function.name === "browser_open")).toBe(true);
+    expect(inspected.some(schema => schema.function.name === "browser_inspect")).toBe(false);
+  });
+
+  it("validates supplied URLs before starting the canonical browser tool", async () => {
+    const registry = new SurfaceRegistry();
+    const surface = { id: "browser-owned", type: "browser", state: "running", sessionId: "owned",
+      getLiveViewInfo: () => ({ novncUrl: "live" }),
+      navigate: vi.fn().mockResolvedValue({ url: "https://example.com/path", title: "Example", text: "Loaded", elements: [] }) };
+    vi.spyOn(registry, "getSurface").mockReturnValue(undefined);
+    const start = vi.spyOn(registry, "startSurface").mockResolvedValue(surface as any);
+    const tools = createToolRegistry(registry);
+    const context: ToolContext = { sessionId: "owned", userId: "owner", actionId: "action", projectRoot: "/project", requestedBy: "assistant" };
+    expect(tools.get("browser.open")?.parameters.required ?? []).not.toContain("url");
+    expect((await tools.execute("browser.open", { url: "about:blank" }, context)).ok).toBe(false);
+    expect(start).not.toHaveBeenCalled();
+    expect((await tools.execute("browser.open", { url: "https://example.com/path" }, context)).ok).toBe(true);
+    expect(start).toHaveBeenCalledWith("browser", "browser-owned", { sessionId: "owned", projectRoot: "/project", userId: "owner", requireLiveView: true });
+    expect(surface.navigate).toHaveBeenCalledWith("https://example.com/path", undefined);
+    expect((await tools.execute("browser.open", { url: "https://example.com/path" }, { ...context, sessionId: "" })).ok).toBe(false);
   });
 
   it("starts a managed preview and broadcasts panel state", async () => {

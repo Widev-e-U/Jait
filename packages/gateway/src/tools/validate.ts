@@ -4,11 +4,10 @@
  * Handles only the subset of JSON Schema used by ToolParametersSchema:
  *   - `type: "object"` with `properties` and `required`
  *   - Property types: string, number, boolean, array, object
- *   - `enum` constraints
+ *   - `enum`, string/array bounds, and string patterns
+ *   - `allOf` conditional `if`/`then` action requirements
  *
- * This is intentionally minimal — ~60 lines vs Ajv's 124 KB.
- * For our use-case (validating LLM-generated tool arguments), it's
- * 5-10× faster than Ajv because there's no schema compilation step.
+ * Keep validation aligned with the schema advertised to the model.
  */
 
 import type { ToolParametersSchema } from "./contracts.js";
@@ -94,6 +93,21 @@ function validateSchemaValue(
     );
   }
 
+  if (typeof current === "string") {
+    if (schema.minLength !== undefined && current.length < schema.minLength)
+      errors.push(`Property '${formatPath(path)}' must contain at least ${schema.minLength} characters`);
+    if (schema.maxLength !== undefined && current.length > schema.maxLength)
+      errors.push(`Property '${formatPath(path)}' must contain at most ${schema.maxLength} characters`);
+    if (schema.pattern && !new RegExp(schema.pattern).test(current))
+      errors.push(`Property '${formatPath(path)}' must match pattern ${schema.pattern}`);
+  }
+  if (Array.isArray(current)) {
+    if (schema.minItems !== undefined && current.length < schema.minItems)
+      errors.push(`Property '${formatPath(path)}' must contain at least ${schema.minItems} items`);
+    if (schema.maxItems !== undefined && current.length > schema.maxItems)
+      errors.push(`Property '${formatPath(path)}' must contain at most ${schema.maxItems} items`);
+  }
+
   const isObject = TYPE_CHECKS.object;
   if (expectedType === "object" && schema.properties && isObject?.(current)) {
     const obj = current as Record<string, unknown>;
@@ -144,7 +158,9 @@ export function validateToolInput(
   // Required fields
   if (schema.required) {
     for (const key of schema.required) {
-      if (!(key in obj) || obj[key] === undefined) {
+      const type = schema.properties[key]?.type;
+      const nullable = Array.isArray(type) ? type.includes("null") : type === "null";
+      if (!(key in obj) || obj[key] === undefined || (obj[key] === null && !nullable)) {
         errors.push(`Missing required property: ${key}`);
       }
     }
@@ -157,5 +173,13 @@ export function validateToolInput(
     obj[key] = validateSchemaValue(propSchema, value, `$.${key}`, errors);
   }
 
+  // The same constraints are advertised to providers and enforced before dispatch.
+  for (const condition of schema.allOf ?? []) {
+    const matches = validateToolInput({ type: "object", ...condition.if }, { ...obj });
+    if (matches.valid) {
+      const result = validateToolInput({ type: "object", properties: {}, ...condition.then }, obj);
+      errors.push(...result.errors);
+    }
+  }
   return { valid: errors.length === 0, errors };
 }

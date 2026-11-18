@@ -1,0 +1,53 @@
+{
+  "review_scope": "parity-callbacks bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/evaluation/agent-eval.test.ts:228:3",
+      "status": "verified",
+      "parity_review": "Reviewed handles actual HTTP SSE and timeout cancellation without any model calls. Original bodies, helper/default callback bodies, setup, imports, lifecycle and all assertion operands match the bounded completion audit with enclosing function binding checks. Six completion structural controls pass. Test-only function-entry observation records an instrumentation plan for every assertion-containing callback block and places an entry recorder before its statements, without changing its parameters or return behavior. An optional zero-count site requires a matching callback plan, zero entries for that callback, and positive execution evidence from another instrumented block in the same case. The WebSocket callbacks are uninvoked by these HTTP-only cases; the evaluator case supplies real fetch instead of invoking its default fixture callback. Six controls reject missing plans, entered callbacks, wrong cases/slots and missing execution evidence. This preserves unexercised optional helper assertions without claiming callback coverage. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-callbacks/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_agent_eval_test_ts_228_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/browser-devtools.test.ts:46:3",
+      "status": "verified",
+      "parity_review": "Reviewed enforces authentication, ownership and browser takeover. Original bodies, helper/default callback bodies, setup, imports, lifecycle and all assertion operands match the bounded completion audit with enclosing function binding checks. Six completion structural controls pass. Test-only function-entry observation records an instrumentation plan for every assertion-containing callback block and places an entry recorder before its statements, without changing its parameters or return behavior. An optional zero-count site requires a matching callback plan, zero entries for that callback, and positive execution evidence from another instrumented block in the same case. The WebSocket callbacks are uninvoked by these HTTP-only cases; the evaluator case supplies real fetch instead of invoking its default fixture callback. Six controls reject missing plans, entered callbacks, wrong cases/slots and missing execution evidence. This preserves unexercised optional helper assertions without claiming callback coverage. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-callbacks/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_browser_devtools_test_ts_46_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/browser-devtools.test.ts:56:3",
+      "status": "verified",
+      "parity_review": "Reviewed serves bundled assets with a resource grant and rejects escape paths. Original bodies, helper/default callback bodies, setup, imports, lifecycle and all assertion operands match the bounded completion audit with enclosing function binding checks. Six completion structural controls pass. Test-only function-entry observation records an instrumentation plan for every assertion-containing callback block and places an entry recorder before its statements, without changing its parameters or return behavior. An optional zero-count site requires a matching callback plan, zero entries for that callback, and positive execution evidence from another instrumented block in the same case. The WebSocket callbacks are uninvoked by these HTTP-only cases; the evaluator case supplies real fetch instead of invoking its default fixture callback. Six controls reject missing plans, entered callbacks, wrong cases/slots and missing execution evidence. This preserves unexercised optional helper assertions without claiming callback coverage. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-callbacks/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_browser_devtools_test_ts_56_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/browser-devtools.test.ts:71:3",
+      "status": "verified",
+      "parity_review": "Reviewed only lets the owner release a grant. Original bodies, helper/default callback bodies, setup, imports, lifecycle and all assertion operands match the bounded completion audit with enclosing function binding checks. Six completion structural controls pass. Test-only function-entry observation records an instrumentation plan for every assertion-containing callback block and places an entry recorder before its statements, without changing its parameters or return behavior. An optional zero-count site requires a matching callback plan, zero entries for that callback, and positive execution evidence from another instrumented block in the same case. The WebSocket callbacks are uninvoked by these HTTP-only cases; the evaluator case supplies real fetch instead of invoking its default fixture callback. Six controls reject missing plans, entered callbacks, wrong cases/slots and missing execution evidence. This preserves unexercised optional helper assertions without claiming callback coverage. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-callbacks/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_browser_devtools_test_ts_71_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

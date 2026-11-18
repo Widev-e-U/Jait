@@ -1,0 +1,5951 @@
+{
+  "cases": [
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "list"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "list owner"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "chosen"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "get explicit"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": {
+            "roomId": "work-room",
+            "messageId": "parent"
+          }
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "get work"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "agentId": "agent"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "get create"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "missing room"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "",
+        "agentId": "agent"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "empty room does not fall through"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": null,
+        "agentId": "agent"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "null room falls through"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "agentId": "ignored"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": {
+            "roomId": "work-room"
+          }
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "work wins agent"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "chosen"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": {
+            "roomId": "ignored"
+          }
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "explicit wins work"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "roomId": "room",
+        "content": "Verify delivery",
+        "criteria": [
+          "a",
+          "b"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "goal"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "complete",
+        "roomId": "room",
+        "evidence": [
+          "independent review"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "complete"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "assignment",
+        "recipientIds": [
+          "agent"
+        ],
+        "targetSessionId": "thread",
+        "clientKey": "retry"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "chat relay overrides kind"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "recipientIds": []
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "chat passive recipients"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent default kind"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "discussion"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent discussion"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "assignment"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent assignment"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "question"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent question"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "review"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent review"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "result"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent result"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "verification"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent verification"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "blocked"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent blocked"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "relay"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "agent",
+            "agentId": "agent"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "agent relay"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": {
+            "roomId": "work-room",
+            "messageId": "parent"
+          }
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": {
+            "id": "thread"
+          }
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "parent work and thread"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": {}
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "work without parent"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "clientKey": ""
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "empty retry key retained"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "clientKey": null
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "null retry uses action"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "random retry",
+      "randomKey": true
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": null
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "null action random retry",
+      "randomKey": true
+    },
+    {
+      "context": {},
+      "input": {
+        "action": "bogus"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "authentication first"
+    },
+    {
+      "context": {
+        "userId": ""
+      },
+      "input": {
+        "action": "bogus"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "authentication first"
+    },
+    {
+      "context": {
+        "userId": null
+      },
+      "input": {
+        "action": "bogus"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "authentication first"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {},
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 31"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "bogus"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 32"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 33"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": " \n\t"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 34"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "roomId": "room",
+        "content": "goal",
+        "criteria": []
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 35"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "content": "goal",
+        "criteria": [
+          " "
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 36"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "content": "goal",
+        "criteria": [
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a",
+          "a"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 37"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "content": "goal",
+        "criteria": [
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 38"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "complete",
+        "evidence": []
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 39"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "recipientIds": [
+          7
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 40"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix",
+        "kind": "invalid"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 41"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": 42
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "validation 42"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "list"
+      },
+      "responses": {
+        "list": {
+          "error": "denied list"
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error list"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "list"
+      },
+      "responses": {
+        "list": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error list"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "error": "denied workForSession"
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error workForSession"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error workForSession"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "error": "denied ensureRoom"
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error ensureRoom"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error ensureRoom"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "error": "denied get"
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error get"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error get"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "room"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "error": "denied roomMembers"
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error roomMembers"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "room"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error roomMembers"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "room"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "error": "denied history"
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error history"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "get",
+        "roomId": "room"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error history"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "error": "denied deliveries"
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error deliveries"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error deliveries"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "error": "denied sender"
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error sender"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error sender"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "roomId": "room",
+        "content": "goal",
+        "criteria": [
+          "ok"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "error": "denied setGoal"
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error setGoal"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "goal",
+        "roomId": "room",
+        "content": "goal",
+        "criteria": [
+          "ok"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error setGoal"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "complete",
+        "roomId": "room",
+        "evidence": [
+          "proof"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "error": "denied completeGoal"
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error completeGoal"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "complete",
+        "roomId": "room",
+        "evidence": [
+          "proof"
+        ]
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error completeGoal"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "error": "denied threadById"
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error threadById"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        },
+        "postRouted": {
+          "value": {
+            "id": "posted"
+          }
+        }
+      },
+      "name": "error threadById"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "error": "denied postRouted"
+        }
+      },
+      "name": "error postRouted"
+    },
+    {
+      "context": {
+        "userId": "owner",
+        "sessionId": "session",
+        "actionId": "action-key"
+      },
+      "input": {
+        "action": "send",
+        "roomId": "room",
+        "content": "Apply the requested fix"
+      },
+      "responses": {
+        "list": {
+          "value": [
+            {
+              "id": "room"
+            }
+          ]
+        },
+        "workForSession": {
+          "value": null
+        },
+        "ensureRoom": {
+          "value": {
+            "id": "created-room"
+          }
+        },
+        "get": {
+          "value": {
+            "id": "canonical-room",
+            "name": "Operators",
+            "rootAgentId": "root-agent"
+          }
+        },
+        "roomMembers": {
+          "value": [
+            {
+              "id": "member"
+            }
+          ]
+        },
+        "history": {
+          "value": [
+            {
+              "id": "old-message"
+            }
+          ]
+        },
+        "deliveries": {
+          "value": [
+            {
+              "id": "yes",
+              "messageId": "posted"
+            },
+            {
+              "id": "no",
+              "messageId": "other"
+            }
+          ]
+        },
+        "sender": {
+          "value": {
+            "kind": "chat",
+            "sourceSessionId": "session"
+          }
+        },
+        "setGoal": {
+          "value": {
+            "id": "room",
+            "goal": "reviewed"
+          }
+        },
+        "completeGoal": {
+          "value": {
+            "id": "room",
+            "status": "complete"
+          }
+        },
+        "threadById": {
+          "value": null
+        },
+        "postRouted": {
+          "thrown": {
+            "untrusted": "failure"
+          }
+        }
+      },
+      "name": "error postRouted"
+    }
+  ]
+}

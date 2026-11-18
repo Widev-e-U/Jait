@@ -1,12 +1,17 @@
+import { compactProviderContext, type ProviderContextState } from "./context-control.js";
+import { parseAcpUsage } from "./usage.js";
+import { cliSessionIdle } from "./session-idle.js";
+import { stopSessionProcess } from "./session-process.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { hasOpenCodeGoCredential, setOpenCodeGoCredential } from "./opencode-credentials.js";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { Readable, Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -39,6 +44,7 @@ import type {
   CliProviderAdapter,
   McpServerRef,
   ProviderEvent,
+  ProviderTurnAttachment,
   ProviderAuthStatus,
   ProviderLoginResult,
   ProviderLogoutResult,
@@ -141,6 +147,13 @@ const CLAUDE_FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
   .map((reasoningEffort) => ({ reasoningEffort }));
 const CODEX_FALLBACK_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"]
   .map((reasoningEffort) => ({ reasoningEffort }));
+/**
+ * Claude Code's built-in shell tools. Disabled so every command goes through
+ * the visible jait.terminal MCP tool, matching Codex (which has no native
+ * shell once the ACP `terminal` capability is off).
+ */
+const CLAUDE_CODE_NATIVE_SHELL_TOOLS = ["Bash", "BashOutput", "KillShell", "KillBash", "PowerShell"];
+
 const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
   { id: "fable", name: "Fable", description: "Claude Fable alias for the top-tier Mythos-class model" },
@@ -250,12 +263,18 @@ interface PendingApproval {
 }
 
 interface AcpSessionState {
+  contextControl?: ProviderContextState;
   session: ProviderSession;
   child: ChildProcess;
   connection: ClientSideConnection;
   agent: Agent;
   client: JaitAcpClient;
   acpSessionId: string;
+  /** Provider failures may arrive as notifications before the prompt resolves. */
+  turnError?: string;
+  promptInFlight?: boolean;
+  turnInterrupted?: boolean;
+  pendingCompaction?: Promise<unknown>;
   approvals: Map<string, PendingApproval>;
   initialized: InitializeResponse;
   /**
@@ -348,6 +367,56 @@ class JaitAcpClient implements Client {
 
 const requireAcpAdapter = createRequire(import.meta.url);
 
+/**
+ * Absolute path to the Codex runtime that `codex-acp` drives.
+ *
+ * The adapter spawns `CODEX_PATH` when it is set and otherwise resolves
+ * `@openai/codex/bin/codex.js` relative to its own install location. A patched
+ * adapter copy has no nested `node_modules`, so that lookup fails, the adapter
+ * exits before the ACP handshake, and the SDK reports only the opaque
+ * "ACP connection closed". Resolving from the gateway keeps the runtime
+ * reachable no matter how the adapter was installed.
+ */
+function resolveCodexRuntime(): string | undefined {
+  try {
+    return requireAcpAdapter.resolve("@openai/codex/bin/codex.js");
+  } catch {
+    // Fall through to the package store scan below.
+  }
+  // Bun extracts every installed package into `node_modules/.bun` even when it
+  // does not link it at the top level, and deploy snapshots only carry the
+  // extracted copies. Walk up to the nearest store and take the newest match.
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 8; depth += 1) {
+    const store = join(dir, "node_modules", ".bun");
+    const found = findCodexInStore(store);
+    if (found) return found;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+function findCodexInStore(store: string): string | undefined {
+  if (!existsSync(store)) return undefined;
+  let entries: string[];
+  try {
+    entries = readdirSync(store);
+  } catch {
+    return undefined;
+  }
+  const candidates = entries
+    .filter((entry) => entry.startsWith("@openai+codex@"))
+    .sort()
+    .reverse();
+  for (const entry of candidates) {
+    const bin = join(store, entry, "node_modules", "@openai", "codex", "bin", "codex.js");
+    if (existsSync(bin)) return bin;
+  }
+  return undefined;
+}
+
 /** Built-in adapters are installed with the gateway, so a session never runs npm. */
 function resolveBundledAdapter(config: AcpProviderConfig, providerType: string): Pick<AcpProviderConfig, "command" | "args"> | null {
   const packageName = providerType === "codex"
@@ -359,7 +428,8 @@ function resolveBundledAdapter(config: AcpProviderConfig, providerType: string):
   const args = config.args ?? [];
   const packageSpec = args[0] === "-y" ? args[1] : args[0];
   if (packageSpec !== packageName && !packageSpec?.startsWith(`${packageName}@`)) return null;
-  const adapterEntry = requireAcpAdapter.resolve(`${packageName}/dist/index.js`);
+  // Newer adapters declare an `exports` map that hides dist/index.js, but package.json stays resolvable.
+  const adapterEntry = join(dirname(requireAcpAdapter.resolve(`${packageName}/package.json`)), "dist", "index.js");
   return { command: process.execPath, args: [adapterEntry, ...args.slice(args[0] === "-y" ? 2 : 1)] };
 }
 
@@ -377,10 +447,12 @@ export class AcpProvider implements CliProviderAdapter {
   private replayableEvents: Array<{ event: ProviderEvent; emittedAt: number }> = [];
   private authLoginProcess: ChildProcess | null = null;
   private cachedModels: ProviderModelInfo[] | null = null;
+  private preferLatestPackage = false;
   private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
   private authProbeInFlight: Promise<ProviderAuthStatus> | null = null;
   private activeLoginAuthProbeInFlight: Promise<ProviderAuthStatus> | null = null;
   private authenticatedHint: boolean | null = null;
+  private acpStartupError: string | undefined;
 
   constructor(config: AcpProviderConfig) {
     const providerType = config.providerType ?? config.id;
@@ -395,6 +467,10 @@ export class AcpProvider implements CliProviderAdapter {
     const env = providerType === "codex"
       ? {
           ...baseEnv,
+          // codex-acp otherwise drops session/new MCP servers whose names are
+          // already in saved config. A saved unbound Jait URL must never replace
+          // the originating chat's scoped URL (including account aliases).
+          DISABLE_MCP_CONFIG_FILTERING: "true",
           CODEX_CONFIG: mergeJaitCodexConfig(config.env?.["CODEX_CONFIG"] ?? process.env.CODEX_CONFIG),
         }
       : baseEnv;
@@ -435,7 +511,13 @@ export class AcpProvider implements CliProviderAdapter {
    * provider-configured value always wins.
    */
   private childEnv(...overrides: Array<NodeJS.ProcessEnv | undefined>): NodeJS.ProcessEnv {
-    return buildAcpChildEnv(this.config, process.env, ...overrides);
+    const env = buildAcpChildEnv(this.config, process.env, ...overrides);
+    // An explicit CODEX_PATH from the provider config always wins.
+    if (this.providerType === "codex" && !env["CODEX_PATH"]) {
+      const runtime = resolveCodexRuntime();
+      if (runtime) env["CODEX_PATH"] = runtime;
+    }
+    return env;
   }
 
   async checkAvailability(): Promise<boolean> {
@@ -464,14 +546,28 @@ export class AcpProvider implements CliProviderAdapter {
       }
     }
 
-    this.info.available = true;
-    this.info.unavailableReason = undefined;
+    this.info.available = !this.acpStartupError;
+    this.info.unavailableReason = this.acpStartupError;
     return true;
   }
 
   resetModels(): void {
     this.cachedModels = null;
     this.cachedAuthStatus = null;
+    // The agent adapter bundles the model catalogue. An unpinned `npx -y pkg`
+    // keeps reusing its cached copy, so a refresh must resolve `@latest`.
+    this.preferLatestPackage = true;
+  }
+
+  /** Spawn args, with an unpinned npx package bumped to `@latest` after a refresh. */
+  private spawnArgs(): string[] {
+    const args = this.config.args;
+    if (!this.preferLatestPackage || !/^npx(\.cmd)?$/.test(this.config.command)) {
+      return args;
+    }
+    const index = args.findIndex((arg) => /^(@[\w.-]+\/)?[\w.-]+$/.test(arg) && !arg.startsWith("-"));
+    if (index < 0) return args;
+    return args.map((arg, i) => (i === index ? `${arg}@latest` : arg));
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
@@ -533,9 +629,9 @@ export class AcpProvider implements CliProviderAdapter {
       // Fallbacks are keyed by provider *type*: `this.id` is the account id
       // ("claude-code-01J…") for per-account providers, which matched nothing
       // and left the picker empty whenever the agent advertised no models.
-      this.cachedModels = models.length > 0
-        ? models
-        : getAcpFallbackModels(this.providerType);
+      // Fallbacks are not cached, so the next refresh re-probes the agent.
+      if (models.length === 0) return getAcpFallbackModels(this.providerType);
+      this.cachedModels = models;
       return this.cachedModels;
     } catch (error) {
       const message = extractErrorMessage(error, "ACP model discovery failed");
@@ -548,10 +644,7 @@ export class AcpProvider implements CliProviderAdapter {
       // CLI's well-known models are a better answer than an empty picker.
       if (!isAuthenticationRequiredMessage(message)) {
         const fallbackModels = getAcpFallbackModels(this.providerType);
-        if (fallbackModels.length > 0) {
-          this.cachedModels = fallbackModels;
-          return this.cachedModels;
-        }
+        if (fallbackModels.length > 0) return fallbackModels;
       }
       throw error instanceof Error ? error : new Error(message);
     } finally {
@@ -611,7 +704,13 @@ export class AcpProvider implements CliProviderAdapter {
     }
 
     const providerCliAuthenticated = await this.getProviderCliAuthenticated();
-    const probe = await this.probeAcpAuth().catch(() => null);
+    this.acpStartupError = undefined;
+    const probe = await this.probeAcpAuth().catch((error) => {
+      this.acpStartupError = `Unable to start ${this.info.name}: ${extractErrorMessage(error, "ACP initialization failed")}`;
+      return null;
+    });
+    this.info.available = Boolean(probe);
+    this.info.unavailableReason = this.acpStartupError;
     const login = (probe?.authMethods.length ?? 0) > 0;
     const acpLogout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
     probe?.child.kill();
@@ -625,9 +724,9 @@ export class AcpProvider implements CliProviderAdapter {
       logout,
       deviceCode: false,
       authenticated,
-      detail: probe
+      detail: this.acpStartupError ?? (probe
         ? formatAcpAuthDetail(this.info.name, authenticated)
-        : formatCliAuthDetail(this.info.name, authenticated, logout),
+        : formatCliAuthDetail(this.info.name, authenticated, logout)),
     };
     this.cachedAuthStatus = { status: result, expiresAt: Date.now() + AUTH_STATUS_TTL_MS };
     return result;
@@ -871,11 +970,14 @@ export class AcpProvider implements CliProviderAdapter {
     }
   }
 
+  private readonly contextControls = new Map<string, ProviderContextState>();
+
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
     if (this.executionNodeId && this.executionNodeId !== "gateway") {
       throw new Error(`Provider account ${this.id} must run on device ${this.executionNodeId}`);
     }
     const sessionId = uuidv7();
+    this.contextControls.set(sessionId, {});
     const session: ProviderSession = {
       id: sessionId,
       providerId: this.id,
@@ -901,8 +1003,9 @@ export class AcpProvider implements CliProviderAdapter {
       }
     }
 
-    const child = spawn(this.config.command, this.config.args, {
+    const child = spawn(this.config.command, this.spawnArgs(), {
       cwd: options.workingDirectory,
+      detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"],
       env,
       shell: needsShell(this.config.command),
@@ -910,9 +1013,14 @@ export class AcpProvider implements CliProviderAdapter {
 
     child.on("error", () => {}); // prevent unhandled ENOENT on Windows
 
+    // Keep the tail of stderr so a startup crash can be reported with the real
+    // cause. Without this the ACP SDK only sees stdout EOF and reports the
+    // opaque "ACP connection closed", hiding errors like a missing module.
+    let stderrTail = "";
     child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8").trim();
       if (text) {
+        stderrTail = (stderrTail + "\n" + text).slice(-800).trim();
         this.emitEvent({ type: "activity", sessionId, kind: "stderr", summary: text });
       }
     });
@@ -930,6 +1038,7 @@ export class AcpProvider implements CliProviderAdapter {
     }, stream);
 
     child.once("exit", (code, signal) => {
+      cliSessionIdle.forget(sessionId);
       const current = this.sessions.get(sessionId);
       if (!current) return;
       current.session.status = current.session.status === "completed" ? "completed" : "interrupted";
@@ -942,6 +1051,7 @@ export class AcpProvider implements CliProviderAdapter {
           : { error: `ACP provider exited (${signal ?? code ?? "unknown"})` }),
       } as ProviderEvent);
       this.sessions.delete(sessionId);
+      this.contextControls.delete(sessionId);
       current.piProvisionCleanup?.();
     });
 
@@ -955,12 +1065,20 @@ export class AcpProvider implements CliProviderAdapter {
           fs: { readTextFile: false, writeTextFile: false },
           // Shell work must go through the always-visible jait.terminal MCP tool.
           terminal: false,
+          // Codex ACP otherwise serializes service failures as assistant text.
+          // Negotiate its typed failure extension and read it on prompt results.
+          ...(this.providerType === "codex" ? {
+            _meta: { jetbrains: { air: { version: 1, capabilities: ["sessionFailure"] } } },
+          } : {}),
         },
       });
 
       newSession = await connection.newSession({
         cwd: options.workingDirectory,
         mcpServers: (options.mcpServers ?? []).map(toAcpMcpServer),
+        ...(this.providerType === "claude-code" ? {
+          _meta: { claudeCode: { options: { disallowedTools: CLAUDE_CODE_NATIVE_SHELL_TOOLS } } },
+        } : {}),
       });
 
       // These calls can legitimately fail — not every ACP agent implements
@@ -1022,7 +1140,12 @@ export class AcpProvider implements CliProviderAdapter {
         }
       }
     } catch (error) {
-      child.kill();
+      this.contextControls.delete(sessionId);
+      stopSessionProcess(child);
+      const detail = extractErrorMessage(error, "unknown error");
+      if (stderrTail && /connection closed|unavailable/i.test(detail)) {
+        throw new Error(`${this.info.name} failed to start: ${detail} — ${stderrTail}`);
+      }
       throw error;
     }
 
@@ -1033,6 +1156,7 @@ export class AcpProvider implements CliProviderAdapter {
       connection,
       agent: capturedAgent ?? connection,
       client,
+      contextControl: this.contextControls.get(sessionId),
       acpSessionId: newSession.sessionId,
       approvals,
       initialized,
@@ -1040,27 +1164,82 @@ export class AcpProvider implements CliProviderAdapter {
       piProvisionCleanup,
     };
     this.sessions.set(sessionId, state);
+    if (this.providerType === "codex") {
+      cliSessionIdle.watch(sessionId, options.threadId,
+        () => !!state.promptInFlight || state.approvals.size > 0,
+        () => this.stopSession(sessionId));
+    }
     this.emitEvent({ type: "session.started", sessionId });
     return session;
   }
 
-  async sendTurn(sessionId: string, message: string, attachments?: string[]): Promise<void> {
+  async sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void> {
     const state = this.getSession(sessionId);
+    state.turnError = undefined;
+    state.turnInterrupted = false;
+    state.session.error = undefined;
+    state.session.status = "running";
+    state.promptInFlight = true;
     this.emitEvent({ type: "turn.started", sessionId });
     const prompt = [
       { type: "text" as const, text: message },
-      ...(attachments ?? []).map((path) => ({
+      ...(attachments ?? []).map((attachment) => typeof attachment === "string" ? ({
         type: "resource_link" as const,
-        uri: `file://${path}`,
-        name: path.split("/").pop() || path,
+        uri: `file://${attachment}`,
+        name: attachment.split("/").pop() || attachment,
+      }) : ({
+        type: "image" as const,
+        mimeType: attachment.mimeType,
+        data: attachment.data.startsWith("data:") ? attachment.data.split(",")[1] ?? "" : attachment.data,
       })),
     ];
 
     try {
+      if (state.pendingCompaction) throw new Error("Previous compaction is still stopping");
+      if (state.contextControl) {
+        try {
+          await compactProviderContext(state.contextControl, async command => {
+            const pending = state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] });
+            let result: Awaited<typeof pending>;
+            try {
+              result = await withTimeout(pending, 180_000);
+            } catch (error) {
+              // A timed-out prompt may still own the provider session. Cancel it
+              // and wait for settlement before allowing another prompt.
+              if (error instanceof Error && error.message === "Operation timed out") {
+                await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
+                try { await withTimeout(pending.then(() => undefined, () => undefined), 5_000); }
+                catch {
+                  state.pendingCompaction = pending;
+                  void pending.then(
+                    () => { if (state.pendingCompaction === pending) state.pendingCompaction = undefined; },
+                    () => { if (state.pendingCompaction === pending) state.pendingCompaction = undefined; },
+                  );
+                  throw new Error("Compaction timed out and the provider did not stop");
+                }
+              }
+              throw error;
+            }
+            const usage = parseAcpUsage(result.usage, uuidv7());
+            if (usage) this.emitEvent({ type: "usage", sessionId, usage });
+            const failure = state.turnError ?? readAcpSessionFailure(result._meta);
+            if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
+          });
+        } catch (error) {
+          if (state.turnInterrupted || (error instanceof Error && error.message === "Compaction timed out and the provider did not stop")) throw error;
+          // Compaction is auxiliary. A settled failure must not poison the real turn.
+          state.turnError = undefined;
+        }
+      }
+      if (state.turnInterrupted) throw new Error("Turn cancelled");
       const result = await state.connection.prompt({
         sessionId: state.acpSessionId,
         prompt,
       });
+      const usage = parseAcpUsage(result.usage, uuidv7());
+      if (usage) this.emitEvent({ type: "usage", sessionId, usage });
+      const failure = state.turnError ?? readAcpSessionFailure(result._meta);
+      if (failure) throw new Error(failure);
       if (result.stopReason === "cancelled") {
         this.emitEvent({ type: "session.error", sessionId, error: "Turn cancelled" });
       }
@@ -1072,6 +1251,8 @@ export class AcpProvider implements CliProviderAdapter {
       state.session.error = messageText;
       this.emitEvent({ type: "session.error", sessionId, error: messageText });
       throw error;
+    } finally {
+      state.promptInFlight = false;
     }
   }
 
@@ -1102,15 +1283,41 @@ export class AcpProvider implements CliProviderAdapter {
     }
   }
 
+  async steerTurn(sessionId: string, message: string, _expectedTurnId?: string, attachments?: ProviderTurnAttachment[]): Promise<boolean> {
+    const state = this.getSession(sessionId);
+    // Steering is a negotiated extension, advertised beside agentCapabilities.
+    const capability = state.initialized._meta?.["steering"] as { supported?: boolean } | undefined;
+    if (capability?.supported !== true || !state.promptInFlight) return false;
+    const result = await state.connection.extMethod("_session/steering", {
+      sessionId: state.acpSessionId,
+      prompt: [
+        { type: "text", text: message },
+        ...(attachments ?? []).flatMap((attachment) => typeof attachment === "string" ? [] : [{
+          type: "image" as const,
+          mimeType: attachment.mimeType,
+          data: attachment.data.startsWith("data:") ? attachment.data.split(",")[1] ?? "" : attachment.data,
+        }]),
+      ],
+      // Keep ownership of idle fallback: never launch an untracked detached turn.
+      _meta: { steering: { idleBehavior: "promptRequired" } },
+    });
+    if (result["outcome"] === "promptRequired") return false;
+    // Older agents may use their detached fallback despite the idle hint. That
+    // still consumed the message, so it must not be sent a second time.
+    if (result["outcome"] === "injected" || result["outcome"] === "startedNewTurn") return true;
+    throw new Error("ACP steering returned an unknown outcome");
+  }
+
   async interruptTurn(sessionId: string): Promise<void> {
     const state = this.getSession(sessionId);
+    state.turnInterrupted = true;
     await state.connection.cancel({ sessionId: state.acpSessionId });
   }
 
   async respondToApproval(sessionId: string, requestId: string, approved: boolean): Promise<void> {
     const state = this.getSession(sessionId);
     const pending = state.approvals.get(requestId);
-    if (!pending) return;
+    if (!pending) throw new Error("Approval request is no longer available");
     state.approvals.delete(requestId);
     pending.resolve({
       outcome: approved
@@ -1128,17 +1335,23 @@ export class AcpProvider implements CliProviderAdapter {
     this.emitter.removeAllListeners();
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
+  }
+
   async stopSession(sessionId: string): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (!state) return;
+    cliSessionIdle.forget(sessionId);
+    this.sessions.delete(sessionId);
+    this.contextControls.delete(sessionId);
+    state.session.status = "completed";
+    state.session.completedAt = new Date().toISOString();
     await withTimeout(
       state.connection.closeSession?.({ sessionId: state.acpSessionId }) ?? Promise.resolve(),
       2_000,
     ).catch(() => {});
-    state.session.status = "completed";
-    state.session.completedAt = new Date().toISOString();
-    state.child.kill();
-    this.sessions.delete(sessionId);
+    stopSessionProcess(state.child);
     state.piProvisionCleanup?.();
     this.emitEvent({ type: "session.completed", sessionId });
   }
@@ -1170,9 +1383,26 @@ export class AcpProvider implements CliProviderAdapter {
   handleSessionUpdate(sessionId: string, params: SessionNotification): void {
     const update = params.update;
     if (isTransientJaitMcpStartupCancellation(update)) return;
+    const failure = readAcpSessionFailure(update._meta);
+    if (failure) {
+      const state = this.sessions.get(sessionId);
+      if (state) state.turnError = failure;
+      else this.emitEvent({ type: "session.error", sessionId, error: failure });
+      return;
+    }
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text") {
+          // Older Codex adapters send this complete service error with no
+          // message id. Real assistant deltas carry an id; preserve quotations.
+          const text = update.content.text.trim();
+          if (this.providerType === "codex" && !update.messageId
+            && text === "Selected model is at capacity. Please try a different model.") {
+            const state = this.sessions.get(sessionId);
+            if (state) state.turnError = text;
+            else this.emitEvent({ type: "session.error", sessionId, error: text });
+            break;
+          }
           this.emitEvent({ type: "token", sessionId, content: update.content.text });
         }
         break;
@@ -1253,12 +1483,25 @@ export class AcpProvider implements CliProviderAdapter {
         }
         break;
       }
+      case "available_commands_update": {
+        const control = this.contextControls.get(sessionId);
+        if (control) control.commands = update.availableCommands.map(command => command.name);
+        this.emitEvent({ type: "activity", sessionId, kind: update.sessionUpdate, summary: update.sessionUpdate, payload: update });
+        break;
+      }
+      case "usage_update": {
+        const context = this.contextControls.get(sessionId);
+        if (context) {
+          context.usedTokens = update.used;
+          context.contextWindow = update.size;
+        }
+        this.emitEvent({ type: "activity", sessionId, kind: update.sessionUpdate, summary: update.sessionUpdate, payload: update });
+        break;
+      }
       case "user_message_chunk":
-      case "available_commands_update":
       case "current_mode_update":
       case "config_option_update":
       case "session_info_update":
-      case "usage_update":
         this.emitEvent({
           type: "activity",
           sessionId,
@@ -1302,7 +1545,7 @@ export class AcpProvider implements CliProviderAdapter {
     initialized: InitializeResponse;
     authMethods: AuthMethod[];
   }> {
-    const child = spawn(this.config.command, this.config.args, {
+    const child = spawn(this.config.command, this.spawnArgs(), {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
       env: this.childEnv(),
@@ -1892,4 +2135,27 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
   } catch {
     return defaults;
   }
+}
+
+/** Codex ACP's negotiated extension carries terminal failures on prompt results. */
+function readAcpSessionFailure(meta: unknown): string | undefined {
+  if (!isRecord(meta) || !isRecord(meta.jetbrains) || !isRecord(meta.jetbrains.air)) return;
+  const failure = meta.jetbrains.air.sessionFailure;
+  if (!isRecord(failure) || failure.severity !== "error" || typeof failure.title !== "string") return;
+  const title = failure.title.trim();
+  if (!title) return;
+  // Only accept the adapter's bounded, path-free diagnostic shape. Never
+  // persist arbitrary exception messages, which can contain prompts or secrets.
+  const diagnostic = failure.jaitDiagnostic;
+  if (!isRecord(diagnostic) || typeof diagnostic.name !== "string"
+    || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(diagnostic.name)
+    || !Array.isArray(diagnostic.frames)) return title;
+  const frames = diagnostic.frames.slice(0, 8).filter((frame): frame is string =>
+    typeof frame === "string" && /^[A-Za-z0-9_.$<>]+ \([A-Za-z0-9_.-]+:\d+:\d+\)$/.test(frame)
+  );
+  const code = typeof diagnostic.code === "number" && Number.isInteger(diagnostic.code)
+    && diagnostic.code >= -2147483648 && diagnostic.code <= 2147483647 ? diagnostic.code : undefined;
+  const methods = ["turn/start", "turn/steer", "thread/resume", "thread/start", "thread/read", "skills/list", "skills/extraRoots/set"];
+  const method = typeof diagnostic.method === "string" && methods.includes(diagnostic.method) ? diagnostic.method : undefined;
+  return `${title} Diagnostic: ${diagnostic.name}${code !== undefined ? `; RPC code ${code}` : ""}${method ? `; RPC method ${method}` : ""}${frames.length ? `; ${frames.join("; ")}` : ""}`;
 }

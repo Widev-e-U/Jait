@@ -1,0 +1,44 @@
+{
+  "review_scope": "parity-opaque bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/evaluation/agent-eval.test.ts:137:3",
+      "status": "verified",
+      "parity_review": "Reviewed requires structured verdicts and rejects extra fields or unsupported outcomes. Original body, helpers, lexical setup, imports, hooks, matcher polarity and actual/expected operands match through the completion audit with enclosing-function binding checks. The six completion structural controls pass. For toThrow with no expected operand, only whether the operation throws or rejects is observed; no error-message or constructor predicate exists. Other matcher operands retain the plain-data guard. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-opaque/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_agent_eval_test_ts_137_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/email/service.test.ts:155:1",
+      "status": "verified",
+      "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_155_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
+        }
+      ]
+    }
+  ],
+  "superseded_declarations": [
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:50:3",
+      "status": "verified",
+      "parity_review": "Reviewed does not modify history when summarization is cancelled. Original body, helpers, lexical setup, imports, hooks, matcher polarity and actual/expected operands match through the completion audit with enclosing-function binding checks. The six completion structural controls pass. For toThrow with no expected operand, only whether the operation throws or rejects is observed; no error-message or constructor predicate exists. Other matcher operands retain the plain-data guard. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-opaque/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_50_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ],
+      "superseded_reason": "Compaction source changed; original review retained, replaced by current source-bound review in parity-source-reconcile-reviewed.json."
+    }
+  ]
+}

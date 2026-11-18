@@ -1,0 +1,390 @@
+{
+  "format": 1,
+  "id": "chat-tool-history",
+  "description": "Chat to tool to history and restart data flow",
+  "method": "Manually traced from gateway source and validated by public HTTP/SSE process tests. This is a scoped dependency map; it does not claim whole-program static taint completeness.",
+  "nodes": [
+    {
+      "id": "request",
+      "label": "Authenticated HTTP request"
+    },
+    {
+      "id": "context",
+      "label": "Owned session and settings"
+    },
+    {
+      "id": "provider",
+      "label": "Local model peer"
+    },
+    {
+      "id": "tool",
+      "label": "Parsed tool call"
+    },
+    {
+      "id": "consent",
+      "label": "Gateway consent"
+    },
+    {
+      "id": "effect",
+      "label": "Real filesystem write"
+    },
+    {
+      "id": "history",
+      "label": "SQLite transcript and event log"
+    },
+    {
+      "id": "client",
+      "label": "HTTP snapshot and SSE client"
+    },
+    {
+      "id": "restart",
+      "label": "Fresh gateway process"
+    },
+    {
+      "id": "notification",
+      "label": "Notification summary"
+    },
+    {
+      "id": "cli",
+      "label": "External CLI provider approval"
+    }
+  ],
+  "sources": {
+    "startup": {
+      "path": "packages/gateway/src/index.ts",
+      "anchor": "async function main("
+    },
+    "auth": {
+      "path": "packages/gateway/src/security/http-auth.ts",
+      "anchor": "export async function requireAuth"
+    },
+    "request": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "app.post(\"/api/chat\","
+    },
+    "model": {
+      "path": "packages/gateway/src/services/jait-llm.ts",
+      "anchor": "export function resolveJaitLlmConfig("
+    },
+    "parse": {
+      "path": "packages/gateway/src/tools/agent-loop.ts",
+      "anchor": "const parsed = isOllama"
+    },
+    "toolcall": {
+      "path": "packages/gateway/src/tools/agent-loop.ts",
+      "anchor": "onEvent?.({ type: \"tool_start\""
+    },
+    "execution": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "async function executeTool("
+    },
+    "wiring": {
+      "path": "packages/gateway/src/index.ts",
+      "anchor": "const toolExecutor = async"
+    },
+    "consent": {
+      "path": "packages/gateway/src/security/consent-executor.ts",
+      "anchor": "const decision = await this.consentManager.requestConsent"
+    },
+    "decision": {
+      "path": "packages/gateway/src/routes/consent.ts",
+      "anchor": "app.post(\"/api/consent/:id/approve\","
+    },
+    "ownership": {
+      "path": "packages/gateway/src/security/control-access.ts",
+      "anchor": "  consentRequest(id: string, userId: string | null): boolean {"
+    },
+    "validation": {
+      "path": "packages/gateway/src/tools/registry.ts",
+      "anchor": "const validation = validateToolInput"
+    },
+    "filesystem": {
+      "path": "packages/gateway/src/tools/file-tools.ts",
+      "anchor": "await fs.write(input.path, input.content);"
+    },
+    "toolfeedback": {
+      "path": "packages/gateway/src/tools/agent-loop.ts",
+      "anchor": "async function executeOneToolCall("
+    },
+    "messages": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "function persistMessage("
+    },
+    "events": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "function persistStreamEvent("
+    },
+    "snapshot": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "app.get(\"/api/sessions/:sessionId/messages\","
+    },
+    "replay": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "app.get(\"/api/sessions/:sessionId/events\","
+    },
+    "hydrate": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "function hydrateSession("
+    },
+    "cancel": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "app.post(\"/api/sessions/:sessionId/cancel\","
+    },
+    "notification": {
+      "path": "packages/gateway/src/services/chat-notification.ts",
+      "anchor": "export async function generateChatNotificationDetail("
+    },
+    "cliapproval": {
+      "path": "packages/gateway/src/routes/chat.ts",
+      "anchor": "app.post(\"/api/sessions/:sessionId/approve\","
+    }
+  },
+  "edges": [
+    {
+      "id": "F01",
+      "from": "request",
+      "to": "context",
+      "data": "Bearer identity and sessionId resolve ownership before execution",
+      "sources": [
+        "auth",
+        "request",
+        "ownership"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "chat_flow/foreign_user_cannot_approve_cancel_or_read_another_users_tool_flow"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F02",
+      "from": "context",
+      "to": "provider",
+      "data": "User settings select the loopback model origin; user content enters the first model request",
+      "sources": [
+        "model",
+        "request"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F03",
+      "from": "provider",
+      "to": "tool",
+      "data": "Streaming JSON tool arguments map file_write to file.write with a correlated call ID",
+      "sources": [
+        "parse",
+        "toolcall"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F04",
+      "from": "tool",
+      "to": "consent",
+      "data": "Production main builds ToolContext and dispatches supervised writes through ConsentAwareExecutor",
+      "sources": [
+        "startup",
+        "execution",
+        "wiring",
+        "consent"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "chat_flow/rejected_tool_has_no_file_side_effect_and_reaches_provider_and_history",
+        "chat_flow/foreign_user_cannot_approve_cancel_or_read_another_users_tool_flow",
+        "chat_flow/cancellation_during_consent_prevents_late_approval_side_effects"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F05",
+      "from": "consent",
+      "to": "effect",
+      "data": "Owner approves; registry validates arguments; UTF-8 file bytes preserve CRLF, Unicode and literal shell characters",
+      "sources": [
+        "decision",
+        "ownership",
+        "validation",
+        "filesystem"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "chat_flow/foreign_user_cannot_approve_cancel_or_read_another_users_tool_flow"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F06",
+      "from": "consent",
+      "to": "provider",
+      "data": "Owner rejection returns consentRejected to the loop without creating the file",
+      "sources": [
+        "consent",
+        "toolfeedback"
+      ],
+      "cases": [
+        "chat_flow/rejected_tool_has_no_file_side_effect_and_reaches_provider_and_history"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F07",
+      "from": "effect",
+      "to": "provider",
+      "data": "ToolResult data and call ID enter the next provider request",
+      "sources": [
+        "toolfeedback"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F08",
+      "from": "tool",
+      "to": "history",
+      "data": "Arguments, result data and assistant text are checkpointed and serialized into messages",
+      "sources": [
+        "messages"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "chat_flow/rejected_tool_has_no_file_side_effect_and_reaches_provider_and_history"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F09",
+      "from": "tool",
+      "to": "history",
+      "data": "Correlated stream events receive durable log IDs independently of turn-local counters",
+      "sources": [
+        "events"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "active_stream/active_stream_loopback_contract"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F10",
+      "from": "history",
+      "to": "client",
+      "data": "Authenticated messages snapshot and cursor-driven SSE expose stored data",
+      "sources": [
+        "snapshot",
+        "replay"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "chat_flow/foreign_user_cannot_approve_cancel_or_read_another_users_tool_flow",
+        "active_stream/active_stream_loopback_contract"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F11",
+      "from": "history",
+      "to": "restart",
+      "data": "Persisted messages and durable event IDs survive full process restart",
+      "sources": [
+        "startup",
+        "hydrate",
+        "snapshot"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F12",
+      "from": "restart",
+      "to": "provider",
+      "data": "Restored user and assistant context reaches a follow-up model request",
+      "sources": [
+        "hydrate",
+        "model"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn"
+      ],
+      "coverage": "partial",
+      "limit": "Visible user and assistant context checked; identical warm/cold tool-protocol reconstruction is still open"
+    },
+    {
+      "id": "F13",
+      "from": "restart",
+      "to": "client",
+      "data": "Last-Event-ID resumes with byte-equivalent JSON events and strictly increasing durable IDs",
+      "sources": [
+        "replay"
+      ],
+      "cases": [
+        "chat_flow/approved_tool_data_survives_history_replay_restart_and_next_turn",
+        "active_stream/active_stream_loopback_contract"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F14",
+      "from": "request",
+      "to": "consent",
+      "data": "Cancellation aborts the turn; approving an old request cannot execute its guarded filesystem write",
+      "sources": [
+        "cancel",
+        "consent"
+      ],
+      "cases": [
+        "chat_flow/cancellation_during_consent_prevents_late_approval_side_effects"
+      ],
+      "coverage": "scoped",
+      "limit": "Public API assertions for the deterministic file-write flow"
+    },
+    {
+      "id": "F15",
+      "from": "history",
+      "to": "notification",
+      "data": "Completed user task and assistant response may produce a nonstream notification summary",
+      "sources": [
+        "notification"
+      ],
+      "cases": [],
+      "coverage": "uncovered",
+      "limit": "Peer supports at most two recognized optional summaries; WS delivery, content and push are not asserted"
+    },
+    {
+      "id": "F16",
+      "from": "tool",
+      "to": "cli",
+      "data": "CLI-provider approval uses a separate session approve endpoint and adapter response",
+      "sources": [
+        "cliapproval"
+      ],
+      "cases": [],
+      "coverage": "uncovered",
+      "limit": "This HTTP-model/file-tool flow does not execute external CLI providers"
+    }
+  ]
+}

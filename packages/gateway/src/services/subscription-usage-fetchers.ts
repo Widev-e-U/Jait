@@ -1,5 +1,9 @@
-import { parseDocument, DomUtils } from "htmlparser2";
+import { createRequire } from "node:module";
 import type { OllamaQuotaUsageResponse } from "./provider-quota-fetchers.js";
+
+// matrix-bot-sdk also requires this ESM package via sanitize-html. Bun 1.4.0
+// can reject that require while a static import is loading it (oven-sh/bun#33180).
+const { parseDocument, DomUtils } = createRequire(import.meta.url)("htmlparser2") as typeof import("htmlparser2");
 
 export interface OpenCodeGoUsage {
   usage: Record<"rolling" | "weekly" | "monthly", {

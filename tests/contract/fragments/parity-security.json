@@ -1,0 +1,39 @@
+{
+  "lane": "security",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/security-assessments.test.ts:21:3",
+      "status": "verified",
+      "parity_review": "The TS declaration asserts that GET /api/security/assessments and POST /api/security/scopes without a Bearer token both return 401. Rust case security.anonymous-routes-denied asserts 401 for exactly those method/path pairs (plus 14 further security routes) with no authorization header, matching the same HTTP surface and status codes. The Rust case is a strict superset of the TS assertions, so every observable behavior in the declaration is enforced.",
+      "rust_cases": [
+        {
+          "id": "security.anonymous-routes-denied",
+          "source": "tests/contract/src/security_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/security-assessments.test.ts:26:3",
+      "status": "verified",
+      "parity_review": "The TS declaration asserts 400 for two malformed scope payloads: one omitting every authorization field ({}) and one with authorized:true but a non-literal target (router.local). Rust security.explicit-authorization-required asserts 400 for omitted/false/coerced authorized fields (covering the {} payload), and security.scope-target-validation asserts 400 for router.local and other non-literal-IPv4 targets (covering the second payload). Both Rust cases additionally pin the rejection reason string and prove the rejected scopes leave history unchanged, so the status-code contract the TS test observes is fully covered with stronger error-shape assertions.",
+      "rust_cases": [
+        {
+          "id": "security.explicit-authorization-required",
+          "source": "tests/contract/src/security_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        },
+        {
+          "id": "security.scope-target-validation",
+          "source": "tests/contract/src/security_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    "packages/gateway/src/routes/security-assessments.test.ts:31:3 \u2014 only partially covered: security.scope-operator-vantage-and-canonical-storage asserts operatorId is rewritten to the authenticated user and nodeId to \"gateway\", and security.scope-cross-user-isolation asserts scope-run creation by another user is rejected 400 and foreign scopes stay out of the other user's history. However, the run-lifecycle half of this declaration (POST /api/security/assessments returns 202 with a run id, foreign-user GET /api/security/assessments/{run} and cancel on a REAL run return 404, the run completes to status \"completed\", and the owner's final GET returns 200) is asserted by no Rust case: security_contracts.rs explicitly never starts an assessment run, and security.missing-resources-and-inputs only covers 404s for fabricated \"unknown\" ids, not foreign access to live runs.",
+    "packages/gateway/src/routes/security-assessments.test.ts:57:1 \u2014 only the unresolvable-session rejection is covered (security.scope-filesystem-session-binding asserts 400 for a missing session, an unknown sessionId, and a session owned by another user, matching the final sessionId:\"other\" assertion). The Rust suite cannot cover the positive binding assertion (POST returns 200 with projectRoot rewritten to the session's project_path), the two remote-project rejections (session rows carrying node_id or metadata.executionNodeId return 400), or the vi.fn interaction assertion that the sqlite session lookup is called with (\"owned\", \"route-owner\") \u2014 that mock-level check is not expressible as an HTTP contract at all.",
+    "packages/gateway/src/routes/security-workbench.test.ts:11:1 \u2014 the anonymous-401 loop maps to security.anonymous-routes-denied and the empty {runs:[],findings:[]} isolation maps to security.denied-executions-leave-no-runs plus security.scope-cross-user-isolation, but the bulk of the declaration is uncovered: no Rust case runs a successful check to 202/completed, asserts foreign-user 404 on real run/report/finding/plan resources, asserts comparison of a foreign run returns 404 or that an owner comparison yields comparable:true, asserts the report body redacts the target address and fetched response bodies (report must not contain \"127.0.0.1\" or \"secret discarded\"), asserts finding-decision validation (\"verified-absent\" -> 400, \"accepted-risk\" persists), or asserts DELETE ownership semantics (foreign DELETE -> 400, owner DELETE -> 200, subsequent GET -> 404)."
+  ]
+}

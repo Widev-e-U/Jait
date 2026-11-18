@@ -6,6 +6,7 @@ import { TeamChatService, rankTeamRecipients } from "./team-chat.js";
 import { createTeamChatTool } from "../tools/team-chat-tools.js";
 import { personaAgentProfileSchema, type TeamSender, type TeamRoom } from "@jait/shared";
 
+import * as uuidIds from "../db/uuidv7.js";
 import * as systemOne from "./system-one.js";
 
 const owner = "owner";
@@ -75,6 +76,32 @@ describe("persistent team coordination", () => {
     }
   });
 
+  it("bounds each agent's independent deliveries and dispatches queued work in FIFO order", async () => {
+    vi.stubEnv("JAIT_TEAM_DELIVERY_CONCURRENCY", "2");
+    const releases: Array<() => void> = [];
+    const dispatch = vi.fn((_delivery: unknown, _agent: unknown, _prompt: string) => new Promise<{ content: string }>(resolve => {
+      releases.push(() => resolve({ content: "Done" }));
+    }));
+    service.setDispatcher(dispatch);
+    try {
+      for (let i = 0; i < 4; i++) post(`Task ${i}`, `cap-${i}`, ["Developer"]);
+      expect(dispatch).toHaveBeenCalledTimes(2);
+      expect(service.deliveries(owner, room.id).filter(d => d.status === "running")).toHaveLength(2);
+      expect(service.deliveries(owner, room.id).filter(d => d.status === "queued")).toHaveLength(2);
+      releases[0]!();
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(3));
+      expect(dispatch.mock.calls[2]?.[2]).toBe("Task 2");
+      releases[1]!();
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(4));
+      expect(dispatch.mock.calls[3]?.[2]).toBe("Task 3");
+    } finally {
+      service.close();
+      for (const release of releases) release();
+      await Promise.resolve();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("parks infrastructure blockers without sending the same broken environment to a manager", async () => {
     const dispatch = vi.fn(async () => { throw new Error("Execution blocked: Required executable unavailable persisted after two retries."); });
     service.setDispatcher(dispatch);
@@ -126,6 +153,51 @@ describe("persistent team coordination", () => {
     expect(service.context(owner, delivery.sessionId)).toContain(selected.id);
   });
 
+  it("keeps manager handoffs conversational while delivering the full review instructions", async () => {
+    service.setGoal(owner, room.id, "Ship", ["PR merged"], human);
+    const evidence = "Tests pass; PR not merged. See the evidence in the task thread.";
+    const dispatcher = vi.fn(async (_delivery, agent, _prompt: string) => ({ content: agent.id === "Developer" ? evidence : "I'll check the PR." }));
+    service.setDispatcher(dispatcher);
+    post("Implement", "conversational-worker", ["Developer"]);
+    await vi.waitFor(() => expect(dispatcher).toHaveBeenCalledTimes(2));
+    const review = service.history(owner, room.id).find(message => message.coordinationEvent?.kind === "completion")!;
+    expect(review.content).toBe("Hey @Scrum, could you check my task update?");
+    expect(review.content).not.toContain(evidence);
+    expect(review.workThreadId).toBe(service.deliveries(owner, room.id)[0]!.sessionId);
+    expect(dispatcher.mock.calls[1]?.[2]).toContain("Verify the reported outcome");
+    expect(dispatcher.mock.calls[1]?.[2]).toContain(evidence);
+    expect(service.get(owner, room.id).goal?.status).toBe("active");
+  });
+
+  it("keeps detailed final reports in the task thread without claiming success in the room", async () => {
+    const report = "## Findings\\n" + "Tests could not run; the change remains unverified. ".repeat(30);
+    service.setDispatcher(async () => ({ content: report }));
+    post("Investigate", "detailed-report", ["QA"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("completed"));
+    const result = service.history(owner, room.id).find(message => message.kind === "result")!;
+    expect(result.content).toBe("I've left a detailed update in my task thread. Please check it for the outcome and next steps.");
+    expect(result.workThreadId).toBe(service.deliveries(owner, room.id)[0]!.sessionId);
+    expect(result.content).not.toContain("Findings");
+    expect(result.content).not.toContain("done");
+    expect(result.content).not.toContain("pass");
+  });
+
+  it("keeps recovery evidence in the receiving thread rather than the team request", async () => {
+    const dispatcher = vi.fn(async (_delivery, agent, _prompt: string) => {
+      if (agent.id === "Developer") throw new Error("Runtime missing: bun");
+      return { content: "I'll check the runtime." };
+    });
+    service.setDispatcher(dispatcher);
+    post("Run the checks", "conversational-recovery", ["Developer"]);
+    await vi.waitFor(() => expect(dispatcher).toHaveBeenCalledTimes(2));
+    const review = service.history(owner, room.id).find(message => message.coordinationEvent?.kind === "recovery")!;
+    expect(review.content).toBe("Hey @Scrum, I'm blocked on this task. Can you help me unblock it?");
+    expect(review.workThreadId).toBe(service.deliveries(owner, room.id)[0]!.sessionId);
+    expect(dispatcher.mock.calls[1]?.[2]).toContain("Runtime missing: bun");
+    expect(dispatcher.mock.calls[1]?.[2]).toContain("Run the checks");
+    expect(dispatcher.mock.calls[1]?.[2]).toContain("Inspect the existing thread before reassigning");
+  });
+
   it("requires root coordinators and intermediate managers to verify completion", () => {
     profiles.savePersonaAgent(owner, profile("Junior", "Developer"));
     const rootContext = service.context(owner, "", profile("Scrum"))!;
@@ -158,12 +230,117 @@ describe("persistent team coordination", () => {
       clientKey: "worker-outcome", workSessionId: worker.sessionId };
     service.post(owner, room.id, outcome);
     service.post(owner, room.id, outcome);
-    const checks = service.history(owner, room.id).filter(message => message.content.startsWith("Leadership completion check:"));
+    const checks = service.history(owner, room.id).filter(message => message.coordinationEvent?.kind === "completion");
     expect(checks).toHaveLength(1);
     expect(checks[0]!.recipientIds).toEqual(["Scrum"]);
     expect(checks[0]!.targetSessionId).toBe(managerThread);
     expect(service.deliveries(owner, room.id)).toHaveLength(3);
     expect(service.get(owner, room.id).goal?.status).toBe("active");
+  });
+
+  it("checks deep outcomes once per delivery without bypassing ordinary handoff limits", () => {
+    service.setGoal(owner, room.id, "Ship", ["Acceptance passes"], human);
+    let parent = post("Implement", "deep-worker", ["Developer"]);
+    const delivery = service.deliveries(owner, room.id)[0]!;
+    for (let depth = 1; depth < 33; depth++) parent = service.post(owner, room.id, {
+      content: "Progress " + depth, clientKey: "progress-" + depth, sender: sender("Developer"),
+      recipientIds: [], parentMessageId: parent.id,
+    });
+    const outcome = service.post(owner, room.id, {
+      sender: { ...sender("Developer"), sourceSessionId: delivery.sessionId }, kind: "result",
+      content: "Tests pass", clientKey: "deep-result", recipientIds: [], parentMessageId: parent.id,
+    });
+    service.post(owner, room.id, {
+      sender: { ...sender("Developer"), sourceSessionId: delivery.sessionId }, kind: "verification",
+      content: "More evidence", clientKey: "deep-verify", recipientIds: [], parentMessageId: outcome.id,
+    });
+    const reviews = service.history(owner, room.id).filter(message => message.kind === "review");
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({ parentMessageId: outcome.id, depth: 0,
+      coordinationEvent: { kind: "completion", deliveryId: delivery.id } });
+    expect(() => service.post(owner, room.id, { sender: sender("Developer"), kind: "assignment",
+      content: "Another handoff", recipientIds: ["QA"], parentMessageId: outcome.id, clientKey: "still-bounded" })).toThrow("Handoff limit");
+  });
+
+  it("reconciles an outcome committed before its completion event after restart", async () => {
+    service.setGoal(owner, room.id, "Ship", ["Acceptance passes"], human);
+    post("Implement", "crash-worker", ["Developer"]);
+    const delivery = service.deliveries(owner, room.id)[0]!;
+    const hook = vi.spyOn(service as unknown as { requestCompletionCheck: () => void }, "requestCompletionCheck").mockImplementation(() => {});
+    service.post(owner, room.id, { sender: { ...sender("Developer"), sourceSessionId: delivery.sessionId },
+      kind: "result", content: "Tests pass", clientKey: "committed-outcome", recipientIds: [] });
+    hook.mockRestore();
+    opened.sqlite.prepare("UPDATE team_room_deliveries SET status = 'completed' WHERE id = ?").run(delivery.id);
+    service.close();
+    const restored = new TeamChatService(opened.db, sessions, profiles);
+    try {
+      await restored.recover();
+      await restored.recover();
+      expect(restored.history(owner, room.id).filter(message => message.kind === "review")).toHaveLength(1);
+      expect(restored.deliveries(owner, room.id).filter(item => item.agentId === "Scrum")).toHaveLength(1);
+      expect(restored.get(owner, room.id).goal?.status).toBe("active");
+    } finally { restored.close(); }
+  });
+
+  it("recovers a deep failed delivery once after restart without replaying the worker", async () => {
+    let parent = post("Start", "deep-failure-root", []);
+    for (let depth = 1; depth < 32; depth++) parent = service.post(owner, room.id, {
+      content: "Progress", clientKey: "failure-progress-" + depth, sender: sender("Developer"),
+      recipientIds: [], parentMessageId: parent.id,
+    });
+    service.post(owner, room.id, { content: "Implement", clientKey: "deep-failed-work", sender: sender("Scrum"),
+      kind: "assignment", recipientIds: ["Developer"], parentMessageId: parent.id });
+    const delivery = service.deliveries(owner, room.id)[0]!;
+    opened.sqlite.prepare("UPDATE team_room_deliveries SET status = 'failed', error = 'Provider request failed' WHERE id = ?").run(delivery.id);
+    service.close();
+    const restored = new TeamChatService(opened.db, sessions, profiles);
+    try {
+      await restored.recover();
+      await restored.recover();
+      expect(restored.deliveries(owner, room.id).filter(item => item.agentId === "Developer")).toHaveLength(1);
+      const reviews = restored.history(owner, room.id).filter(message => message.kind === "review");
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0]).toMatchObject({ depth: 0, coordinationEvent: { kind: "recovery", deliveryId: delivery.id } });
+    } finally { restored.close(); }
+  });
+
+  it("does not associate an older outcome with a later turn in a reused thread", async () => {
+    service.setGoal(owner, room.id, "Ship", ["Acceptance passes"], human);
+    post("Implement", "old-turn", ["Developer"]);
+    const first = service.deliveries(owner, room.id)[0]!;
+    service.post(owner, room.id, { sender: { ...sender("Developer"), sourceSessionId: first.sessionId },
+      kind: "result", content: "First result", clientKey: "first-result", recipientIds: [] });
+    service.post(owner, room.id, { sender: human, content: "Continue", clientKey: "new-turn",
+      recipientIds: ["Developer"], targetSessionId: first.sessionId });
+    const second = service.deliveries(owner, room.id).filter(item => item.agentId === "Developer").at(-1)!;
+    service.close();
+    const restored = new TeamChatService(opened.db, sessions, profiles);
+    try {
+      await restored.recover();
+      const reviews = restored.history(owner, room.id).filter(message => message.kind === "review");
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0]).toMatchObject({ coordinationEvent: { deliveryId: first.id } });
+      expect(reviews[0]).not.toMatchObject({ coordinationEvent: { deliveryId: second.id } });
+    } finally { restored.close(); }
+  });
+
+  it.each(["success", "failure"])("does not overwrite a stopped delivery after late %s", async (outcome) => {
+    let finish!: () => void;
+    const completed = new Promise<void>(resolve => { finish = resolve; });
+    service.setDispatcher(async () => { await completed;
+      if (outcome === "failure") throw new Error("Late provider error");
+      return { content: "Late answer" };
+    });
+    post("Implement", "stopped-late", ["Developer"]);
+    const delivery = service.deliveries(owner, room.id)[0]!;
+    opened.sqlite.prepare("UPDATE team_room_deliveries SET status = 'cancelled', error = 'Stopped by user' WHERE id = ?").run(delivery.id);
+    finish();
+    // Flush the real dispatch continuation and its finally/pump path.
+    await completed;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(service.deliveries(owner, room.id)[0]).toMatchObject({ status: "cancelled", error: "Stopped by user" });
+    expect(service.deliveries(owner, room.id)).toHaveLength(1);
+    expect(service.history(owner, room.id).filter(message => ["result", "blocked", "review"].includes(message.kind))).toHaveLength(0);
   });
 
   it("routes outcome verification to an intermediate manager before the root coordinator", () => {
@@ -174,7 +351,7 @@ describe("persistent team coordination", () => {
     service.post(owner, room.id, { sender: { ...sender("Junior"), sourceSessionId: worker.sessionId },
       kind: "verification", content: "Acceptance evidence", recipientIds: [], clientKey: "junior-outcome" });
     expect(service.deliveries(owner, room.id).at(-1)?.agentId).toBe("Developer");
-    expect(service.history(owner, room.id).at(-1)?.content).toContain("Leadership completion check:");
+    expect(service.history(owner, room.id).at(-1)?.content).toBe("Hey @Developer, could you check my task update?");
   });
 
   it("checks final dispatcher results even when the worker does not explicitly post", async () => {
@@ -186,7 +363,7 @@ describe("persistent team coordination", () => {
     await vi.waitFor(() => expect(dispatcher).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(service.deliveries(owner, room.id).every(delivery => delivery.status === "completed")).toBe(true));
     expect(service.get(owner, room.id).goal?.status).toBe("active");
-    expect(service.history(owner, room.id).filter(message => message.content.startsWith("Leadership completion check:"))).toHaveLength(1);
+    expect(service.history(owner, room.id).filter(message => message.coordinationEvent?.kind === "completion")).toHaveLength(1);
   });
 
   it("does not route outcome checks outside selected room membership", () => {
@@ -437,17 +614,27 @@ describe("persistent team coordination", () => {
     expect(service.deliveries(owner, room.id)).toHaveLength(2);
   });
 
-  it("allows a later verified result to resolve an earlier blocker in the same turn", async () => {
+  it.each([
+    { kinds: ["blocked", "verification"] as const, status: "completed" },
+    { kinds: ["verification", "blocked"] as const, status: "failed" },
+  ])("uses persisted order for same-millisecond outcomes: $status", async ({ kinds, status }) => {
+    // Force valid IDs in descending lexical order within one millisecond.
+    // This also checks assignment/outcome association and restart history.
+    let suffix = 0xffffffffffff;
+    vi.spyOn(uuidIds, "uuidv7").mockImplementation(() =>
+      "019fe795-0000-7000-8000-" + (suffix--).toString(16).padStart(12, "0"));
     service.setDispatcher(async (delivery, agent) => {
-      for (const kind of ["blocked", "verification"] as const) service.post(owner, room.id, {
+      for (const kind of kinds) service.post(owner, room.id, {
         sender: { ...sender(agent.id), sourceSessionId: delivery.sessionId }, content: kind,
         kind, recipientIds: [], clientKey: delivery.id + ":" + kind, parentMessageId: delivery.messageId,
       });
       return { content: "Verified." };
     });
     post("Verify", "resolved-blocker", ["QA"]);
-    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("completed"));
-    expect(service.deliveries(owner, room.id)).toHaveLength(1);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe(status));
+    const outcomes = service.history(owner, room.id).filter(message => kinds.includes(message.kind as typeof kinds[number]) && message.sender.id === "QA");
+    expect(outcomes.map(message => message.kind)).toEqual([...kinds]);
+    if (status === "completed") expect(service.deliveries(owner, room.id)).toHaveLength(1);
   });
 
   // Room history, delivery settlement and goal verification all order messages by id, so a

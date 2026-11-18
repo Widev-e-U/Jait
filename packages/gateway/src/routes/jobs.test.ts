@@ -420,3 +420,35 @@ describe("job routes", () => {
     expect(matchesCronMinute("0 7 * * *", instant, "Invalid/Timezone")).toBe(false);
   });
 });
+
+
+describe("job schedule validation", () => {
+  it("returns 400 for invalid creates and leaves a job unchanged after invalid edits", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const scheduler = new SchedulerService({ db, executeTool: async () => ({ ok: true }) });
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "schedule-validation-secret" };
+    registerJobRoutes(app, config, scheduler);
+    const headers = await authHeader(config.jwtSecret, "schedule-owner");
+    try {
+      for (const cron of ["not-a-cron", "60 * * * *", "*/0 * * * *", "0junk 9 * * *"]) {
+        const result = await app.inject({ method: "POST", url: "/api/jobs", headers, payload: { name: "Invalid review", cron_expression: cron, enabled: false } });
+        expect(result.statusCode).toBe(400);
+        expect(result.json().detail).toMatch(/cron/i);
+      }
+      expect(scheduler.list("schedule-owner")).toHaveLength(0);
+      const created = await app.inject({ method: "POST", url: "/api/jobs", headers, payload: { name: "Weekly review", cron_expression: "0 9 * * 1", enabled: false } });
+      expect(created.statusCode).toBe(201);
+      const id = created.json().id;
+      for (const cron of ["not-a-cron", "", 123, null]) {
+        const result = await app.inject({ method: "PATCH", url: `/api/jobs/${id}`, headers, payload: { name: "Changed", cron_expression: cron, enabled: true } });
+        expect(result.statusCode).toBe(400);
+        expect(scheduler.get(id)).toMatchObject({ name: "Weekly review", cron: "0 9 * * 1", enabled: false });
+      }
+    } finally {
+      await app.close();
+      sqlite.close();
+    }
+  });
+});

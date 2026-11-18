@@ -85,13 +85,15 @@ function ImageViewer({ src, alt }: { src: string; alt: string }) {
   }
 
   return <>
-    <DialogTitle className="mr-10 truncate px-1 text-sm">{alt}</DialogTitle>
-    <DialogDescription className="px-1 text-xs">Scroll to zoom · Middle mouse to drag · Pinch and drag on touchscreens</DialogDescription>
-    <div className="flex items-center gap-2 px-1">
-      <button type="button" aria-label="Zoom out" className="rounded border px-3 py-1" disabled={view.scale <= 1} onClick={() => zoom(1 / 1.5)}>−</button>
-      <output className="min-w-12 text-center text-xs" aria-label="Image zoom">{Math.round(view.scale * 100)}%</output>
-      <button type="button" aria-label="Zoom in" className="rounded border px-3 py-1" disabled={view.scale >= 16} onClick={() => zoom(1.5)}>+</button>
-      <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => update(initialView)}>Reset zoom</button>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pl-1 pr-10">
+      <DialogTitle className="min-w-20 flex-1 truncate text-sm">{alt}</DialogTitle>
+      <DialogDescription className="sr-only xl:not-sr-only xl:text-xs">Scroll to zoom · Middle mouse to drag · Pinch and drag on touchscreens</DialogDescription>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" aria-label="Zoom out" className="rounded border px-3 py-1" disabled={view.scale <= 1} onClick={() => zoom(1 / 1.5)}>−</button>
+        <output className="min-w-12 text-center text-xs" aria-label="Image zoom">{Math.round(view.scale * 100)}%</output>
+        <button type="button" aria-label="Zoom in" className="rounded border px-3 py-1" disabled={view.scale >= 16} onClick={() => zoom(1.5)}>+</button>
+        <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => update(initialView)}>Reset zoom</button>
+      </div>
     </div>
     <div ref={viewport} role="region" aria-label="Image viewport" tabIndex={0}
       className="relative flex min-h-0 flex-1 touch-none select-none items-center justify-center overflow-hidden rounded bg-muted/30 outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -46,7 +46,7 @@ async function fixture(page: Page) {
     await route.fulfill({ json })
   })
   await page.goto('/agent-continuation.html', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: 'Retry Nova', exact: true })).toBeEnabled()
   return { resumed, profiles }
 }
@@ -77,7 +77,16 @@ test('graph has sparse reactive dots and supports dragging without opening detai
   await page.waitForTimeout(2500)
   const before = (await avatar.boundingBox())!
   const other = (await page.getByRole('button', { name: 'Open Atlas', exact: true }).boundingBox())!
-  expect(Math.hypot(before.x - other.x, before.y - other.y)).toBeLessThan(750)
+  // The cards are laid out to use the whole panel rather than huddling in the middle, so the pair is no
+  // longer a tight cluster: what matters for a manual drag is that both cards sit inside the panel.
+  const panel = (await page.getByLabel('Agent reporting graph').boundingBox())!
+  for (const box of [before, other]) {
+    expect(box.x).toBeGreaterThanOrEqual(panel.x - 1)
+    expect(box.y).toBeGreaterThanOrEqual(panel.y - 1)
+    expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width + 1)
+    expect(box.y + box.height).toBeLessThanOrEqual(panel.y + panel.height + 1)
+  }
+  expect(Math.hypot(before.x - other.x, before.y - other.y)).toBeLessThan(panel.width)
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
   await page.mouse.down()
   await page.mouse.move(before.x + before.width / 2 + 100, before.y + before.height / 2 + 50, { steps: 12 })

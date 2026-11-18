@@ -1,5 +1,6 @@
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Search,
   BookOpen,
@@ -53,7 +54,7 @@ function InstalledSkills({ token }: { token: string | null }) {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useUrlSearchState('settings', 'skillsQ')
   const [busy, setBusy] = useState<string | null>(null)
   const [installingTool, setInstallingTool] = useState<string | null>(null)
   const headers = useHeaders(token)
@@ -251,10 +252,9 @@ function SkillMarketplace({ token }: { token: string | null }) {
   const [results, setResults] = useState<StoreSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useUrlSearchState('settings', 'marketplaceQ')
   const [category, setCategory] = useState('tool workflow agent')
   const [installing, setInstalling] = useState<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
   const headers = useHeaders(token)
 
   const fetchStore = useCallback(
@@ -282,19 +282,9 @@ function SkillMarketplace({ token }: { token: string | null }) {
   )
 
   useEffect(() => {
-    void fetchStore(undefined, category)
-  }, [fetchStore, category])
-
-  const onSearch = useCallback(
-    (value: string) => {
-      setQuery(value)
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => {
-        void fetchStore(value || undefined, category)
-      }, 400)
-    },
-    [fetchStore, category],
-  )
+    const timer = setTimeout(() => { void fetchStore(query || undefined, category) }, 400)
+    return () => clearTimeout(timer)
+  }, [fetchStore, category, query])
 
   const install = useCallback(
     async (slug: string) => {
@@ -335,7 +325,7 @@ function SkillMarketplace({ token }: { token: string | null }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => onSearch(e.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search ClawHub skills..."
             className="pl-9"
           />
@@ -465,8 +455,9 @@ interface SkillSettingsProps {
 }
 
 export function SkillSettings({ token }: SkillSettingsProps) {
+  const [tab, setTab] = useUrlSearchState('settings', 'skillsTab', 'installed')
   return (
-    <Tabs defaultValue="installed" className="space-y-4">
+    <Tabs value={tab === 'marketplace' ? 'marketplace' : 'installed'} onValueChange={setTab} className="space-y-4">
       <Card className="space-y-3 p-5">
         <div>
           <h2 className="text-base font-medium">Skills</h2>

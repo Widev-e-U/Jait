@@ -83,6 +83,7 @@ export const userSettings = sqliteTable("user_settings", {
   reasoningEffort: text("reasoning_effort"), // 'minimal' | 'low' | 'medium' | 'high' | null (only for reasoning-capable models)
   projectPickerPath: text("project_picker_path"),
   projectPickerNodeId: text("project_picker_node_id"),
+  navigationOrder: text("navigation_order"), // JSON string[] of page ids in the user's preferred sidebar order
   // Explicit "last selected" project/session, set only when the user picks
   // one in the UI. Distinct from sessions.lastActiveAt, which is bumped by
   // any activity (including background automation) and must not be used to
@@ -594,6 +595,71 @@ export const automationPlans = sqliteTable(
   ],
 );
 
+// ─── Plan Orchestration (run state; plan definitions stay in automation_plans) ───
+export const orchestrationRuns = sqliteTable(
+  "orchestration_runs",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    planId: text("plan_id"),
+    userId: text("user_id").notNull(),
+    repoId: text("repo_id"),
+    title: text("title").notNull(),
+    status: text("status").notNull(), // running | interrupted | passed | failed | cancelled
+    paused: integer("paused", { mode: "boolean" }).notNull().default(false),
+    maxWorkers: integer("max_workers").notNull(),
+    definition: text("definition").notNull(), // JSON snapshot: validated tasks + topological order
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [index("idx_orchestration_runs_owner").on(table.userId, table.createdAt)],
+);
+
+export const orchestrationTaskRuns = sqliteTable(
+  "orchestration_task_runs",
+  {
+    runId: text("run_id").notNull(),
+    taskId: text("task_id").notNull(),
+    state: text("state").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    currentAttemptId: text("current_attempt_id"), // only this attempt may report or finish the task
+    lastError: text("last_error"),
+    result: text("result"), // JSON: last accepted agent report
+    verification: text("verification"), // JSON: last gate outcomes
+    agentRef: text("agent_ref"),
+    worktreeRef: text("worktree_ref"),
+    startedAt: text("started_at"),
+    finishedAt: text("finished_at"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.runId, table.taskId] }),
+    index("idx_orchestration_task_runs_state").on(table.runId, table.state),
+  ],
+);
+
+export const orchestrationAttempts = sqliteTable(
+  "orchestration_attempts",
+  {
+    id: text("id").primaryKey(), // UUIDv7, also the attempt's lease token
+    runId: text("run_id").notNull(),
+    taskId: text("task_id").notNull(),
+    attemptNo: integer("attempt_no").notNull(),
+    state: text("state").notNull(), // running | verifying | passed | failed | interrupted | cancelled
+    agentRef: text("agent_ref"),
+    worktreeRef: text("worktree_ref"),
+    outcome: text("outcome"), // JSON: report and verification outcomes
+    error: text("error"),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [
+    uniqueIndex("idx_orchestration_attempts_no").on(table.runId, table.taskId, table.attemptNo),
+    index("idx_orchestration_attempts_run").on(table.runId),
+  ],
+);
+
 // ─── Automation Repo Proposals ───────────────────────────────────────
 export const automationRepoProposals = sqliteTable(
   "automation_repo_proposals",
@@ -855,6 +921,18 @@ export const agentGithubApps = sqliteTable("agent_github_apps", {
   updatedAt: text("updated_at").notNull(),
 }, table => [uniqueIndex("idx_agent_github_app_agent").on(table.userId, table.agentId)]);
 
+export const githubIntakePolicies = sqliteTable("github_intake_policies", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), agentId: text("agent_id").notNull(),
+  rules: text("rules").notNull(), updatedAt: text("updated_at").notNull(),
+}, table => [uniqueIndex("idx_github_intake_policy_owner").on(table.userId, table.agentId)]);
+
+export const githubIntakeDecisions = sqliteTable("github_intake_decisions", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), agentId: text("agent_id").notNull(),
+  deliveryId: text("delivery_id").notNull(), event: text("event").notNull(), action: text("action").notNull(),
+  repository: text("repository").notNull(), sender: text("sender").notNull(), result: text("result").notNull(),
+  reason: text("reason").notNull(), createdAt: text("created_at").notNull(),
+}, table => [uniqueIndex("idx_github_intake_delivery").on(table.userId, table.agentId, table.deliveryId)]);
+
 export const teamDeliveries = sqliteTable("team_room_deliveries", {
   id: text("id").primaryKey(),
   roomId: text("room_id").notNull(),
@@ -864,3 +942,42 @@ export const teamDeliveries = sqliteTable("team_room_deliveries", {
   status: text("status").notNull(),
   error: text("error"),
 }, table => [index("idx_team_delivery_status").on(table.status)]);
+
+/**
+ * Owner-wide hard stop. One row per user; `halted = true` freezes every
+ * autonomous execution path (agent threads, team deliveries, routed work)
+ * until the same user resumes it. Deliberately *not* per-agent: an emergency
+ * stop must be reachable without first identifying which identity is spinning.
+ */
+export const agentControl = sqliteTable("agent_control", {
+  userId: text("user_id").primaryKey(),
+  halted: integer("halted", { mode: "boolean" }).notNull().default(false),
+  reason: text("reason"),
+  haltedAt: text("halted_at"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// Saved browser workflows are owner/project scoped; runs retain an immutable revision.
+export const browserWorkflows = sqliteTable("browser_workflows", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  projectRoot: text("project_root").notNull(),
+  revision: integer("revision").notNull(),
+  definition: text("definition").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const browserWorkflowRuns = sqliteTable("browser_workflow_runs", {
+  id: text("id").primaryKey(),
+  workflowId: text("workflow_id").notNull(),
+  userId: text("user_id").notNull(),
+  projectRoot: text("project_root").notNull(),
+  sessionId: text("session_id").notNull(),
+  revision: integer("revision").notNull(),
+  definition: text("definition").notNull(),
+  status: text("status").notNull(),
+  nextStep: integer("next_step").notNull(),
+  progress: text("progress").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

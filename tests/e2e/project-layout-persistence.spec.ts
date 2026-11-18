@@ -62,6 +62,10 @@ async function createProject(
 async function expectPanelWidth(page: Page, expected: number) {
   const panel = page.locator('aside:has(.sash-handle-bordered)').last()
   await expect(panel).toBeVisible({ timeout: 15000 })
+  await expect.poll(async () => panel.evaluate(element => {
+    const parent = element.parentElement
+    return parent ? Math.abs(element.getBoundingClientRect().height - parent.getBoundingClientRect().height) : Infinity
+  }), { timeout: 15000 }).toBeLessThan(1)
   await expect.poll(async () => Math.round((await panel.boundingBox())?.width ?? 0), {
     timeout: 15000,
   }).toBe(expected)

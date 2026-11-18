@@ -4,6 +4,7 @@ import { CircleAlert, Loader2, Pause, Play, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { agentContinuation, agentContinuationLabel } from '@/lib/agent-continuation'
 import { Button } from '@/components/ui/button'
+import { TooltipHint } from '@/components/ui/tooltip'
 import { agentsApi, type AgentThread } from '@/lib/agents-api'
 import type { PersonaAgentDraft } from '@/lib/persona-agents'
 import { earliestAgentStart, formatAgentElapsed } from '@/lib/agent-runtime'
@@ -88,15 +89,15 @@ export function AgentRow({ agent, depth, threads, onOpen, onChooseTask, onRefres
     </button>
     <div className="flex h-8 items-center gap-2">
       <AgentProviderEditor compact agent={agent} onSave={saveProvider} />
-      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80" disabled={busy || resumeBusy || providerSaving || !available} title={controlTitle} aria-label={`${action} ${agent.name}`} onClick={() => void toggle()}>
+      <TooltipHint content={controlTitle}><Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80" disabled={busy || resumeBusy || providerSaving || !available} aria-label={`${action} ${agent.name}`} onClick={() => void toggle()}>
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : running ? <Square className="h-3 w-3" fill="currentColor" /> : failed ? <CircleAlert className="h-4 w-4 text-destructive" /> : interrupted ? <Pause className="h-3.5 w-3.5" fill="currentColor" /> : <Play className="h-3.5 w-3.5" fill="currentColor" />}
-      </Button>
+      </Button></TooltipHint>
     </div>
     <div className="flex h-7 max-w-full items-center gap-1.5">
       {running && <span className="relative flex h-7 w-7 shrink-0 items-center justify-center text-xs tabular-nums" aria-label={`${active.length} running tasks`}><span className="absolute inset-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />{active.length}</span>}
       <button type="button" onClick={onOpen} className="min-w-0 truncate text-xs font-medium" aria-label={`Details for ${agent.name}`}>{agent.name}</button>
     </div>
-    {continuation && !running && <span title={continuation.error ?? continuation.title} className="max-w-36 text-center text-[10px] text-muted-foreground">{agentContinuationLabel(continuation)}</span>}
+    {continuation && !running && <TooltipHint content={continuation.error ?? continuation.title}><span className="max-w-36 text-center text-[10px] text-muted-foreground">{agentContinuationLabel(continuation)}</span></TooltipHint>}
   </div>
   return <div data-testid="agent-row" className={`group flex items-center gap-2 rounded-xl px-3 py-3 transition-colors ${running ? 'bg-primary/5' : 'hover:bg-muted/50'}`} style={{ marginLeft: `${Math.min(depth, 4) * 16}px` }}>
     <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Open ${agent.name}`}>
@@ -107,9 +108,9 @@ export function AgentRow({ agent, depth, threads, onOpen, onChooseTask, onRefres
       </span>
     </button>
     <AgentProviderEditor agent={agent} onSave={saveProvider} />
-    {running && <span title="Elapsed time for the earliest active run" aria-label="Running time" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatAgentElapsed(earliestAgentStart(active.map((source) => source.runtime)), now)}</span>}
-    <Button variant={running ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9 shrink-0 rounded-full" disabled={busy || resumeBusy || providerSaving || !available} title={controlTitle} aria-label={`${action} ${agent.name}`} onClick={() => void toggle()}>
+    {running && <TooltipHint content="Elapsed time for the earliest active run"><span aria-label="Running time" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatAgentElapsed(earliestAgentStart(active.map((source) => source.runtime)), now)}</span></TooltipHint>}
+    <TooltipHint content={controlTitle}><Button variant={running ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9 shrink-0 rounded-full" disabled={busy || resumeBusy || providerSaving || !available} aria-label={`${action} ${agent.name}`} onClick={() => void toggle()}>
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : running ? <Square className="h-3.5 w-3.5" fill="currentColor" /> : failed ? <CircleAlert className="h-4 w-4 text-destructive" /> : interrupted ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" />}
-    </Button>
+    </Button></TooltipHint>
   </div>
 }

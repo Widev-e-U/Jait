@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react'
-import { emailApi, type EmailProvider } from '@/lib/email-api'
+import { emailApi, type OAuthEmailProvider as EmailProvider } from '@/lib/email-api'
 
 const PROVIDER_LABEL: Record<EmailProvider, string> = {gmail: 'Gmail', outlook: 'Outlook'}
 const PROVIDER_CONFIG_URL: Record<EmailProvider, string> = {

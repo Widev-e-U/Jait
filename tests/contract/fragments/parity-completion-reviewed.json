@@ -1,0 +1,629 @@
+{
+  "review_scope": "parity-completion bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/__scratch-pr.test.ts:27:1",
+      "status": "verified",
+      "parity_review": "Reviewed scratch: replicate pr-state flow. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/channels/telegram/connector.test.ts:698:3",
+      "status": "verified",
+      "parity_review": "Reviewed names the competing instance behind a 409 and keeps trying. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_channels_telegram_connector_test_ts_698_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/scheduler/service.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Reviewed starts jobs due in the same minute without waiting for another job. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_scheduler_service_test_ts_88_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/ollama-usage-setup.test.ts:24:3",
+      "status": "verified",
+      "parity_review": "Reviewed quotes operator-configured paths safely. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_usage_setup_test_ts_24_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/opencode-go-fetch.test.ts:43:1",
+      "status": "verified",
+      "parity_review": "Reviewed translates auxiliary native completions. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_opencode_go_fetch_test_ts_43_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/opencode-go-fetch.test.ts:55:1",
+      "status": "verified",
+      "parity_review": "Reviewed preserves images and tool results in both native formats. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_opencode_go_fetch_test_ts_55_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/opencode-go-fetch.test.ts:61:1",
+      "status": "verified",
+      "parity_review": "Reviewed replays reasoning and unnamed tool results through Go chat completions. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_opencode_go_fetch_test_ts_61_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:108:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses DELETE-in-CTE even when a trailing LIMIT clamps it. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_108_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:114:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses INSERT inside a CTE body. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_114_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:122:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses UPDATE inside a CTE body. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_122_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:128:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses mutation CTE as the SECOND arm of a WITH list. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_128_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:136:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses WITH\u2026DELETE as a top-level statement shape. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_136_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:142:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses a mutation CTE split across a comment boundary. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_142_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:150:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses mutation keywords hidden after an unterminated line comment at EOF. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_150_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:192:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses blocked table in a UNION arm. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_192_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:197:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses INSERT-target-style references and attached-name qualification. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_197_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:202:3",
+      "status": "verified",
+      "parity_review": "Reviewed a similarly-prefixed benign table name is NOT blocked and errors natively. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_202_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:214:3",
+      "status": "verified",
+      "parity_review": "Reviewed a string literal containing a blocked name does NOT trigger the blocklist. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_214_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:268:3",
+      "status": "verified",
+      "parity_review": "Reviewed nested block comments: comment ends at first `*/` (SQLite semantics) \u2014 mutation tail is refused. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_268_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:274:3",
+      "status": "verified",
+      "parity_review": "Reviewed unterminated block comment hides a keyword \u2014 allowed, and engine also treats it as comment-to-EOF. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_274_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:280:3",
+      "status": "verified",
+      "parity_review": "Reviewed unterminated string keeps the tokenizer aligned with the engine (refusal or clean error, never execution). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_280_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:314:3",
+      "status": "verified",
+      "parity_review": "Reviewed allows one trailing semicolon and unicode whitespace that JS trims. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_314_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:321:3",
+      "status": "verified",
+      "parity_review": "Reviewed a semicolon inside a string literal is not a statement separator. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_321_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:327:3",
+      "status": "verified",
+      "parity_review": "Reviewed statement split ONLY after a comment is still multi-statement. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_327_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:332:3",
+      "status": "verified",
+      "parity_review": "Reviewed comment-only and semicolon-only inputs are rejected as invalid/readonly. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_332_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:339:3",
+      "status": "verified",
+      "parity_review": "Reviewed unicode whitespace the engine does NOT accept yields a clean sql_error (no execution). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_339_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:363:3",
+      "status": "verified",
+      "parity_review": "Reviewed creates the `updated_messages` probe table (contains banned substring 'update'). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_363_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:376:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses load_extension() (file/exec vector). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_376_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:382:3",
+      "status": "verified",
+      "parity_review": "Reviewed writefile()/readfile() are banned function calls \u2192 refused before execution, never a write. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_382_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:392:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses pragma_* table-valued functions (schema introspection / writable pragmas). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_392_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:399:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses bare PRAGMA and other non-SELECT first keywords. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_399_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:404:3",
+      "status": "verified",
+      "parity_review": "Reviewed REPLACE() string function is refused by the banned-anywhere list (false positive, safe direction). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_404_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:418:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses EXPLAIN (introspection of statement execution). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_418_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:424:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses bare VALUES (a statement the engine would happily execute). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_424_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:459:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses mutation keyword as the very first token (fast path). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_459_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:680:3",
+      "status": "verified",
+      "parity_review": "Reviewed blocked tables are also NOT queryable even though their DDL exists in the DB. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_680_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:829:3",
+      "status": "verified",
+      "parity_review": "Reviewed missing / empty / whitespace sql \u2192 ok:false invalid_input (never executes). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_829_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:839:3",
+      "status": "verified",
+      "parity_review": "Reviewed non-string sql (number / array) returns a clean error instead of throwing. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_839_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:849:3",
+      "status": "verified",
+      "parity_review": "Reviewed service.query() also returns invalid_sql for non-string sql instead of throwing. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_849_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:859:3",
+      "status": "verified",
+      "parity_review": "Reviewed registry-level input validation rejects non-string sql before the tool runs. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_859_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:903:3",
+      "status": "verified",
+      "parity_review": "Reviewed refuses obfuscated call forms: whitespace, case, quoting, comments. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_903_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:933:3",
+      "status": "verified",
+      "parity_review": "Reviewed tool wrapper surfaces banned_function errors with the offending name. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_933_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:227:5",
+      "status": "verified",
+      "parity_review": "Reviewed rejects an empty / comment-only statement. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_227_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:234:5",
+      "status": "verified",
+      "parity_review": "Reviewed rejects non-SQL and non-SELECT first tokens. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_234_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:243:5",
+      "status": "verified",
+      "parity_review": "Reviewed rejects multi-statement input including trailing junk after a semicolon. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_243_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:252:5",
+      "status": "verified",
+      "parity_review": "Reviewed rejects pragma_* table-valued functions even inside UNION. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_252_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:259:5",
+      "status": "verified",
+      "parity_review": "Reviewed blocks secret/credential tables everywhere they appear. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_259_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:280:5",
+      "status": "verified",
+      "parity_review": "Reviewed allows consent_log which holds only consent metadata. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_280_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:381:5",
+      "status": "verified",
+      "parity_review": "Reviewed returns an error result on a broken database. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_381_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.test.ts:409:5",
+      "status": "verified",
+      "parity_review": "Reviewed requires sql or mode=schema. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_test_ts_409_5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/team-chat.test.ts:441:3",
+      "status": "verified",
+      "parity_review": "Reviewed does not write to a closed database when an in-flight delivery finishes. Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_team_chat_test_ts_441_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint2.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Reviewed migration is idempotent (can run twice). Original body, helper bodies, lexical setup, import origins, hooks, matcher/negation and every actual/expected operand match the generated fixture through a bounded AST comparison. Assertion matching also requires matching enclosing function bindings, distinguishing identical test-body and helper predicates. Reachable assertion sites execute and every retry finishes passing; zero observations require an explicit unused-helper proof. Pure sibling loops that only register independent tests are excluded from the helper reachability graph with source offsets retained; their input expressions and lack of initialization effects are checked. Successful completion records are additional predicates: when present they must immediately follow the awaited original body and have exactly the expected slot and completed:true. Six controls reject false/missing/wrong-slot completion, changed helper expectation and side effects in sibling registration loops. Raw values pass the guarded data-domain checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-completion/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint2_test_ts_88_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

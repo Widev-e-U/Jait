@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, readFile, writeFile, rename, rm, cp, access } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const exec = promisify(execFile);
 const modulePath = fileURLToPath(import.meta.url);
@@ -29,6 +29,13 @@ export async function validatePackage(root, runCommand = run) {
   }
   await runCommand(process.execPath, ["--check", join(root, "dist/index.js")]);
   await runCommand(process.execPath, [join(root, "bin/jait.mjs"), "--version"], { timeout: 30_000 });
+  // --check and --version never link the gateway's imports. Load the real
+  // module graph with CLI auto-start disabled to catch incompatible published
+  // dependencies before stopping the working gateway (e.g. missing shared exports).
+  await runCommand(process.execPath, ["--input-type=module", "--eval",
+    `process.env.__JAIT_CLI = "1"; await import(${JSON.stringify(pathToFileURL(resolve(root, "dist/index.js")).href)}); process.exit(0);`], {
+    timeout: 30_000,
+  });
   return pkg.version;
 }
 

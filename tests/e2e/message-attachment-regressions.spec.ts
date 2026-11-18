@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function openFixture(page: Page, width = 1280, queue = false) {
   await page.setViewportSize({ width, height: 900 })
-  await page.goto(queue ? '/?queue=1' : '/', { waitUntil: 'domcontentloaded' })
+  await page.goto(queue ? '/src/e2e-fixtures/index.html?queue=1' : '/src/e2e-fixtures/index.html', { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => import('/src/e2e-fixtures/message-attachment-regressions.tsx'))
   await expect(page.getByTestId('composer').getByRole('textbox')).toBeVisible()
 }
@@ -47,6 +47,31 @@ test('image viewport and portal controls never start message editing', async ({ 
 })
 
 for (const width of [390, 1280]) {
+  test(`user message controls stay clear of message text at ${width}px`, async ({ page }) => {
+    await openFixture(page, width)
+    const sent = page.getByTestId('sent')
+    const bubble = sent.locator('[data-message-from="user"]').last()
+    await bubble.hover()
+    const controls = sent.getByRole('button', { name: width < 768 ? 'Message actions' : 'Edit message', exact: true })
+    await expect(controls).toBeVisible()
+    const bubbleBox = (await bubble.boundingBox())!
+    const controlsBox = (await controls.boundingBox())!
+    if (width < 768) {
+      expect(controlsBox.y).toBeGreaterThanOrEqual(bubbleBox.y)
+      expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y + bubbleBox.height)
+    } else {
+      // Desktop actions hang off the bubble's bottom edge so they do not intercept text clicks.
+      expect(controlsBox.y + controlsBox.height).toBeGreaterThanOrEqual(bubbleBox.y + bubbleBox.height)
+      expect(controlsBox.x).toBeGreaterThanOrEqual(0)
+      expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(width)
+    }
+    if (width < 768) {
+      await controls.click()
+      await page.getByRole('menuitem', { name: 'Edit message', exact: true }).click()
+    } else await controls.click()
+    await expect(sent.getByRole('button', { name: 'Cancel editing message' })).toBeVisible()
+  })
+
   test(`user image gallery sits above an evenly padded bubble at ${width}px`, async ({ page }) => {
     await openFixture(page, width)
     const sent = page.getByTestId('sent')
@@ -68,24 +93,54 @@ for (const width of [390, 1280]) {
     await openFixture(page, width)
     const queue = page.getByTestId('queue')
     await queue.getByRole('button', { name: 'Edit message', exact: true }).click()
-    const editor = queue.locator('[contenteditable="true"]')
+    const editing = page.locator('[data-queue-editor]')
+    const editor = editing.locator('[contenteditable="true"]')
     await expect(editor).toBeVisible()
     await expect(editor.locator('[data-image-name]')).toHaveText(['first.png', 'second.png'])
     await expect(editor.locator('[data-image-number]')).toHaveCount(0)
     await editor.getByRole('button', { name: 'Remove first.png' }).click()
-    await queue.getByRole('button', { name: 'Remove notes.txt' }).click()
+    await editing.getByRole('button', { name: 'Remove notes.txt' }).click()
     await editor.press('End')
     await page.keyboard.type(' changed')
-    await queue.getByRole('button', { name: 'Send message', exact: true }).click()
+    await editing.getByRole('button', { name: 'Save changes', exact: true }).click()
     await expect(editor).toHaveCount(0)
     const saved = JSON.parse((await page.getByTestId('queue-state').textContent())!)[0]
     expect(saved.attachments.map((item: { name: string }) => item.name)).toEqual(['second.png'])
     expect(saved.displaySegments.map((item: { type: string }) => item.type)).toEqual(['text', 'image', 'text'])
     expect(saved.displaySegments[2].text).toContain('changed')
     await queue.getByRole('button', { name: 'Edit message', exact: true }).click()
-    await expect(queue.locator('[contenteditable="true"] [data-image-name]')).toHaveText(['second.png'])
-    await queue.getByRole('button', { name: 'Cancel editing message' }).click()
-    await expect(queue.locator('[contenteditable="true"]')).toHaveCount(0)
+    await expect(editing.locator('[contenteditable="true"] [data-image-name]')).toHaveText(['second.png'])
+    await editing.getByRole('button', { name: 'Cancel editing message' }).click()
+    await expect(editor).toHaveCount(0)
     await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `queued-message-edit-${width}.png`) })
   })
+}
+
+for (const action of ['click', 'enter'] as const) {
+  for (const success of [true, false]) {
+    test(`sent message draft stays visible while saving (${action}, ${success ? 'success' : 'rejection'})`, async ({ page }) => {
+      await openFixture(page)
+      const sent = page.getByTestId('sent')
+      await sent.getByText('Before ', { exact: true }).click()
+      const editor = sent.getByRole('textbox')
+      await expect(editor).toBeVisible()
+      await editor.press('End')
+      await page.keyboard.type(' edited')
+      const draft = await editor.textContent()
+      if (action === 'enter') await editor.press('Enter')
+      else await sent.getByRole('button', { name: 'Send message', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Complete edit' })).toBeVisible()
+      // The edit request is held pending: text and attachments must remain on screen.
+      await expect(editor).toHaveText(draft!)
+      await expect(sent.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
+      await page.getByRole('button', { name: success ? 'Complete edit' : 'Reject edit' }).click()
+      if (success) {
+        await expect(editor).toHaveCount(0)
+        await expect(sent).toContainText('edited')
+      } else {
+        await expect(editor).toHaveText(draft!)
+        await expect(sent.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
+      }
+    })
+  }
 }

@@ -2,10 +2,11 @@ import { useCallback, type RefObject } from 'react'
 import { toast } from 'sonner'
 
 import { projectLanguageForPath, type ProjectFile, type ProjectPanelHandle } from '@/components/project'
+import { isProjectBinaryPreview } from '@/components/project/project-file-preview'
 import { getApiUrl } from '@/lib/gateway-url'
 import { gitApi } from '@/lib/git-api'
 import { openHtmlPresentation } from '@/lib/html-presentation'
-import { isPathWithinProject } from '@/lib/project-links'
+import { isAbsoluteProjectPath, isPathWithinProject, resolveProjectPath } from '@/lib/project-links'
 
 const API_URL = getApiUrl()
 
@@ -14,7 +15,7 @@ interface UseProjectFileActionsOptions {
   activeProject: any
   activeProjectRecord: { rootPath?: string | null } | null | undefined
   activeSessionId: string | null
-  openRemoteProjectOnGateway: (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => Promise<void>
+  openRemoteProjectOnGateway: (dirPath: string, nodeId?: string, sessionIdOverride?: string | null, openPanel?: boolean, strictNode?: boolean) => Promise<void>
   projectFiles: ProjectFile[]
   projectRef: RefObject<ProjectPanelHandle | null>
   setActiveProjectFileId: (fileId: string | null | ((prev: string | null) => string | null)) => void
@@ -149,9 +150,37 @@ export function useProjectFileActions({
     }
   }, [activeSessionId, activeProject, openRemoteProjectOnGateway, resolveKnownProjectRootForFile, token, showProject, showProjectEditorPanel, projectRef, setShowProject, showProjectRef])
 
-  const handleOpenMessagePath = useCallback(async (filePath: string, line?: number) => {
+  /**
+   * The project file whose path ends with `relative`, via the gateway's file
+   * search (the panel's own tree only knows directories that were expanded).
+   */
+  const findProjectFileBySuffix = useCallback(async (relative: string, projectRoot: string): Promise<string | null> => {
+    const baseName = relative.split('/').pop() ?? relative
+    const query = new URLSearchParams({ query: baseName, mode: 'files', limit: '50' })
+    if (activeProject?.surfaceId && projectRoot === activeProject.projectRoot) query.set('surfaceId', activeProject.surfaceId)
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
     try {
-      const targetProjectRoot = resolveKnownProjectRootForFile(filePath)
+      const response = await fetch(`${API_URL}/api/project/search?${query}`, { headers })
+      if (!response.ok) return null
+      const data = await response.json() as { files?: Array<{ path: string }> }
+      const matches = (data.files ?? []).map((file) => file.path.replace(/\\/g, '/'))
+        .filter((path) => path === relative || path.endsWith(`/${relative}`))
+      // Search can be truncated at the requested limit. Never guess when the
+      // suffix is ambiguous or when further matches may have been omitted.
+      if ((data.files?.length ?? 0) >= 50 || matches.length !== 1) return null
+      return resolveProjectPath(matches[0]!, projectRoot)
+    } catch {
+      return null
+    }
+  }, [activeProject?.projectRoot, activeProject?.surfaceId, token])
+
+  const handleOpenMessagePath = useCallback(async (rawPath: string, line?: number) => {
+    try {
+      // Chat messages mostly name files relative to the project (`src/a.ts`).
+      const filePath = resolveProjectPath(rawPath, activeProject?.projectRoot ?? activeProjectRecord?.rootPath)
+      let targetProjectRoot = resolveKnownProjectRootForFile(filePath)
+      let openedOutsideDirectory = false
 
       if (!targetProjectRoot) {
         const existing = projectFiles.find((file) => file.path === filePath)
@@ -165,11 +194,25 @@ export function useProjectFileActions({
           showProjectEditorPanel()
           return
         }
-        toast('File is outside the active project. Open its directory explicitly to browse it.')
-        return
+        if (!isAbsoluteProjectPath(filePath) || !activeSessionId) {
+          toast('An absolute file path and an active chat are required to open this document.')
+          return
+        }
+        const normalized = filePath.replace(/\\/g, '/')
+        const slash = normalized.lastIndexOf('/')
+        const directory = slash === 0 ? '/' : slash === 2 && /^[A-Za-z]:/.test(normalized) ? normalized.slice(0, 3) : normalized.slice(0, slash)
+        if (!directory || normalized.split('/').some((part) => part === '..')) {
+          toast('Cannot open this file path.')
+          return
+        }
+        const node = activeProject?.nodeId || 'gateway'
+        if (!window.confirm(`Open ${filePath} on ${node}? This opens its directory as the project and grants access to the directory: ${directory}`)) return
+        await openRemoteProjectOnGateway(directory, node, activeSessionId, true, true)
+        targetProjectRoot = directory
+        openedOutsideDirectory = true
       }
 
-      if (/\.html?$/i.test(filePath) && line == null) {
+      if (!openedOutsideDirectory && /\.html?$/i.test(filePath) && line == null) {
         await openHtmlPresentation(filePath, async () => {
           if (!activeProject || activeProject.projectRoot !== targetProjectRoot) {
             await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
@@ -187,28 +230,52 @@ export function useProjectFileActions({
         return
       }
 
-      if (targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
+      if (!openedOutsideDirectory && targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
         await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
       }
 
-      const openedInTree = await projectRef.current?.openFileByPath(filePath)
-      if (openedInTree) {
-        if (!showProject) {
-          showProjectRef.current = true
-          setShowProject(true)
+      // On mobile the project panel only exists while it is shown, and a freshly
+      // opened project still has to load its file tree — so show it first and
+      // give the tree a moment before falling back to a plain text read (which
+      // cannot display images or PDFs).
+      if (!showProject) {
+        showProjectRef.current = true
+        setShowProject(true)
+      }
+      showProjectEditorPanel()
+      // Agents often name files relative to a sub-package (`lib/a.ts` for
+      // `apps/web/src/lib/a.ts`); if the root-relative guess is not a file,
+      // take the project file whose path ends with what was written.
+      const relative = isAbsoluteProjectPath(rawPath) ? null : rawPath.replace(/\\/g, '/').replace(/^\.\//, '')
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const panel = projectRef.current
+        if (panel && await panel.openFileByPath(filePath)) {
+          showProjectEditorPanel()
+          return
         }
-        showProjectEditorPanel()
-        return
+        if (panel && relative && attempt === 2) {
+          const hit = await findProjectFileBySuffix(relative, targetProjectRoot)
+          if (hit && await panel.openFileByPath(hit)) {
+            showProjectEditorPanel()
+            return
+          }
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 150))
       }
 
+      if (openedOutsideDirectory) throw new Error('The directory opened, but the document could not be loaded. Try opening it from the project panel.')
       const existing = projectFiles.find((file) => file.path === filePath)
       if (existing) {
         mergeProjectFiles([existing])
         setActiveProjectFileId(existing.id)
       } else {
+        // The plain-text fallback below would show an image or PDF as garbage.
+        if (isProjectBinaryPreview(filePath)) throw new Error(`Could not open ${filePath.split(/[\\/]/).pop()} — it was not found in the project.`)
         const headers: Record<string, string> = {}
         if (token) headers.Authorization = `Bearer ${token}`
-        const readRes = await fetch(`${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}`, { headers })
+        const query = new URLSearchParams({ path: filePath })
+        if (activeProject?.surfaceId && targetProjectRoot === activeProject.projectRoot) query.set('surfaceId', activeProject.surfaceId)
+        const readRes = await fetch(`${API_URL}/api/project/read?${query}`, { headers })
         if (!readRes.ok) throw new Error(`Failed to open file: ${readRes.status}`)
 
         const readData = await readRes.json() as { path: string; content: string }
@@ -232,7 +299,7 @@ export function useProjectFileActions({
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to open linked file')
     }
-  }, [activeSessionId, activeProject, mergeProjectFiles, openRemoteProjectOnGateway, resolveKnownProjectRootForFile, showProject, showProjectEditorPanel, token, projectFiles, projectRef, setActiveProjectFileId, setShowProject, showProjectRef])
+  }, [activeSessionId, activeProject, activeProjectRecord?.rootPath, findProjectFileBySuffix, mergeProjectFiles, openRemoteProjectOnGateway, resolveKnownProjectRootForFile, showProject, showProjectEditorPanel, token, projectFiles, projectRef, setActiveProjectFileId, setShowProject, showProjectRef])
 
   const handleApplyProjectDiff = useCallback(async (filePath: string, resultContent: string) => {
     try {

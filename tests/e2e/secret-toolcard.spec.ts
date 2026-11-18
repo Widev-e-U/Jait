@@ -9,6 +9,9 @@ test.describe('secret prompt tool cards', () => {
 
     const form = page.getByTestId('inline-secret-form')
     await expect(form).toBeVisible()
+    // The prompt belongs directly to its single highlighted frame.
+    await expect(form.locator('..')).toHaveClass(/ring-yellow-500/)
+    await expect(form.locator('..').locator('[class*="bg-background/35"]')).toHaveCount(0)
     await expect(form.getByText('SSH password')).toBeVisible()
     await expect(form.getByText('This prompt is attached to the running tool call.')).toBeVisible()
     await expect(form.getByText('Password for alice@host')).toBeVisible()

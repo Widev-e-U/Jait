@@ -25,7 +25,7 @@ test('shows live approval icons for background chats and clears them after recon
   // Forward the real app socket; inject only approval state so no tools execute.
   const sockets: WebSocketRoute[] = []
   let pending: Array<{ id: string; sessionId: string }> = []
-  await page.routeWebSocket('**/ws?*', (socket) => {
+  await page.routeWebSocket(url => url.host === new URL(API_URL).host && ['/', '/ws'].includes(url.pathname), (socket) => {
     sockets.push(socket)
     const server = socket.connectToServer()
     server.onMessage((message) => {
@@ -54,6 +54,7 @@ test('shows live approval icons for background chats and clears them after recon
   const send = (type: string, payload: unknown) => {
     for (const socket of sockets) socket.send(JSON.stringify({ type, sessionId: chat.id, timestamp: new Date().toISOString(), payload }))
   }
+  await expect.poll(() => sockets.length).toBeGreaterThan(0)
   pending = [{ id: 'approval-1', sessionId: chat.id }, { id: 'approval-2', sessionId: chat.id }]
   send('session.streaming', { sessionId: chat.id, streaming: true })
   for (const item of pending) send('consent.required', item)

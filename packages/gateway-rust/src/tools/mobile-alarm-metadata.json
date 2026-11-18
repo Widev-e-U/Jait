@@ -1,0 +1,33 @@
+{
+  "name": "mobile.alarm.schedule",
+  "displayName": "Schedule phone alarm",
+  "description": "Schedule an exact wake-up alarm on the authenticated users registered Android phone. Use an ISO-8601 timestamp with timezone.",
+  "tier": "standard",
+  "category": "os",
+  "risk": "medium",
+  "defaultConsentLevel": "once",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "at": {
+        "type": "string",
+        "description": "Future ISO-8601 timestamp including timezone offset."
+      },
+      "title": {
+        "type": "string",
+        "description": "Alarm title."
+      },
+      "body": {
+        "type": "string",
+        "description": "Alarm message."
+      },
+      "id": {
+        "type": "string",
+        "description": "Stable alarm identifier for replacement."
+      }
+    },
+    "required": [
+      "at"
+    ]
+  }
+}

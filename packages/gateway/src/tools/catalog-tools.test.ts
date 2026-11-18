@@ -74,4 +74,34 @@ describe("live Jait capability catalog", () => {
     expect(() => JSON.parse(text.slice(text.indexOf("{")))).not.toThrow();
   });
 
+  it("reports tools that no Jait page advertises so coverage gaps stay visible", async () => {
+    // registry.register() always stamps a page, so a tool can only reach the
+    // catalog unadvertised when a page-less source feeds it directly.
+    const { category: _category, ...uncategorised } = stub("zeta.orphan.inspector");
+    const tools = [stub("agent.profiles"), uncategorised as unknown as ToolDefinition];
+    const registry = { list: () => tools, listForMcp: () => tools, search: () => [] } as unknown as ToolRegistry;
+    const catalog = createJaitCatalogTool(registry);
+
+    const data = (await catalog.execute({}, context)).data as any;
+
+    expect(data.uncataloguedTools).toEqual([{ name: "zeta.orphan.inspector" }]);
+    expect(data.uncataloguedTools.map((tool: any) => tool.name)).not.toContain("agent.profiles");
+  });
+
+  it("drops excess schemas instead of truncating JSON when a payload exceeds the budget", async () => {
+    const registry = new ToolRegistry();
+    for (let index = 0; index < 2; index++) {
+      registry.register({ ...stub(`agent.profiles.bulky${index}`), parameters: { type: "object", properties: {
+        payload: { type: "string", description: "x".repeat(20_000) },
+      } } });
+    }
+    const catalog = createJaitCatalogTool(registry);
+
+    const data = (await catalog.execute({ pageId: "agents" }, context)).data as any;
+
+    expect(JSON.stringify(data).length).toBeLessThanOrEqual(10_000);
+    expect(data.matches).toEqual([]);
+    expect(data.schemaLookupRequired).toEqual(expect.arrayContaining(["agent.profiles.bulky0", "agent.profiles.bulky1"]));
+  });
+
 });

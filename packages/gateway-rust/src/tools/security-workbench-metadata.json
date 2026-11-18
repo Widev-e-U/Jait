@@ -1,0 +1,1535 @@
+{
+  "base": [
+    {
+      "name": "security.tls.check",
+      "description": "Inspect a scoped TLS certificate, trust, identity and negotiated protocol. No exhaustive cipher or legacy-protocol test.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.http.check",
+      "description": "Request only GET / on a scoped IP/port; inspect status and header presence. No redirects, cookies, credentials, bodies or crawling.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.https.check",
+      "description": "Inspect HTTPS GET / header policy. Certificate/trust findings require security.tls.check.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.ssh.check",
+      "description": "Read a bounded SSH identification string; no authentication, credentials or banner-only CVE conclusions.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.host.audit",
+      "description": "Read gateway OS/SSH directives, or a fixed SSH audit on an authorized user/target. SSH uses existing keys, strict host-key verification and no proxy or forwarding. Effective policy may remain unknown.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "medium",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.web.scan",
+      "description": "Run only Jait's hash-pinned GET / nosniff template via Nuclei, then confirm HTTP response coverage. No arbitrary templates, redirects, callbacks, code, headless, fuzzing or credentials.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "medium",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.software.scan",
+      "description": "Run offline Trivy configuration checks on a bounded project snapshot. No secrets, symlinks, external paths, image pulls or database downloads. Optional package correlation uses a prepared local database and records its metadata revision; applicability remains suspected.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.telemetry.ingest",
+      "description": "Import up to 100 Wazuh/Suricata JSONL events from a scoped project file, preserving only in-scope normalized alerts as unverified source reports.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.services.nmap",
+      "description": "Run fixed unprivileged Nmap selected-port TCP inventory; no scripts, DNS, UDP, OS detection or version scripts. Parse bounded XML with scope checks.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.results.show",
+      "displayName": "Show saved security assessment",
+      "risk": "low",
+      "defaultConsentLevel": "none",
+      "description": "Display a saved assessment in a readable chat tool card with findings, evidence, scanner version, time, vantage and coverage gaps. Read-only: retrieves an owned native TCP or expanded check by runId without rescanning. Use after a check or when the user asks to see existing results.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ]
+      }
+    },
+    {
+      "name": "security.scope.get",
+      "description": "Get an assessment scope owned by the current operator; does not extend expiry or authorization.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.engines.status",
+      "description": "Check locally installed Nmap, Nuclei and Trivy versions. Missing engines are reported explicitly; nothing is installed or downloaded.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "security.assets.discover",
+      "description": "Discover responsiveness among explicit authorized scope targets using bounded selected-port TCP checks; no automatic subnet expansion or unscoped ARP hosts.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.findings.list",
+      "description": "List recent normalized findings with confidence, evidence references, disposition and verification state; no blanket security score.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "security.findings.explain",
+      "description": "Explain a measured rule using its cited evidence, confidence, coverage and remediation recommendation.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.remediation.plan",
+      "description": "Prepare concrete rule-specific remediation, backup, rollback and same-check verification instructions. Changes still use existing consent paths.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.verification.run",
+      "description": "Repeat the original scoped check from the same gateway. Mark verified-absent only after a conclusive compatible protocol result; failures/timeouts/changed engines remain inconclusive.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.baseline.compare",
+      "description": "Compare two completed checks with identical authorized scope, profile, engine version and gateway vantage. Incompatible/incomplete runs remain inconclusive.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "beforeRunId": {
+            "type": "string"
+          },
+          "afterRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "beforeRunId",
+          "afterRunId"
+        ]
+      }
+    },
+    {
+      "name": "security.report.export",
+      "description": "Export a report with deterministic evidence, scanner versions and limits. Target addresses and operator/vantage identities are aliased by default; no raw artifacts or scope paths are exported.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ]
+      }
+    }
+  ],
+  "scheduled": [
+    {
+      "name": "security.tls.check",
+      "description": "Inspect a scoped TLS certificate, trust, identity and negotiated protocol. No exhaustive cipher or legacy-protocol test.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.http.check",
+      "description": "Request only GET / on a scoped IP/port; inspect status and header presence. No redirects, cookies, credentials, bodies or crawling.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.https.check",
+      "description": "Inspect HTTPS GET / header policy. Certificate/trust findings require security.tls.check.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.ssh.check",
+      "description": "Read a bounded SSH identification string; no authentication, credentials or banner-only CVE conclusions.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.host.audit",
+      "description": "Read gateway OS/SSH directives, or a fixed SSH audit on an authorized user/target. SSH uses existing keys, strict host-key verification and no proxy or forwarding. Effective policy may remain unknown.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "medium",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.web.scan",
+      "description": "Run only Jait's hash-pinned GET / nosniff template via Nuclei, then confirm HTTP response coverage. No arbitrary templates, redirects, callbacks, code, headless, fuzzing or credentials.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "medium",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.software.scan",
+      "description": "Run offline Trivy configuration checks on a bounded project snapshot. No secrets, symlinks, external paths, image pulls or database downloads. Optional package correlation uses a prepared local database and records its metadata revision; applicability remains suspected.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.telemetry.ingest",
+      "description": "Import up to 100 Wazuh/Suricata JSONL events from a scoped project file, preserving only in-scope normalized alerts as unverified source reports.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.services.nmap",
+      "description": "Run fixed unprivileged Nmap selected-port TCP inventory; no scripts, DNS, UDP, OS detection or version scripts. Parse bounded XML with scope checks.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "low",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.results.show",
+      "displayName": "Show saved security assessment",
+      "risk": "low",
+      "defaultConsentLevel": "none",
+      "description": "Display a saved assessment in a readable chat tool card with findings, evidence, scanner version, time, vantage and coverage gaps. Read-only: retrieves an owned native TCP or expanded check by runId without rescanning. Use after a check or when the user asks to see existing results.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ]
+      }
+    },
+    {
+      "name": "security.scope.get",
+      "description": "Get an assessment scope owned by the current operator; does not extend expiry or authorization.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.engines.status",
+      "description": "Check locally installed Nmap, Nuclei and Trivy versions. Missing engines are reported explicitly; nothing is installed or downloaded.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "security.assets.discover",
+      "description": "Discover responsiveness among explicit authorized scope targets using bounded selected-port TCP checks; no automatic subnet expansion or unscoped ARP hosts.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scopeId"
+        ]
+      }
+    },
+    {
+      "name": "security.findings.list",
+      "description": "List recent normalized findings with confidence, evidence references, disposition and verification state; no blanket security score.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "security.findings.explain",
+      "description": "Explain a measured rule using its cited evidence, confidence, coverage and remediation recommendation.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.remediation.plan",
+      "description": "Prepare concrete rule-specific remediation, backup, rollback and same-check verification instructions. Changes still use existing consent paths.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.verification.run",
+      "description": "Repeat the original scoped check from the same gateway. Mark verified-absent only after a conclusive compatible protocol result; failures/timeouts/changed engines remain inconclusive.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "findingId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "findingId"
+        ]
+      }
+    },
+    {
+      "name": "security.baseline.compare",
+      "description": "Compare two completed checks with identical authorized scope, profile, engine version and gateway vantage. Incompatible/incomplete runs remain inconclusive.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "beforeRunId": {
+            "type": "string"
+          },
+          "afterRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "beforeRunId",
+          "afterRunId"
+        ]
+      }
+    },
+    {
+      "name": "security.report.export",
+      "description": "Export a report with deterministic evidence, scanner versions and limits. Target addresses and operator/vantage identities are aliased by default; no raw artifacts or scope paths are exported.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ]
+      }
+    },
+    {
+      "name": "security.monitor.schedule",
+      "description": "Schedule the exact scoped network check every 15, 30 or 60 minutes. Expiry is enforced on every execution; the job disables itself when scope expires. No host audits or software/telemetry jobs.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "risk": "medium",
+      "defaultConsentLevel": "always",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "tls",
+              "http",
+              "https",
+              "ssh",
+              "nmap"
+            ]
+          },
+          "minutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "scopeId",
+          "profile",
+          "minutes"
+        ]
+      }
+    },
+    {
+      "name": "security.monitor.tick",
+      "description": "Execute a previously scheduled scoped check and compare its baseline; expired authorization disables the owned monitor.",
+      "tier": "standard",
+      "category": "network",
+      "source": "builtin",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "string",
+            "description": "Previously authorized scope ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "Literal IP from the scope"
+          },
+          "port": {
+            "type": "number",
+            "description": "TCP port from the scope"
+          },
+          "serverName": {
+            "type": "string",
+            "description": "Previously authorized TLS SNI/identity name"
+          },
+          "username": {
+            "type": "string",
+            "description": "Previously authorized SSH user (existing key and trusted host key required)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Previously authorized project-relative file/directory"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "wazuh",
+              "suricata"
+            ]
+          },
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "http",
+              "https"
+            ]
+          },
+          "includePackages": {
+            "type": "boolean",
+            "description": "Use an already-prepared local Trivy vulnerability database; never download during scans"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "monitorJobId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scopeId",
+          "profile",
+          "monitorJobId"
+        ]
+      }
+    }
+  ]
+}

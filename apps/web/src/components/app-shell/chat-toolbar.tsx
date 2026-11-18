@@ -31,7 +31,7 @@ import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { isMobileProjectTargetActive, type MobileProjectControlState, type MobileProjectTarget } from '@/lib/mobile-project-controls'
 import type { AppView } from '@/lib/app-view'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/lib/view-mode'
 import { canStopThread } from '@/lib/thread-status'
 
 interface ChatToolbarProps {
@@ -95,13 +95,16 @@ export function ChatToolbar({
   onToggleSidebar,
   onToggleTerminal,
 }: ChatToolbarProps) {
-  if ((currentView !== 'chat' && currentView !== 'threads') || (!isMobile && (viewMode !== 'manager' || !automation.selectedThread))) return null
+  if (currentView !== 'chat' && currentView !== 'threads') return null
+  // Desktop developer controls are already available in the workspace.
+  // Only selected manager threads need this extra toolbar on desktop.
+  if (!isMobile && (viewMode !== 'manager' || !automation.selectedThread)) return null
 
   return (
     <div
       className={`border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${isMobile && !compactManagerToolbar ? 'hidden' : 'flex'} ${
         compactManagerToolbar
-          ? 'min-h-[35px] items-center gap-1.5 pt-14 py-2'
+          ? 'min-h-[35px] items-center gap-1.5 py-2'
           : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto overflow-y-visible scrollbar-none'
       }`}
     >

@@ -325,14 +325,21 @@ export function registerTerminalRoutes(
         let settled = false;
         let settleTimer: ReturnType<typeof setTimeout> | null = null;
         let dMatch: { exitCode: number; end: number } | null = null;
+        let pendingExitCode: number | null = null;
 
         const listener = (data: string) => {
           raw += data;
 
           if (settled) return;
 
-          // Once completion is detected, do not extend the settle window.
+          // Completion already detected: keep the settle window open while
+          // output is still flushing. ConPTY can deliver command output after
+          // the completion marker or the shell prompt; re-arming the 50ms
+          // timer on every chunk means we settle 50ms after the stream goes
+          // quiet instead of dropping late output.
           if (settleTimer) {
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(() => finish(false, pendingExitCode), 50);
             return;
           }
 
@@ -346,8 +353,8 @@ export function registerTerminalRoutes(
             }
           }
           if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
-            const code = dMatch.exitCode;
-            settleTimer = setTimeout(() => finish(false, code), 50);
+            pendingExitCode = dMatch.exitCode;
+            settleTimer = setTimeout(() => finish(false, pendingExitCode), 50);
             return;
           }
 
@@ -359,7 +366,8 @@ export function registerTerminalRoutes(
 
           // No shell integration markers: fall back to prompt detection.
           if (!dMatch && hasShellPrompt(raw, shell)) {
-            settleTimer = setTimeout(() => finish(false, inferFallbackExitCode(raw)), 100);
+            pendingExitCode = inferFallbackExitCode(raw);
+            settleTimer = setTimeout(() => finish(false, pendingExitCode), 100);
           }
         };
 

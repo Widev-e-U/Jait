@@ -66,6 +66,22 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('drops a hidden steering event so internal nudges never reach the transcript', () => {
+    // Background-terminal notifications steer the model but are internal: the
+    // chat must stay clean while trajectory mode still logs them.
+    const stream = createMessageStream()
+    stream.pushText('before the steer')
+    stream.push({
+      type: 'steering',
+      content: '[system-notification: background command finished]',
+      hidden: true,
+    })
+    expect(stream.snapshot()).toMatchObject({
+      content: 'before the steer',
+      segments: [{ type: 'text', content: 'before the steer' }],
+    })
+  })
+
   it('groups repeated tool call IDs once', () => {
     const stream = createMessageStream()
     stream.pushToolStart('a', 'x', {})
@@ -97,6 +113,31 @@ describe('createMessageStream', () => {
       result: { ok: true, message: 'done', data: { hits: 1 } },
     })
     expect(snap.segments).toEqual([{ type: 'toolGroup', callIds: ['c1'] }])
+  })
+
+  it('rekeys the correct parallel provisional call after snapshot resume', () => {
+    const initial = createMessageStream()
+    initial.pushToolCallDelta('pending-0', 'file_', '{', undefined, 0)
+    initial.pushToolCallDelta('pending-1', 'other', '', undefined, 1)
+    const resumed = createMessageStream(initial.snapshot())
+    resumed.pushToolCallDelta('real-a', 'read', '}', undefined, 0)
+    expect(resumed.snapshot().toolCalls.map(call => [call.callId, call.tool])).toEqual([
+      ['real-a', 'file_read'], ['pending-1', 'other'],
+    ])
+    expect(resumed.snapshot().segments).toEqual([{ type: 'toolGroup', callIds: ['real-a', 'pending-1'] }])
+  })
+
+  it('hydrates out-of-order provider slots and preserves fragments', () => {
+    const initial = createMessageStream()
+    initial.pushToolCallDelta('pending-0', 'file_', '{', undefined, 4)
+    initial.pushToolCallDelta('pending-1', 'other', '', undefined, 1)
+    const resumed = createMessageStream()
+    resumed.hydrate(initial.snapshot())
+    resumed.pushToolCallDelta('real-a', 'read', '}', undefined, 4)
+    expect(resumed.snapshot().toolCalls.map(call => [call.callId, call.tool, call.streamingArgs])).toEqual([
+      ['real-a', 'file_read', '{}'], ['pending-1', 'other', ''],
+    ])
+    expect(resumed.snapshot().segments).toEqual([{ type: 'toolGroup', callIds: ['real-a', 'pending-1'] }])
   })
 
   it('supports approval_required', () => {
@@ -216,6 +257,41 @@ describe('createMessageStream', () => {
       { type: 'text', content: 'before the steer' },
       { type: 'steering', content: 'do X instead', displayContent: 'do X instead' },
       { type: 'text', content: 'after the steer and more' },
+    ])
+  })
+
+  it('anchors a deferred steer after the tool round that was already running', () => {
+    const stream = createMessageStream()
+
+    // Round 1: the user sends a message, the model starts a tool call.
+    stream.pushText('let me look at the file')
+    stream.pushToolStart('t1', 'read_file', { path: 'a.ts' })
+
+    // Mid-loop the user steers. The gateway defers injection to the next round
+    // boundary, so no marker exists yet — the queue owns the visible "unsent"
+    // row and the transcript stays untouched.
+    expect(stream.snapshot().segments).toEqual([
+      { type: 'text', content: 'let me look at the file' },
+      { type: 'toolGroup', callIds: ['t1'] },
+    ])
+
+    // The in-flight round finishes…
+    stream.pushToolResult('t1', true, 'ok', {}, undefined)
+
+    // …and only then does the boundary inject the steer, carrying the id the
+    // client used to correlate the queued row with this marker.
+    stream.pushSteering('use b.ts instead', 'use b.ts instead', 'steer-123', true)
+
+    expect(stream.snapshot().segments).toEqual([
+      { type: 'text', content: 'let me look at the file' },
+      { type: 'toolGroup', callIds: ['t1'] },
+      {
+        type: 'steering',
+        content: 'use b.ts instead',
+        displayContent: 'use b.ts instead',
+        queuedMessageId: 'steer-123',
+        deferred: true,
+      },
     ])
   })
 
@@ -420,4 +496,23 @@ describe('provisional pending-N tool call ids', () => {
       { type: 'text', content: 'Done.' },
     ])
   })
+})
+
+it('tracks explicit provisional identity across live same-ID adoption', () => {
+  const stream = createMessageStream()
+  stream.pushToolCallDelta('pending-0', 'file_', '{', undefined, 4, true)
+  stream.pushToolCallDelta('pending-0', 'read', '}', undefined, 4, false)
+  stream.pushToolStart('other', 'file_read', {})
+  expect(stream.snapshot().toolCalls.map(call => [call.callId, call.provisional])).toEqual([
+    ['pending-0', false], ['other', undefined],
+  ])
+})
+
+it('does not adopt a provisional call from a different indexed slot', () => {
+  const stream = createMessageStream()
+  stream.pushToolCallDelta('pending-0', 'first', '', undefined, 4, true)
+  stream.pushToolCallDelta('real-1', 'second', '', undefined, 1, false)
+  expect(stream.snapshot().toolCalls.map(call => [call.callId, call.tool])).toEqual([
+    ['pending-0', 'first'], ['real-1', 'second'],
+  ])
 })

@@ -1,16 +1,16 @@
-import { Boxes, Bug, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { useRef, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
 import type { ModeSidebarItem, SidebarAccount } from '@/components/app-shell/mode-sidebar'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { AppView } from '@/lib/app-view'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
+import type { SessionWaitMap } from '@/lib/session-waits'
 import {
   DEVELOPER_SIDEBAR_MIN_WIDTH,
   clampDeveloperSidebarWidth,
@@ -21,11 +21,7 @@ interface DeveloperSidebarsProps {
   changedFilesCount?: number
   account: SidebarAccount
   currentView: AppView
-  viewMode: ViewMode
   onNavigate: (view: AppView) => void
-  onViewModeChange: (mode: ViewMode) => void
-  screenShareActive: boolean
-  onToggleScreenShare: () => void
   activeProject: ActiveProjectState
   activeProjectId: string | null
   openSessionIds?: ReadonlySet<string>
@@ -44,13 +40,16 @@ interface DeveloperSidebarsProps {
   searchResults: ProjectSearchResults | null
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
-  showDebugPanel: boolean
   showSidebar: boolean
   sidebarView: DeveloperSidebarView
   sidebarWidth: number
   showTerminal: boolean
   streamingSessionIds: Set<string>
   approvalSessionIds?: ReadonlySet<string>
+  /** IDs of sessions with an open `user.ask` question awaiting an answer. */
+  questionSessionIds?: ReadonlySet<string>
+  /** Every known wait reason per session (question, consent, browser, terminal, …). */
+  sessionWaits?: SessionWaitMap
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
   onArchiveSession: (sessionId: string) => void
@@ -68,11 +67,12 @@ interface DeveloperSidebarsProps {
   onSearch: (query: string) => void
   onSelectPersonalSession: (sessionId: string) => void
   onSelectProject: (projectId: string) => void
+  onNewChatInProject?: (projectId: string) => void
+  onRenameSession?: (sessionId: string, name: string) => void | Promise<unknown>
   onSelectProjectSession: (projectId: string, sessionId: string) => void
   onShowFewer: () => void
   onShowMore: () => void
   onToggleArchitecture: () => void
-  onToggleDebug: () => void
   onTogglePreview: () => void
   onSelectSidebarView: (view: DeveloperSidebarView) => void
   onSidebarWidthChange: (width: number) => void
@@ -84,11 +84,7 @@ export function DeveloperSidebars({
   changedFilesCount = 0,
   account,
   currentView,
-  viewMode,
   onNavigate,
-  onViewModeChange,
-  screenShareActive,
-  onToggleScreenShare,
   activeProject,
   activeProjectId,
   activeSessionId,
@@ -107,13 +103,14 @@ export function DeveloperSidebars({
   searchResults,
   sessionInfo,
   showArchitecture,
-  showDebugPanel,
   showSidebar,
   sidebarView,
   sidebarWidth,
   showTerminal,
   streamingSessionIds,
   approvalSessionIds,
+  questionSessionIds,
+  sessionWaits,
   sidebarRef,
   onAssignRepository,
   onArchiveSession,
@@ -131,11 +128,12 @@ export function DeveloperSidebars({
   onSearch,
   onSelectPersonalSession,
   onSelectProject,
+  onNewChatInProject,
+  onRenameSession,
   onSelectProjectSession,
   onShowFewer,
   onShowMore,
   onToggleArchitecture,
-  onToggleDebug,
   onTogglePreview,
   onSelectSidebarView,
   onSidebarWidthChange,
@@ -169,11 +167,7 @@ export function DeveloperSidebars({
         <AppNavigationSidebar
           account={account}
           currentView={currentView}
-          viewMode={viewMode}
           onNavigate={onNavigate}
-          onViewModeChange={onViewModeChange}
-          screenShareActive={screenShareActive}
-          onToggleScreenShare={onToggleScreenShare}
           items={[
             { id: 'projects', label: 'Projects & Chats', icon: Folders, active: showSidebar && sidebarView === 'projects', onSelect: () => onSelectSidebarView('projects') },
             ...((activeProjectId || activeProject) ? [
@@ -186,15 +180,13 @@ export function DeveloperSidebars({
               { id: 'architecture', label: 'Architecture', icon: Boxes, active: showArchitecture, disabled: authLoading || projectsLoading, onSelect: onToggleArchitecture },
             ] : []),
           ] satisfies ModeSidebarItem[]}
-          bottomItems={[
-            { id: 'trajectory', label: 'Trajectory', icon: Bug, active: showDebugPanel, disabled: !activeSessionId, onSelect: onToggleDebug },
-          ]}
           onOpenSettings={onOpenSettings}
         />
       )}
 
       {showSidebar && sidebarView === 'projects' && !isMobile && (
         <aside
+          data-browser-sidebar
           ref={sidebarRef}
           tabIndex={-1}
           onBlur={onBlur}
@@ -215,6 +207,8 @@ export function DeveloperSidebars({
               searchResults={searchResults}
               onSearch={onSearch}
               onSelectProject={onSelectProject}
+              onNewChatInProject={onNewChatInProject}
+              onRenameSession={onRenameSession}
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
               onArchiveSession={onArchiveSession}
@@ -236,6 +230,8 @@ export function DeveloperSidebars({
               repositories={repositories}
               streamingSessionIds={streamingSessionIds}
               approvalSessionIds={approvalSessionIds}
+              questionSessionIds={questionSessionIds}
+              sessionWaits={sessionWaits}
             />
           </ErrorBoundary>
           <div
@@ -257,7 +253,15 @@ export function DeveloperSidebars({
             onPointerMove={(event) => {
               const start = resizeStartRef.current
               if (!start) return
-              setAndStoreSidebarWidth(start.width + event.clientX - start.pointerX)
+              const rawWidth = start.width + event.clientX - start.pointerX
+              if (rawWidth < DEVELOPER_SIDEBAR_MIN_WIDTH - 40) {
+                // Dragged past the minimum: hide the panel (selecting the open view toggles it closed).
+                resizeStartRef.current = null
+                document.documentElement.classList.remove('is-dragging-col-resize')
+                onSelectSidebarView('projects')
+                return
+              }
+              setAndStoreSidebarWidth(rawWidth)
             }}
             onPointerUp={finishSidebarResize}
             onPointerCancel={finishSidebarResize}

@@ -6,11 +6,18 @@ export interface ProjectSwitchTarget {
 }
 
 export function activeProjectDuringSwitch(
-  _current: ActiveProjectState,
+  current: ActiveProjectState,
   target: ProjectSwitchTarget,
+  willOpen = true,
 ): ActiveProjectState {
   const projectRoot = target.rootPath?.trim()
   if (!projectRoot) return null
+  if (!willOpen) {
+    const nodeId = target.nodeId?.trim() || 'gateway'
+    return current?.surfaceId && current.projectRoot === projectRoot && (current.nodeId ?? 'gateway') === nodeId
+      ? { ...current, opening: false }
+      : null
+  }
   return {
     surfaceId: '',
     projectRoot,

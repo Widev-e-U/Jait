@@ -12,7 +12,7 @@ function TeamChatsFixture() {
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
   }, [])
-  return <main className="flex h-screen flex-col"><ManagerMode currentPage="agents" onPageChange={() => {}} isMobile={isMobile} viewMode="manager" onViewModeChange={() => {}} account={{ username: 'Test user', initial: 'T', loading: false, onLogin: () => {}, onLogout: () => {}, themeMode: 'dark', onThemeModeChange: () => {} }}><p>Agents graph</p></ManagerMode></main>
+  return <main className="flex h-screen flex-col"><ManagerMode currentPage="agents" onPageChange={() => {}} isMobile={isMobile} account={{ username: 'Test user', initial: 'T', loading: false, onLogin: () => {}, onLogout: () => {}, themeMode: 'dark', onThemeModeChange: () => {} }}><p>Agents graph</p></ManagerMode></main>
 }
 
 if (new URLSearchParams(window.location.search).has('panelFixture')) {

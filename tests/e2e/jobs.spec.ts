@@ -5,7 +5,10 @@ import type { Page } from '@playwright/test'
 import { cleanupTestJobs, test, expect } from './fixtures'
 
 async function openJobsPage(page: Page): Promise<void> {
-  await page.goto('/')
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('button', { name: 'Account menu', exact: true })).toBeVisible()
+  const openMenu = page.getByRole('button', { name: 'Open menu', exact: true })
+  if (await openMenu.isVisible()) await openMenu.click()
   await page.getByRole('button', { name: 'Jobs', exact: true }).click()
 }
 

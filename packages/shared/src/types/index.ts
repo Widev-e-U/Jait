@@ -35,8 +35,10 @@ export type {
   FsChangeEvent,
   FsChangesPayload,
   AttentionKind,
+  SessionWait,
+  SessionWaitKind,
 } from "./message.js";
-export { attentionKey } from "./message.js";
+export { attentionKey, sessionWaitLabel, BLOCKING_SESSION_WAIT_KINDS } from "./message.js";
 export type { GatewayStatus, DeviceInfo, FsNode, FsBrowseEntry, FsBrowseResponse, FsRootsResponse } from "./gateway.js";
 export type {
   NodePlatform,
@@ -149,6 +151,25 @@ export type {
   UserSecretRecord,
   CreateUserSecretRequest,
 } from "./automation.js";
+
+export {
+  ORCHESTRATION_LIMITS,
+  ORCHESTRATION_RUN_STATES,
+  ORCHESTRATION_TASK_STATES,
+} from "./orchestration.js";
+export type {
+  AgentReportStatus,
+  AgentTaskReport,
+  OrchestrationRunState,
+  OrchestrationRunView,
+  OrchestrationTaskSpec,
+  OrchestrationTaskState,
+  OrchestrationTaskView,
+  TaskResources,
+  VerificationCheck,
+  VerificationGate,
+  VerificationOutcome,
+} from "./orchestration.js";
 
 export type {
   PullRequestListState,

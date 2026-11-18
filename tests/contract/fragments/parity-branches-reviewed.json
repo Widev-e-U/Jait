@@ -1,0 +1,80 @@
+{
+  "review_scope": "parity-branches bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:254:5",
+      "status": "verified",
+      "parity_review": "Reviewed `refuses hostile: ${sql.slice(0, 50)}`. All source bodies, setup, inputs, assertion operands and enclosing function bindings match the bounded completion or loop audit. The corresponding loop and pattern structural controls pass. The unchanged fixture is observed with a test-only branch wrapper that returns each original condition value unchanged and records its truthiness once. A zero-observation conditional slot requires an executed enclosing condition whose actual branch excludes that slot on every evaluation; the report binds this evidence to the case, capture slot, fixture source position and condition text. Slots without such a condition proof remain pending. Six controls reject absent events, an entered branch, wrong case/slot and malformed truth values. Other zero-count slots need the existing unused-helper proof. This preserves reference-test conditional skips and does not claim those skipped branches were exercised. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-branches/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_254_5_for0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_254_5_for1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_254_5_for2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_254_5_for3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/server.test.ts:93:3",
+      "status": "verified",
+      "parity_review": "Reviewed GET / returns web UI or gateway info. All source bodies, setup, inputs, assertion operands and enclosing function bindings match the bounded completion or loop audit. The corresponding loop and pattern structural controls pass. The unchanged fixture is observed with a test-only branch wrapper that returns each original condition value unchanged and records its truthiness once. A zero-observation conditional slot requires an executed enclosing condition whose actual branch excludes that slot on every evaluation; the report binds this evidence to the case, capture slot, fixture source position and condition text. Slots without such a condition proof remain pending. Six controls reject absent events, an entered branch, wrong case/slot and malformed truth values. Other zero-count slots need the existing unused-helper proof. This preserves reference-test conditional skips and does not claim those skipped branches were exercised. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-branches/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_server_test_ts_93_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/project-reveal.test.ts:129:3",
+      "status": "verified",
+      "parity_review": "Reviewed reveals a file inside an open local project surface. All source bodies, setup, inputs, assertion operands and enclosing function bindings match the bounded completion or loop audit. The corresponding loop and pattern structural controls pass. The unchanged fixture is observed with a test-only branch wrapper that returns each original condition value unchanged and records its truthiness once. A zero-observation conditional slot requires an executed enclosing condition whose actual branch excludes that slot on every evaluation; the report binds this evidence to the case, capture slot, fixture source position and condition text. Slots without such a condition proof remain pending. Six controls reject absent events, an entered branch, wrong case/slot and malformed truth values. Other zero-count slots need the existing unused-helper proof. This preserves reference-test conditional skips and does not claim those skipped branches were exercised. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-branches/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_project_reveal_test_ts_129_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/project-reveal.test.ts:155:3",
+      "status": "verified",
+      "parity_review": "Reviewed accepts a project-relative path and resolves it against the project root. All source bodies, setup, inputs, assertion operands and enclosing function bindings match the bounded completion or loop audit. The corresponding loop and pattern structural controls pass. The unchanged fixture is observed with a test-only branch wrapper that returns each original condition value unchanged and records its truthiness once. A zero-observation conditional slot requires an executed enclosing condition whose actual branch excludes that slot on every evaluation; the report binds this evidence to the case, capture slot, fixture source position and condition text. Slots without such a condition proof remain pending. Six controls reject absent events, an entered branch, wrong case/slot and malformed truth values. Other zero-count slots need the existing unused-helper proof. This preserves reference-test conditional skips and does not claim those skipped branches were exercised. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-branches/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_project_reveal_test_ts_155_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/session-sql.adversarial.test.ts:429:3",
+      "status": "verified",
+      "parity_review": "Reviewed parenthesized SELECT is allowed by the validator and either runs or errors natively (never a mutation). All source bodies, setup, inputs, assertion operands and enclosing function bindings match the bounded completion or loop audit. The corresponding loop and pattern structural controls pass. The unchanged fixture is observed with a test-only branch wrapper that returns each original condition value unchanged and records its truthiness once. A zero-observation conditional slot requires an executed enclosing condition whose actual branch excludes that slot on every evaluation; the report binds this evidence to the case, capture slot, fixture source position and condition text. Slots without such a condition proof remain pending. Six controls reject absent events, an entered branch, wrong case/slot and malformed truth values. Other zero-count slots need the existing unused-helper proof. This preserves reference-test conditional skips and does not claim those skipped branches were exercised. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-branches/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_session_sql_adversarial_test_ts_429_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

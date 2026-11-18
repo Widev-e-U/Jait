@@ -1,4 +1,8 @@
 // @jait/shared — main entry point
+export * from "./chat-node.js";
+export * from "./messenger.js";
+export * from "./agent-control.js";
+
 export * from "./types/index.js";
 export * from "./schemas/index.js";
 export * from "./constants/index.js";
@@ -21,3 +25,11 @@ export * from "./security-workbench.js";
 export * from "./jait-link.js";
 
 export * from "./team-chat.js";
+
+export * from "./network-resources.js";
+
+export type * from "./email.js";
+
+export type { ModelUsage, UsageSummary } from "./model-usage.js";
+export * from "./chat-loop.js";
+export * from "./browser-workflows.js";

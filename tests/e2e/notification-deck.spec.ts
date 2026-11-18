@@ -1,0 +1,33 @@
+import { expect, test } from '@playwright/test'
+
+test('notification deck expands and collapses and updates when dismissed', async ({ page }) => {
+  await page.goto('/src/e2e-fixtures/notification-deck.html')
+  await page.getByRole('button', { name: 'Add notifications' }).click()
+  const toggle = page.getByRole('button', { name: 'Show notifications' })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByText('3 notifications')).toBeVisible()
+  const cards = page.locator('[data-sonner-toast]')
+  await expect(cards).toHaveCount(3)
+  await expect(cards.first()).toHaveAttribute('data-expanded', 'false')
+  await toggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: 'Show fewer' })).toHaveAttribute('aria-expanded', 'true')
+  await expect(cards.first()).toHaveAttribute('data-expanded', 'true')
+  await expect.poll(async () => cards.evaluateAll(elements => {
+    const boxes = elements.map(element => element.getBoundingClientRect())
+    return boxes.map((box, index) => ({
+      height: Math.round(box.height),
+      gap: index ? Math.round(box.top - boxes[index - 1].bottom) : 0,
+    }))
+  })).toEqual([{ height: 110, gap: 0 }, { height: 110, gap: 8 }, { height: 110, gap: 8 }])
+  const actions = cards.filter({ hasText: 'First notification' })
+  const cancelBox = await actions.getByRole('button', { name: 'Mark as read' }).boundingBox()
+  const openBox = await actions.getByRole('button', { name: 'Open' }).boundingBox()
+  expect(cancelBox!.x + cancelBox!.width).toBeLessThan(openBox!.x)
+  await page.getByRole('button', { name: 'Show fewer' }).click()
+  await page.mouse.move(0, 0)
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(cards.first()).toHaveAttribute('data-expanded', 'false')
+  await cards.first().getByRole('button', { name: 'Close toast' }).click({ force: true })
+  await expect(page.getByText('2 notifications')).toBeVisible()
+})

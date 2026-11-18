@@ -161,6 +161,15 @@ export interface ProviderModelInfo {
     reasoningEffort: string;
     description?: string;
   }>;
+  /**
+   * Published list price in USD per 1M tokens, when the backend exposes it.
+   * Locally hosted models report 0; unknown pricing is left undefined rather
+   * than guessed, so cost-based routing can treat "unknown" honestly.
+   */
+  pricing?: {
+    promptPerMTok?: number;
+    completionPerMTok?: number;
+  };
 }
 
 export interface RemoteProviderStatus {

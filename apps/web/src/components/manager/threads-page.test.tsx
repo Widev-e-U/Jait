@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { createElement, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+const mocks = vi.hoisted(() => ({ approve: vi.fn(), refresh: vi.fn(), message: vi.fn() }))
+vi.mock('@/lib/agents-api', () => ({ agentsApi: { approveToolCall: mocks.approve } }))
 vi.mock('@/components/chat', () => ({
   Conversation: ({ children }: any) => children,
-  Message: () => null,
+  Message: (props: any) => { mocks.message(props); return null },
   TodoList: () => null,
   MessageQueue: () => null,
   PromptInput: (props: any) => createElement('output', {
@@ -26,10 +28,10 @@ vi.mock('@/components/manager/manager-thread-ui', () => ({
 vi.mock('./thread-approval-notice', () => ({ ThreadApprovalNotice: () => null }))
 import { ThreadsPage } from './threads-page'
 
-function render(selectedThread: Record<string, unknown> | null) {
+function render(selectedThread: Record<string, unknown> | null, messages: unknown[] = []) {
   return renderToStaticMarkup(createElement(ThreadsPage, {
-    automation: { selectedThread, selectedThreadTodos: [], repositories: [], threadPrStates: {} },
-    automationMessages: [], managerThreads: [], selectedManagerQueue: [],
+    automation: { selectedThread, selectedThreadTodos: [], repositories: [], threadPrStates: {}, refreshSelectedThread: mocks.refresh },
+    automationMessages: messages, managerThreads: [], selectedManagerQueue: [],
     availableFiles: [], availableSkills: [],
     chatProvider: 'jait', cliModel: 'default-model', chatReasoningEffort: 'low',
     chatProviderRuntimeMode: 'full-access', chatResponseStyle: 'normal',
@@ -58,5 +60,41 @@ describe('thread composer execution selection', () => {
     expect(html).toContain('data-provider="jait"')
     expect(html).toContain('data-model="default-model"')
     expect(html).toContain('data-locked="false"')
+  })
+})
+
+
+describe('thread approval response', () => {
+  it.each([true, false])('sends the explicit %s decision and refreshes recorded activity', async (approved) => {
+    mocks.approve.mockReset().mockResolvedValue(undefined)
+    mocks.refresh.mockReset().mockResolvedValue(undefined)
+    mocks.message.mockClear()
+    render({ id: 'thread-1', status: 'running' }, [{ id: 'message', role: 'assistant', content: '' }])
+    const respond = mocks.message.mock.calls[0][0].onApprovalResponse
+    await respond('request-1', approved)
+    expect(mocks.approve).toHaveBeenCalledWith('thread-1', 'request-1', approved)
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+  })
+
+  it('waits for the submission before refreshing activity', async () => {
+    let resolveSubmission!: () => void
+    mocks.approve.mockReset().mockReturnValue(new Promise<void>((resolve) => { resolveSubmission = resolve }))
+    mocks.refresh.mockReset().mockResolvedValue(undefined)
+    mocks.message.mockClear()
+    render({ id: 'thread-1', status: 'running' }, [{ id: 'message', role: 'assistant', content: '' }])
+    const pending = mocks.message.mock.calls[0][0].onApprovalResponse('request-1', true)
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    resolveSubmission()
+    await pending
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+  })
+
+  it('propagates submission failure without refreshing or claiming success', async () => {
+    mocks.approve.mockReset().mockRejectedValue(new Error('No active session'))
+    mocks.refresh.mockReset()
+    mocks.message.mockClear()
+    render({ id: 'thread-1', status: 'running' }, [{ id: 'message', role: 'assistant', content: '' }])
+    await expect(mocks.message.mock.calls[0][0].onApprovalResponse('request-1', false)).rejects.toThrow('No active session')
+    expect(mocks.refresh).not.toHaveBeenCalled()
   })
 })

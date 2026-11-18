@@ -1,0 +1,27 @@
+{
+  "name": "network.scan",
+  "description": "Scan the local network using ARP + port probing. Discovers hosts, checks SSH (port 22), and detects running Jait gateway nodes. Returns a summary of discovered hosts.",
+  "tier": "standard",
+  "category": "network",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "subnet": {
+        "type": "string",
+        "description": "Target subnet prefix (e.g. \"192.168.1\"). If omitted, auto-detects from local interfaces."
+      },
+      "deep": {
+        "type": "boolean",
+        "description": "Whether to run a deeper sweep across the full subnet instead of relying mostly on ARP/neighbour cache. Defaults to true."
+      },
+      "includeIps": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Specific IPs to force-include in the scan, for example [\"192.168.1.100\"]."
+      }
+    }
+  }
+}

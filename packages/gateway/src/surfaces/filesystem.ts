@@ -5,8 +5,8 @@
  * via PathGuard. Tracks operations for audit.
  */
 
-import { readFile, writeFile, mkdir, stat, readdir, unlink, rename, rm, cp } from "node:fs/promises";
-import { dirname, relative, join, basename } from "node:path";
+import { readFile, writeFile, mkdir, stat, readdir, unlink, rename, rm, cp, realpath } from "node:fs/promises";
+import { dirname, relative, join, basename, sep, isAbsolute } from "node:path";
 import { PathGuard, type PathGuardOptions } from "../security/path-guard.js";
 import type {
   Surface,
@@ -120,6 +120,17 @@ export class FileSystemSurface implements Surface {
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf-8");
     this.onOutput?.(`wrote ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
+  }
+
+  /** Save new binary artifacts without overwriting an existing file. */
+  async writeNewBinary(filePath: string, content: Uint8Array): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    await mkdir(dirname(abs), { recursive: true, mode: 0o700 });
+    await this.guard!.validateWithSymlinkCheck(filePath);
+    await writeFile(abs, content, { flag: "wx", mode: 0o600 });
+    this._opCount++;
+    this.onOutput?.(`wrote binary ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
   }
 
   async patch(filePath: string, search: string, replace: string): Promise<{ matched: boolean }> {
@@ -326,6 +337,24 @@ export class FileSystemSurface implements Surface {
     await mkdir(dirname(absDest), { recursive: true });
     const srcStat = await stat(absSrc);
     if (srcStat.isDirectory()) {
+      // Bun's recursive cp can recurse until process failure for this input.
+      // Resolve existing aliases too; the destination's parent exists above.
+      const realSource = await realpath(absSrc);
+      let realDestination: string;
+      try {
+        realDestination = await realpath(absDest);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        realDestination = join(await realpath(dirname(absDest)), basename(absDest));
+      }
+      const destinationRelativeToSource = relative(realSource, realDestination);
+      if (destinationRelativeToSource === "" || (
+        destinationRelativeToSource !== ".."
+        && !destinationRelativeToSource.startsWith(`..${sep}`)
+        && !isAbsolute(destinationRelativeToSource)
+      )) {
+        throw new Error("Cannot copy a directory into itself or its descendants.");
+      }
       await cp(absSrc, absDest, { recursive: true });
     } else {
       await cp(absSrc, absDest);

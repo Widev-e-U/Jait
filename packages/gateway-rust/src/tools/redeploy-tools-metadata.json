@@ -1,0 +1,22 @@
+[
+  {
+    "name": "gateway.redeploy",
+    "description": "Self-update the Jait gateway. Pulls the latest version via npm, verifies it in a canary process, then performs a zero-downtime switchover. Under systemd, uses `systemctl restart` for a clean handoff. Otherwise spawns a detached replacement process. This tool requires human consent.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Version/tag to install (default: \"latest\")"
+        },
+        "skipCanary": {
+          "type": "boolean",
+          "description": "Skip the canary health check (not recommended)"
+        }
+      }
+    }
+  }
+]

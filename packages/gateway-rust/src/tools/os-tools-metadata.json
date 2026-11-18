@@ -1,0 +1,42 @@
+[
+  {
+    "name": "os.query",
+    "description": "Query system information: info, processes, disk usage, or environment",
+    "tier": "standard",
+    "category": "os",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "What to query",
+          "enum": ["info", "processes", "disk", "env"]
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "os.install",
+    "description": "Install a system package via winget (Windows), apt (Linux), or brew (macOS)",
+    "tier": "standard",
+    "category": "os",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "Package name to install"
+        },
+        "manager": {
+          "type": "string",
+          "description": "Package manager to use",
+          "enum": ["winget", "apt", "brew", "auto"]
+        }
+      },
+      "required": ["package"]
+    }
+  }
+]

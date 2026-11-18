@@ -20,6 +20,8 @@ const original: UserMessageSegment[] = [
   { type: 'text', text: ' after' }, { type: 'attachment', ...document },
 ]
 function Harness() {
+  const [pendingEdit, setPendingEdit] = useState(false)
+  const editResolution = useRef<((success: boolean) => void) | null>(null)
   const [value, setValue] = useState('')
   const [segments, setSegments] = useState<UserMessageSegment[]>([])
   const [revision, setRevision] = useState(0)
@@ -38,8 +40,16 @@ function Harness() {
       <button type="button" onClick={() => setRevision(n => n + 1)}>Remount composer</button>
       <section data-testid="sent"><Message role="user" messageId="regression-user" content={userMessageTextFromSegments(sent)}
         displaySegments={sent} onEditMessage={async (_id, _text, _index, _fromEnd, options) => {
+          setPendingEdit(true)
+          const success = await new Promise<boolean>(resolve => { editResolution.current = resolve })
+          setPendingEdit(false)
+          if (!success) return false
           setSent(options?.displaySegments ?? []); return true
         }} /></section>
+      {pendingEdit && <div>
+        <button onClick={() => editResolution.current?.(true)}>Complete edit</button>
+        <button onClick={() => editResolution.current?.(false)}>Reject edit</button>
+      </div>}
       <section data-testid="queue"><MessageQueue items={items} iconOnly
         onEdit={(id, content, attachments, displaySegments) => setItems(prev => prev.map(item => item.id === id
           ? editQueuedChatMessage(item, content, attachments, displaySegments) : item))} /></section>

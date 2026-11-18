@@ -45,6 +45,8 @@ export interface TeamRoomMessage {
   workThreadId?: string;
   parentMessageId?: string;
   routingDecision?: TeamRoutingDecision;
+  /** Persisted gateway event; clients cannot mint these through team.chat. */
+  coordinationEvent?: { kind: "completion" | "recovery"; deliveryId: string };
   depth: number;
   targetSessionId?: string;
 }

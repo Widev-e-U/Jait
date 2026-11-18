@@ -1,4 +1,7 @@
-import { AlertTriangle, FolderOpen, X } from 'lucide-react'
+import { latestUserTurnId } from '@/lib/conversation-turn'
+import { readChatLoop } from '@jait/shared'
+import { ChatLoopGoal } from '@/components/chat/loop-goal-card'
+import { AlertTriangle, FolderOpen, RotateCcw, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import {
@@ -14,11 +17,21 @@ import {
 } from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import {
+  getChatColumnClassName,
   getChatComposerBoundaryClassName,
   getChatTranscriptBoundaryClassName,
   shouldShowChatContextIndicator,
   shouldShowNormalChatComposer,
 } from '@/components/chat/message-edit-layout'
+import {
+  clampRevealDeltaToHeader,
+  getComposerRevealDelta,
+  getKeyboardBottomInset,
+  getNewChatColumnClassName,
+  getNewChatStackClassName,
+  getVisibleViewportBottom,
+  shouldPlaceControlRowAboveComposer,
+} from '@/components/chat/new-chat-composer-layout'
 import { GitDiffIndicator } from '@/components/chat/git-diff-indicator'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
@@ -41,11 +54,13 @@ const FLOATING_CHAT_INDICATORS_MIN_WIDTH = 480
 const GIT_DIFF_INDICATOR_LEFT_INSET_PX = 8
 
 interface DeveloperChatWorkspaceProps {
+  newChatContext?: ReactNode
   activeProject: any
   activeProjectId: string | null
   activeProjectDisplayName: string | null
   activeProjectRoot: string | null
   onLatestContentViewed?: () => void
+  sessionMetadata?: string | null
   activeSessionId: string | null
   availableFilesForMention: any[]
   availableSkills: any[]
@@ -116,7 +131,7 @@ interface DeveloperChatWorkspaceProps {
   onClearTodoList: () => void
   onCliModelChange: (model: string | null) => void
   onReasoningEffortChange: (reasoningEffort: SessionReasoningEffort | null) => void
-  onContinueChat: (options: { token: string | null; sessionId: string | null }) => void
+  onContinueChat: (options: { token: string | null; sessionId: string | null }) => Promise<unknown> | void
   onDequeueMessage: (id: string) => void
   onEditPreviousMessage: (...args: any[]) => void
   onExecutePlan: () => void
@@ -160,11 +175,13 @@ interface DeveloperChatWorkspaceProps {
 }
 
 export function DeveloperChatWorkspace({
+  newChatContext,
   activeProject,
   activeProjectId,
   activeProjectDisplayName,
   activeProjectRoot,
   onLatestContentViewed,
+  sessionMetadata,
   activeSessionId,
   availableFilesForMention,
   availableSkills,
@@ -274,6 +291,25 @@ export function DeveloperChatWorkspace({
   onVoiceInput,
   renderInlineSecretPrompt,
 }: DeveloperChatWorkspaceProps) {
+  const [isContinuing, setIsContinuing] = useState(false)
+  const continuationPendingRef = useRef(false)
+  const handleErrorRetry = useCallback(async () => {
+    if (!activeSessionId || isLoading || isLoadingHistory || limitReached || continuationPendingRef.current) return
+    continuationPendingRef.current = true
+    setIsContinuing(true)
+    try {
+      await onContinueChat({ token, sessionId: activeSessionId })
+    } finally {
+      continuationPendingRef.current = false
+      setIsContinuing(false)
+    }
+  }, [activeSessionId, isLoading, isLoadingHistory, limitReached, onContinueChat, token])
+  const retryDisabled = isLoading || isLoadingHistory || limitReached || isContinuing
+  const latestMessage = messages.at(-1)
+  const latestMessageHasError = latestMessage?.role === 'assistant'
+    && Array.isArray(latestMessage.segments) && latestMessage.segments.at(-1)?.type === 'error'
+
+  const [editingQueue, setEditingQueue] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   // Width of the chat panel, used to hide the floating top indicators when the
   // panel gets too narrow (they would overlap transcript text otherwise).
@@ -289,6 +325,18 @@ export function DeveloperChatWorkspace({
   // The floating git-diff pill hides as soon as its right edge would come
   // within a small gap of the transcript text column (instead of sitting on
   // top of the text), measured against the actual rendered pill width.
+  // The goal overlay must stop above the composer dock, so track its height.
+  const [composerDockElement, setComposerDockElement] = useState<HTMLDivElement | null>(null)
+  const [composerDockHeight, setComposerDockHeight] = useState(0)
+  useEffect(() => {
+    const el = composerDockElement
+    if (!el || typeof ResizeObserver === 'undefined') { setComposerDockHeight(0); return }
+    const update = () => setComposerDockHeight((prev) => (prev === el.offsetHeight ? prev : el.offsetHeight))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [composerDockElement])
   const [gitDiffIndicatorElement, setGitDiffIndicatorElement] = useState<HTMLDivElement | null>(null)
   const [gitDiffIndicatorWidth, setGitDiffIndicatorWidth] = useState(0)
   const attachGitDiffIndicator = useCallback((node: HTMLDivElement | null) => {
@@ -307,6 +355,83 @@ export function DeveloperChatWorkspace({
     observer.observe(el)
     return () => observer.disconnect()
   }, [gitDiffIndicatorElement])
+  // ── Mobile new-chat composer visibility ────────────────────────────────
+  // The empty state is one centered column. On a phone the soft keyboard
+  // shrinks the viewport below the column height, which used to clip the
+  // composer behind the mobile nav bar. The column scrolls on mobile and we
+  // nudge it up by exactly the hidden amount so the input stays fully usable.
+  const newChatScrollRef = useRef<HTMLDivElement | null>(null)
+  const newChatStackRef = useRef<HTMLDivElement | null>(null)
+  const [keyboardInset, setKeyboardInset] = useState(0)
+  const setNewChatScrollElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      newChatScrollRef.current = node
+      setChatPanelElement(node)
+    },
+    [setChatPanelElement],
+  )
+  useEffect(() => {
+    if (!isMobile) {
+      setKeyboardInset(0)
+      return
+    }
+    const viewport = window.visualViewport
+    if (!viewport) return
+    // iOS keeps the layout viewport at full height while the keyboard is open,
+    // so nothing inside the column resizes and the reveal observer would never
+    // fire. The covered height therefore both triggers the reveal and reserves
+    // a scroll band at the bottom of the column; the reveal itself measures the
+    // visible band from the visual viewport so the keyboard is subtracted once.
+    const update = () => {
+      const next = getKeyboardBottomInset(window.innerHeight, viewport)
+      setKeyboardInset((prev) => (prev === next ? prev : next))
+    }
+    update()
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+    }
+  }, [isMobile])
+  useEffect(() => {
+    if (!isMobile || hasMessages) return
+    const scroller = newChatScrollRef.current
+    const stack = newChatStackRef.current
+    if (!scroller || !stack) return
+    const revealComposer = () => {
+      const scrollerRect = scroller.getBoundingClientRect()
+      // Only the part of the column above the keyboard is usable. Measuring the
+      // band from `visualViewport` (instead of from the column and the keyboard
+      // inset separately) keeps the nudge exact on both platforms: the column
+      // has already shrunk where the layout viewport resizes, and on iOS the
+      // visual viewport is the only thing that knows the keyboard is up.
+      const visibleBottom = Math.min(
+        scrollerRect.bottom,
+        getVisibleViewportBottom(window.visualViewport, window.innerHeight),
+      )
+      const rawDelta = getComposerRevealDelta(
+        stack.getBoundingClientRect().bottom,
+        scrollerRect.top,
+        visibleBottom - scrollerRect.top,
+      )
+      // The nudge scrolls content up, so it must never tuck the composer under
+      // the header: cap it at the room that keeps the composer top clear.
+      const composer = stack.querySelector<HTMLElement>('[data-testid="chat-composer"]')
+      const composerTop = composer ? composer.getBoundingClientRect().top : stack.getBoundingClientRect().top
+      const header = document.querySelector('header, [role="banner"]')
+      const headerBottom = header ? header.getBoundingClientRect().bottom : scrollerRect.top
+      const delta = clampRevealDeltaToHeader(rawDelta, composerTop, headerBottom)
+      if (delta > 0) scroller.scrollTop += delta
+    }
+    revealComposer()
+    if (typeof ResizeObserver === 'undefined') return
+    // Re-check whenever the viewport shrinks (keyboard) or the composer grows.
+    const observer = new ResizeObserver(revealComposer)
+    observer.observe(scroller)
+    observer.observe(stack)
+    return () => observer.disconnect()
+  }, [isMobile, hasMessages, keyboardInset])
   const showGitDiffIndicator =
     chatPanelWidth === 0 ||
     gitDiffIndicatorWidth === 0 ||
@@ -324,7 +449,7 @@ export function DeveloperChatWorkspace({
     if (message?.role !== 'user') return
     setEditingMessageId(message.id)
   }, [messages])
-  const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId)
+  const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId, editingQueue)
   const panelHideButton = showPanelHideButton ? (
     <TooltipHint content="Hide chat panel">
       <Button
@@ -343,6 +468,16 @@ export function DeveloperChatWorkspace({
     setEditingMessageId(null)
   }, [activeSessionId])
 
+  // An edit-and-resend replaces the edited row with a locally rendered user
+  // turn whose id the old row never owned, so its unmount cannot release edit
+  // ownership. Without this, `editingMessageId` would keep pointing at a gone
+  // message and the mobile composer would stay hidden after the resend.
+  useEffect(() => {
+    if (!editingMessageId) return
+    if (messages.some((message) => message.id === editingMessageId)) return
+    setEditingMessageId(null)
+  }, [editingMessageId, messages])
+
   // These hooks must stay above the empty-chat return. A chat commonly renders
   // once without messages while history loads and then renders with messages;
   // placing transcript-only hooks below that return changes the hook count on
@@ -354,12 +489,7 @@ export function DeveloperChatWorkspace({
   const sharedRenderInputsRef = useRef<readonly unknown[] | undefined>(undefined)
   const sharedRenderVersionRef = useRef(0)
   const cacheSessionRef = useRef<string | null>(null)
-  const scrollToUserMessageId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') return messages[i].renderId ?? messages[i].id
-    }
-    return null
-  }, [messages])
+  const scrollToUserMessageId = useMemo(() => latestUserTurnId(messages), [messages])
   const activeProjectHasRepo = useMemo(
     () => {
       if (!activeProjectId) return false
@@ -374,20 +504,29 @@ export function DeveloperChatWorkspace({
     cacheSessionRef.current = activeSessionId
   }
 
+  // With the mobile soft keyboard open the composer card must be the stack's
+  // bottom element so the reveal can dock it just above the keyboard; the
+  // control row moves above it for as long as the keyboard is up.
+  const controlRowAboveComposer = shouldPlaceControlRowAboveComposer(isMobile, keyboardInset)
+
   if (!hasMessages) {
     return (
       <div
-        ref={setChatPanelElement}
-        className={`relative flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
-        style={developerChatPanelStyle}
+        ref={setNewChatScrollElement}
+        className={getNewChatColumnClassName(isMobile, !chatCollapsed)}
+        // Reserve the covered band so the column can scroll far enough, while
+        // the reveal below measures the *visible* band so the keyboard is only
+        // subtracted once. Padding alone lifted the composer under the header.
+        style={keyboardInset > 0 ? { ...developerChatPanelStyle, paddingBottom: keyboardInset } : developerChatPanelStyle}
       >
         {panelHideButton}
-        <div className="w-full max-w-4xl space-y-8">
+        <div ref={newChatStackRef} className={getNewChatStackClassName(isMobile)}>
           <div className="text-center">
             <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
             <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
           </div>
-          {!projectsLoading && projects.length === 0 ? (
+          {newChatContext}
+          {!newChatContext && !projectsLoading && projects.length === 0 ? (
             <div className="text-center space-y-3">
               <p className="text-sm text-muted-foreground">Add a project folder to start chatting with your code.</p>
               <Button variant="default" size="lg" onClick={onOpenAddProject}>
@@ -396,13 +535,14 @@ export function DeveloperChatWorkspace({
               </Button>
             </div>
           ) : (
-            <Suggestions suggestions={showProject && activeProject ? projectSuggestions : suggestions} onSelect={onHandleSuggestion} />
+            <Suggestions suggestions={activeProjectId ? projectSuggestions : suggestions} onSelect={onHandleSuggestion} />
           )}
           <div className="space-y-1.5">
             {developerChatUiState.showTodoList && (
               <TodoList items={todoList} onClear={onClearTodoList} merged />
             )}
             {inlinePrompts}
+            {controlRowAboveComposer && developerComposerControlRow}
             <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
               <PromptInput
                 ref={promptInputRef}
@@ -454,7 +594,7 @@ export function DeveloperChatWorkspace({
                 projectId={activeProjectId}
               />
             </ErrorBoundary>
-            {developerComposerControlRow}
+            {!controlRowAboveComposer && developerComposerControlRow}
           </div>
         </div>
       </div>
@@ -501,6 +641,9 @@ export function DeveloperChatWorkspace({
     for (let idx = 0; idx < messages.length; idx++) {
       const msg = messages[idx]
       const isStreaming = isLoading && msg.id === lastMsgId
+      const onTryContinue = msg.id === lastMsgId && latestMessageHasError && activeSessionId
+        ? handleErrorRetry : undefined
+      const isMessageContinuing = Boolean(onTryContinue && retryDisabled)
       const cached = cache.get(msg.id)
       const renderInputs = [
         sharedRenderVersionRef.current,
@@ -512,6 +655,7 @@ export function DeveloperChatWorkspace({
         msg.persona,
         msg.content,
         msg.steered,
+        msg.sendState,
         msg.contextFlow,
         msg.hasContextFlow,
         msg.hasMemoryProvenance,
@@ -524,6 +668,8 @@ export function DeveloperChatWorkspace({
         msg.toolCalls,
         msg.segments,
         isStreaming,
+        onTryContinue,
+        isMessageContinuing,
         editingMessageId === msg.id,
       ]
       if (cached && !haveRenderInputsChanged(cached.renderInputs, renderInputs)) {
@@ -541,6 +687,7 @@ export function DeveloperChatWorkspace({
           persona={msg.persona}
           content={msg.content}
           steered={msg.steered}
+          sendState={msg.sendState}
           contextFlow={msg.contextFlow}
           hasContextFlow={msg.hasContextFlow}
           hasMemoryProvenance={msg.hasMemoryProvenance}
@@ -563,6 +710,8 @@ export function DeveloperChatWorkspace({
           renderInlineSecretPrompt={renderInlineSecretPrompt}
           onApprovalResponse={onApprovalResponse}
           onEditMessage={onEditPreviousMessage}
+          onTryContinue={onTryContinue}
+          isContinuing={isMessageContinuing}
           editing={editingMessageId === msg.id}
           onEditingChange={handleMessageEditingChange}
           editComposer={editComposerBag}
@@ -585,11 +734,19 @@ export function DeveloperChatWorkspace({
     }
   }
 
+  const loop = readChatLoop(sessionMetadata)
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
+  // Without a visible file-diff indicator the goal card takes its slot instead
+  // of leaving a gap under the header.
+  const gitDiffIndicatorVisible = !showDebugPanel && isProjectChat && activeProjectHasRepo && showGitDiffIndicator
+  // The mobile header is a fixed pill (top-2, h-10, bottom edge at 48px), so the
+  // goal always starts 8px below it, whether or not the diff indicator is shown.
+  const goalTop = isMobile ? 56 : gitDiffIndicatorVisible ? 48 : 8
 
   return (
     <div
       ref={setChatPanelElement}
+      data-browser-chat-scope
       className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
       style={developerChatPanelStyle}
     >
@@ -604,6 +761,16 @@ export function DeveloperChatWorkspace({
                 onOpen={onOpenSourceControl}
                 compact={isMobile}
               />
+            </div>
+          )}
+          {!showDebugPanel && loop && activeSessionId && (
+            // Keep the card above the composer and allow more room for text on mobile.
+            <div
+              data-testid="chat-goal-overlay"
+              className={`pointer-events-none absolute left-2 z-40 flex flex-col items-start bg-transparent ${isMobile ? 'w-[calc(100%-1rem)]' : 'w-[calc(50%-0.5rem)]'}`}
+              style={{ top: goalTop, maxHeight: `calc(100% - ${goalTop + composerDockHeight + 8}px)` }}
+            >
+              <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
           )}
           {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
@@ -624,6 +791,8 @@ export function DeveloperChatWorkspace({
             <ErrorBoundary name="Chat transcript" variant="section" className={getChatTranscriptBoundaryClassName()} resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
               <Conversation
                 key={activeSessionId ?? 'developer-empty'}
+                sessionId={activeSessionId}
+                authToken={token}
                 onLatestContentViewed={onLatestContentViewed}
                 className={getChatTranscriptBoundaryClassName()}
                 compact={showDesktopProject}
@@ -644,6 +813,7 @@ export function DeveloperChatWorkspace({
                 {messageQueue.length > 0 && (
                   <MessageQueue
                     items={messageQueue}
+                    onEditingChange={setEditingQueue}
                     onRemove={onDequeueMessage}
                     onEdit={onUpdateQueueItem}
                     onReorder={onReorderQueueItem}
@@ -660,12 +830,18 @@ export function DeveloperChatWorkspace({
           )}
 
           {showNormalComposer && (
-            <div className={getChatComposerBoundaryClassName(isMobile, showDesktopProject)}>
-            <div className="mx-auto w-full max-w-4xl space-y-1.5">
+            <div ref={setComposerDockElement} data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
+            <div className={getChatColumnClassName('space-y-1.5')}>
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 break-words">{error}</span>
+                  <span className="min-w-0 flex-1 break-words">{error}</span>
+                  {activeSessionId && !latestMessageHasError && (
+                    <Button type="button" variant="outline" size="sm" disabled={retryDisabled} onClick={handleErrorRetry} className="shrink-0 gap-1.5">
+                      <RotateCcw className="h-3 w-3" />
+                      Retry
+                    </Button>
+                  )}
                 </div>
               )}
               {hitMaxRounds && !isLoading && (
@@ -698,7 +874,7 @@ export function DeveloperChatWorkspace({
               {limitReached && (
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
-              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20 overflow-hidden">
               <div className="max-h-[40vh] overflow-y-auto divide-y divide-border [&:not(:empty)]:border-b [&:not(:empty)]:border-border">
                 {developerChatUiState.showTodoList && (
                   <TodoList items={todoList} onClear={onClearTodoList} merged />

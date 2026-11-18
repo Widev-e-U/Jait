@@ -111,6 +111,8 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
   let currentSegments: MessageSegment[] = []
   // callId → ToolCallInfo for fast look-up when results arrive
   const toolCallMap = new Map<string, ToolCallInfo>()
+  // Approval request IDs belong to a thread, independently of tool call IDs.
+  const approvalsByThread = new Map<string, Map<string, ToolCallInfo>>()
   // callIds accumulated in the current tool group for segments
   let currentToolGroupIds: string[] = []
 
@@ -268,7 +270,8 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
 
       case 'tool.approval': {
         const msg = ensureAssistant(act.id)
-        const callId = (payload.requestId as string) ?? act.id
+        const requestId = asString(payload.requestId)
+        const callId = requestId ?? act.id
         const tc: ToolCallInfo = {
           callId,
           parentCallId: payload.parentCallId as string | undefined,
@@ -278,12 +281,35 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
             (payload.args as Record<string, unknown>) ?? {},
           ),
           status: 'pending',
+          ...(requestId ? { approvalRequestId: requestId, approvalState: 'pending' as const } : {}),
           startedAt: new Date(act.createdAt).getTime(),
         }
         msg.toolCalls = msg.toolCalls ?? []
         msg.toolCalls.push(tc)
         toolCallMap.set(callId, tc)
+        if (requestId) {
+          let approvals = approvalsByThread.get(act.threadId)
+          if (!approvals) {
+            approvals = new Map()
+            approvalsByThread.set(act.threadId, approvals)
+          }
+          approvals.set(requestId, tc)
+        }
         currentToolGroupIds.push(callId)
+        break
+      }
+
+      case 'tool.approval-response': {
+        const requestId = asString(payload.requestId)
+        const tc = requestId ? approvalsByThread.get(act.threadId)?.get(requestId) : undefined
+        // Only a recorded decision resolves a pending request. Failed or malformed
+        // responses must not turn a pending request into an approval.
+        if (!tc || tc.status !== 'pending' || typeof payload.approved !== 'boolean' || payload.ok === false) break
+        const approved = payload.approved
+        tc.status = approved ? 'success' : 'error'
+        tc.approvalState = approved ? 'approved' : 'rejected'
+        tc.result = { ok: approved, message: approved ? 'Approved' : 'Rejected' }
+        tc.completedAt = new Date(act.createdAt).getTime()
         break
       }
 

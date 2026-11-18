@@ -1,0 +1,94 @@
+name: Rust gateway contracts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-contracts:
+    runs-on: ubuntu-latest
+    # The full contract suite is deterministic but long: setup plus the native
+    # lane, internals and reference-source mutation passes already account for
+    # ~50 minutes on a 2-core runner, and the translated-assertion and audit
+    # steps follow. A 30 minute budget killed the job mid-suite (before the
+    # source-inventory audit ran) and reported it as cancelled, which is both
+    # misleading and hides real regressions behind a timeout.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Native timezone contracts were reviewed against Bun 1.4.0 / ICU 78.3.
+          bun-version: "1.4.0"
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: rustfmt, clippy
+      - name: Install gateway dependencies
+        run: bun install --frozen-lockfile
+      - name: Build gateway workspace dependencies
+        run: |
+          bun run --filter @jait/shared build
+          bun run --filter @jait/api-client build
+          bun run --filter @jait/screen-share build
+          bun run --filter @jait/gateway build
+      - name: Check Rust formatting and lint
+        run: |
+          bun run test:contract:fmt
+          bun run test:contract:lint
+      - name: Build and validate the native gateway lane
+        run: |
+          node packages/gateway-rust/run.mjs fmt
+          node packages/gateway-rust/run.mjs clippy --all-targets -- -D warnings
+          bun run build:gateway:rust
+          bun run test:gateway:rust
+      - name: Test parity tooling and identity transport
+        run: node --test tests/contract/tooling/*.test.mjs
+      - name: Test contract parser and runner failure handling
+        run: node tests/contract/run.mjs test --bins --test runner --test compaction --test notification_sync --test boundaries --test consent_invariants --test tenant_recovery --test backend_launch --test tail_stream_cleanup --test active_stream --test recovery_corpus --test gateway_updates
+      - name: Test the isolated TypeScript gateway from Rust
+        run: bun run test:contract
+      - name: Test TypeScript internals with Rust assertions
+        run: bun run test:contract:internal
+      - name: Validate reference source mutations and restored behavior
+        run: bun run test:contract:source
+      - name: Reconcile reviewed native and reference source contracts
+        run: node tests/contract/tooling/native-source-review.mjs
+      - name: Test translated assertions and record source-bound evidence
+        run: bun run test:contract:translated
+      - name: Prepare owned Docker and Chromium integrations
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.jait/artifacts/playwright-browsers
+        run: |
+          docker build --file docker/Dockerfile.sandbox --tag jait/sandbox:latest docker
+          node packages/gateway/node_modules/playwright/cli.js install --with-deps chromium
+          docker image inspect --format '{{.Id}}' jait/sandbox:latest > .jait/artifacts/contracts/native-docker-image.txt
+      - name: Test explicit native integrations without skipped cases
+        run: |
+          node tests/contract/run.mjs translated-report --profile docker
+          node tests/contract/run.mjs translated-report --profile chromium
+      - name: Audit external interface inventory
+        run: |
+          node tests/contract/tooling/capture-interfaces.mjs --check
+          node tests/contract/run.mjs interfaces
+      - name: Audit source inventory and current parity evidence
+        run: bun run test:contract:coverage --evidence-dir .jait/artifacts/contracts
+      - name: Upload contract reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-contract-reports
+          path: |
+            .jait/artifacts/contracts/*/report.json
+            .jait/artifacts/contracts/native-docker-image.txt
+            .jait/artifacts/gateway-rust-readiness/coverage-audit.json
+          if-no-files-found: warn
+          retention-days: 7

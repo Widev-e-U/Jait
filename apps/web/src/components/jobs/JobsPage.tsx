@@ -122,17 +122,17 @@ export function JobsPage() {
   return (
     <div className="container mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex items-start justify-between gap-3 sm:mb-6 sm:items-center">
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-            <Calendar className="h-6 w-6" />
+          <h1 className="flex items-center gap-2 text-lg font-bold sm:text-2xl">
+            <Calendar className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
             Scheduled Jobs
           </h1>
           <p className="mt-1 text-sm text-muted-foreground sm:text-base">
             Manage your automated tasks and agent schedules
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <TooltipHint content="Refresh">
           <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="shrink-0 px-3 sm:px-4" aria-label="Refresh">
             <RefreshCw className={`h-4 w-4 sm:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
@@ -216,7 +216,7 @@ export function JobsPage() {
         <div className="text-sm text-muted-foreground">
           Showing {pageStart}–{pageEnd} of {totalJobs}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm text-muted-foreground" htmlFor="jobs-page-size">
             Per page
           </label>
@@ -233,7 +233,7 @@ export function JobsPage() {
               ))}
             </SelectContent>
           </Select>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:items-center">
+          <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto sm:items-center">
             <Button
               variant="outline"
               size="sm"

@@ -3,14 +3,15 @@
  */
 import type { OllamaUsageSetup } from '@jait/shared'
 import { OllamaUsageSetupPanel } from './ollama-usage-setup'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { getApiUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
 import { providerIcon } from '@/components/icons/provider-icons'
+import { describeResetCredits, describeUsageReset, quotaLabel, type UsageResetCredits } from '@/lib/usage-resets'
 
-const API_URL = getApiUrl()
+import { getUsageSummary, subscribeUsageSummary, refreshUsageSummary } from '@/lib/usage-summary-store'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface UsageQuotaSnapshot {
   accountId: string
@@ -19,6 +20,8 @@ interface UsageQuotaSnapshot {
   status: string | null
   utilization: number | null
   resetsAt: string | null
+  /** How the gateway obtained `resetsAt`; Ollama reconstructs, other providers report. */
+  resetSource?: string | null
   isUsingOverage: boolean
   updatedAt: string
   planType: string | null
@@ -28,6 +31,8 @@ interface UsageQuotaSnapshot {
     unlimited?: boolean
     balance?: string | null
   } | null
+  /** Unused "reset buttons" the provider granted (Codex's rate limit reset credits). */
+  resetCredits?: UsageResetCredits | null
   models: Array<{ name: string; requestCount: number }>
   activityCost: string | null
   requestCount?: number | null
@@ -50,22 +55,9 @@ interface UsageProfile {
   error: string | null
 }
 
-interface UsageSummary {
+export interface UsageSummary {
   generatedAt: string
   profiles: UsageProfile[]
-}
-
-const QUOTA_LABELS: Record<string, string> = {
-  request_activity: 'Request activity',
-  five_hour: '5-hour limit',
-  seven_day: 'Weekly limit',
-  seven_day_opus: 'Opus weekly limit',
-  seven_day_sonnet: 'Sonnet weekly limit',
-  seven_day_overage_included: 'Weekly extra usage',
-  monthly: 'Monthly limit',
-  overage: 'Extra usage',
-  primary: 'Primary limit',
-  secondary: 'Secondary limit',
 }
 
 function formatDateTime(iso: string | null): string {
@@ -80,31 +72,25 @@ function formatDateTime(iso: string | null): string {
   })
 }
 
-function formatReset(iso: string | null): string | null {
-  if (!iso) return null
-  const formatted = formatDateTime(iso)
-  return formatted === '—' ? null : `Resets ${formatted}`
-}
-
 function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
   const percent = quota.utilization == null
     ? null
     : Math.round(Math.min(1, Math.max(0, quota.utilization)) * 100)
-  const reset = quota.quotaRefreshMissing ? null : formatReset(quota.resetsAt)
+  const reset = quota.quotaRefreshMissing ? null : describeUsageReset(quota.resetsAt, quota.resetSource ?? null)
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span>{quota.providerType === 'ollama' && quota.rateLimitType === 'five_hour' ? 'Session usage (5-hour limit)' : QUOTA_LABELS[quota.rateLimitType] ?? quota.rateLimitType}</span>
+        <span>{quota.providerType === 'ollama' && quota.rateLimitType === 'five_hour' ? 'Session usage (5-hour limit)' : quotaLabel(quota.rateLimitType)}</span>
         <span className="shrink-0 tabular-nums font-medium">
-          {quota.requestCount != null ? `${quota.requestCount.toLocaleString()} requests` : percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used${quota.quotaRefreshMissing ? ' (last reported)' : ''}`}
+          {quota.requestCount != null ? `${quota.requestCount.toLocaleString()} requests` : percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used${quota.status === 'rejected' && percent < 100 ? ' · limit reached' : ''}${quota.quotaRefreshMissing ? ' (last reported)' : ''}`}
         </span>
       </div>
       {percent != null && (
         <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div
             className={`h-full rounded-full transition-all ${
-              percent >= 90 ? 'bg-red-500' : percent >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+              quota.status === 'rejected' || percent >= 90 ? 'bg-red-500' : percent >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
             style={{ width: `${percent}%` }}
           />
@@ -112,9 +98,17 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
       )}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {quota.usagePeriod && <span>{formatDateTime(quota.usagePeriod.from)} – {formatDateTime(quota.usagePeriod.until)}</span>}
-        {reset && <span>{reset}</span>}
+        {reset && (
+          <TooltipHint content={reset.title}>
+            <span>
+              {reset.text}
+              {reset.estimated ? ' · est.' : ''}
+            </span>
+          </TooltipHint>
+        )}
         <span>Updated {formatDateTime(quota.updatedAt)}</span>
-        {quota.activityCost && <span>Cost {quota.activityCost}</span>}
+        {quota.activityCost && <span>{quota.providerType === 'ollama' && quota.rateLimitType === 'monthly' ? quota.activityCost : `Cost ${quota.activityCost}`}</span>}
+        {quota.providerType === 'ollama' && quota.rateLimitType === 'monthly' && quota.credits?.balance != null && <span>Purchased credits ${quota.credits.balance}</span>}
       </div>
       {quota.quotaRefreshMissing && <p className="text-xs text-muted-foreground">Last reported quota. The latest Ollama response did not refresh session or weekly usage.</p>}
       {quota.requestCount != null && <p className="text-xs text-muted-foreground">This response contains request activity only; it does not refresh subscription quota.</p>}
@@ -134,6 +128,7 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
 function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retry: () => Promise<void>; loading: boolean }) {
   const plan = profile.planType ?? profile.quotas.find((quota) => quota.planType)?.planType
   const credits = profile.quotas.find((quota) => quota.credits)?.credits
+  const resetCredits = describeResetCredits(profile.quotas.find((quota) => quota.resetCredits)?.resetCredits)
 
   return (
     <div className="space-y-4">
@@ -145,6 +140,20 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
           </p>
           {profile.accountLabel && (
             <p className="truncate text-xs text-muted-foreground">{profile.accountLabel}</p>
+          )}
+          {profile.providerType === 'claude-code' && !resetCredits && (
+            <p className="text-xs text-muted-foreground">
+              Free reset availability: <a className="text-primary underline" href="https://claude.ai/settings/usage" target="_blank" rel="noopener noreferrer">Check in Claude</a>
+            </p>
+          )}
+          {resetCredits && (
+            <TooltipHint content={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}>
+              <p
+                className="text-xs text-emerald-600 dark:text-emerald-400"
+              >
+                ↺ {resetCredits.text}
+              </p>
+            </TooltipHint>
           )}
         </div>
         {plan && (
@@ -188,7 +197,7 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
         </details>
       )}
       {profile.providerType === 'ollama' && !profile.error && profile.quotas.some(quota => quota.rateLimitType !== 'request_activity') && (
-        <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">Connected — cloud usage is up to date.</p>
+        <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">Connected — showing the last reported cloud usage.</p>
       )}
 
       {profile.error && profile.quotas.length > 0 && (
@@ -197,57 +206,6 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
     </div>
   )
 }
-
-/** localStorage key for the last successful summary, shared across reloads. */
-const SUMMARY_CACHE_KEY = 'jait.usage-summary.v1'
-
-/**
- * Read the last persisted summary so the modal can render the real provider
- * grid (same size, all options) on the very first paint instead of a generic
- * skeleton. Transient per-request fields are dropped so a stale error or setup
- * hint never survives a reload.
- */
-function readStoredSummary(): UsageSummary | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(SUMMARY_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as UsageSummary | null
-    if (!parsed || !Array.isArray(parsed.profiles)) return null
-    return {
-      ...parsed,
-      profiles: parsed.profiles.map((profile) => ({
-        ...profile,
-        error: null,
-        ollamaSetup: undefined,
-      })),
-    }
-  } catch {
-    return null
-  }
-}
-
-function writeStoredSummary(summary: UsageSummary): void {
-  if (typeof window === 'undefined') return
-  try {
-    const profiles = summary.profiles.map((profile) => ({
-      ...profile,
-      error: null,
-      ollamaSetup: undefined,
-    }))
-    window.localStorage.setItem(SUMMARY_CACHE_KEY, JSON.stringify({ ...summary, profiles }))
-  } catch {
-    // Storage can be unavailable (quota exceeded or private mode); the in-memory
-    // cache below still carries the summary within the session.
-  }
-}
-
-/**
- * Last successful summary, kept outside React state so reopening the modal (or
- * remounting it) shows the known providers immediately while the refresh runs.
- * Seeded from localStorage as well so a full page reload keeps the layout.
- */
-let cachedSummary: UsageSummary | null = readStoredSummary()
 
 /**
  * Full-size placeholder shown while the first usage response is in flight, so the
@@ -303,73 +261,62 @@ function UsageModalSkeleton() {
 }
 
 export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [summary, setSummary] = useState<UsageSummary | null>(() => cachedSummary)
+  const token = getAuthToken()
+  const summary = useSyncExternalStore(subscribeUsageSummary, getUsageSummary, () => null)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const applySummary = useCallback((data: UsageSummary) => {
-    cachedSummary = data
-    writeStoredSummary(data)
-    setSummary(data)
-    setSelectedId((current) => {
-      const ids = data.profiles.map((profile) => profile.id)
-      return current && ids.includes(current) ? current : (ids[0] ?? null)
-    })
+  const load = useCallback(async (force = true, quiet = false) => {
+    if (!getAuthToken()) return
+    if (!quiet) {
+      setError(null)
+      setLoading(!getUsageSummary())
+      setRefreshing(true)
+    }
+    try { await refreshUsageSummary(force) }
+    catch (error) {
+      if (!quiet) setError(error instanceof Error ? error.message : 'Failed to load provider usage')
+    } finally {
+      if (!quiet) { setLoading(false); setRefreshing(false) }
+    }
   }, [])
 
-  /**
-   * Two phases so the dialog never jumps from a small spinner to the full layout:
-   *  1. `refresh=0` paints the last known snapshots — every configured profile
-   *     plus its cached numbers — without touching the provider APIs.
-   *  2. a live refresh then upgrades utilisation and reset dates in place.
-   */
-  const load = useCallback(async () => {
-    const token = getAuthToken()
-    if (!token) {
-      setError('Sign in to view provider usage.')
-      setLoading(false)
-      setRefreshing(false)
-      return
+  // Prepare usage before opening the modal. Hidden and idle clients do no work.
+  // Multiple mounted headers share the store's promise and freshness timestamp.
+  useEffect(() => {
+    if (!token) return
+    let lastActiveAt = Date.now()
+    const refresh = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine
+        && Date.now() - lastActiveAt < 10 * 60_000) void load(false, true)
     }
-    setError(null)
-    setLoading(true)
-
-    let painted = false
-    try {
-      const response = await fetch(`${API_URL}/api/provider-usage/summary?refresh=0`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!response.ok) throw new Error(`Usage request failed (${response.status})`)
-      applySummary((await response.json()) as UsageSummary)
-      painted = true
-    } catch {
-      // Keep the skeleton up; the live refresh below may still succeed.
+    const active = () => { lastActiveAt = Date.now(); refresh() }
+    const visible = () => { if (document.visibilityState === 'visible') active() }
+    refresh()
+    const interval = window.setInterval(refresh, 60_000)
+    document.addEventListener('visibilitychange', visible)
+    window.addEventListener('online', active)
+    window.addEventListener('pointerdown', active, { passive: true })
+    window.addEventListener('keydown', active)
+    window.addEventListener('wheel', active, { passive: true })
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', visible)
+      window.removeEventListener('online', active)
+      window.removeEventListener('pointerdown', active)
+      window.removeEventListener('keydown', active)
+      window.removeEventListener('wheel', active)
     }
-    if (painted) setLoading(false)
-
-    setRefreshing(true)
-    try {
-      const response = await fetch(`${API_URL}/api/provider-usage/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!response.ok) throw new Error(`Usage request failed (${response.status})`)
-      applySummary((await response.json()) as UsageSummary)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load provider usage')
-    } finally {
-      setRefreshing(false)
-      setLoading(false)
-    }
-  }, [applySummary])
+  }, [token, load])
 
   useEffect(() => {
-    if (open) void load()
-  }, [open, load])
+    if (open) void load(false)
+  }, [open, token, load])
 
   const profiles = summary?.profiles ?? []
-  const selected = profiles.find((profile) => profile.id === selectedId) ?? null
+  const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles[0] ?? null
   const busy = loading || refreshing
 
   return (
@@ -425,6 +372,9 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
                     .map((quota) => quota.utilization)
                     .filter((value): value is number => value != null),
                 )
+                // A workspace can be blocked while its windows are below 100%
+                // (e.g. exhausted credits), so the stored status is authoritative.
+                const exhausted = profile.quotas.some((quota) => quota.status === 'rejected')
                 return (
                   <button
                     type="button"
@@ -439,7 +389,11 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
                       <span className="block truncate text-sm font-medium">{profile.providerLabel}</span>
                       <span className="block truncate text-xs text-muted-foreground">{profile.profileLabel}</span>
                     </span>
-                    {bestPercent >= 0 && (
+                    {exhausted ? (
+                      <span className="shrink-0 rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+                        Full
+                      </span>
+                    ) : bestPercent >= 0 && (
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {Math.round(bestPercent * 100)}%
                       </span>
@@ -452,7 +406,7 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
             {selected && <ProfileUsage key={selected.id} profile={selected} retry={load} loading={busy} />}
 
             <p className="text-[11px] text-muted-foreground">
-              {refreshing ? 'Refreshing live limits…' : <>Refreshed {formatDateTime(summary?.generatedAt ?? null)}</>}
+              {refreshing ? 'Refreshing live limits…' : <>Last checked {formatDateTime(summary?.generatedAt ?? null)}</>}
             </p>
           </div>
         )}

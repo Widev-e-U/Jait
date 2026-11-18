@@ -1,10 +1,14 @@
 import { ThreadApprovalNotice } from './thread-approval-notice'
 import { AlertTriangle, RefreshCw, Loader2 as SpinnerIcon } from 'lucide-react'
-import { useRef, type ReactNode, type RefObject } from 'react'
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, TodoList, MessageQueue } from '@/components/chat'
 import type { PromptInputHandle, ToolCallInfo } from '@/components/chat'
-import { getChatComposerBoundaryClassName, getChatTranscriptBoundaryClassName } from '@/components/chat/message-edit-layout'
+import {
+  getChatColumnClassName,
+  getChatComposerBoundaryClassName,
+  getChatTranscriptBoundaryClassName,
+} from '@/components/chat/message-edit-layout'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { useManagerSidebarSection } from '@/components/manager/manager-mode'
 import { haveRenderInputsChanged } from '@/lib/message-element-cache'
@@ -18,7 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { inferThreadRepositoryName } from '@/lib/automation-repositories'
-import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import { agentsApi, type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
@@ -153,10 +157,16 @@ export function ThreadsPage({
   // their own render-relevant inputs means only the streaming message gets a
   // new element, so React skips reconciling the rest.
   const activeThreadId = automation.selectedThread?.id ?? null
+  const handleApprovalResponse = useCallback(async (requestId: string, approved: boolean) => {
+    if (!activeThreadId) throw new Error('No thread selected')
+    await agentsApi.approveToolCall(activeThreadId, requestId, approved)
+    await automation.refreshSelectedThread()
+  }, [activeThreadId, automation.refreshSelectedThread])
   const threadRunning = automation.selectedThread?.status === 'running'
   const threadProvider = automation.selectedThread?.providerId as ProviderId | undefined
   const sharedRenderInputs = [
     threadProvider,
+    handleApprovalResponse,
     managerThreads,
     renderInlineSecretPrompt,
     onOpenMessagePath,
@@ -219,6 +229,7 @@ export function ThreadsPage({
           provider={threadProvider}
           threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={handleApprovalResponse}
           onOpenPath={onOpenMessagePath}
           onOpenDiff={onChangedFileClick}
           onOpenMemorySource={onMemorySourceOpen}
@@ -274,8 +285,8 @@ export function ThreadsPage({
                 {messageElements}
               </Conversation>
             </ErrorBoundary>
-            <div className={getChatComposerBoundaryClassName(isMobile, false)}>
-              <div className="mx-auto w-full max-w-4xl space-y-1.5">
+            <div className={getChatComposerBoundaryClassName(isMobile)}>
+              <div className={getChatColumnClassName('space-y-1.5')}>
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -340,6 +351,7 @@ export function ThreadsPage({
                     onSearchFiles={onSearchFiles}
                     projectOpen={showProject}
                     chatId={automation.selectedThread?.id ?? undefined}
+                    allowPersonalChatNode={false}
                     merged
                   />
                 </ErrorBoundary>

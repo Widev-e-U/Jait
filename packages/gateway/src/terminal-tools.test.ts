@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createTerminalRunTool,
   getManagedTerminalExecution,
@@ -13,6 +13,20 @@ import { TerminalSurfaceFactory, type TerminalSurface } from "./surfaces/termina
 import { SecretInputService } from "./services/secret-input.js";
 import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import type { WsControlPlane } from "./ws.js";
+
+afterEach(() => backgroundCommandMonitor.clearForTests());
+
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 
 function makeContext() {
   return {
@@ -112,7 +126,7 @@ function makeSecretPromptTool(
 
 describe("terminal.run tool status reporting", () => {
   it("returns ok=true when sandbox exit code is zero", async () => {
-    const sandbox = new SandboxManager(async () => ({ output: "done", exitCode: 0, timedOut: false }));
+    const sandbox = sandboxFixture(async () => ({ output: "done", exitCode: 0, timedOut: false }));
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
     const result = await tool.execute({ command: "echo hi", sandbox: true }, makeContext());
@@ -125,7 +139,7 @@ describe("terminal.run tool status reporting", () => {
 
   it("rewrites host project paths to the sandbox mount path", async () => {
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -155,7 +169,7 @@ describe("terminal.run tool status reporting", () => {
 
   it("executes sandbox commands inside a thread sandbox container when provided", async () => {
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -173,7 +187,7 @@ describe("terminal.run tool status reporting", () => {
 
   it("rewrites host paths before executing inside a thread sandbox container", async () => {
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -186,7 +200,7 @@ describe("terminal.run tool status reporting", () => {
   });
 
   it("returns ok=false when sandbox exit code is non-zero", async () => {
-    const sandbox = new SandboxManager(async () => ({ output: "error", exitCode: 1, timedOut: false }));
+    const sandbox = sandboxFixture(async () => ({ output: "error", exitCode: 1, timedOut: false }));
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
     const result = await tool.execute({ command: "bad-command", sandbox: true }, makeContext());
@@ -197,7 +211,7 @@ describe("terminal.run tool status reporting", () => {
   });
 
   it("returns ok=false when sandbox command times out", async () => {
-    const sandbox = new SandboxManager(async () => ({
+    const sandbox = sandboxFixture(async () => ({
       output: "[timeout after 1000ms]",
       exitCode: null,
       timedOut: true,
@@ -442,10 +456,10 @@ describe("terminal.run tool status reporting", () => {
     const tool = createTerminalRunTool(registry);
 
     const waiting = await tool.execute(
-      { command: "sleep 2", timeout: 20 },
+      { command: "sleep 2", yieldTimeMs: 20 },
       makeContext(),
     );
-    expect(waiting.data).toMatchObject({ timedOut: true, watched: true });
+    expect(waiting.data).toMatchObject({ timedOut: false, yielded: true, watched: true });
     const busyTerminalId = (waiting.data as any).terminalId as string;
     expect(backgroundCommandMonitor.hasWatcherForTerminal(busyTerminalId)).toBe(true);
 
@@ -611,11 +625,11 @@ describe("terminal.run tool status reporting", () => {
   it("moves the wait to background when no completion marker returns", async () => {
     const { tool, writes } = makePromptFallbackTool(["running without prompt\r\n"]);
 
-    const result = await tool.execute({ command: "long-running", terminalId: "term-existing", timeout: 20 }, makeContext());
+    const result = await tool.execute({ command: "long-running", terminalId: "term-existing", yieldTimeMs: 20 }, makeContext());
 
     expect(result.ok).toBe(true);
-    expect(result.message).toContain("timed out");
-    expect((result.data as any).timedOut).toBe(true);
+    expect(result.message).toContain("still running");
+    expect((result.data as any).timedOut).toBe(false);
     expect(writes).not.toContain("\x03\r");
     expect(result.data).toMatchObject({ isBackground: true, watched: true });
     backgroundCommandMonitor.clearForTests();

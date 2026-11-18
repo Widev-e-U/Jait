@@ -1,0 +1,53 @@
+//! Process lifecycle and bounded work. Domain services do not own the runtime.
+pub mod blocking;
+mod server;
+
+pub use server::Gateway;
+
+pub mod command;
+
+pub mod application;
+
+pub mod skills_mount;
+
+pub mod git_mount;
+pub mod git_network;
+pub mod team_chat_mount;
+pub mod tools_mount;
+
+pub mod channels_mount;
+pub mod chat_acp;
+pub mod chat_settings;
+pub mod chat_tools;
+pub mod consent_mount;
+pub mod consent_ws;
+pub mod maintenance_mount;
+pub mod mobile_mount;
+
+pub mod chat_turn;
+
+pub mod chat_store;
+
+#[cfg(test)]
+mod chat_flow_tests;
+
+pub mod chat_sessions;
+
+pub mod chat_projection;
+
+pub mod chat_config;
+
+pub mod chat_events;
+
+#[cfg(test)]
+mod chat_application_tests;
+
+pub mod api_contracts;
+
+/// Inactive WebSocket transport; callers must supply trusted authority and supervise shutdown.
+pub mod ws_transport;
+
+pub mod web_ui;
+
+#[cfg(all(test, target_os = "linux"))]
+mod live_file_smoke;

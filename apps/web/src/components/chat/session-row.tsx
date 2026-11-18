@@ -1,8 +1,20 @@
-import { Loader2, MessageSquare, MessageSquareX, ShieldQuestion } from 'lucide-react'
+import {
+  CircleQuestionMark,
+  Infinity as InfinityIcon,
+  Loader2,
+  MessageSquare,
+  MessageSquareX,
+  MousePointerClick,
+  ShieldQuestion,
+  TerminalSquare,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type {
   HTMLAttributes,
   MouseEventHandler,
+  ReactNode,
 } from 'react'
+import { readChatLoop, type SessionWait, type SessionWaitKind } from '@jait/shared'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { formatAgo } from '@/lib/relative-time'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -31,14 +43,64 @@ export interface SessionRowProps {
   isActive: boolean
   isStreaming?: boolean
   isWaitingForApproval?: boolean
+  /** True while the chat has an open question awaiting the user's answer. */
+  isAwaitingAnswer?: boolean
+  /**
+   * Why the chat is stopped right now, straight from the gateway. Takes
+   * precedence over the legacy `isAwaitingAnswer`/`isWaitingForApproval`
+   * booleans so every user-facing wait — a question, approval, a secret, a
+   * terminal prompt, browser control — is visible in the list. Waits with no
+   * row icon (a running background command) are ignored here.
+   */
+  wait?: SessionWait
   /** Shown when session.name is empty (e.g. "Personal chat" vs "Untitled session"). */
   fallbackLabel?: string
   onRowClick?: () => void
   onRowContextMenu?: MouseEventHandler<HTMLDivElement>
   /** Drag handlers (draggable/onDragStart/onDragEnd) built by the sidebar. */
-  dragProps?: Pick<HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd'>
+  dragProps?: Pick<HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd' | 'onDragOver' | 'onDragLeave' | 'onDrop' | 'style'>
+  /** Touch drag handle rendered before the row's status icon. */
+  dragHandle?: ReactNode
+  /** Identifies this row to the touch drag-and-drop hit test. */
+  dndKey?: string
   /** Extra long-press/pointer handlers spread onto the row. */
   longPressProps?: HTMLAttributes<HTMLDivElement>
+}
+
+/**
+ * One icon per wait reason that actually stops the chat for the user.
+ *
+ * `background` (a command the agent asked to be woken up for) has no entry on
+ * purpose: it is the agent's own reminder, it lingers for the whole run and it
+ * used to badge rows that were simply working, so those rows keep their
+ * streaming spinner / normal chat icon instead.
+ */
+const SESSION_WAIT_ICONS: Partial<Record<SessionWaitKind, LucideIcon>> = {
+  question: CircleQuestionMark,
+  consent: ShieldQuestion,
+  secret: ShieldQuestion,
+  browser: MousePointerClick,
+  terminal: TerminalSquare,
+}
+
+/** Icon for a wait reason, or undefined when the wait needs no row badge. */
+export function sessionWaitIcon(wait: SessionWait | undefined): LucideIcon | undefined {
+  return wait ? SESSION_WAIT_ICONS[wait.kind] : undefined
+}
+
+/** Icon + tooltip for one wait reason. Blocking waits are amber, non-blocking ones pulse. */
+function SessionWaitIcon({ wait, Icon }: { wait: SessionWait; Icon: LucideIcon }) {
+  const title = wait.detail ? `${wait.label} — ${wait.detail}` : wait.label
+  const tone = wait.blocking ? 'text-amber-500' : 'text-muted-foreground'
+  return (
+    <TooltipHint content={title}>
+      <Icon
+        className={`h-3.5 w-3.5 shrink-0 ${tone} ${wait.blocking ? '' : 'animate-pulse'}`}
+        aria-label={title}
+        data-testid={`session-row-wait-${wait.kind}`}
+      />
+    </TooltipHint>
+  )
 }
 
 /**
@@ -50,13 +112,19 @@ export function SessionRow({
   isActive,
   isStreaming = false,
   isWaitingForApproval = false,
+  isAwaitingAnswer = false,
+  wait,
   fallbackLabel = 'Untitled session',
   onRowClick,
   onRowContextMenu,
   dragProps,
+  dragHandle,
+  dndKey,
   longPressProps,
 }: SessionRowProps) {
   const chatError = parseSessionChatError(session.metadata)
+  const loop = readChatLoop(session.metadata)
+  const waitIcon = sessionWaitIcon(wait)
   const unread = isSessionUnread({
     lastActiveAt: session.lastActiveAt ?? '',
     viewedAt: session.viewedAt ?? null,
@@ -64,22 +132,43 @@ export function SessionRow({
   })
   return (
     <div
-      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors ${
+      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${
         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
       }`}
       onClick={onRowClick}
       onContextMenu={onRowContextMenu}
+      data-dnd-key={dndKey}
       {...dragProps}
       {...longPressProps}
     >
-      {isWaitingForApproval ? (
+      {dragHandle}
+      {wait && waitIcon ? (
+        <SessionWaitIcon wait={wait} Icon={waitIcon} />
+      ) : isAwaitingAnswer ? (
+        <TooltipHint content="Waiting for your answer">
+          <CircleQuestionMark
+            className="h-3.5 w-3.5 shrink-0 text-amber-500"
+            aria-label="Waiting for your answer"
+            data-testid="session-row-question"
+          />
+        </TooltipHint>
+      ) : isWaitingForApproval ? (
         <TooltipHint content="Waiting for approval">
           <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Waiting for approval" />
         </TooltipHint>
+      ) : loop?.status === 'running' ? (
+        <TooltipHint content="Goal loop running">
+          <span className="relative flex size-3.5 shrink-0 items-center justify-center" role="status" aria-label="Goal loop running" data-testid="session-row-loop">
+            <span className="absolute inset-[-2px] rounded-full border border-primary/25 border-t-primary animate-spin motion-reduce:animate-none" />
+            <InfinityIcon className="size-3 text-primary" />
+          </span>
+        </TooltipHint>
+      ) : loop?.status === 'waiting' ? (
+        <CircleQuestionMark className="size-3.5 shrink-0 text-amber-500" aria-label="Loop waiting for your answer" />
       ) : isStreaming ? (
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-      ) : chatError ? (
-        <TooltipHint content={`Last reply failed: ${chatError.message}`}>
+      ) : chatError || loop?.status === 'error' ? (
+        <TooltipHint content={`Last reply failed: ${chatError?.message || loop?.summary}`}>
           <MessageSquareX
             className="h-3.5 w-3.5 shrink-0 text-destructive"
             aria-label="Last reply failed"

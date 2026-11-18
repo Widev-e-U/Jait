@@ -4,6 +4,750 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.972](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.972) — 2026-11-12
+
+- fix(web): toast close button no longer overlaps action buttons; restyle toast actions — 95c2733c
+- chore: commit pending web, email, messenger and gateway work — ecde1c13
+- feat(gateway): replace elevated.run with terminal.run elevated option (sudo via PTY secret prompt, UAC on Windows, per-call consent) — f43daeec
+- feat(gateway-rust): native preview reopen route; regenerate API inventory (227/429 native-tested) — 1da9de00
+- test(gateway-rust): black-box test for preview reopen route mounted through composed binary — 7aae11d3
+- feat(gateway-rust): native browser screenshot route, auth-gated and project-scoped, with black-box test — 56a5512c
+- feat(gateway-rust): native voice wake-candidate route with auth, size/rate limits and System One review; black-box test — 3a6e0d8e
+- feat(gateway-rust): native preview file and owner-scoped dev/preview proxy routes with black-box tests — 3961c3f5
+- docs(gateway-rust): document network git/forge consent model; inventory counts web UI fallback and literal forge test paths — 456e5c8b
+- feat(gateway-rust): consent-gated GitHub forge status/auth/pr-checks routes with read-only gh allowlist and black-box test — 307b0128
+- feat(gateway-rust): per-destination consent for network git fetch/pull/push with black-box test — 4c7302ef
+- feat(gateway-rust): project repository assignment with ownership-change rollback and black-box tests — e6b5218b
+- feat: improve mobile layouts and gateway functionality — bbc70ff4
+- feat(gateway-rust): plan execute, retry-tool and project download routes with black-box tests — 373edfaf
+- feat(gateway-rust): session restart-from route with black-box test — 321b7aab
+- feat(gateway-rust): session approve, steer and trajectory routes with black-box test — dd2fb2b2
+- feat(gateway-rust): session message context-flow and sub-agent history routes with black-box test — 1d0113f0
+- test(gateway-rust): black-box repo, todo, proposal, plan and user-question routes — 1b5ed0b7
+- test(gateway-rust): black-box reminder, trust level and assistant profile item routes — 7c537626
+- test(gateway-rust): black-box consent, session and terminal routes through the composed binary — a6f3904f
+- feat(gateway-rust): wire tool catalog into settings so /api/auth/settings/tools works in the composed binary — dc460a04
+- test(gateway-rust): black-box read routes for auth, consent, calendar, email, filesystem — 85f89097
+- feat(gateway-rust): native git run-stacked-action (commit, commit_push) under command authority — 1169d49c
+- test(gateway-rust): template node credential test paths so inventory counts them — ca746179
+- feat(gateway-rust): native node credential issue/revoke routes mounted on the composition root — 23ade2f4
+- test(gateway-rust): project hierarchy/sessions/state black-box test, restore 400 parity, inventory sees mid() dispatch — 09975839
+- feat(gateway-rust): native thread approve validation and provider-support conflict — 32585b39
+- feat(gateway-rust): native thread steer (stop and restart on the thread session) — 567e1cbb
+- feat(gateway-rust): native thread start, send and resume on the thread session — 4ab14bba
+- docs(gateway-rust): generated API inventory with per-route Rust status — 2cc0e64c
+- feat(gateway-rust): expose consent-gated project tools over /mcp — 838c8b65
+- feat(gateway-rust): mount file.list and file.patch in chat tools with consent — 10945e1f
+- chore(contract): refresh behavior inventory for changed preview and gateway-tools sources — 5c050973
+- feat(messenger): filter chips row, blob cache, service logo updates — 015fcef6
+- feat(browser): keep last page URL and reopen stopped chat browser on demand — 558a1942
+
+Fix overlapping close/Open buttons in toast notifications.
+
+## [v0.1.971](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.971) — 2026-11-12
+
+- chore: commit pending web, email, messenger and gateway work — ecde1c13
+- feat(gateway): replace elevated.run with terminal.run elevated option (sudo via PTY secret prompt, UAC on Windows, per-call consent) — f43daeec
+- feat(gateway-rust): native preview reopen route; regenerate API inventory (227/429 native-tested) — 1da9de00
+- test(gateway-rust): black-box test for preview reopen route mounted through composed binary — 7aae11d3
+- feat(gateway-rust): native browser screenshot route, auth-gated and project-scoped, with black-box test — 56a5512c
+- feat(gateway-rust): native voice wake-candidate route with auth, size/rate limits and System One review; black-box test — 3a6e0d8e
+- feat(gateway-rust): native preview file and owner-scoped dev/preview proxy routes with black-box tests — 3961c3f5
+- docs(gateway-rust): document network git/forge consent model; inventory counts web UI fallback and literal forge test paths — 456e5c8b
+- feat(gateway-rust): consent-gated GitHub forge status/auth/pr-checks routes with read-only gh allowlist and black-box test — 307b0128
+- feat(gateway-rust): per-destination consent for network git fetch/pull/push with black-box test — 4c7302ef
+- feat(gateway-rust): project repository assignment with ownership-change rollback and black-box tests — e6b5218b
+- feat: improve mobile layouts and gateway functionality — bbc70ff4
+- feat(gateway-rust): plan execute, retry-tool and project download routes with black-box tests — 373edfaf
+- feat(gateway-rust): session restart-from route with black-box test — 321b7aab
+- feat(gateway-rust): session approve, steer and trajectory routes with black-box test — dd2fb2b2
+- feat(gateway-rust): session message context-flow and sub-agent history routes with black-box test — 1d0113f0
+- test(gateway-rust): black-box repo, todo, proposal, plan and user-question routes — 1b5ed0b7
+- test(gateway-rust): black-box reminder, trust level and assistant profile item routes — 7c537626
+- test(gateway-rust): black-box consent, session and terminal routes through the composed binary — a6f3904f
+- feat(gateway-rust): wire tool catalog into settings so /api/auth/settings/tools works in the composed binary — dc460a04
+- test(gateway-rust): black-box read routes for auth, consent, calendar, email, filesystem — 85f89097
+- feat(gateway-rust): native git run-stacked-action (commit, commit_push) under command authority — 1169d49c
+- test(gateway-rust): template node credential test paths so inventory counts them — ca746179
+- feat(gateway-rust): native node credential issue/revoke routes mounted on the composition root — 23ade2f4
+- test(gateway-rust): project hierarchy/sessions/state black-box test, restore 400 parity, inventory sees mid() dispatch — 09975839
+- feat(gateway-rust): native thread approve validation and provider-support conflict — 32585b39
+- feat(gateway-rust): native thread steer (stop and restart on the thread session) — 567e1cbb
+- feat(gateway-rust): native thread start, send and resume on the thread session — 4ab14bba
+- docs(gateway-rust): generated API inventory with per-route Rust status — 2cc0e64c
+- feat(gateway-rust): expose consent-gated project tools over /mcp — 838c8b65
+- feat(gateway-rust): mount file.list and file.patch in chat tools with consent — 10945e1f
+- chore(contract): refresh behavior inventory for changed preview and gateway-tools sources — 5c050973
+- feat(messenger): filter chips row, blob cache, service logo updates — 015fcef6
+- feat(browser): keep last page URL and reopen stopped chat browser on demand — 558a1942
+
+terminal.run now supports elevated:true (replaces elevated.run).
+
+## [v0.1.970](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.970) — 2026-11-11
+
+- feat: improve mobile layouts and gateway functionality — bbc70ff4
+- feat(gateway-rust): plan execute, retry-tool and project download routes with black-box tests — 373edfaf
+- feat(gateway-rust): session restart-from route with black-box test — 321b7aab
+- feat(gateway-rust): session approve, steer and trajectory routes with black-box test — dd2fb2b2
+- feat(gateway-rust): session message context-flow and sub-agent history routes with black-box test — 1d0113f0
+- test(gateway-rust): black-box repo, todo, proposal, plan and user-question routes — 1b5ed0b7
+- test(gateway-rust): black-box reminder, trust level and assistant profile item routes — 7c537626
+- test(gateway-rust): black-box consent, session and terminal routes through the composed binary — a6f3904f
+- feat(gateway-rust): wire tool catalog into settings so /api/auth/settings/tools works in the composed binary — dc460a04
+- test(gateway-rust): black-box read routes for auth, consent, calendar, email, filesystem — 85f89097
+- feat(gateway-rust): native git run-stacked-action (commit, commit_push) under command authority — 1169d49c
+- test(gateway-rust): template node credential test paths so inventory counts them — ca746179
+- feat(gateway-rust): native node credential issue/revoke routes mounted on the composition root — 23ade2f4
+- test(gateway-rust): project hierarchy/sessions/state black-box test, restore 400 parity, inventory sees mid() dispatch — 09975839
+- feat(gateway-rust): native thread approve validation and provider-support conflict — 32585b39
+- feat(gateway-rust): native thread steer (stop and restart on the thread session) — 567e1cbb
+- feat(gateway-rust): native thread start, send and resume on the thread session — 4ab14bba
+- docs(gateway-rust): generated API inventory with per-route Rust status — 2cc0e64c
+- feat(gateway-rust): expose consent-gated project tools over /mcp — 838c8b65
+- feat(gateway-rust): mount file.list and file.patch in chat tools with consent — 10945e1f
+- chore(contract): refresh behavior inventory for changed preview and gateway-tools sources — 5c050973
+- feat(messenger): filter chips row, blob cache, service logo updates — 015fcef6
+- feat(browser): keep last page URL and reopen stopped chat browser on demand — 558a1942
+
+## [v0.1.969](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.969) — 2026-11-10
+
+- feat(browser): keep last page URL and reopen stopped chat browser on demand — 558a1942
+
+Chat browser keeps its last page after stopping and can be reopened there.
+
+## [v0.1.968](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.968) — 2026-11-10
+
+- test(web): match four-column project row grid in session selector — dea6a852
+- feat(gateway-rust): chat route coverage and contract evidence — 811f49b0
+- feat(messenger): service bar, bridge re-auth, chat-loop and UI updates — 3e37ab07
+- feat(gateway-rust): thread stop and interrupt with ownership and session-state handling — 8816224f
+- fix(gateway): disable Claude Code native shell so commands use jait.terminal — 15e4daca
+
+## [v0.1.967](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.967) — 2026-11-09
+
+- fix(web): stop long-press chat menu selecting text; render Claude terminal cards like Codex — c68bb2a7
+- feat(gateway-rust): serve provider usage summary, surface-scoped project search and MCP api keys — a6791a14
+- feat(gateway-rust): serve provider accounts and usage from the database — b2231000
+- feat(gateway-rust): persist provider API keys in user settings — 2dd26c14
+- feat(gateway-rust): serve /api/providers from the real provider registry — 9b6bde03
+- feat(gateway-rust): register ACP providers in the composed app's registry — 21106884
+- fix(messenger): honour Synapse rate limits when joining Teams invites — 2eae121c
+- fix(messenger): join Teams bridge invites so rooms get labelled — 46e7a35e
+- test(gateway-rust): align schema retry test with verified-retry contract — 2ad4130b
+- style(gateway-rust): rustfmt voice and skills mounts — 7a44378c
+- feat(gateway-rust): deliver consent prompts and decisions to session-bound WebSocket clients — 74d39d07
+- feat(gateway-rust): operator-enabled ACP agent as a consent-routed chat provider — ee24a377
+- feat(gateway-rust): consent-gated terminal.run in the settings chat — b4cdb819
+- feat(gateway-rust): consent-gated file.write in the settings chat with mounted consent routes — bae8dad4
+- feat(gateway-rust): mount scoped read-only file.read tool in the settings chat — 50623efc
+- feat(gateway-rust): run chat on the user's saved OpenAI-compatible settings — 79af37be
+- feat(gateway-rust): mount skills router on a discovered registry — e6c6b70f
+- feat(gateway-rust): wire DB-backed voice settings and env-granted STT transport — c281dcdb
+- feat(gateway-rust): mount voice router in the composed application — b5b8b2f4
+- feat(gateway-rust): mount environment and calendar routers on real services — 8eaf3a6a
+- feat(gateway-rust): mount code-graph and update routers on real services — 2e543e83
+- feat(gateway-rust): serve the built web UI and gate non-loopback bind behind a config flag — 1c9e2b81
+- feat(gateway-rust): mount assistant profiles, architecture and user questions routers — e9f523b8
+- feat(gateway-rust): mount git, plans, proposals and repositories routers — bf39aa36
+- feat(gateway-rust): mount filesystem and secrets routers in the composed application — 7b1b9479
+- feat(gateway-rust): mount threads and reminders routers in the composed application — 66f88687
+- feat(gateway-rust): inventory distinguishes unmounted routers — 443909b4
+- feat(gateway-rust): add generated API inventory tooling — c6ad1621
+- chore: checkpoint current migration work — 1c3c4cff
+- fix(gateway-rust): repair migration verification blockers — 49e987a8
+- fix: mark changed Rust parity claims pending — a945587e
+- feat: advance gateway migration and workbench updates — 460f95d4
+
+## [v0.1.966](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.966) — 2026-11-03
+
+- fix(gateway): stop the desktop shell from reporting slow shutdowns as failures — 43d04a25
+
+Fixes a shutdown exit-code race that failed Windows gateway packaging on slow runners. The desktop shell now exits 0 when a stop overruns, a genuine hang still exits non-zero, and deadlines are strictly ordered: watchdog 15s (JAIT_SHUTDOWN_TIMEOUT_MS) < host backstop 20s < workflow 30s. HTTP close is now bounded so lingering keep-alive sockets cannot stall shutdown.
+
+## [v0.1.965](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.965) — 2026-11-03
+
+- test: cover browser history behavior — d2424b2a
+- chore(contracts): recapture browser interface inventory — d7404087
+- feat: add PDF search and compact browser controls — 5a2dedd7
+- fix: address project chat and PDF review feedback — b01e5698
+- fix(web): keep the folder chevron icon-sized on touch devices — 36f8aaad
+- fix(web): tint the folder icon instead of a dot so sidebar titles align — 9635b509
+- chore(contracts): recapture interface manifest for shifted project route offsets — 55ff4351
+- fix: deliver chat queue entries from Android after a silent socket drop — e3f3038c
+- test(web): cover chat rename menu, project new-chat click and preview kinds — 8f79134d
+- feat(web): rename chats from the sidebar; a project click opens a new-chat view — ab57ab13
+- feat(web): open file paths from chat in the viewer, with PDF and markdown preview — a4ecb2ee
+- feat(web): bullet and numbered lists in the chat composer — e1984dbc
+- fix(web): stop duplicated and vanishing chat messages, recover silent streams — 60c50c25
+
+## [v0.1.964](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.964) — 2026-11-03
+
+- test(gateway): account for daemon probes in quota refresh fixtures — ac39324d
+- fix(rust): align process, persistence and service contracts — af9fc8f7
+- fix(gateway): improve chat responsiveness, provider usage and cleanup — f671ae67
+- test(rust): promote 91 original components to verified on green native contract evidence — b5af9f7f
+- test(rust): add native evidence suites for tools/routes/services/root/data/platform components — 94e114f7
+- test(rust): expose and verify tools::agent_loop through the contract crate — 979953f7
+- fix(rust): match reference MAC precedence in network_scan::merge_entries — 819d1a2c
+- test(rust): record seven untracked additions in native coverage ledger — 316e3156
+- fix(web): improve goal and browser overlays — 6fdd4b47
+- feat: add browser workflows and streamline release checks — d78f4a36
+- fix(contracts): reconcile reviewed source fingerprints — 9af1a730
+- fix(contracts): isolate reviewed source mutation probes — 87cbfdd6
+- fix(contracts): apply source review overrides in node peer — 957e6b41
+- fix(contracts): provide steering fixture UUID import — 492ddcd5
+- fix(graph): stop cancelled builds before setup — 2d2d4109
+- test(gateway): cover provider and location boundaries — 2ad0809d
+- fix(ci): account for new migration inventory and test gaps — 147db3de
+- fix(tests): release mutex guards before async calls — 8ca2bb07
+- feat(gateway-rust): advance native migration and contract coverage — 90c66ec3
+- test(rust): reconcile native coverage ledger with 370-path inventory — f7bf554a
+- test(rust): add prompt parity contracts and refresh native coverage inventory — 91278701
+- feat(web): single-line browser header with three-way size switch — 501de9eb
+- fix(rust): reconcile prompt and computer control drift — b5efae91
+- fix: format Rust contract tests — 6d8b2d12
+- fix: align pipeline tests with browser and chat behavior — bd3026d1
+- feat: advance gateway migration and improve browser controls — f74cae5b
+- fix(codex-acp): restore compaction turn-completion wait in adapter patch — c5463c8c
+- Fix Codex ACP startup: give the adapter a resolvable Codex runtime — 0ec156ed
+- fix(gateway): retain codex exception diagnostics — 5eaa5c57
+- deploy: cut pipeline from 9m21s to 4m23s without weakening gates — 2fa05ce6
+- chat: steady goal-card expansion; rust: no live stream after failed terminal write — f2ba37a3
+- feat: improve screen sharing and native gateway — d6c5dfd8
+- chore: capture local workspace changes — bedc3ed9
+- fix(gateway): preserve chat-scoped Codex MCP bindings — faa29639
+- fix(gateway-rust): mirror Bun's URL parse errors for the Jait MCP server ref — 9d473705
+- fix(contracts): separate provider fixture checks from migration cases — 66642765
+- fix(web): coalesce repeated question waits into one card — 6a7769fc
+- fix(contracts): refresh parser dependency interface snapshot — 37670f40
+- fix(contracts): reconcile reviewed native source fingerprints — 81b5bf54
+- fix(gateway): avoid Bun shared HTML parser import race — 4a46bbf2
+- test(contracts): allow provider fixture shutdown during reads — 3f602850
+- fix(ci): align Rust contracts with reviewed Bun runtime — 26f34fa1
+- test(contracts): preserve reviewed remote-terminal mappings — 41661264
+- fix(rust): match pinned Bun assessment error responses — f53b7d21
+- test(browser): refresh reviewed MCP contract inventory — 386c1379
+- fix(ci): restore Rust lint and component coverage gates — 987b38cc
+- fix(browser): bind handoffs to the originating chat — 53403b40
+- feat: improve browser handoffs, chat workflows and native gateway contracts — 0fec4d81
+- revert: drop parallel-workstream test files committed without contract recapture — 88dd31cf
+- test(gateway): cover background execution, ACP context updates and graph truncation — 2657b6ec
+
+## [v0.1.963](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.963) — 2026-11-02
+
+- fix(web): improve goal and browser overlays — 6fdd4b47
+- feat: add browser workflows and streamline release checks — d78f4a36
+- fix(contracts): reconcile reviewed source fingerprints — 9af1a730
+- fix(contracts): isolate reviewed source mutation probes — 87cbfdd6
+- fix(contracts): apply source review overrides in node peer — 957e6b41
+- fix(contracts): provide steering fixture UUID import — 492ddcd5
+- fix(graph): stop cancelled builds before setup — 2d2d4109
+- test(gateway): cover provider and location boundaries — 2ad0809d
+- fix(ci): account for new migration inventory and test gaps — 147db3de
+- fix(tests): release mutex guards before async calls — 8ca2bb07
+- feat(gateway-rust): advance native migration and contract coverage — 90c66ec3
+- test(rust): reconcile native coverage ledger with 370-path inventory — f7bf554a
+- test(rust): add prompt parity contracts and refresh native coverage inventory — 91278701
+- feat(web): single-line browser header with three-way size switch — 501de9eb
+- fix(rust): reconcile prompt and computer control drift — b5efae91
+- fix: format Rust contract tests — 6d8b2d12
+- fix: align pipeline tests with browser and chat behavior — bd3026d1
+- feat: advance gateway migration and improve browser controls — f74cae5b
+- fix(codex-acp): restore compaction turn-completion wait in adapter patch — c5463c8c
+- Fix Codex ACP startup: give the adapter a resolvable Codex runtime — 0ec156ed
+- fix(gateway): retain codex exception diagnostics — 5eaa5c57
+- deploy: cut pipeline from 9m21s to 4m23s without weakening gates — 2fa05ce6
+- chat: steady goal-card expansion; rust: no live stream after failed terminal write — f2ba37a3
+- feat: improve screen sharing and native gateway — d6c5dfd8
+- chore: capture local workspace changes — bedc3ed9
+- fix(gateway): preserve chat-scoped Codex MCP bindings — faa29639
+- fix(gateway-rust): mirror Bun's URL parse errors for the Jait MCP server ref — 9d473705
+- fix(contracts): separate provider fixture checks from migration cases — 66642765
+- fix(web): coalesce repeated question waits into one card — 6a7769fc
+- fix(contracts): refresh parser dependency interface snapshot — 37670f40
+- fix(contracts): reconcile reviewed native source fingerprints — 81b5bf54
+- fix(gateway): avoid Bun shared HTML parser import race — 4a46bbf2
+- test(contracts): allow provider fixture shutdown during reads — 3f602850
+- fix(ci): align Rust contracts with reviewed Bun runtime — 26f34fa1
+- test(contracts): preserve reviewed remote-terminal mappings — 41661264
+- fix(rust): match pinned Bun assessment error responses — f53b7d21
+- test(browser): refresh reviewed MCP contract inventory — 386c1379
+- fix(ci): restore Rust lint and component coverage gates — 987b38cc
+- fix(browser): bind handoffs to the originating chat — 53403b40
+- feat: improve browser handoffs, chat workflows and native gateway contracts — 0fec4d81
+- revert: drop parallel-workstream test files committed without contract recapture — 88dd31cf
+- test(gateway): cover background execution, ACP context updates and graph truncation — 2657b6ec
+
+## [v0.1.962](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.962) — 2026-11-02
+
+- feat: add browser workflows and streamline release checks — d78f4a36
+- fix(contracts): reconcile reviewed source fingerprints — 9af1a730
+- fix(contracts): isolate reviewed source mutation probes — 87cbfdd6
+- fix(contracts): apply source review overrides in node peer — 957e6b41
+- fix(contracts): provide steering fixture UUID import — 492ddcd5
+- fix(graph): stop cancelled builds before setup — 2d2d4109
+- test(gateway): cover provider and location boundaries — 2ad0809d
+- fix(ci): account for new migration inventory and test gaps — 147db3de
+- fix(tests): release mutex guards before async calls — 8ca2bb07
+- feat(gateway-rust): advance native migration and contract coverage — 90c66ec3
+- test(rust): reconcile native coverage ledger with 370-path inventory — f7bf554a
+- test(rust): add prompt parity contracts and refresh native coverage inventory — 91278701
+- feat(web): single-line browser header with three-way size switch — 501de9eb
+- fix(rust): reconcile prompt and computer control drift — b5efae91
+- fix: format Rust contract tests — 6d8b2d12
+- fix: align pipeline tests with browser and chat behavior — bd3026d1
+- feat: advance gateway migration and improve browser controls — f74cae5b
+- fix(codex-acp): restore compaction turn-completion wait in adapter patch — c5463c8c
+- Fix Codex ACP startup: give the adapter a resolvable Codex runtime — 0ec156ed
+- fix(gateway): retain codex exception diagnostics — 5eaa5c57
+- deploy: cut pipeline from 9m21s to 4m23s without weakening gates — 2fa05ce6
+- chat: steady goal-card expansion; rust: no live stream after failed terminal write — f2ba37a3
+- feat: improve screen sharing and native gateway — d6c5dfd8
+- chore: capture local workspace changes — bedc3ed9
+- fix(gateway): preserve chat-scoped Codex MCP bindings — faa29639
+- fix(gateway-rust): mirror Bun's URL parse errors for the Jait MCP server ref — 9d473705
+- fix(contracts): separate provider fixture checks from migration cases — 66642765
+- fix(web): coalesce repeated question waits into one card — 6a7769fc
+- fix(contracts): refresh parser dependency interface snapshot — 37670f40
+- fix(contracts): reconcile reviewed native source fingerprints — 81b5bf54
+- fix(gateway): avoid Bun shared HTML parser import race — 4a46bbf2
+- test(contracts): allow provider fixture shutdown during reads — 3f602850
+- fix(ci): align Rust contracts with reviewed Bun runtime — 26f34fa1
+- test(contracts): preserve reviewed remote-terminal mappings — 41661264
+- fix(rust): match pinned Bun assessment error responses — f53b7d21
+- test(browser): refresh reviewed MCP contract inventory — 386c1379
+- fix(ci): restore Rust lint and component coverage gates — 987b38cc
+- fix(browser): bind handoffs to the originating chat — 53403b40
+- feat: improve browser handoffs, chat workflows and native gateway contracts — 0fec4d81
+- revert: drop parallel-workstream test files committed without contract recapture — 88dd31cf
+- test(gateway): cover background execution, ACP context updates and graph truncation — 2657b6ec
+
+## [v0.1.961](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.961) — 2026-10-23
+
+- test(gateway,shared): cover directory copy guards, terminal exit listeners and chat loop parsing — d8d7141e
+- test(chat): measure the inner composer column in the alignment fixture — 367bfb3f
+- fix(ci): resolve node from PATH and mount browser panel in e2e fixture — fac193a0
+- fix(ci): green the contract fmt/clippy lane and tooling target list — 78b57108
+
+Home chat: transcript and composer share one centered Copilot-style column.
+
+## [v0.1.960](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.960) — 2026-10-23
+
+- chore(e2e): drop leftover column-alignment debug log — 6d3ddafe
+- feat: context/cost controls, native Rust ports, and messenger/chat UI — eed1be75
+- feat: rust gateway contract port, local deploy tooling, messenger and browser UI work — 1d584fb1
+- fix(chat): keep background-terminal steering notices out of the transcript — 78183b9c
+- fix(web): keep desktop transcript visible beside the minimap — 483062b0
+
+Context/cost controls, native Rust ports (chat loops, code graph, workbench, security tools, context budget), and messenger/chat UI; native gate 219/374.
+
+## [v0.1.959](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.959) — 2026-10-22
+
+- feat: rust gateway contract port, local deploy tooling, messenger and browser UI work — 1d584fb1
+- fix(chat): keep background-terminal steering notices out of the transcript — 78183b9c
+- fix(web): keep desktop transcript visible beside the minimap — 483062b0
+
+Keeps background-terminal steering nudges out of chat transcripts (trajectory keeps internal/deferred badges).
+
+## [v0.1.958](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.958) — 2026-10-21
+
+- fix(web): keep desktop transcript visible beside the minimap — 483062b0
+
+## [v0.1.957](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.957) — 2026-10-21
+
+- fix(update): publish shared session waits and validate installed gateway imports — 21d460b1
+
+Publishes shared 0.1.107 with the session-wait exports required by the gateway,
+repairing the startup failure introduced in 0.1.954 and still present in 0.1.956.
+Updates now load the installed gateway's imports before stopping the running
+service, and release CI validates an installed npm tarball against registry
+dependencies before publishing the gateway. Rust regressions cover missing
+shared exports without downtime, successful activation with compatible exports,
+and restoration of the previous installation after a startup failure.
+
+## [v0.1.956](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.956) — 2026-10-21
+
+- fix(release): detect full push bumps and reject missing packages — c93464e7
+- fix(contract): record reused declaration execution under its own id — 0c333d82
+- fix(contract): refresh the behavior inventory so the coverage audit is consistent — 32d6ab57
+- test(gateway-rust): wait for the worker mailbox to drain a cancelled job — cb1325fb
+- ci(contract): give the Rust gateway contract lane room to finish — 94da7f98
+- fix(contract): hash interface claim digests in serde declaration order — f0bd51b1
+- fix(contract): re-pin stale source review digests for user questions — 87e4d96b
+- fix(contract): resolve the fixture node binary from PATH instead of /usr/bin/node — 1e4afdef
+- feat(scheduler,core-agent): embed tzdata 2024a and add core agent surface — 6a58e1be
+- fix(gateway): retry exec on ETXTBSY so concurrent spawns stop failing under load — ea602d43
+- test(contract): port native assessment, cron, session-sql and validate suites — f7a0c467
+
+Release detection now checks the entire pushed commit range. A version that
+never becomes available on npm fails the workflow, and gateway publication
+and install checks run for every release. GitHub releases require successful
+Windows and Android builds. This release also includes the gateway spawn
+retry and the latest Rust migration and contract fixes listed above.
+
+## [v0.1.955](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.955) — 2026-10-21
+
+- fix(web): drop the provider badge beside the Models heading — bbf28c60
+
+The model selector no longer repeats the active provider beside the “Models”
+heading. The provider column and the trigger already name the provider, so the
+badge only squeezed the heading; the models column now stands on its own. The
+favorites-aware initial scroll keeps the selected row visible on open.
+
+## [v0.1.954](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.954) — 2026-10-20
+
+- feat(gateway-rust,gateway,web,shared): port consent, tool profiles and session waits natively — 5abe77b7
+- fix(ci): restore component coverage and stop the active-stream fixture race — 5b52b410
+- fix(ci): rustfmt model_fetchers and stop the vitest compile-cache teardown race — 71768981
+- fix(ci): format steering tests and retry vitest state teardown — 80b417ad
+- fix(ci): repair rust contracts, clippy, chat_flow tool alias, Windows smoke — 46f50ac8
+- fix(messenger): render outgoing messages immediately — d01a66e0
+
+The Rust port picks up the consent manager, the tool permission ladder, tool
+profiles with their extracted asset table, session waits, sub-agent history,
+the messenger bridge, code-graph retrieval and the maintenance tool, each with
+its own contract suite, plus an ECMAScript-compatible JSON module the rest of
+the port reuses. The TypeScript gateway feeds the same payloads through the
+messenger service, preview surface, browser/terminal/screenshot tools and the
+websocket layer, and the web client adds conversation-browser and session-wait
+helpers, a messenger peer view and reworked chat and settings surfaces.
+
+The pipeline is green again. The active-stream contract fixture installed its
+release gate after a fixed sleep, so a fast client could release the stream
+before the callback existed and the test hung; the gate is now installed before
+the first token is sent. Component coverage, which had drifted below the frozen
+baseline since 4f4be0bb, is restored with real tests for tool profiles, terminal
+tool metadata, ACP catalogue mapping, pi MCP provisioning, the Gmail client,
+offline jait-models fallback, the skills bin cache, terminal output slicing and
+chat context-flow serialization rather than by re-baselining. Vitest state
+teardown and rustfmt/clippy drift on `model_fetchers.rs` are fixed as well.
+
+## [v0.1.953](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.953) — 2026-10-20
+
+- feat(gateway,web,gateway-rust): queue mid-loop steers until the tool round ends — 8691640c
+
+Steering now tells the truth about timing. A steer sent while a tool round is
+running is parked in a per-session queue and injected at the top of the next
+iteration — after the running round's tools finish, before the next model call
+— instead of landing in the transcript as if the model had already read it.
+`POST /api/sessions/:sessionId/steer` responds with `deferred` and the client's
+`queuedMessageId`, and the `steering` event echoes both so the UI can promote
+the parked row into a real transcript segment at the moment of injection. Until
+then the message queue shows it as `Queued #N` ("Sends after this step") with
+reorder, edit and steer actions suppressed, and pending steers are excluded
+from the auto-drain so they cannot be replayed as their own turn. A rejected
+steer falls back to an ordinary queued message. On the native side, a new
+`services::steering` queue provides the same primitive in Rust with idempotent
+steer-per-id, session-scoped drains and a discard path, covered by tests for
+round-boundary deferral, send ordering, idempotency, session scoping, discard
+and observer re-entrancy.
+
+## [v0.1.952](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.952) — 2026-10-20
+
+- fix(gateway): harden thread titles, user questions and network seams — f12c7461
+- feat(web): edit and resend chat messages — 53932001
+- feat(gateway-rust): complete the provider, service and route port — 30a29dda
+- fix(gateway): list Ollama Cloud models in refreshed model catalogues — a1649bdc
+
+Chat gains in-place message editing and resend, so a prompt can be corrected
+without starting a new thread. Refreshed model catalogues now include Ollama
+Cloud entries. The gateway hardens thread-title generation, user-question
+handling and several network seams, and the Rust port reaches parity for the
+remaining providers, services and routes.
+
+## [v0.1.951](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.951) — 2026-10-19
+
+- feat(gateway): account token overhead and usage end-to-end — 90a8b2b0
+- feat(gateway-rust): port providers, calendar, security and services with contract coverage — 46a9e828
+
+Token spend is now accounted end-to-end: a shared context-overhead and
+model-usage model (with Rust parity) measures prompt/cached/completion tokens
+and estimated vs reported totals, flows through gateway metrics into the chat
+usage receipt and context-flow dialog, and captures Codex usage events. The
+release also fixes skill-discovery emission, the compacted catalog overview,
+terminal echo removal and valid-JSON truncation for MCP results. On the native
+side, providers, calendar, security and background services are ported to Rust
+with contract drivers and a source-review harness.
+
+## [v0.1.950](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.950) — 2026-10-19
+
+- ci(release): retry npm smoke until the packument propagates — 36f9300a
+- fix(contracts): format gateway_rust_secrets with rustfmt — d3622342
+- test(gateway): cover Codex rate-limit response validators — 7976d5a3
+- fix(gateway): settle terminal commands after the output stream quiets — e0e68dc2
+- fix(web): fill the sidebar rail before showing the three-dot menu — caf340bc
+
+The sidebar rail now fills every slot that actually fits before falling back
+to the "⋯" overflow menu: a shared allocator distributes the rail's measured
+height across both sections proportionally and hands leftover space to any
+section still hiding items, and button heights are measured from the rendered
+markup instead of assumed (the Button size variant had been overriding the
+item's declared height, shrinking the effective fit by 4px per button).
+
+Terminal command execution no longer drops output that ConPTY flushes after
+the completion marker or shell prompt — the settle window re-arms while data
+keeps arriving, so the response settles 50ms after the stream goes quiet
+instead of racing it.
+
+The release pipeline is repaired end-to-end: the `npm install -g` smoke test
+retries for up to 20 minutes with `--prefer-online` (registry packument
+propagation for gateway 0.1.949 outgrew the 6-minute budget while the package
+itself was fine), and the Rust contracts' `gateway_rust_secrets.rs` is
+rustfmt-clean again. The Codex rate-limit response validators (reset credits,
+account flags, per-limit snapshots) gain direct unit coverage for the
+component coverage baseline.
+
+Validation: workspace typecheck, oxlint and the touched unit suites pass
+locally (provider-quota-fetchers 23/23, terminals-execute 3/3); the full
+monorepo suite and release jobs run in CI.
+
+## [v0.1.949](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.949) — 2026-10-19
+
+- feat(gateway-rust): port plugins, prompts, scheduler and security with migration contracts — eb67739e
+- feat(web): chat composer layout, crowded provider selector and read status — 07eee50e
+- fix(gateway): guard MCP reconnects and retain native watcher path case — 080ab48b
+- feat(usage): show Codex reset credits and fix quota refresh merging — 7d1e22e2
+- feat(messenger): emoji picker, options and status/team room views — ddc8059b
+
+The usage views now surface Codex's periodic free rate-limit resets
+(`rateLimitResetCredits` from the Codex app-server) as "N resets available"
+with each credit's title and expiry, in the usage modal and the Settings →
+Usage tab. Quota refreshes merge observations by timestamp so a stale cached
+row can never outvote a newer live read (and vice versa), remote-node accounts
+no longer push auto refresh into 30-minute backoff, and a read that yields no
+quota window at all now counts as a failure for backoff.
+
+Messenger gains an emoji picker with search, room options, and dedicated views
+for WhatsApp status broadcasts and team-platform hubs (spaces) with their
+channels (`MessengerRoomKind` in `@jait/shared`). The web chat UI gains a
+redesigned new-chat composer layout, a crowded-layout provider/model selector,
+message read status and agent control refinements.
+
+The MCP bridge tags connection attempts with identity tokens so a late
+handshake can no longer restore a removed server, and the project watcher
+keeps native path case semantics.
+
+The native gateway port grows plugins, prompts, the cron scheduler, security
+(trust engine, assessment lease, path guard), and the architecture, assistant
+profiles, hooks, secrets, trust and user-questions routes, all with translated
+migration contracts and parity tests.
+
+Validation: the release guard, workspace typecheck (8 packages) and oxlint all
+pass with 0 errors; the usage unit suites pass 41/41 locally. The full
+monorepo suite runs in CI.
+
+## [v0.1.948](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.948) — 2026-10-18
+
+- fix(gateway): stop the project watcher from stalling file I/O — c3e35516
+- feat(gateway-rust): port the surface registry with ownership and lifecycle parity — 51309b97
+
+The recursive project watcher now ignores the gateway's own state tree and other
+high-volume generated trees by default: `**/.jait/**`, `**/target/**`, `.turbo`,
+`.nx`, `.angular`, `.svelte-kit`, `.gradle`, `.terraform`, `.venv`, `coverage`,
+`.pytest_cache`, `.mypy_cache` and `.ruff_cache`, on top of the existing
+`node_modules`/`dist`/`build` defaults. A project whose generated artifacts
+outgrew the kernel watch budget (`fs.inotify.max_user_watches`) used to leave the
+scan retrying forever, occupying libuv's four async fs threads; every
+file-backed response, including the web UI assets, then queued behind it and
+hung indefinitely while `/health` still answered in about 1 ms. Exhausting the
+watch table is now reported as such instead of surfacing `ENOSPC` as "No space
+left on device", and the generated systemd unit exports `UV_THREADPOOL_SIZE=16`
+so a heavy scan cannot starve unrelated file I/O.
+
+Validation: gateway typecheck passed and the new `project-watcher` unit tests
+pass 5/5. The full suite was not re-run on the release host; CI runs it.
+
+## [v0.1.947](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.947) — 2026-10-18
+
+- feat(gateway-rust): add the native gateway port with contract parity coverage — bf004545
+- feat(usage): cache provider usage refresh and persist the usage summary in web — ad911912
+- fix(gateway): salvage truncated conversation checkpoints — 24b41a7e
+- fix(gateway): reject malformed password digests and race-safe session binding — 6171a13e
+- test(ci): exercise pending prewarm with a controlled startup gate — 9bcd3562
+- test(ci): isolate Git diff coverage from checkout state — 67f05978
+- test(ci): wait for channel progress completion deterministically — 2c9e6734
+- test(ci): cover environment-dependent gateway branches explicitly — e91ca49b
+- fix(contracts): wait for direct child fixture readiness — bc5d05d9
+- fix(ci): build workspace dependencies before gateway checks — c91e3cf3
+
+Add the native Rust gateway under `packages/gateway-rust` (auth, users, sessions, projects, terminal, storage, recall, replay, scheduler, memory and the contract surface) with a `run.mjs` toolchain wrapper and root `dev:gateway:rust` / `build:gateway:rust` / `test:gateway:rust` scripts, plus per-lane Rust contract parity suites, reviewed parity fragments and tailstatic driver fixtures, and a CI lane that builds and checks the native target. Cache provider usage refresh behind a short-lived per-user cache so the usage modal paints from the last summary and reconciles after refresh, and persist that summary in the web store across reloads. Raise the conversation checkpoint output budget and keep partial text when a provider truncates it instead of degrading to the structured fallback. Reject malformed stored password digests and make session ownership claims atomic.
+
+Validation: workspace typechecks passed for all eight packages, and the release version-source and artifact-path checks passed. 5,235 of 5,238 unit/integration tests passed (78 skipped); the three failures are confined to the pre-existing `parallel-sessions` E2E file, which passes 12/12 in isolation and touches no file in this release. The native Rust lane was not built on the release host (no Rust toolchain installed), so CI performs its first `cargo fmt`/clippy/build/test run.
+
+Package versions: gateway 0.1.947, web 0.1.455, shared 0.1.105, mobile 0.1.30. No database migration or application configuration change.
+
+## [v0.1.946](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.946) — 2026-10-17
+
+- test(contracts): expand Rust acceptance and component coverage gates — 40afb1a3
+- feat: improve messenger actions, notification sync, and agent output — a0dcfa73
+
+Improve Messenger message actions, image display and history loading; synchronize chat completion/read notifications across web and Android; improve project todo interactions, model-facing command output, compaction and DeepSeek prompting. Expand Rust acceptance tests against the TypeScript reference, source-bound parity evidence and interface inventories, and add an Istanbul component coverage baseline and CI gate. The native Rust gateway remains planned work.
+
+Validation: 3,517 gateway/shared/API-client tests and 1,705 client tests passed in isolated application state (78 integration tests skipped); 9 browser checks, 37 contract-tooling tests, 93 Rust regression tests, 93 gateway scenarios and 395 internal scenarios passed. Production build, workspace typechecks, lint, Rust formatting/clippy, component coverage, release version and artifact checks passed.
+
+Package versions: gateway 0.1.946, web 0.1.454, shared 0.1.104, mobile 0.1.29. No database migration. Command output filtering is enabled by default; `JAIT_COMMAND_OUTPUT_FILTERS=0` disables it.
+
+## [v0.1.945](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.945) — 2026-10-17
+
+- test(contracts): refresh inventory for messenger and worktree changes — 5ac6d8d3
+- fix(ci): build gateway workspace dependencies before contract checks — 7c193b17
+- fix(gateway): resolve an existing base when creating delivery worktrees (#260) (#261) — 88ac47ae
+- fix(e2e): write team-avatar screenshots into the project .jait/shots (#256) — b094d917
+
+Resolve delivery worktree bases in detached and shallow checkouts, and create delivery branches without inheriting the default branch as upstream. Keep team-avatar screenshots under the project .jait/shots directory. Build gateway workspace dependencies before contract CI starts the gateway, and refresh the behavior inventory for the committed messenger and worktree changes.
+
+Validation: 5,178 unit/integration tests passed across isolated and default-state runs (78 skipped); 93 managed gateway scenarios and 281 internal reference scenarios passed. Production build, workspace typechecks, lint, release version and artifact-path checks passed. A clean checkout reproduced the contract startup failure before the dependency build and passed afterward; the refreshed inventory passes the evidence audit.
+
+Package versions: gateway 0.1.945, web 0.1.453, shared 0.1.103. No database migration or application configuration change.
+
+## [v0.1.944](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.944) — 2026-10-16
+
+- test(contracts): add the storage lane vectors and scheduler fixture operations — 83872826
+- test(contracts): expand the storage lane driver and provider vectors — ab7d9938
+- test(contracts): pre-register seven placeholder contract lanes — c922dc86
+- docs(changelog): record the 0.1.943 contract lane verifier — 5e5ad239
+
+Add 177 declarative storage-lane vectors and replay them through the TypeScript reference adapter, extend the fixtures driver with cron-minute matching plus scheduler create/update guard operations, expand the provider vectors, and pre-register the remaining contract lanes as explicit placeholders so the Rust binary reports them instead of silently skipping them.
+
+Validation: 5,174 unit/integration tests passed (78 skipped); 93 managed HTTP/SSE contract scenarios and 281 internal reference scenarios passed, and 177 storage vectors matched the TypeScript reference adapter. Typechecks, Rust unit tests, formatting, clippy, lint, release version and artifact checks passed.
+
+Package versions: gateway 0.1.944, web 0.1.453, shared 0.1.103.
+
+## [v0.1.943](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.943) — 2026-10-16
+
+- fix(threads): allow cross-provider delegation — fe34ef1f
+- test(threads): cover cross-provider delegation and model isolation — d16d07f4
+- test(contracts): expand security parity coverage inventory — 12cb001d
+- test(contracts): add lane verifier for Rust-owned declarative vectors — ebc1ab85
+- feat(messenger): share gateway Matrix state and add Rust contracts — 009ae4cc
+
+Move Matrix login, syncing, encryption state and encrypted history recovery into the gateway so clients share a persistent device. Add Rust HTTP and internal acceptance contracts and a migration coverage inventory. Add declarative contract vectors and a lane verifier that replays them through the TypeScript reference adapter. Let chat threads delegate work to agents that run on a different provider, and cover the resulting thread's model isolation with tests.
+
+Validation: 5,174 unit/integration tests passed (78 skipped); 93 HTTP and 50 internal contract scenarios passed. Typechecks, Rust unit tests, formatting, lint and artifact checks passed.
+
+Package versions: gateway 0.1.943, web 0.1.453, shared 0.1.103.
+
+## [v0.1.942](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.942) — 2026-10-16
+
+- feat: expand email and messenger workflows and chat navigation — d75b530e
+- perf(build): add bounded local production build — ba325ca7
+- fix(web): center update button in collapsed sidebar — bcf52f8d
+
+Expand email account setup, signatures, IMAP/SMTP support and sandboxed HTML previews; add messenger assistant controls and tools, searchable page links, and a personal/project selector for new chats. Prevent redundant screenshot display instructions. Add a bounded Linux local build command to avoid terminal memory throttling: the fresh workspace build completed in 46.69 seconds, with the Vite bundle taking 29.70 seconds.
+
+Validation: full unit/integration suite passes (5,171 passed, 78 skipped). Workspace typechecks, production build, lint, release guard and artifact checks pass. Targeted browser checks pass for email previews (2), messenger tools (3), and agent controls (6). The corrected email privacy check distinguishes CSP-blocked attempts from actual requests; deliberately allowing external styles makes it fail, and restoring CSP makes it pass.
+
+Package versions: gateway 0.1.942, web 0.1.452, shared 0.1.102. No database migration. `bun run build:local` requires Linux with a user systemd manager; its temporary memory budget and timeout do not change ordinary terminal defaults.
+
+## [v0.1.941](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.941) — 2026-10-16
+
+- fix(web): improve browser controls, sidebar overflow and agent graph layout — 6b1fd823
+
+Let clicks and scrolling reach the browser page by default, add an explicit Adjust view mode with scoped keyboard shortcuts, and keep the address bar and live session available in fullscreen. Move excess sidebar navigation and tools into accessible menus on short windows. Compute a stable agent reporting layout before the first visible frame and preserve manual placement during live updates.
+
+Validation: all 8 targeted Chromium UI regressions and 7 graph layout unit tests pass. Workspace typechecks, lint, release version checks and artifact-path checks pass.
+
+Package versions: gateway 0.1.941, web 0.1.451. No database migration or application configuration change.
+
+## [v0.1.940](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.940) — 2026-10-15
+
+- fix(ci): isolate browser smoke ports and clean up server processes — 0561f4b4
+- fix(web): preserve mobile drafts while editing queued messages — 9c7a56a9
+- fix(gateway): preserve team event order and stabilize test concurrency — c160de61
+
+Use persisted team-message order for delivery outcomes, completion verification and restart recovery, including messages created in the same millisecond. Bound Vitest concurrency and assert warm-session reuse without a wall-clock deadline. Allocate separate browser smoke ports for each CI invocation and clean up the test stack. Keep one mobile composer while editing queued messages, preserve the unsent draft and inline attachments, and add an isolated two-worker UI fixture suite.
+
+Validation: deterministic team outcome regressions fail on the previous code and pass with the fix; 39 team service tests pass. The mobile regression previously showed two editors instead of one; all 27 UI fixture checks pass. Full suite: 5,087 passed, 78 skipped. Production build, workspace typechecks, lint, artifact checks, 33 real Chromium browser-tool tests and 25 web smoke tests pass.
+
+Package versions: gateway 0.1.940, web 0.1.450. No database migration or application configuration change.
+
+## [v0.1.939](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.939) — 2026-10-15
+
+- fix(web): use maintained Vite config for default builds — ed30985a
+- fix(web): center mobile mode switch and add agent controls menu — 27cb0c0e
+
+Keep the mobile Manager/Developer switch centered, place agent controls on the left, and preserve account clearance. Add an agent menu with Go to Agents and Stop all agents/Resume agents actions. Include larger horizontal avatars and a vertical collapsed sidebar stack with 16px account clearance. Remove stale generated Vite config files that shadowed the maintained TypeScript config and blocked desktop releases from resolving the Matrix crypto WASM asset.
+
+Validation: the centering regression failed before the fix with a 49px offset at 320px and passes afterward. Six browser checks at 1280px, 390px and 320px, 15 related unit tests, the fail-then-pass Vite config selection test, workspace typechecks, lint, release guard and artifact checks passed. The additional full-app thread-provider check timed out while loading the isolated test server. The production build hit the default Node heap limit; a build with a larger heap is still pending.
+
+Package versions: gateway 0.1.939, web 0.1.449.
+
+## [v0.1.938](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.938) — 2026-10-15
+
+- feat(web): show agent avatar beside recognized @mention names in team chat (#264) (#265) — 9717cbaa
+
+Show each recognized team-chat @mention with the saved agent's existing avatar beside its name. Match multi-word names case-insensitively and prefer the longest matching name; preserve message text and leave recipient routing unchanged. Closes #264 via PR #265.
+
+Validation: the integrated web suite passed 194 files / 1,655 tests. Bugzilla independently verified the final PR head with 39 focused tests and the web suite. Existing gateway CI failures remain tracked separately; the local production web build stalled in disk I/O after increasing Node's heap, so full production packaging remains unverified here.
+
+Package versions: gateway 0.1.938, web 0.1.448. No database migration or required configuration change.
+
+## [v0.1.937](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.937) — 2026-10-15
+
+- feat(messenger): reuse chat composer and add receipts, read actions and dictation — 596a81d2
+- feat: add encrypted messenger and improve agent workflows — c4912d4b
+
+Add the built-in encrypted Matrix Messenger with optional Synapse deployment. Reuse Jait's chat composer, messages and scrolling; add public receipt details, manual read/unread controls, notification read actions and room-specific dictation drafts. Includes the agent workflow improvements in the preceding feature commit.
+
+Validation: workspace typechecks and release guard passed; the full unit suite passed 5,062 tests with 78 skipped. Five browser checks with real isolated Synapse, desktop notification tests and Android Java compilation passed. Full-app production packaging and real WhatsApp/Teams bridge accounts remain unverified; dictation browser coverage uses synthetic audio and a mocked transcription response.
+
+Package versions: gateway 0.1.937, web 0.1.447, mobile 0.1.28. Matrix/bridges remain optional and require explicit account setup.
+
+## [v0.1.936](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.936) — 2026-10-15
+
+- fix(network): keep resource controls usable on mobile and isolate browser checks — 8feb3bae
+- feat(network): enrich Docker resources and group Jait sandboxes — e5608bee
+- fix(chat): load personal history independently of project chats — 8827bd93
+
+Show Docker containers as named resources with stable IDs, explicit application logos, image/network/status details, and a searchable resource picker. Group Jait sandboxes by default with expand/collapse controls; remove duplicate scanned container addresses and local host aliases. Keep scan results available when Docker inventory cannot be read. Docker inspection collects selected metadata only, with bounded work and cached polling.
+
+Align the JavaScript Vite config with the TypeScript config so production source maps remain opt-in.
+
+Load personal chat history independently of the global 100-chat page so project activity cannot hide older personal chats.
+
+Validation: clean workspace typecheck and lint passed; 4,993 tests passed with 73 skipped. Desktop and mobile browser checks passed for logos, details, search, grouping, and Docker-unavailable feedback.
+
+Package versions: gateway 0.1.936, web 0.1.446, shared 0.1.101. No database migration or required configuration change. Existing sandboxes without ownership metadata show owner as not recorded.
+
+## [v0.1.935](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.935) — 2026-10-13
+
+- fix(gateway): keep agent previews usable and recover browser launches — a6746079
+
+Start new agent-created previews shared with the agent while preserving user takeover across reuse, replacement, and restart. Reuse the browser surface's configured-channel and installed-browser fallbacks for standalone screenshots. Report precise browser sharing and missing executable blockers with recovery instructions.
+
+Validation: four regression checks failed before the fixes and pass after them; the full suite passed with 4,983 tests passing and 73 skipped. Typecheck, changed-file lint, and artifact-path checks passed. No database migration or required configuration change.
+
+Package version: gateway 0.1.935.
+
+## [v0.1.934](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.934) — 2026-10-13
+
+- fix(tools): resolve tool aliases exactly and validate advertised constraints — 45f2637b
+
+Resolve discovered tool aliases against the registry and enforce advertised action-specific argument constraints.
+
+Package version: gateway 0.1.934.
+
+## [v0.1.933](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.933) — 2026-10-13
+
+- fix(team-chat): keep execution instructions in task threads — 91d68e15
+
+Route completion and recovery instructions into the receiving task thread instead of the visible room conversation, and keep room messages short and conversational. Detailed final answers are retained by the task thread rather than posted verbatim to the team room.
+
+Package versions: gateway 0.1.933, shared 0.1.100, web 0.1.445.
+
+## [v0.1.932](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.932) — 2026-10-13
+
+- test: expand core smoke coverage and stabilize browser workflows — 7d750b18
+- feat(workbench): add agent halt controls and personal chat devices — 514f86fc
+- fix(chat): inset message actions without blocking bubble text — 0f723b55
+- fix(providers): forward uploaded images and surface ACP failures — 3331c8ef
+- fix(chat): reveal transcripts after StrictMode replay — bb9bd8a0
+- fix(scheduler): validate cron schedules before persistence — 0f209d4e
+
+Add durable owner halt/resume controls across threads, saved-agent chats, MCP and scheduled work; report stop failures and restore halt state on reconnect. Personal chats can select an owned execution device, while project chats retain their project location. Improve agent run views and graph layout, preserve uploaded images across providers, expose ACP failures, validate schedules, and cover core web workflows in CI.
+
+Migration 75 adds the `agent_control` table. Package versions: gateway 0.1.932, shared 0.1.100, web 0.1.445.
+
 ## [v0.1.931](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.931) — 2026-10-12
 
 - fix(gateway): bound tool discovery to prevent chat recovery freezes — 8bbaa55d

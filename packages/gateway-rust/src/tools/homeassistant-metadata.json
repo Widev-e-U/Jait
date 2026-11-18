@@ -1,0 +1,70 @@
+[
+  {
+    "name": "homeassistant.states",
+    "description": "Read the current state of Home Assistant entities. Omit entity_id to list all entities and their states, or pass a specific entity_id (e.g. 'light.kitchen') to fetch a single entity's state and attributes.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "low",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Optional entity id to fetch a single entity, e.g. 'light.kitchen'. Omit to list all entities."
+        }
+      }
+    }
+  },
+  {
+    "name": "homeassistant.call_service",
+    "description": "Call a Home Assistant service to control devices, e.g. turn lights on/off, set a thermostat, run scenes. Provide the domain (e.g. 'light'), service (e.g. 'turn_on'), and optionally a target entity_id plus service_data (e.g. { brightness_pct: 50 }). Use homeassistant.services to discover available domains/services.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "medium",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Service domain, e.g. 'light', 'switch', 'climate', 'scene', 'script'."
+        },
+        "service": {
+          "type": "string",
+          "description": "Service name within the domain, e.g. 'turn_on', 'turn_off', 'toggle', 'set_temperature'."
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "Optional target entity id (or comma-separated list) the service acts on, e.g. 'light.kitchen'."
+        },
+        "service_data": {
+          "type": "object",
+          "description": "Optional extra service data merged into the request body, e.g. { brightness_pct: 50, color_name: 'red' }.",
+          "properties": {}
+        }
+      },
+      "required": [
+        "domain",
+        "service"
+      ]
+    }
+  },
+  {
+    "name": "homeassistant.services",
+    "description": "List the service domains and services available in Home Assistant. Optionally filter to a single domain (e.g. 'light') to see just its services. Use this to discover what homeassistant.call_service can do.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "low",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Optional domain to filter by, e.g. 'light'. Omit to list all domains."
+        }
+      }
+    }
+  }
+]

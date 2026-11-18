@@ -180,13 +180,16 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   activeProjectIdRef.current = activeProjectId
   const activeSessionIdRef = useRef<string | null>(null)
   activeSessionIdRef.current = activeSessionId
-  const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
-  if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search)
-    const sessionId = params.get('sessionId')
-    if (sessionId) {
-      const projectId = params.get('projectId')
-      initialRouteSelectionRef.current = { projectId: projectId || null, sessionId }
+  const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null | undefined>(undefined)
+  if (initialRouteSelectionRef.current === undefined) {
+    initialRouteSelectionRef.current = null
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const sessionId = params.get('sessionId')
+      if (sessionId) {
+        const projectId = params.get('projectId')
+        initialRouteSelectionRef.current = { projectId: projectId || null, sessionId }
+      }
     }
   }
 
@@ -267,7 +270,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     try {
       const [projectsRes, sessionsRes, lastActiveRes] = await Promise.all([
         fetch(`${API_URL}/api/projects?status=active&limit=${visibleLimit}`, { headers: authHeaders(token) }),
-        fetch(`${API_URL}/api/sessions?status=active&limit=100`, { headers: authHeaders(token) }),
+        fetch(`${API_URL}/api/sessions?status=active&personal=true`, { headers: authHeaders(token) }),
         fetch(`${API_URL}/api/projects/last-active`, { headers: authHeaders(token) }),
       ])
       if (projectsRes.status === 401 || sessionsRes.status === 401 || lastActiveRes.status === 401) {
@@ -396,8 +399,10 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       const session = await response.json() as ProjectSession
       if (session.projectId) {
         setProjects((prev) => prev.map((project) => (
-          project.id === session.projectId && !project.sessions.some((entry) => entry.id === session.id)
-            ? { ...project, sessions: [session, ...project.sessions] }
+          project.id === session.projectId
+            ? { ...project, sessions: project.sessions.some((entry) => entry.id === session.id)
+              ? project.sessions.map((entry) => entry.id === session.id ? session : entry)
+              : [session, ...project.sessions] }
             : project
         )))
       } else {
@@ -409,6 +414,23 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       return null
     }
   }, [onLoginRequired, token])
+
+  const refreshActiveSession = useCallback(async () => {
+    const sessionId = activeSessionIdRef.current
+    if (sessionId) await loadSession(sessionId)
+  }, [loadSession])
+
+  // Mobile browsers suspend background connections and can miss chat.updated.
+  // Recover authoritative metadata (including the goal) on selection and return.
+  useEffect(() => {
+    if (!activeSessionId || !token) return
+    void refreshActiveSession()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshActiveSession()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [activeSessionId, token, refreshActiveSession])
 
   const searchChats = useCallback(async (query: string) => {
     const normalized = query.trim()
@@ -507,6 +529,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         const withoutExisting = prev.filter((entry) => entry.id !== nextProject.id)
         return [nextProject, ...withoutExisting].slice(0, visibleLimit)
       })
+      initialRouteSelectionRef.current = null
       setActiveProjectId(nextProject.id)
       setActiveSessionId(null)
       return nextProject
@@ -517,6 +540,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   }, [onLoginRequired, token, visibleLimit])
 
   const persistSelection = useCallback((projectId: string | null, sessionId?: string | null) => {
+    initialRouteSelectionRef.current = null
     if (!token) return
     fetch(`${API_URL}/api/projects/select`, {
       method: 'POST',
@@ -633,6 +657,18 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     persistSelection(projectId, sessionId)
     persistActiveSelectionToCache(projectId, sessionId)
   }, [persistActiveSelectionToCache, persistSelection, projects])
+
+  /**
+   * A "new chat" in a project that does not exist yet: the project is active
+   * but no chat is. Sending the first message creates the chat (the composer
+   * falls back to `createSession` without an active chat), so merely looking
+   * leaves nothing behind. Not persisted — a reload returns to the last chat.
+   */
+  const startProjectDraft = useCallback((projectId: string) => {
+    initialRouteSelectionRef.current = null
+    setActiveProjectId(projectId)
+    setActiveSessionId(null)
+  }, [])
 
   // Keep acknowledgments across stale list responses and out-of-order WS events.
   const readReceiptsRef = useRef(new Map<string, string>())
@@ -1366,6 +1402,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     fetchProjects,
     loadProject,
     loadSession,
+    refreshActiveSession,
     searchChats,
     searchProjects,
     createProject,
@@ -1377,6 +1414,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     createSession,
     forkSession,
     switchProject,
+    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,

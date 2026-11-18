@@ -36,6 +36,8 @@ export class PtyBrokerClient {
   private pending = new Map<number, PendingCall>();
   private ready = false;
 
+  constructor(private readonly launch: typeof spawn = spawn) {}
+
   /** Callback when a PTY produces output */
   onOutput?: (ptyId: string, data: string) => void;
   /** Callback when a PTY process exits */
@@ -48,7 +50,7 @@ export class PtyBrokerClient {
   async start(): Promise<void> {
     const brokerPath = resolve(dirname(fileURLToPath(import.meta.url)), "pty-broker.mjs");
 
-    this.proc = spawn("node", [brokerPath], {
+    this.proc = this.launch("node", [brokerPath], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });

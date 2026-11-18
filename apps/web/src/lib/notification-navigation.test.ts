@@ -53,3 +53,35 @@ it('ignores arbitrary external activation URLs', async () => {
   expect(handler).not.toHaveBeenCalled()
   unsubscribe()
 })
+
+it.each(['synchronous', 'promise'])('handles %s Android notification bridge results', async (mode) => {
+  const nav = await import('./notification-navigation')
+  const accept = vi.fn()
+  const remove = vi.fn()
+  const result = <T>(value: T) => mode === 'promise' ? Promise.resolve(value) : value
+  const bridge = {
+    addListener: vi.fn(() => result({ remove })),
+    getPendingNotification: vi.fn(() => result({ activation })),
+    setNotificationContext: vi.fn(() => result(undefined)),
+  }
+
+  const watcher = nav.watchAndroidNotifications(bridge, accept)
+  nav.setAndroidNotificationContext(bridge, { sessionId: 'alpha', visible: true })
+  watcher.read()
+  await vi.waitFor(() => expect(accept).toHaveBeenCalledWith(activation))
+  expect(bridge.setNotificationContext).toHaveBeenCalledWith({ sessionId: 'alpha', visible: true })
+  watcher.dispose()
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
+})
+
+it('removes an Android listener that resolves after disposal', async () => {
+  const nav = await import('./notification-navigation')
+  const remove = vi.fn()
+  let resolve!: (listener: { remove: typeof remove }) => void
+  const bridge = { addListener: () => new Promise<{ remove: typeof remove }>(r => { resolve = r }) }
+  const watcher = nav.watchAndroidNotifications(bridge, vi.fn())
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
+  watcher.dispose()
+  resolve({ remove })
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
+})

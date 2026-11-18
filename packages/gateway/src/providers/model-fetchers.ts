@@ -20,6 +20,23 @@ const OLLAMA_CACHE_TTL = 30 * 1000;
 /** Timeout for any single /models fetch. */
 const FETCH_TIMEOUT_MS = 5_000;
 
+/**
+ * Public Ollama Cloud catalogue.
+ *
+ * A local daemon's `/api/tags` only reports the hosted models somebody already
+ * pulled, so relying on it alone hid most of Ollama Cloud from the picker.
+ */
+const OLLAMA_CLOUD_CATALOGUE_URL = "https://ollama.com/api/tags";
+
+/** Timeout for the cloud probes. They are optional extras, never blockers. */
+const OLLAMA_CLOUD_TIMEOUT_MS = 4_000;
+
+/** TTL for the cloud catalogue probe of a given daemon. */
+const OLLAMA_CLOUD_CACHE_TTL = 5 * 60 * 1000;
+
+/** Group label used for hosted models so the picker can show them separately. */
+const OLLAMA_CLOUD_GROUP = "Ollama Cloud";
+
 /** Maximum number of OpenRouter models to return (UI list cap). */
 const OPENROUTER_MAX_MODELS = 100;
 
@@ -74,6 +91,8 @@ const OPENAI_NON_CHAT_SUBSTRINGS = [
 let openRouterCache: { models: ProviderModelInfo[]; fetchedAt: number } | null = null;
 const openaiCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
 const ollamaCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
+/** Cloud catalogue per daemon URL — `[]` records a signed-out daemon. */
+const ollamaCloudCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
 const omnirouteCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
 
 // In-flight guards so a stale-while-revalidate refresh never stampedes.
@@ -87,6 +106,7 @@ export function resetModelFetcherCaches(): void {
   openRouterCache = null;
   openaiCaches.clear();
   ollamaCaches.clear();
+  ollamaCloudCaches.clear();
   omnirouteCaches.clear();
   openRouterInflight = null;
   openaiInflight.clear();
@@ -155,17 +175,27 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
     });
     if (!res.ok) return openRouterCache?.models ?? [];
     const data = (await res.json()) as {
-      data?: Array<{ id: string; name?: string; description?: string }>;
+      data?: Array<{
+        id: string;
+        name?: string;
+        description?: string;
+        pricing?: { prompt?: string; completion?: string };
+      }>;
     };
     const models: ProviderModelInfo[] = (data.data ?? [])
       .filter((m) => m.id && !m.id.includes(":free"))
       .slice(0, OPENROUTER_MAX_MODELS)
-      .map((m) => ({
-        id: m.id,
-        name: m.name || m.id.split("/").pop() || m.id,
-        description: m.description?.slice(0, 80),
-        reasoningEffortSupported: supportsReasoningEffort(m.id),
-      }));
+      .map((m) => {
+        const pricing = parseOpenRouterPricing(m.pricing);
+        const info: ProviderModelInfo = {
+          id: m.id,
+          name: m.name || m.id.split("/").pop() || m.id,
+          description: m.description?.slice(0, 80),
+          reasoningEffortSupported: supportsReasoningEffort(m.id),
+        };
+        if (pricing) info.pricing = pricing;
+        return info;
+      });
     openRouterCache = { models, fetchedAt: Date.now() };
     return models;
   } catch (err) {
@@ -174,6 +204,29 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * OpenRouter publishes USD per *token* as decimal strings; convert to the
+ * per-1M-token shape used elsewhere. Returns undefined when the payload has no
+ * usable numbers, so callers see "price unknown" instead of a fake zero.
+ */
+function parseOpenRouterPricing(
+  pricing?: { prompt?: string; completion?: string },
+): ProviderModelInfo["pricing"] | undefined {
+  const perMillion = (value?: string): number | undefined => {
+    if (!value) return undefined;
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+    return Math.round(parsed * 1_000_000 * 1e6) / 1e6;
+  };
+  const promptPerMTok = perMillion(pricing?.prompt);
+  const completionPerMTok = perMillion(pricing?.completion);
+  if (promptPerMTok === undefined && completionPerMTok === undefined) return undefined;
+  const result: NonNullable<ProviderModelInfo["pricing"]> = {};
+  if (promptPerMTok !== undefined) result.promptPerMTok = promptPerMTok;
+  if (completionPerMTok !== undefined) result.completionPerMTok = completionPerMTok;
+  return result;
 }
 
 /** Fetch the OpenAI (or OpenAI-compatible) catalogue. Returns [] on any non-OK response. */
@@ -304,23 +357,152 @@ async function doFetchOmniRouteModels(
   }
 }
 
-/** Fetch the Ollama tags catalogue. Returns [] on any non-OK response. */
-export async function fetchOllamaModels(baseUrl: string): Promise<ProviderModelInfo[]> {
+export interface FetchOllamaModelsOptions {
+  /** Bypass the caches — used by the picker's "Refresh models" action. */
+  force?: boolean;
+  /** Merge the hosted Ollama Cloud catalogue for signed-in daemons. */
+  includeCloud?: boolean;
+}
+
+/** Shape of an entry in either the local `/api/tags` or the cloud catalogue. */
+interface OllamaTag {
+  name?: string;
+  model?: string;
+  capabilities?: string[];
+  details?: { family?: string; parameter_size?: string };
+}
+
+/**
+ * Is this daemon signed in to Ollama Cloud?
+ *
+ * `/api/me` is the only account endpoint a local daemon exposes; it answers 200
+ * with a `plan` for signed-in users and 404/401 otherwise.
+ */
+async function isOllamaCloudSignedIn(url: string, signal: AbortSignal): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/api/me`, { method: "POST", signal });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { plan?: unknown };
+    return typeof data?.plan === "string" && data.plan.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Map cloud catalogue entries to provider models.
+ *
+ * Cloud entries carry no `family` or `parameter_size`, so the description falls
+ * back to the reported capabilities.
+ */
+export function mapOllamaCloudModels(tags: OllamaTag[]): ProviderModelInfo[] {
+  const seen = new Set<string>();
+  const models: ProviderModelInfo[] = [];
+  for (const tag of tags) {
+    const id = (tag?.name ?? tag?.model ?? "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const description =
+      [tag.details?.family, tag.details?.parameter_size].filter(Boolean).join(" · ") ||
+      (tag.capabilities ?? [])
+        .filter((capability) => capability && capability !== "completion")
+        .join(", ") ||
+      undefined;
+    models.push({ id, name: id, description, group: OLLAMA_CLOUD_GROUP });
+  }
+  return models;
+}
+
+/**
+ * Merge the hosted catalogue into the local list.
+ *
+ * Local entries win, and the `:cloud`/`-cloud` suffix is ignored when comparing
+ * so a locally pulled `llama3:8b` (or `llama3:8b-cloud`) does not show up twice
+ * next to its hosted counterpart.
+ */
+export function mergeOllamaModels(
+  local: ProviderModelInfo[],
+  cloud: ProviderModelInfo[],
+): ProviderModelInfo[] {
+  if (cloud.length === 0) return local;
+  const stripCloudSuffix = (id: string) => id.replace(/(:cloud|-cloud)$/, "");
+  const known = new Set<string>();
+  for (const model of local) {
+    known.add(model.id);
+    known.add(stripCloudSuffix(model.id));
+  }
+  return [
+    ...local,
+    ...cloud.filter((model) => !known.has(model.id) && !known.has(stripCloudSuffix(model.id))),
+  ];
+}
+
+async function doFetchOllamaCloudModels(url: string): Promise<ProviderModelInfo[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OLLAMA_CLOUD_TIMEOUT_MS);
+  try {
+    if (!(await isOllamaCloudSignedIn(url, controller.signal))) {
+      ollamaCloudCaches.set(url, { models: [], fetchedAt: Date.now() });
+      return [];
+    }
+    const res = await fetch(OLLAMA_CLOUD_CATALOGUE_URL, { signal: controller.signal });
+    if (!res.ok) return ollamaCloudCaches.get(url)?.models ?? [];
+    const data = (await res.json()) as { models?: OllamaTag[] };
+    const models = mapOllamaCloudModels(data.models ?? []);
+    ollamaCloudCaches.set(url, { models, fetchedAt: Date.now() });
+    return models;
+  } catch {
+    // The cloud catalogue is an optional extra; never fail the list over it.
+    return ollamaCloudCaches.get(url)?.models ?? [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchOllamaCloudModels(url: string, force: boolean): Promise<ProviderModelInfo[]> {
+  const cached = ollamaCloudCaches.get(url);
+  if (!force && cached && Date.now() - cached.fetchedAt < OLLAMA_CLOUD_CACHE_TTL) {
+    return cached.models;
+  }
+  return doFetchOllamaCloudModels(url);
+}
+
+/**
+ * Fetch the Ollama tags catalogue. Returns [] on any non-OK response.
+ *
+ * `includeCloud` also merges the hosted Ollama Cloud catalogue for daemons that
+ * are signed in, because `/api/tags` only reports cloud models already pulled.
+ */
+export async function fetchOllamaModels(
+  baseUrl: string,
+  opts: FetchOllamaModelsOptions = {},
+): Promise<ProviderModelInfo[]> {
   const url = normalizeJaitBackendBaseUrl(baseUrl);
+  const force = opts.force === true;
   const cached = ollamaCaches.get(url);
-  if (cached) {
+
+  let local: ProviderModelInfo[];
+  if (force || !cached) {
+    local = await refreshOllamaModels(url);
+  } else {
     if (Date.now() - cached.fetchedAt >= OLLAMA_CACHE_TTL && !ollamaInflight.has(url)) {
       const refresh = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
       ollamaInflight.set(url, refresh);
       refresh.catch(() => {});
     }
-    return cached.models;
+    local = cached.models;
   }
-  let request = ollamaInflight.get(url);
-  if (!request) {
-    request = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
-    ollamaInflight.set(url, request);
-  }
+
+  if (!opts.includeCloud) return local;
+  const cloud = await fetchOllamaCloudModels(url, force);
+  return mergeOllamaModels(local, cloud);
+}
+
+function refreshOllamaModels(url: string): Promise<ProviderModelInfo[]> {
+  const inflight = ollamaInflight.get(url);
+  if (inflight) return inflight;
+  const request = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
+  ollamaInflight.set(url, request);
   return request;
 }
 

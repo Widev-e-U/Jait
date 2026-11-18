@@ -279,7 +279,7 @@ describe("GitService worktree cleanup", () => {
   });
 
   it("accepts only descendants of Jait's managed worktree root", () => {
-    const managedRoot = join(homedir(), ".jait", "worktrees");
+    const managedRoot = join(process.env["JAIT_STATE_DIR"] ?? join(homedir(), ".jait"), "worktrees");
 
     expect(isManagedWorktreePath(join(managedRoot, "repo", "thread"))).toBe(true);
     expect(isManagedWorktreePath(managedRoot)).toBe(false);

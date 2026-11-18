@@ -1,0 +1,977 @@
+[
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 42,
+    "sql": "INSERT INTO users (id, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 47,
+    "sql": "INSERT INTO sessions (id, user_id, name, project_path, created_at, last_active_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 61,
+    "sql": "INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 70,
+    "sql": "INSERT INTO agent_threads (id, user_id, session_id, title, provider_id, model, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 79,
+    "sql": "INSERT INTO memories (id, scope, content, source_type, source_id, source_surface, embedding, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 84,
+    "sql": "INSERT INTO scheduled_jobs (id, user_id, name, cron, tool_name, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 89,
+    "sql": "INSERT INTO scheduled_job_runs (id, job_id, status, started_at, completed_at) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 97,
+    "sql": "INSERT INTO user_secrets (id, user_id, type, key, label, encrypted_value, iv, auth_tag, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 104,
+    "sql": "INSERT INTO audit_log (id, timestamp, session_id, action_id, action_type, tool_name, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 114,
+    "sql": "SELECT id, role, content FROM messages ORDER BY id LIMIT 10"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 134,
+    "sql": "WITH recent AS (SELECT * FROM messages WHERE created_at >= '2026-02-01') SELECT COUNT(*) AS n FROM recent"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 146,
+    "sql": "SELECT substr(created_at,1,10) AS d, COUNT(*) AS n FROM messages GROUP BY d ORDER BY d DESC LIMIT 14"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 159,
+    "sql": "SELECT s.id, COUNT(t.id) AS threads FROM sessions s LEFT JOIN agent_threads t ON t.session_id = s.id GROUP BY s.id ORDER BY s.id"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 174,
+    "sql": "SELECT COUNT(*) AS n FROM sessions"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 200,
+    "sql": "insert"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 200,
+    "sql": "INSERT INTO sessions (id, user_id, created_at, last_active_at) VALUES ('x', 'u', 'now', 'now')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 201,
+    "sql": "update"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 201,
+    "sql": "UPDATE sessions SET status = 'archived'"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 202,
+    "sql": "delete"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 202,
+    "sql": "DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 203,
+    "sql": "drop"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 203,
+    "sql": "DROP TABLE messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 204,
+    "sql": "create"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 204,
+    "sql": "CREATE TABLE evil (id TEXT)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 205,
+    "sql": "alter"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 205,
+    "sql": "ALTER TABLE sessions ADD COLUMN evil TEXT"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 206,
+    "sql": "pragma"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 206,
+    "sql": "PRAGMA table_info(sessions)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 207,
+    "sql": "pragma journal mode"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 207,
+    "sql": "PRAGMA journal_mode = WAL"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 208,
+    "sql": "pragma function form"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 208,
+    "sql": "SELECT * FROM pragma_table_info('sessions') WHERE 1=1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 209,
+    "sql": "attach"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 209,
+    "sql": "ATTACH DATABASE '.jait/artifacts/gateway-rust/session-sql-engine/x.db' AS x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 210,
+    "sql": "detach"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 210,
+    "sql": "DETACH DATABASE x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 211,
+    "sql": "vacuum"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 211,
+    "sql": "VACUUM"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 212,
+    "sql": "reindex"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 212,
+    "sql": "REINDEX"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 213,
+    "sql": "begin"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 213,
+    "sql": "BEGIN TRANSACTION"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 214,
+    "sql": "commit"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 214,
+    "sql": "COMMIT"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 215,
+    "sql": "BEGIN; SELECT 1; COMMIT;"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 216,
+    "sql": "WITH x AS (SELECT 1) DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 245,
+    "sql": "SELECT 1; SELECT 2"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 246,
+    "sql": "SELECT 1; DROP TABLE messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 248,
+    "sql": "SELECT 1;"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 249,
+    "sql": "SELECT 1; \n\t "
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 255,
+    "sql": "SELECT * FROM sessions WHERE status = 'active' UNION SELECT 1, 2, 3, 4, 5, 6, 7, 8 FROM pragma_user_settings"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 262,
+    "sql": "SELECT * FROM user_secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 263,
+    "sql": "SELECT key FROM user_secrets WHERE id = 'sec-1'"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 264,
+    "sql": "SELECT id FROM users"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 265,
+    "sql": "SELECT * FROM user_settings"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 266,
+    "sql": "SELECT s.id FROM sessions s JOIN user_secrets u ON u.user_id = s.user_id"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 267,
+    "sql": "SELECT (SELECT COUNT(*) FROM user_secrets) AS leaked"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 268,
+    "sql": "SELECT * FROM \"user_secrets\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 269,
+    "sql": "WITH c AS (SELECT * FROM user_secrets) SELECT * FROM c"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 270,
+    "sql": "SELECT * FROM automation_repositories"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 271,
+    "sql": "SELECT * FROM mobile_push_registrations"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 282,
+    "sql": "SELECT COUNT(*) AS n FROM consent_log"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 294,
+    "sql": "SELECT id FROM audit_log ORDER BY id"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 329,
+    "sql": "SELECT id FROM messages LIMIT 500000"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.test.ts",
+    "line": 340,
+    "sql": "SELECT id FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 45,
+    "sql": "CREATE TABLE updated_messages (id INTEGER PRIMARY KEY, note TEXT)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 46,
+    "sql": "INSERT INTO updated_messages (id, note) VALUES (1, 'probe')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 47,
+    "sql": "CREATE TABLE adv_big (id INTEGER PRIMARY KEY, filler TEXT)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 48,
+    "sql": "INSERT INTO adv_big (id, filler) VALUES (?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 51,
+    "sql": "CREATE TABLE adv_blob_test (id INTEGER PRIMARY KEY, data BLOB)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 52,
+    "sql": "INSERT INTO adv_blob_test (data) VALUES (?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 56,
+    "sql": "CREATE TABLE writefile_log (id INTEGER PRIMARY KEY, note TEXT)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 57,
+    "sql": "INSERT INTO writefile_log (id, note) VALUES (?, ?)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 96,
+    "sql": "SELECT COUNT(*) AS n FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 103,
+    "sql": "WITH x AS (DELETE FROM messages RETURNING *) SELECT * FROM x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 110,
+    "sql": "WITH x AS (DELETE FROM messages RETURNING id) SELECT * FROM x LIMIT 5"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 117,
+    "sql": "WITH x AS (INSERT INTO messages (id, session_id, role, content, created_at) VALUES ('adv-i', 'sess-a', 'user', 'pwned', '2026-01-01T00:00:00.000Z') RETURNING id) SELECT * FROM x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 124,
+    "sql": "WITH x AS (UPDATE messages SET content = 'pwned' RETURNING id) SELECT * FROM x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 131,
+    "sql": "WITH a AS (SELECT 1 AS v), b AS (DELETE FROM messages) SELECT v FROM a"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 145,
+    "sql": "WITH x AS (SELECT 1 /*)*/ ) DELETE FROM messages SELECT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 156,
+    "sql": "SELECT 1 --;\nDELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 168,
+    "sql": "SELECT * FROM [user_secrets]"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 169,
+    "sql": "SELECT * FROM `user_secrets`"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 170,
+    "sql": "SELECT * FROM main.user_secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 171,
+    "sql": "SELECT * FROM main.\"user_secrets\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 172,
+    "sql": "SELECT * FROM USER_SECRETS"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 173,
+    "sql": "SELECT * FROM User_Secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 174,
+    "sql": "SELECT * FROM \"USER_SECRETS\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 175,
+    "sql": "SELECT * FROM (SELECT * FROM user_secrets) AS t"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 177,
+    "sql": "SELECT m.id FROM messages m JOIN user_secrets s ON s.id = m.id"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 178,
+    "sql": "SELECT m.id FROM messages m JOIN users u USING (id)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 179,
+    "sql": "SELECT (SELECT group_concat(password_hash) FROM users) AS leak"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 180,
+    "sql": "SELECT 1 AS x WHERE EXISTS (SELECT 1 FROM user_settings)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 181,
+    "sql": "SELECT * FROM \"Users\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 182,
+    "sql": "WITH user_secrets AS (SELECT 1 AS pw) SELECT * FROM user_secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 194,
+    "sql": "SELECT id FROM messages UNION SELECT id FROM mobile_push_registrations"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 199,
+    "sql": "SELECT 1 FROM evil.user_secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 207,
+    "sql": "SELECT * FROM user_secrets_extra"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 216,
+    "sql": "SELECT 'user_secrets' AS literal"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 228,
+    "sql": "SELECT 1 /*; DROP TABLE messages*/ AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 229,
+    "sql": "SELECT 'DROP TABLE messages' AS s"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 230,
+    "sql": "SELECT 1 /* INSERT */ /* UPDATE */ /* DELETE */ AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 232,
+    "sql": "SELECT 1 -- DROP TABLE messages\n AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 233,
+    "sql": "SELECT /* DROP */ /* TABLE */ 1 AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 234,
+    "sql": "SELECT 'x; DELETE FROM messages; --' AS s"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 246,
+    "sql": "SELECT 1 /*;*/ ; DROP TABLE messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 247,
+    "sql": "SELECT 1 /* comment */ UNION ALL SELECT 1 FROM (DELETE FROM messages)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 249,
+    "sql": "SELECT 1 /* ; */; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 251,
+    "sql": "SELECT 1 /* DE\nLE */ DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 270,
+    "sql": "SELECT 1 /* outer /* INSERT */ INSERT */ ; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 276,
+    "sql": "SELECT 1 /* DROP TABLE messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 282,
+    "sql": "SELECT * FROM messages WHERE content = '; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 296,
+    "sql": "SELECT 1; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 297,
+    "sql": "SELECT 1 ;-- note\nDROP TABLE messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 298,
+    "sql": "SELECT 1 /* ; */ ; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 299,
+    "sql": "SELECT 1\u0000; DELETE FROM messages"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 300,
+    "sql": "WITH x AS (SELECT 1; DELETE FROM messages) SELECT * FROM x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 302,
+    "sql": "SELECT 1; WITH x AS (SELECT 1) SELECT * FROM x"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 316,
+    "sql": "SELECT 1 AS one ;"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 317,
+    "sql": "\r\n\t SELECT 1 AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 318,
+    "sql": " SELECT 1 AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 323,
+    "sql": "SELECT 'a;b' AS s, 2 AS n"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 329,
+    "sql": "SELECT 1 -- intro\n; SELECT 2"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 341,
+    "sql": "SELECT 1 AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 356,
+    "sql": "SELECT id, note FROM updated_messages ORDER BY id LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 357,
+    "sql": "SELECT created_at, last_active_at FROM sessions LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 358,
+    "sql": "SELECT strftime('%Y-%m', created_at) AS m, COUNT(*) AS n FROM messages GROUP BY m"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 359,
+    "sql": "SELECT MAX(last_active_at) AS latest FROM sessions"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 360,
+    "sql": "SELECT user_id FROM sessions LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 361,
+    "sql": "SELECT 'delete from messages' AS s"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 365,
+    "sql": "CREATE TABLE IF NOT EXISTS updated_messages (id INTEGER PRIMARY KEY, note TEXT)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 366,
+    "sql": "INSERT OR IGNORE INTO updated_messages (id, note) VALUES (1, 'probe')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 378,
+    "sql": "SELECT load_extension('x')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 384,
+    "sql": "SELECT writefile('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial-pwned', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 387,
+    "sql": "SELECT readfile('.jait/artifacts/gateway-rust/session-sql-engine/missing-fixture') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 394,
+    "sql": "SELECT * FROM pragma_table_info('messages')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 395,
+    "sql": "SELECT * FROM pragma_journal_mode"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 396,
+    "sql": "SELECT * FROM pragma_user_version"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 404,
+    "sql": "REPLACE() string function is refused by the banned-anywhere list (false positive, safe direction)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 409,
+    "sql": "SELECT replace('a-b', 'a', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 444,
+    "sql": "WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x < 5) SELECT SUM(x) AS total FROM cnt"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 463,
+    "sql": "BEGIN"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 464,
+    "sql": "ATTACH ':memory:' AS evil"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 475,
+    "sql": "SELECT id FROM adv_big"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 486,
+    "sql": "SELECT id FROM adv_big LIMIT 999999"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 495,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 999999 OFFSET 5"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 510,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 5, 999999"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 521,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 5"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 531,
+    "sql": "SELECT id FROM adv_big LIMIT 201"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 540,
+    "sql": "SELECT id FROM adv_big WHERE id <= 200"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 548,
+    "sql": "SELECT * FROM (SELECT id FROM adv_big ORDER BY id LIMIT 3) AS t"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 560,
+    "sql": "WITH top3 AS (SELECT id FROM adv_big ORDER BY id DESC LIMIT 3) SELECT id FROM top3"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 571,
+    "sql": "SELECT id FROM adv_big WHERE id IN (SELECT id FROM adv_big ORDER BY id DESC LIMIT 2)"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 580,
+    "sql": "SELECT id FROM adv_big WHERE id <= 120 UNION ALL SELECT id FROM adv_big WHERE id > 120 ORDER BY id"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 591,
+    "sql": "SELECT 'LIMIT 999999' AS literal"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 599,
+    "sql": "SELECT id FROM adv_big ORDER BY id /* LIMIT 999999 */ LIMIT 999999"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 607,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 10"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 636,
+    "sql": "SELECT 1 AS one"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 682,
+    "sql": "SELECT COUNT(*) AS n FROM user_secrets"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 683,
+    "sql": "SELECT username, password_hash FROM users LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 691,
+    "sql": "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 704,
+    "sql": "SELECT s.name, COUNT(m.id) AS msgs FROM sessions s LEFT JOIN messages m ON m.session_id = s.id GROUP BY s.id ORDER BY msgs DESC, s.name LIMIT 3"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 726,
+    "sql": "SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n FROM messages GROUP BY day ORDER BY day"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 792,
+    "sql": "SELECT data FROM adv_blob_test"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 800,
+    "sql": "SELECT * FROM messages WHERE 1 = 0"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 816,
+    "sql": "SELECT id, content FROM messages WHERE 1 = 0"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 841,
+    "sql": "SELECT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 889,
+    "sql": "SELECT fts3_tokenizer('simple') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 890,
+    "sql": "SELECT zipfile('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial.zip') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 891,
+    "sql": "SELECT sqlar('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial.tar') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 892,
+    "sql": "SELECT load_extension('.jait/artifacts/gateway-rust/session-sql-engine/missing-extension.so') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 893,
+    "sql": "SELECT sqlite_load_extension('.jait/artifacts/gateway-rust/session-sql-engine/missing-extension.so') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 906,
+    "sql": "SELECT writefile ('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial-pwned', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 907,
+    "sql": "SELECT WRITEFILE('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial-pwned', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 908,
+    "sql": "SELECT \"writefile\"('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial-pwned', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 909,
+    "sql": "SELECT [zipfile]('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial.zip') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 910,
+    "sql": "SELECT `load_extension`('.jait/artifacts/gateway-rust/session-sql-engine/missing-extension.so') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 911,
+    "sql": "SELECT \"writefile\" /*note*/ ('.jait/artifacts/gateway-rust/session-sql-engine/jait-adversarial-pwned', 'x') AS r"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 919,
+    "sql": "SELECT * FROM writefile_log"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 922,
+    "sql": "WITH zipfile AS (SELECT 1 AS v) SELECT v FROM zipfile"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 925,
+    "sql": "SELECT strftime('%Y', '2024-01-01') AS y"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 929,
+    "sql": "SELECT 'writefile(' || note AS tag FROM writefile_log"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 954,
+    "sql": "SELECT * FROM \"pragma_table_info\"('user_secrets')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 955,
+    "sql": "SELECT * FROM [pragma_table_info]('user_secrets')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 956,
+    "sql": "SELECT * FROM `pragma_table_info`('user_secrets')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 957,
+    "sql": "SELECT * FROM \"PRAGMA_TABLE_INFO\"('user_secrets')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 958,
+    "sql": "SELECT * FROM \"pragma_journal_mode\"('DELETE')"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 959,
+    "sql": "SELECT * FROM \"pragma_user_version\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 960,
+    "sql": "SELECT 1 AS one UNION SELECT * FROM \"pragma_table_list\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 961,
+    "sql": "SELECT id FROM messages AS \"pragma_table_info\" LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 973,
+    "sql": "SELECT 1 AS \"pragma\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 977,
+    "sql": "SELECT 1 AS \"my_pragma_table_info\""
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 980,
+    "sql": "SELECT \"content\" FROM \"messages\" ORDER BY id LIMIT 1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 996,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT -1"
+  },
+  {
+    "source": "packages/gateway/src/services/session-sql.adversarial.test.ts",
+    "line": 1007,
+    "sql": "SELECT id FROM adv_big ORDER BY id LIMIT +5"
+  }
+]

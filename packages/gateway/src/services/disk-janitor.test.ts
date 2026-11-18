@@ -8,6 +8,7 @@ import { migrateDatabase, openDatabase, type JaitDB } from "../db/index.js";
 import { ThreadService } from "./threads.js";
 import {
   DiskJanitor,
+  measureTree,
   isInside,
   loadDiskJanitorPolicy,
   type DiskJanitorPolicy,
@@ -33,7 +34,17 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 /** Create a directory holding one file, aged `ageMs` before NOW. */
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+
+/** Backdate a path's mtime without adding content (empty dirs, containers). */
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -173,6 +184,45 @@ describe("DiskJanitor", () => {
     },
   );
 
+  it("preserves the shared build lock even when it is old", async () => {
+    const lock = join(tempRoot, "jait-vite-build.lock");
+    writeFileSync(lock, "");
+    const old = new Date(NOW.getTime() - 10 * DAY_MS);
+    utimesSync(lock, old, old);
+    const report = await janitor().run({ now: NOW });
+    expect(existsSync(lock)).toBe(true);
+    expect(report.tempScratch.some((entry) => entry.path === lock)).toBe(false);
+    expect(report.blockedForeignOwned).toBe(0);
+  });
+
+  it("measures nested trees, individual files, and missing paths", async () => {
+    const nested = join(root, "nested", "child");
+    mkdirSync(nested, { recursive: true });
+    const file = join(nested, "payload");
+    writeFileSync(file, "hello");
+    expect((await measureTree(join(root, "nested"))).bytes).toBe(5);
+    expect((await measureTree(file)).bytes).toBe(5);
+    expect(await measureTree(join(root, "missing"))).toEqual({ bytes: 0, newestMtimeMs: 0 });
+  });
+
+  it.skipIf(process.platform === "win32" || !process.getuid)("reports foreign-owned scratch in a sticky directory once", async () => {
+    const blocked = join(tempRoot, "jait-foreign");
+    makeAgedDir(blocked, 10 * DAY_MS);
+    chmodSync(tempRoot, 0o1777);
+    vi.spyOn(process, "getuid").mockReturnValue(process.getuid!() + 1);
+    const notify = vi.fn();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const instance = new DiskJanitor(sqlite, policy(), logger, gitStub as never, {
+      worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot,
+    }, notify);
+    const first = await instance.run({ now: NOW });
+    await instance.run({ now: NOW });
+    expect(first.blockedForeignOwned).toBe(1);
+    expect(existsSync(blocked)).toBe(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith("Disk cleanup blocked", expect.stringContaining("belong to another user"));
+  });
+
   it("reaps a worktree whose thread finished outside the grace period", async () => {
     const path = join(worktreeRoot, "repo", "jait-aaa");
     makeAgedDir(path, 10 * DAY_MS);
@@ -229,6 +279,40 @@ describe("DiskJanitor", () => {
     expect(report.worktrees).toHaveLength(1);
     expect(report.worktrees[0]?.reason).toBe("orphaned: no owning thread");
     expect(existsSync(path)).toBe(false);
+  });
+
+  it("reaps an empty per-repo container once its worktrees are gone", async () => {
+    // Created eagerly on first execution and never removed, so every project
+    // ever run leaves one behind; it sits at the level the worktree scan treats
+    // as a repo dir, which is why it used to accumulate forever.
+    const container = join(worktreeRoot, "jait-execution-e2e-fixture");
+    mkdirSync(container, { recursive: true });
+    agePath(container, 10 * DAY_MS);
+
+    const report = await janitor().run({ now: NOW });
+
+    expect(report.worktrees).toHaveLength(1);
+    expect(report.worktrees[0]?.path).toBe(container);
+    expect(report.worktrees[0]?.reason).toBe("empty worktree container");
+    expect(existsSync(container)).toBe(false);
+  });
+
+  it("keeps a container that still holds a worktree", async () => {
+    const container = join(worktreeRoot, "repo");
+    const path = join(container, "jait-live");
+    makeAgedDir(path, 30 * DAY_MS);
+    agePath(container, 30 * DAY_MS);
+    seedThread({
+      workingDirectory: path,
+      status: "running",
+      updatedAt: new Date(NOW.getTime() - 30 * DAY_MS).toISOString(),
+    });
+
+    const report = await janitor().run({ now: NOW });
+
+    expect(report.worktrees).toHaveLength(0);
+    expect(existsSync(container)).toBe(true);
+    expect(existsSync(path)).toBe(true);
   });
 
   it("preserves the git branch so committed work stays recoverable", async () => {
@@ -323,4 +407,51 @@ describe("DiskJanitor", () => {
     expect(report.sandboxStorage[0]?.path).toBe(stale);
     expect(existsSync(stale)).toBe(false);
   });
+
+  it("keeps an old scratch directory whose contents are still being written", async () => {
+    // A directory's own mtime only moves when direct children change, so a
+    // long-lived run writing deep into the tree keeps an ancient top-level
+    // mtime. Reaping on that alone would delete live work.
+    const live = join(tempRoot, "jait-long-run");
+    makeAgedDir(live, 10 * DAY_MS, 512);
+    const nested = join(live, "nested");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "active.log"), "still writing\n");
+
+    const report = await janitor().run({ now: NOW });
+
+    expect(report.tempScratch).toHaveLength(0);
+    expect(existsSync(live)).toBe(true);
+  });
+
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "notifies once about scratch it cannot unlink instead of failing silently",
+    async () => {
+      const blocked = join(tempRoot, "jait-blocked-notify");
+      makeAgedDir(blocked, 10 * DAY_MS, 4096);
+      chmodSync(blocked, 0o555);
+      const notify = vi.fn();
+      const instance = new DiskJanitor(
+        sqlite,
+        policy(),
+        { info: () => {}, warn: () => {}, error: () => {} },
+        gitStub as never,
+        { worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot },
+        notify,
+      );
+      try {
+        await instance.run({ now: NOW });
+        expect(notify).toHaveBeenCalledTimes(1);
+        expect(notify.mock.calls[0]?.[0]).toBe("Disk cleanup blocked");
+        expect(String(notify.mock.calls[0]?.[1])).toMatch(/permission denied|sticky bit/i);
+
+        // A later pass hits the same blocked directory; the user must not be
+        // re-notified for an unchanged condition.
+        await instance.run({ now: NOW });
+        expect(notify).toHaveBeenCalledTimes(1);
+      } finally {
+        chmodSync(blocked, 0o755);
+      }
+    },
+  );
 });

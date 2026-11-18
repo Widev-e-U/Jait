@@ -39,6 +39,13 @@ export interface ListJaitModelsOptions {
   config: AppConfig;
   apiKeys?: Record<string, string>;
   fallbackModels: ProviderModelInfo[];
+  /**
+   * Also list the hosted Ollama Cloud catalogue.
+   *
+   * A local Ollama daemon's `/api/tags` only reports hosted models that were
+   * already pulled, so the full cloud catalogue has to come from ollama.com.
+   */
+  includeCloud?: boolean;
 }
 
 const BACKEND_LABELS: Record<JaitBackend, JaitModelGroup> = {
@@ -86,6 +93,7 @@ function configuredModelFallback(
 async function fetchConfiguredInstanceModels(
   instance: JaitBackendInstanceConfig,
   fallbackModels: ProviderModelInfo[],
+  includeCloud = false,
 ): Promise<ProviderModelInfo[]> {
   let models: ProviderModelInfo[] = [];
   try {
@@ -98,7 +106,7 @@ async function fetchConfiguredInstanceModels(
         models = OPENROUTER_MODELS;
       }
     } else if (instance.type === "ollama") {
-      models = await fetchOllamaModels(instance.baseUrl);
+      models = await fetchOllamaModels(instance.baseUrl, { includeCloud });
     } else {
       models = await fetchOmniRouteModels(instance.apiKey ?? "", instance.baseUrl);
     }
@@ -114,7 +122,7 @@ async function fetchConfiguredInstanceModels(
   return models.map((model) => ({
     ...model,
     id: encodeJaitModelId(instance.type, instance.id, model.id),
-    group,
+    group: model.group ? `${instance.name} · ${model.group}` : group,
     description: [BACKEND_LABELS[instance.type], model.description].filter(Boolean).join(" · "),
   }));
 }
@@ -122,9 +130,10 @@ async function fetchConfiguredInstanceModels(
 async function listConfiguredModels(
   instances: JaitBackendInstanceConfig[],
   fallbackModels: ProviderModelInfo[],
+  includeCloud = false,
 ): Promise<ProviderModelInfo[]> {
   const catalogues = await Promise.all(
-    instances.map((instance) => fetchConfiguredInstanceModels(instance, fallbackModels)),
+    instances.map((instance) => fetchConfiguredInstanceModels(instance, fallbackModels, includeCloud)),
   );
   return catalogues.flat();
 }
@@ -169,8 +178,8 @@ async function listLegacyModels(options: ListJaitModelsOptions): Promise<Provide
   const ollamaModelsP: Promise<ProviderModelInfo[]> = (async () => {
     if (!ollamaUrl) return [];
     try {
-      const models = await fetchOllamaModels(ollamaUrl);
-      return models.map((model) => ({ ...model, group: "Ollama" }));
+      const models = await fetchOllamaModels(ollamaUrl, { includeCloud: options.includeCloud });
+      return models.map((model) => ({ ...model, group: model.group ?? "Ollama" }));
     } catch {
       return [];
     }
@@ -198,9 +207,12 @@ async function listLegacyModels(options: ListJaitModelsOptions): Promise<Provide
 }
 
 export async function listJaitModels(options: ListJaitModelsOptions): Promise<ProviderModelInfo[]> {
+  // "All models" includes the hosted catalogue by default: callers only opt out
+  // explicitly, so a new call site cannot silently hide Ollama Cloud again.
+  const includeCloud = options.includeCloud ?? true;
   const instances = parseJaitBackendInstances(options.apiKeys?.["JAIT_BACKEND_INSTANCES"]);
   if (instances.length > 0) {
-    return listConfiguredModels(instances, options.fallbackModels);
+    return listConfiguredModels(instances, options.fallbackModels, includeCloud);
   }
-  return listLegacyModels(options);
+  return listLegacyModels({ ...options, includeCloud });
 }

@@ -153,4 +153,22 @@ describe("ACP registry provider catalog", () => {
 
     expect(providers).toEqual([]);
   });
+
+  it("preserves a constructor registry ID as text instead of inheriting an alias", () => {
+    const providers = parseAcpRegistry({
+      agents: [{
+        id: "constructor",
+        name: "Constructor",
+        version: "1.0.0",
+        description: "Synthetic registry fixture",
+        distribution: { npx: { package: "fixture-constructor" } },
+      }],
+    });
+    expect(providers).toHaveLength(1);
+    expect(providers[0]).toMatchObject({
+      id: "constructor",
+      providerType: "constructor",
+      registry: { id: "constructor" },
+    });
+  });
 });

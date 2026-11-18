@@ -1,9 +1,35 @@
+import { cn } from '@/lib/utils'
+
+/** The transcript and composer share a centered column and outer edges. */
+export const CHAT_COLUMN_MAX_WIDTH_CLASS = 'max-w-4xl'
+
+/** Match the composer's mobile inset while keeping desktop edges flush. */
+export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-2 md:px-0'
+export const CHAT_COMPOSER_COLUMN_PADDING_CLASS = 'px-0'
+
+/** Centered chat column, without a horizontal inset. */
+export function getChatColumnClassName(...extra: Array<string | false | null | undefined>): string {
+  return cn('mx-auto w-full', CHAT_COLUMN_MAX_WIDTH_CLASS, ...extra)
+}
+
+/** Centered chat column carrying the transcript's message gutter. */
+export function getChatTranscriptColumnClassName(...extra: Array<string | false | null | undefined>): string {
+  return getChatColumnClassName(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS, ...extra)
+}
+
 export function getChatTranscriptBoundaryClassName(): string {
   return 'relative z-0 isolate min-h-0 flex-1 overflow-hidden'
 }
 
-export function getChatComposerBoundaryClassName(isMobile: boolean, showDesktopProject: boolean): string {
-  return `relative z-30 isolate shrink-0 bg-background ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`
+/**
+ * On mobile, match the header’s 8px side inset. On desktop, the composer
+ * spans the column edge so its box aligns with the transcript.
+ */
+export function getChatComposerBoundaryClassName(isMobile: boolean): string {
+  return cn(
+    'relative z-30 isolate shrink-0 bg-background',
+    isMobile ? 'px-2 py-2' : `${CHAT_COMPOSER_COLUMN_PADDING_CLASS} py-3`,
+  )
 }
 
 export function getMessageEditPromptClassName(): string {
@@ -35,8 +61,9 @@ export function getMobileUserMessageEditTop(
 export function shouldShowNormalChatComposer(
   isMobile: boolean,
   editingMessageId: string | null,
+  editingQueue = false,
 ): boolean {
-  return !isMobile || editingMessageId === null
+  return !isMobile || (editingMessageId === null && !editingQueue)
 }
 
 export function shouldShowChatContextIndicator(

@@ -1,0 +1,739 @@
+{
+  "notifications": [
+    {
+      "name": "broadcast_and_sink_failures",
+      "sinks": {
+        "a": {
+          "op": "throw"
+        },
+        "b": {
+          "op": "mutate",
+          "key": "fromB",
+          "value": true
+        },
+        "c": {}
+      },
+      "steps": [
+        {
+          "op": "add",
+          "name": "a",
+          "alias": "a"
+        },
+        {
+          "op": "add",
+          "name": "b",
+          "alias": "b"
+        },
+        {
+          "op": "add",
+          "name": "c",
+          "alias": "c"
+        },
+        {
+          "op": "send",
+          "notification": {
+            "id": "notification",
+            "title": "Done",
+            "body": "Detail",
+            "level": "warning",
+            "sessionId": "s",
+            "timestamp": "ignored"
+          }
+        },
+        {
+          "op": "notify",
+          "level": "info",
+          "title": "Info",
+          "body": "text"
+        },
+        {
+          "op": "notify",
+          "level": "success",
+          "title": "Success",
+          "body": "",
+          "link": ""
+        },
+        {
+          "op": "notify",
+          "level": "warning",
+          "title": "Warning",
+          "body": "body",
+          "link": "/jobs"
+        },
+        {
+          "op": "notify",
+          "level": "error",
+          "title": "Failure",
+          "body": "body",
+          "broadcastError": true
+        }
+      ]
+    },
+    {
+      "name": "duplicate_unsubscribe_live_array_reentry",
+      "sinks": {
+        "a": {
+          "op": "remove",
+          "alias": "b"
+        },
+        "b": {},
+        "c": {
+          "op": "append",
+          "name": "d"
+        },
+        "d": {}
+      },
+      "steps": [
+        {
+          "op": "add",
+          "name": "a",
+          "alias": "a"
+        },
+        {
+          "op": "add",
+          "name": "b",
+          "alias": "b"
+        },
+        {
+          "op": "add",
+          "name": "b",
+          "alias": "b2"
+        },
+        {
+          "op": "add",
+          "name": "c",
+          "alias": "c"
+        },
+        {
+          "op": "send",
+          "notification": {
+            "id": "n1",
+            "title": "one",
+            "body": "",
+            "level": "info"
+          }
+        },
+        {
+          "op": "send",
+          "notification": {
+            "id": "n2",
+            "title": "two",
+            "body": "",
+            "level": "info"
+          }
+        },
+        {
+          "op": "remove",
+          "alias": "b2"
+        },
+        {
+          "op": "remove",
+          "alias": "b2"
+        },
+        {
+          "op": "send",
+          "notification": {
+            "id": "n3",
+            "title": "three",
+            "body": "",
+            "level": "info"
+          }
+        }
+      ]
+    },
+    {
+      "name": "append_during_delivery_is_visited",
+      "sinks": {
+        "a": {
+          "op": "append",
+          "name": "b"
+        },
+        "b": {}
+      },
+      "steps": [
+        {
+          "op": "add",
+          "name": "a",
+          "alias": "a"
+        },
+        {
+          "op": "send",
+          "notification": {
+            "id": "n",
+            "title": "one",
+            "body": "",
+            "level": "info"
+          }
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "name": "account_backend_and_quota_order",
+      "accounts": [
+        {
+          "id": "a",
+          "providerType": "codex",
+          "label": "Local",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "b",
+          "providerType": "claude-code",
+          "label": "Remote",
+          "nodeId": "node"
+        },
+        {
+          "id": "c",
+          "providerType": "other",
+          "label": "Other",
+          "nodeId": ""
+        }
+      ],
+      "quotas": [
+        {
+          "accountId": "a",
+          "providerType": "codex",
+          "planType": "",
+          "quotaKey": "one"
+        },
+        {
+          "accountId": "b",
+          "providerType": "opencode-go",
+          "planType": "pro",
+          "limit": 10
+        },
+        {
+          "accountId": "a",
+          "providerType": "codex",
+          "planType": "plus",
+          "used": 2
+        },
+        {
+          "accountId": "orphan",
+          "providerType": "other",
+          "planType": "ignored"
+        }
+      ],
+      "options": {
+        "quotaErrors": {
+          "b": "failed"
+        },
+        "jaitBackendProfiles": [
+          {
+            "id": "backend",
+            "providerType": "ollama",
+            "providerLabel": "Ollama",
+            "profileLabel": "Cloud",
+            "quotaAccountId": "b",
+            "accountLabel": "fixture@example.invalid",
+            "planType": "backend-plan"
+          },
+          {
+            "id": "empty",
+            "providerType": "openai",
+            "providerLabel": "OpenAI",
+            "profileLabel": "No data",
+            "quotaAccountId": "absent"
+          }
+        ]
+      }
+    },
+    {
+      "name": "prototype_named_error_accounts",
+      "accounts": [
+        {
+          "id": "__proto__",
+          "providerType": "claude-code",
+          "label": "__proto__",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "constructor",
+          "providerType": "claude-code",
+          "label": "constructor",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "toString",
+          "providerType": "claude-code",
+          "label": "toString",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "valueOf",
+          "providerType": "claude-code",
+          "label": "valueOf",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "hasOwnProperty",
+          "providerType": "claude-code",
+          "label": "hasOwnProperty",
+          "nodeId": "gateway"
+        },
+        {
+          "id": "id",
+          "providerType": "claude-code",
+          "label": "id",
+          "nodeId": "gateway"
+        }
+      ],
+      "quotas": [],
+      "options": {}
+    },
+    {
+      "name": "explicit_errors_and_nulls",
+      "accounts": [
+        {
+          "id": "toString",
+          "providerType": "unknown",
+          "label": "U",
+          "nodeId": "remote"
+        }
+      ],
+      "quotas": [],
+      "options": {
+        "quotaErrors": {
+          "toString": "own",
+          "absent": "backend error"
+        },
+        "jaitBackendProfiles": [
+          {
+            "id": "b",
+            "providerType": "codex",
+            "providerLabel": "Codex",
+            "profileLabel": "B",
+            "quotaAccountId": "absent",
+            "accountLabel": "",
+            "planType": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty",
+      "accounts": [],
+      "quotas": [],
+      "options": {}
+    }
+  ],
+  "cache": [
+    {
+      "name": "active_freshness_force_boundary",
+      "now": 0,
+      "steps": [
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "first",
+          "value": {
+            "n": 1
+          },
+          "hold": true
+        },
+        {
+          "op": "time",
+          "now": 1000000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "active",
+          "value": {
+            "n": 999
+          },
+          "force": true
+        },
+        {
+          "op": "release",
+          "handle": "first"
+        },
+        {
+          "op": "await",
+          "handle": "active"
+        },
+        {
+          "op": "time",
+          "now": 1029999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "cool",
+          "value": {
+            "n": 2
+          },
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "cool"
+        },
+        {
+          "op": "time",
+          "now": 1030000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "forced",
+          "value": {
+            "n": 3
+          },
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "forced"
+        },
+        {
+          "op": "time",
+          "now": 1329999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "fresh",
+          "value": {
+            "n": 4
+          }
+        },
+        {
+          "op": "await",
+          "handle": "fresh"
+        },
+        {
+          "op": "time",
+          "now": 1330000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "expired",
+          "value": {
+            "n": 5
+          }
+        },
+        {
+          "op": "await",
+          "handle": "expired"
+        }
+      ]
+    },
+    {
+      "name": "rejection_backoff_increments_and_caps",
+      "now": 0,
+      "steps": [
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "a",
+          "error": "provider down"
+        },
+        {
+          "op": "await",
+          "handle": "a"
+        },
+        {
+          "op": "time",
+          "now": 599999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "b",
+          "value": 1
+        },
+        {
+          "op": "await",
+          "handle": "b"
+        },
+        {
+          "op": "time",
+          "now": 600000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "c",
+          "error": "again"
+        },
+        {
+          "op": "await",
+          "handle": "c"
+        },
+        {
+          "op": "time",
+          "now": 1799999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "d",
+          "value": 2
+        },
+        {
+          "op": "await",
+          "handle": "d"
+        },
+        {
+          "op": "time",
+          "now": 1800000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "e",
+          "error": "third"
+        },
+        {
+          "op": "await",
+          "handle": "e"
+        },
+        {
+          "op": "time",
+          "now": 3599999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "f",
+          "value": 3
+        },
+        {
+          "op": "await",
+          "handle": "f"
+        },
+        {
+          "op": "time",
+          "now": 3600000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "g",
+          "value": 4
+        },
+        {
+          "op": "await",
+          "handle": "g"
+        },
+        {
+          "op": "time",
+          "now": 3630000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "reset",
+          "value": 5,
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "reset"
+        }
+      ]
+    },
+    {
+      "name": "failed_value_and_clock_regression",
+      "now": 300000,
+      "steps": [
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "a",
+          "value": {
+            "error": "quota"
+          },
+          "failed": true
+        },
+        {
+          "op": "await",
+          "handle": "a"
+        },
+        {
+          "op": "time",
+          "now": 1
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "regressed",
+          "value": {
+            "ok": true
+          },
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "regressed"
+        },
+        {
+          "op": "time",
+          "now": 899999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "b",
+          "value": {
+            "ok": true
+          }
+        },
+        {
+          "op": "await",
+          "handle": "b"
+        },
+        {
+          "op": "time",
+          "now": 900000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "c",
+          "value": {
+            "ok": true
+          }
+        },
+        {
+          "op": "await",
+          "handle": "c"
+        },
+        {
+          "op": "run",
+          "key": "__proto__",
+          "handle": "proto",
+          "value": "separate"
+        },
+        {
+          "op": "await",
+          "handle": "proto"
+        }
+      ]
+    },
+    {
+      "name": "capacity_evicts_only_expired_entries",
+      "now": 0,
+      "steps": [
+        {
+          "op": "bulk",
+          "count": 1000
+        },
+        {
+          "op": "run",
+          "key": "new",
+          "handle": "capacity",
+          "value": "new"
+        },
+        {
+          "op": "await",
+          "handle": "capacity"
+        },
+        {
+          "op": "time",
+          "now": 300000
+        },
+        {
+          "op": "run",
+          "key": "new",
+          "handle": "new",
+          "value": "new"
+        },
+        {
+          "op": "await",
+          "handle": "new"
+        },
+        {
+          "op": "run",
+          "key": "bulk0",
+          "handle": "old",
+          "value": "reloaded"
+        },
+        {
+          "op": "await",
+          "handle": "old"
+        }
+      ]
+    },
+    {
+      "name": "force_bypasses_settled_failure_backoff",
+      "now": 0,
+      "steps": [
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "a",
+          "error": "first"
+        },
+        {
+          "op": "await",
+          "handle": "a"
+        },
+        {
+          "op": "time",
+          "now": 29999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "b",
+          "value": 1,
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "b"
+        },
+        {
+          "op": "time",
+          "now": 30000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "c",
+          "error": "second",
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "c"
+        },
+        {
+          "op": "time",
+          "now": 59999
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "d",
+          "value": 2,
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "d"
+        },
+        {
+          "op": "time",
+          "now": 60000
+        },
+        {
+          "op": "run",
+          "key": "a",
+          "handle": "e",
+          "value": 3,
+          "force": true
+        },
+        {
+          "op": "await",
+          "handle": "e"
+        }
+      ]
+    }
+  ]
+}

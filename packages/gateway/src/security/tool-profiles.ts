@@ -174,7 +174,7 @@ const PROFILES: Record<ProfileName, ToolPermission[]> = {
  * Get a permission map for the given profile name.
  */
 export function getProfile(name: ProfileName): Map<string, ToolPermission> {
-  const perms = PROFILES[name];
+  const perms = Object.hasOwn(PROFILES, name) ? PROFILES[name] : undefined;
   if (!perms) {
     throw new Error(`Unknown profile: ${name}`);
   }

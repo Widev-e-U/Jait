@@ -4,9 +4,62 @@ import { AgentsApi } from './agents-api'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('AgentsApi.listProviderModels', () => {
+  it('shares slow discovery beyond the TTL and caches from completion time', async () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    let resolve!: (response: Response) => void
+    const fetchMock = vi.fn(() => new Promise<Response>((done) => { resolve = done }))
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new AgentsApi()
+    const first = api.listProviderModels('codex')
+    now += 6 * 60_000
+    const second = api.listProviderModels('codex')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    resolve(Response.json({ models: [{ id: 'model', name: 'Model' }] }))
+    await Promise.all([first, second])
+    now += 4 * 60_000
+    expect((await api.listProviderModels('codex')).models[0].id).toBe('model')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    now += 61_000
+    fetchMock.mockResolvedValueOnce(Response.json({ models: [] }))
+    await api.listProviderModels('codex')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an old failed discovery discard a replacement after reset', async () => {
+    let reject!: (reason: Error) => void
+    let resolve!: (response: Response) => void
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((_, fail) => { reject = fail }))
+      .mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done }))
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new AgentsApi()
+    const old = api.listProviderModels('codex').catch(() => null)
+    api.resetProviderModels()
+    const replacement = api.listProviderModels('codex')
+    reject(new Error('old request failed'))
+    await old
+    const shared = api.listProviderModels('codex')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolve(Response.json({ models: [] }))
+    await Promise.all([replacement, shared])
+  })
+
+  it('retries discovery after a failure', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(Response.json({ models: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new AgentsApi()
+    await expect(api.listProviderModels('codex')).rejects.toThrow('offline')
+    await expect(api.listProviderModels('codex')).resolves.toEqual({ models: [] })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('targets the selected node for a remote CLI provider', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ models: [] }), {
       status: 200,

@@ -1,0 +1,77 @@
+{
+  "lane": "providers-local-http",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:42:3",
+      "status": "verified",
+      "parity_review": "Asserts HTTP 200, ok true, modelCount 4, exact first three sample IDs and authenticated false against the real route and a local catalogue peer.",
+      "rust_cases": [
+        {
+          "id": "provider.omniroute-catalogue",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:77:3",
+      "status": "verified",
+      "parity_review": "A scripted upstream 401 yields ok false and an error containing both 401 and keyless free tier; the synthetic key is not echoed.",
+      "rust_cases": [
+        {
+          "id": "provider.omniroute-rejected-key",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:107:3",
+      "status": "verified",
+      "parity_review": "Malformed base URL returns 400; the local peer records no requests. Valid URL unauthenticated rejection is checked in the same bounded case.",
+      "rust_cases": [
+        {
+          "id": "provider.omniroute-auth-validation-no-fetch",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:124:3",
+      "status": "verified",
+      "parity_review": "Unauthenticated POST is rejected with 401 before reaching the local peer.",
+      "rust_cases": [
+        {
+          "id": "provider.omniroute-auth-validation-no-fetch",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:133:3",
+      "status": "verified",
+      "parity_review": "OpenCode Go without a key returns 400 without requesting the local catalogue peer.",
+      "rust_cases": [
+        {
+          "id": "provider.backend-auth-validation-no-fetch",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/providers-omniroute-test.test.ts:156:3",
+      "status": "verified",
+      "parity_review": "The catalogue succeeds but inference returns 401 with Invalid Go API key; the gateway returns ok false and that diagnostic.",
+      "rust_cases": [
+        {
+          "id": "provider.go-rejected-inference",
+          "source": "tests/contract/src/provider_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    }
+  ]
+}

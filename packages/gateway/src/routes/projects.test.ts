@@ -181,7 +181,11 @@ describe("project routes", () => {
     const user = userService.createUser("title-user", "password123");
     userService.updateSettings(user.id, { apiKeys: { OPENAI_API_KEY: "test-key" } });
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    // mockImplementation (not mockResolvedValue): every call gets a fresh
+    // Response body. A shared Response is consumed by the first res.json() and
+    // poisons later reads — and background polling (e.g. messenger sync) can
+    // legitimately call fetch while this test runs.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({
       choices: [{ message: { content: "Diagnose Desktop gray screens" } }]
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
@@ -205,7 +209,42 @@ describe("project routes", () => {
       const titleBody = JSON.parse(titleRes.body) as { session: { name: string }; generated: boolean };
       expect(titleBody.generated).toBe(true);
       expect(titleBody.session.name).toBe("Diagnose Desktop gray screens");
-      expect(fetchSpy).toHaveBeenCalledOnce();
+      // Scope to the completion call: unrelated background services may fetch
+      // while the test runs (messenger sync), so a global call count is racy.
+      const completionCalls = fetchSpy.mock.calls.filter((call) => String(call[0]).includes("/chat/completions"));
+      expect(completionCalls.length).toBe(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    "<tool_call>",
+    '<tool_call>\n{"name":"terminal","arguments":{}}\n</tool_call>',
+  ])("falls back to the first message for a tool-protocol title: %s", async (content) => {
+    const user = userService.createUser("protocol-title-user", "password123");
+    userService.updateSettings(user.id, { apiKeys: { OPENAI_API_KEY: "test-key" } });
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({
+      choices: [{ message: { content } }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    try {
+      const createRes = await app.inject({ method: "POST", url: "/api/sessions", headers, payload: {} });
+      const session = createRes.json() as { id: string };
+      const prompt = "Help investigate intermittent desktop crashes";
+      const titleRes = await app.inject({
+        method: "POST",
+        url: `/api/sessions/${session.id}/generate-title`,
+        headers,
+        payload: { prompt }
+      });
+      expect(titleRes.statusCode).toBe(200);
+      expect(titleRes.json()).toMatchObject({ generated: false, session: { name: prompt } });
+
+      const savedRes = await app.inject({ method: "GET", url: `/api/sessions/${session.id}`, headers });
+      expect(savedRes.statusCode).toBe(200);
+      expect(savedRes.json()).toMatchObject({ name: prompt });
     } finally {
       fetchSpy.mockRestore();
     }

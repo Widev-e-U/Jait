@@ -1,0 +1,99 @@
+[
+  {
+    "name": "codegraph.index",
+    "description": "Build or refresh the current repository's local structural code graph with Graphify. Use this before graph queries when no ready index exists.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "codegraph.query",
+    "description": "Retrieve a compact multi-hop subgraph for a codebase question with typed edges, confidence, and file/line provenance.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Question or concept to retrieve from the code graph."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "structural",
+            "global",
+            "hybrid"
+          ],
+          "description": "Retrieval mode. Hybrid is the default."
+        },
+        "maxNodes": {
+          "type": "number",
+          "description": "Maximum nodes to return, up to 1000."
+        },
+        "maxDepth": {
+          "type": "number",
+          "description": "Traversal depth, up to 8."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "codegraph.path",
+    "description": "Find the shortest structural path between two code symbols or concepts.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Source symbol label or node id."
+        },
+        "target": {
+          "type": "string",
+          "description": "Target symbol label or node id."
+        },
+        "maxDepth": {
+          "type": "number",
+          "description": "Maximum path depth, up to 50."
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ]
+    }
+  },
+  {
+    "name": "codegraph.prepare_graphrag",
+    "description": "Prepare the current structural graph as GraphRAG entity, relationship, and text-unit datasets. This is the optional second stage for global and multi-hop reasoning.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "codegraph.status",
+    "description": "Get freshness, version, node counts, Graphify version, and GraphRAG preparation status for the current project.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

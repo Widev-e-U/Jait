@@ -16,6 +16,7 @@ describe("createAgentMessageTool", () => {
     const result = await tool.execute({}, baseContext);
     expect(result.ok).toBe(false);
     expect(result.message).toContain("No active swarm round");
+    expect(result).toMatchObject({ data: { code: "no_active_swarm_round" } });
   });
 
   it("reports no siblings have posted yet when peeking an empty round", async () => {

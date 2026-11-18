@@ -1,19 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, Inbox, Loader2, Mail, Paperclip, Pencil, RefreshCw, Reply, Search,
-  Send, Star, Trash2, X,
+  Send, Star, Trash2, X, Settings2, Plus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   emailApi, type EmailAccount, type EmailFolder, type EmailMessageFull,
-  type EmailMessageSummary, type EmailProvider,
+  type EmailMessageSummary, type OAuthEmailProvider as EmailProvider,
 } from '@/lib/email-api'
 import { cn } from '@/lib/utils'
+import { EmailAccountManager } from './email-account-manager'
+import { EmailContent } from './email-content'
+import { getApiUrl } from '@/lib/gateway-url'
 
 interface EmailPageProps {
   isMobile?: boolean
@@ -39,31 +44,53 @@ function formatDate(raw: string): string {
 export function EmailPage({ isMobile = false }: EmailPageProps) {
   const [accounts, setAccounts] = useState<EmailAccount[] | null>(null)
   const [providers, setProviders] = useState<Record<EmailProvider, boolean>>({ gmail: false, outlook: false })
-  const [activeAccountId, setActiveAccountId] = useState<string | null>(null)
+  const [activeAccountId, setActiveAccountId] = useUrlSearchState('email', 'accountId')
   const [folders, setFolders] = useState<EmailFolder[]>([])
-  const [activeFolder, setActiveFolder] = useState('inbox')
+  const [activeFolder, setActiveFolder] = useUrlSearchState('email', 'folder', 'inbox')
   const [messages, setMessages] = useState<EmailMessageSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openMessage, setOpenMessage] = useState<EmailMessageFull | null>(null)
-  const [query, setQuery] = useState('')
+  const [appliedQuery, setAppliedQuery] = useUrlSearchState('email')
+  const [query, setQuery] = useState(appliedQuery)
+  useEffect(() => setQuery(appliedQuery), [appliedQuery])
+  const listRequest = useRef(0)
+  const listScope = useRef('')
   const [loadingList, setLoadingList] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState(false)
   const [connecting, setConnecting] = useState<EmailProvider | null>(null)
 
-  const [compose, setCompose] = useState<null | { to: string; subject: string; body: string; replyToMessageId?: string }>(null)
+  const [compose, setCompose] = useState<null | { to: string; subject: string; body: string; accountId?: string; includeSignature?: boolean; replyToMessageId?: string }>(null)
   const [sending, setSending] = useState(false)
+  const [manageAccounts, setManageAccounts] = useState(false)
+  const messageRequest = useRef(0)
+  const activeAccountRef = useRef<string | null>(null)
 
   const activeAccount = useMemo(
     () => accounts?.find((a) => a.id === activeAccountId) ?? accounts?.[0] ?? null,
     [accounts, activeAccountId],
   )
 
+  activeAccountRef.current = activeAccount?.id ?? null
+  const composeAccount = accounts?.find(account => account.id === (compose?.accountId ?? activeAccount?.id))
+  const changeAccount = (id: string) => {
+    activeAccountRef.current = id
+    messageRequest.current++
+    listRequest.current++
+    setActiveAccountId(id)
+    setActiveFolder('inbox')
+    setSelectedId(null)
+    setOpenMessage(null)
+    setMessages([])
+    setFolders([])
+    setLoadingMsg(false)
+  }
+
   const loadAccounts = useCallback(async () => {
     try {
       const [accs, cfg] = await Promise.all([emailApi.accounts(), emailApi.config()])
       setAccounts(accs)
       setProviders(cfg)
-      if (accs.length > 0) setActiveAccountId((prev) => prev ?? accs[0].id)
+      setActiveAccountId((prev) => accs.some(account => account.id === prev) ? prev : accs[0]?.id ?? '')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load email accounts')
       setAccounts([])
@@ -73,37 +100,58 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   useEffect(() => { void loadAccounts() }, [loadAccounts])
 
   const loadMessages = useCallback(async (accountId: string, folder: string, q: string) => {
+    const request = ++listRequest.current
     setLoadingList(true)
+    const scope = JSON.stringify([accountId, folder, q])
+    if (listScope.current !== scope) { setMessages([]); listScope.current = scope }
+    let fresh = false
+    if (folder === 'inbox' && !q) {
+      void emailApi.cachedInbox(accountId).then(cached => {
+        if (!fresh && request === listRequest.current && cached) setMessages(cached)
+      }).catch(() => {})
+    }
     try {
       const res = await emailApi.listMessages({ accountId, folder, q: q || undefined, limit: 30 })
-      setMessages(res.messages)
+      fresh = true
+      if (request === listRequest.current) setMessages(res.messages)
     } catch (err) {
+      if (request !== listRequest.current) return
       toast.error(err instanceof Error ? err.message : 'Failed to load messages')
-      setMessages([])
     } finally {
-      setLoadingList(false)
+      if (request === listRequest.current) setLoadingList(false)
     }
   }, [])
 
   // Load folders + messages whenever the active account or folder changes.
   useEffect(() => {
     if (!activeAccount) return
-    void emailApi.folders(activeAccount.id).then(setFolders).catch(() => setFolders([]))
+    let cancelled = false
+    void emailApi.folders(activeAccount.id).then(result => { if (!cancelled) setFolders(result) }).catch(() => { if (!cancelled) setFolders([]) })
+    return () => { cancelled = true }
   }, [activeAccount])
 
   useEffect(() => {
     if (!activeAccount) return
-    void loadMessages(activeAccount.id, activeFolder, query)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccount, activeFolder])
+    void loadMessages(activeAccount.id, activeFolder, appliedQuery)
+    return () => { listRequest.current++ }
+  }, [activeAccount, activeFolder, appliedQuery, loadMessages])
+
+  const submitSearch = () => {
+    if (query !== appliedQuery) setAppliedQuery(query)
+    else if (activeAccount) void loadMessages(activeAccount.id, activeFolder, appliedQuery)
+  }
 
   const connect = useCallback(async (provider: EmailProvider) => {
     setConnecting(provider)
     try {
-      const authUrl = await emailApi.connectUrl(provider)
-      const popup = window.open(authUrl, 'jait-email-oauth', 'width=520,height=680')
+      const popup = window.open('about:blank', 'jait-email-oauth', 'width=520,height=680')
+      if (!popup) throw new Error('Allow popups to connect an email account.')
+      let authUrl: string
+      try { authUrl = await emailApi.connectUrl(provider) }
+      catch (error) { popup.close(); throw error }
+      popup.location.href = authUrl
       const onMessage = (ev: MessageEvent) => {
-        if (ev.data?.type === 'jait-email-oauth') {
+        if (ev.source === popup && ev.origin === new URL(getApiUrl(), window.location.href).origin && ev.data?.type === 'jait-email-oauth') {
           window.removeEventListener('message', onMessage)
           setConnecting(null)
           if (ev.data.ok) { toast.success('Mailbox connected'); void loadAccounts() }
@@ -124,16 +172,18 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   const openMsg = useCallback(async (id: string, accountId?: string) => {
     const acct = accountId ?? activeAccount?.id
     if (!acct) return
+    const request = ++messageRequest.current
     setSelectedId(id)
     setLoadingMsg(true)
     try {
       const msg = await emailApi.getMessage(id, acct)
+      if (request !== messageRequest.current || activeAccountRef.current !== acct) return
       setOpenMessage(msg)
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, unread: false } : m)))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to open message')
+      if (request === messageRequest.current) toast.error(err instanceof Error ? err.message : 'Failed to open message')
     } finally {
-      setLoadingMsg(false)
+      if (request === messageRequest.current) setLoadingMsg(false)
     }
   }, [activeAccount])
 
@@ -165,11 +215,12 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   }, [activeAccount, selectedId])
 
   const send = useCallback(async () => {
-    if (!activeAccount || !compose) return
+    if (!composeAccount || !compose) return
     setSending(true)
     try {
       await emailApi.send({
-        accountId: activeAccount.id,
+        accountId: composeAccount.id,
+        includeSignature: compose.includeSignature ?? true,
         to: compose.to,
         subject: compose.subject,
         body: compose.body,
@@ -182,7 +233,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
     } finally {
       setSending(false)
     }
-  }, [activeAccount, compose])
+  }, [composeAccount, compose])
 
   // Agent-driven control of this page (email_view tool + refresh after mutations).
   useEffect(() => {
@@ -203,7 +254,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
           if (data.messageId) void openMsg(data.messageId, acct)
           break
         case 'compose':
-          setCompose({ to: data.to ?? '', subject: data.subject ?? '', body: data.body ?? '', replyToMessageId: data.replyToMessageId })
+          setCompose({ accountId: acct, to: data.to ?? '', subject: data.subject ?? '', body: data.body ?? '', replyToMessageId: data.replyToMessageId })
           break
         case 'refresh':
           if (acct) void loadMessages(acct, activeFolder, query)
@@ -216,12 +267,15 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
 
   const startReply = useCallback((msg: EmailMessageFull) => {
     setCompose({
+      accountId: activeAccount?.id,
       to: msg.from,
       subject: msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`,
       body: '',
       replyToMessageId: msg.id,
     })
-  }, [])
+  }, [activeAccount])
+
+  const accountManager = <EmailAccountManager open={manageAccounts} onOpenChange={setManageAccounts} accounts={accounts ?? []} providers={providers} connecting={connecting} onConnect={provider => { void connect(provider) }} onChanged={loadAccounts} />
 
   // ── Empty / connect state ─────────────────────────────────────────
   if (accounts === null) {
@@ -235,7 +289,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
         <div>
           <h2 className="text-xl font-semibold">Connect your email</h2>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
-            Connect a Gmail or Outlook account to read, send, tag, and organize mail here — and let your agents do it too.
+            Connect your mailboxes to read, send and organize email here and in chat.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -246,10 +300,12 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
             </Button>
           ))}
         </div>
+        <Button variant="outline" onClick={() => setManageAccounts(true)}><Plus className="mr-2 h-4 w-4" />Add email account · other providers</Button>
+        {accountManager}
         {(!providers.gmail || !providers.outlook) && (
           <p className="max-w-md text-xs text-muted-foreground">
             {!providers.gmail && !providers.outlook
-              ? 'No provider is configured yet. Add OAuth client credentials via the GMAIL_OAUTH_CLIENT_ID / OUTLOOK_OAUTH_CLIENT_ID env vars (and secrets), then reload.'
+              ? 'Gmail and Outlook OAuth need app credentials in Settings → Email. Other providers can use IMAP/SMTP setup above.'
               : `${providers.gmail ? 'Outlook' : 'Gmail'} needs OAuth credentials before it can be connected.`}
           </p>
         )}
@@ -260,18 +316,18 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
   const showDetailPane = !isMobile || selectedId !== null
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 min-w-0 w-full">
       {/* Sidebar: account + folders */}
       {(!isMobile && (
         <aside className="flex w-52 shrink-0 flex-col border-r">
           <div className="p-3">
-            <Button className="w-full justify-start gap-2" onClick={() => setCompose({ to: '', subject: '', body: '' })}>
+            <Button className="w-full justify-start gap-2" onClick={() => setCompose({ accountId: activeAccount?.id, to: '', subject: '', body: '' })}>
               <Pencil className="h-4 w-4" /> Compose
             </Button>
           </div>
           <div className="px-3 pb-2">
-            <Select value={activeAccount?.id} onValueChange={(v) => { setActiveAccountId(v); setSelectedId(null); setOpenMessage(null) }}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <Select value={activeAccount?.id} onValueChange={changeAccount}>
+              <SelectTrigger aria-label="Email account" className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {accounts.map((a) => (
                   <SelectItem key={a.id} value={a.id} className="text-xs">{a.email}</SelectItem>
@@ -294,29 +350,37 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
               </button>
             ))}
           </nav>
+          <div className="border-t p-2"><Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setManageAccounts(true)}><Settings2 className="h-4 w-4" />Accounts & signatures</Button></div>
         </aside>
       ))}
 
       {/* Message list */}
       {(!isMobile || selectedId === null) && (
-        <section className={cn('flex min-h-0 flex-col border-r', isMobile ? 'flex-1' : 'w-80 shrink-0')}>
+        <section className={cn('flex min-h-0 min-w-0 flex-col border-r', isMobile ? 'flex-1' : 'w-80 shrink-0')}>
+          {isMobile && <div className="flex min-w-0 items-center gap-2 border-b p-2">
+            <Select value={activeAccount?.id} onValueChange={changeAccount}>
+              <SelectTrigger aria-label="Email account" className="min-w-0 flex-1 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>{accounts.map(account => <SelectItem key={account.id} value={account.id}>{account.email}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button size="icon" variant="ghost" aria-label="Accounts & signatures" onClick={() => setManageAccounts(true)}><Settings2 className="h-4 w-4" /></Button>
+          </div>}
           <div className="flex items-center gap-2 border-b p-2">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && activeAccount) void loadMessages(activeAccount.id, activeFolder, query) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitSearch() }}
                 placeholder="Search mail"
                 className="h-8 pl-7 text-sm"
               />
             </div>
             <Button variant="ghost" size="icon" className="h-8 w-8" disabled={loadingList}
-              onClick={() => activeAccount && loadMessages(activeAccount.id, activeFolder, query)}>
+              onClick={submitSearch}>
               <RefreshCw className={cn('h-4 w-4', loadingList && 'animate-spin')} />
             </Button>
             {isMobile && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCompose({ to: '', subject: '', body: '' })}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Compose" onClick={() => setCompose({ accountId: activeAccount?.id, to: '', subject: '', body: '' })}>
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
@@ -353,7 +417,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
 
       {/* Reading pane */}
       {showDetailPane && (
-        <section className="flex min-h-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loadingMsg ? (
             <div className="flex flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : openMessage ? (
@@ -374,7 +438,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto break-words [overflow-wrap:anywhere] p-4">
                 <h1 className="text-lg font-semibold">{openMessage.subject || '(no subject)'}</h1>
                 <div className="mt-2 text-sm">
                   <div className="font-medium">{senderName(openMessage.from)}</div>
@@ -391,20 +455,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
                   </div>
                 )}
                 <hr className="my-3" />
-                {openMessage.bodyHtml ? (
-                  // Untrusted email HTML is isolated in a sandboxed iframe: no script
-                  // execution, no same-origin access, links open in a new tab.
-                  <iframe
-                    title="Email content"
-                    sandbox="allow-popups allow-popups-to-escape-sandbox"
-                    className="h-[60vh] w-full border-0 bg-white"
-                    srcDoc={`<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
-<style>body{font-family:system-ui,Arial,sans-serif;margin:8px;color:#111;word-break:break-word}img{max-width:100%}</style>
-</head><body>${openMessage.bodyHtml}</body></html>`}
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap break-words font-sans text-sm">{openMessage.bodyText}</pre>
-                )}
+                <EmailContent expanded key={activeAccount?.id + openMessage.id} accountId={activeAccount?.id} bodyHtml={openMessage.bodyHtml} bodyText={openMessage.bodyText} />
               </div>
             </>
           ) : (
@@ -416,6 +467,7 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
         </section>
       )}
 
+      {accountManager}
       {/* Compose / reply dialog */}
       <Dialog open={compose !== null} onOpenChange={(o) => { if (!o) setCompose(null) }}>
         <DialogContent className="max-w-xl">
@@ -424,10 +476,20 @@ export function EmailPage({ isMobile = false }: EmailPageProps) {
           </DialogHeader>
           {compose && (
             <div className="flex flex-col gap-2">
-              <Input placeholder="To" value={compose.to} onChange={(e) => setCompose({ ...compose, to: e.target.value })} />
-              <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} />
-              <Textarea placeholder="Write your message…" rows={10} value={compose.body}
+              <Label className="space-y-1"><span className="text-xs text-muted-foreground">From</span>
+                <Select value={compose.accountId ?? activeAccount?.id} disabled={Boolean(compose.replyToMessageId)} onValueChange={accountId => setCompose({ ...compose, accountId })}>
+                  <SelectTrigger aria-label="From account"><SelectValue /></SelectTrigger>
+                  <SelectContent>{accounts.map(account => <SelectItem key={account.id} value={account.id}>{account.email}</SelectItem>)}</SelectContent>
+                </Select>
+              </Label>
+              <Input aria-label="To" placeholder="To" value={compose.to} onChange={(e) => setCompose({ ...compose, to: e.target.value })} />
+              <Input aria-label="Subject" placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} />
+              <Textarea aria-label="Message body" placeholder="Write your message…" rows={10} value={compose.body}
                 onChange={(e) => setCompose({ ...compose, body: e.target.value })} />
+              {composeAccount?.signature && composeAccount.signatureEnabled !== false && <div className="space-y-2 rounded-md bg-muted/50 p-3">
+                <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={compose.includeSignature !== false} onChange={event => setCompose({ ...compose, includeSignature: event.target.checked })} />Include account signature</label>
+                {compose.includeSignature !== false && <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground">{composeAccount.signature}</pre>}
+              </div>}
             </div>
           )}
           <DialogFooter>

@@ -1,0 +1,8128 @@
+[
+  {
+    "name": "missing action",
+    "input": null,
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": [],
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": true,
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": "text",
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": {},
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": {
+      "action": " "
+    },
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "missing action",
+    "input": {
+      "action": 3
+    },
+    "steps": [],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "no repository",
+    "input": {
+      "action": "list"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "no repository",
+    "input": {
+      "action": "other"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-9",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 9",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-10",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 10",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-11",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 11",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-9",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 9",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-10",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 10",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-11",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 11",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          }
+        ]
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "list preview",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": [
+          {
+            "id": "todo-0",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀long\n  message 😀",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-1",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 1",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-2",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 2",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-3",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 3",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-4",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 4",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-5",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 5",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-6",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 6",
+            "status": "open",
+            "priority": "high",
+            "dueDate": null
+          },
+          {
+            "id": "todo-7",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 7",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-8",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 8",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": null
+          },
+          {
+            "id": "todo-9",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 9",
+            "status": "open",
+            "priority": "high",
+            "dueDate": "2026-99-99"
+          },
+          {
+            "id": "todo-10",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 10",
+            "status": "done",
+            "priority": "normal",
+            "dueDate": null
+          },
+          {
+            "id": "todo-11",
+            "repoId": "repo",
+            "userId": "owner",
+            "message": "item 11",
+            "status": "in_progress",
+            "priority": "low",
+            "dueDate": "2026-99-99"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "explicit repo takes priority",
+    "input": {
+      "action": "list",
+      "repoId": "second"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          },
+          {
+            "id": "second",
+            "name": "other",
+            "localPath": "/elsewhere"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "explicit missing repo never falls back",
+    "input": {
+      "action": "list",
+      "repoId": "missing"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "first prefix wins",
+    "input": {
+      "action": "list"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "short",
+            "name": "project",
+            "localPath": "/p"
+          },
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "name fallback",
+    "input": {
+      "action": "list"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/elsewhere"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "value": []
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/outside/project-named"
+    },
+    "threads": false
+  },
+  {
+    "name": "unmatched project",
+    "input": {
+      "action": "list"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/elsewhere"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/outside"
+    },
+    "threads": false
+  },
+  {
+    "name": "add needs message",
+    "input": {
+      "action": "add",
+      "message": null
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add needs message",
+    "input": {
+      "action": "add",
+      "message": ""
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add needs message",
+    "input": {
+      "action": "add",
+      "message": " ﻿ "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add needs message",
+    "input": {
+      "action": "add",
+      "message": 3
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add needs message",
+    "input": {
+      "action": "add",
+      "message": []
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "bad",
+      "priority": "urgent",
+      "dueDate": "  ",
+      "tags": "no"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": null,
+      "tags": []
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": "٢٠٢٦-01-01",
+      "tags": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": " in_progress ",
+      "priority": " low ",
+      "tags": [
+        null,
+        3,
+        "",
+        "﻿ X "
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "bad",
+      "priority": "urgent",
+      "dueDate": "  ",
+      "tags": "no"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": null,
+      "tags": []
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": "٢٠٢٦-01-01",
+      "tags": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": " in_progress ",
+      "priority": " low ",
+      "tags": [
+        null,
+        3,
+        "",
+        "﻿ X "
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": "bad",
+      "priority": "urgent",
+      "dueDate": "  ",
+      "tags": "no"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": null,
+      "tags": []
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "dueDate": "٢٠٢٦-01-01",
+      "tags": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "add sanitizes optional fields",
+    "input": {
+      "action": "add",
+      "message": " ﻿ repair headers \n",
+      "status": " in_progress ",
+      "priority": " low ",
+      "tags": [
+        null,
+        3,
+        "",
+        "﻿ X "
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "thread provenance",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": null
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "thread provenance",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": "saved title"
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "thread provenance",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "update",
+      "todoId": null
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "update",
+      "todoId": ""
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "update",
+      "todoId": " "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "update",
+      "todoId": 3
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "update",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "update",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "foreign",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "update",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "other",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "remove",
+      "todoId": null
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "remove",
+      "todoId": ""
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "remove",
+      "todoId": " "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "id required",
+    "input": {
+      "action": "remove",
+      "todoId": 3
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "remove",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "remove",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "foreign",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "owner and repo guard",
+    "input": {
+      "action": "remove",
+      "todoId": "todo"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "other",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "value": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "value": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "value": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "nullable owner still requires stored owner field",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "unsupported action",
+    "input": {
+      "action": "unknown"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "unsupported action",
+    "input": {
+      "action": " LIST "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "unsupported action",
+    "input": {
+      "action": "constructor"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure listByRepo",
+    "input": {
+      "action": " list "
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "listByRepo",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": null
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": null
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": null
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": "saved title"
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": "saved title"
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": "saved title"
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure create",
+    "input": {
+      "action": "add",
+      "message": "save task"
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "threads",
+        "method": "getById",
+        "value": {
+          "id": "thread",
+          "title": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "create",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": true
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure update",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "update",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "update",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": "owner",
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": "owner",
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "userId": null,
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure delete",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "value": {
+          "id": "todo",
+          "repoId": "repo",
+          "userId": null,
+          "message": "repair headers",
+          "status": "open",
+          "priority": "normal",
+          "dueDate": null
+        }
+      },
+      {
+        "service": "todos",
+        "method": "delete",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure list",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "error": "fixture dependency failure"
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": null
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  },
+  {
+    "name": "dependency failure getById",
+    "input": {
+      "action": "remove",
+      "todoId": " todo ",
+      "message": " changed ",
+      "status": "done",
+      "priority": "high",
+      "dueDate": "2026-02-31",
+      "tags": [
+        " A ",
+        "a",
+        "B",
+        "İ",
+        "ΣΣ",
+        "é",
+        "é"
+      ]
+    },
+    "steps": [
+      {
+        "service": "repositories",
+        "method": "list",
+        "value": [
+          {
+            "id": "repo",
+            "name": "project",
+            "localPath": "/project"
+          }
+        ]
+      },
+      {
+        "service": "todos",
+        "method": "getById",
+        "thrown": {
+          "untrusted": "fixture"
+        }
+      }
+    ],
+    "context": {
+      "sessionId": "chat",
+      "projectRoot": "/project/nested"
+    },
+    "threads": false
+  }
+]

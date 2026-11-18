@@ -52,4 +52,11 @@ describe("getTerminalOutputSlice", () => {
     expect(slice.startsWith("line 50\r\n")).toBe(true);
     expect(slice).not.toContain("line 49\r\n");
   });
+
+  it("returns nothing for an empty range and tolerates a non-finite offset", () => {
+    // A toolcard reconnecting before any output exists asks for a range that
+    // starts at the cursor; there is nothing to reconnect and no prompt to keep.
+    expect(getTerminalOutputSlice([], 0, Number.NaN)).toBe("");
+    expect(getTerminalOutputSlice([], 0, 3)).toBe("");
+  });
 });

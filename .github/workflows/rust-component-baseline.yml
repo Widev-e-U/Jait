@@ -1,0 +1,60 @@
+name: Rust component baseline
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  component-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: bun install --frozen-lockfile
+      - name: Test coverage gate failure paths and environment isolation
+        run: node --test tests/contract/tooling/component-coverage-gate.test.mjs
+      - name: Prevent lowering or removing the versioned baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          mkdir -p .jait/artifacts/rust-continuation/component-baseline
+          baseline=tests/contract/tooling/component-coverage-baseline.v2.json
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:$baseline" 2>/dev/null; then
+            git show "$BASE_SHA:$baseline" > .jait/artifacts/rust-continuation/component-baseline/base-branch.json
+            node tests/contract/tooling/component-coverage-gate.mjs compare .jait/artifacts/rust-continuation/component-baseline/base-branch.json "$baseline"
+          fi
+      - name: Build gateway runtime workspace dependencies
+        run: |
+          bun run --filter @jait/shared build
+          bun run --filter @jait/screen-share build
+      - name: Typecheck the three baseline components
+        run: bun run --filter @jait/gateway --filter @jait/shared --filter @jait/api-client typecheck
+      - name: Run all original component tests with Istanbul coverage
+        id: measure
+        run: node tests/contract/tooling/component-coverage-run.mjs > .jait/artifacts/rust-continuation/component-baseline/ci-run.log 2>&1
+      - name: Compare measured source and branch coverage
+        if: ${{ !cancelled() && steps.measure.outcome != 'skipped' }}
+        run: node tests/contract/tooling/component-coverage-gate.mjs check
+      - name: Upload measured reports even when original tests fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-component-baseline
+          path: |
+            .jait/artifacts/rust-continuation/component-baseline/measurement.json
+            .jait/artifacts/rust-continuation/component-baseline/tests.json
+            .jait/artifacts/rust-continuation/component-baseline/coverage/
+            .jait/artifacts/rust-continuation/component-baseline/comparison.json
+            .jait/artifacts/rust-continuation/component-baseline/ci-run.log
+          retention-days: 7

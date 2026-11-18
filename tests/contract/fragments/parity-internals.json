@@ -1,0 +1,149 @@
+{
+  "lane": "typescript-internal-reference",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:12:3",
+      "status": "verified",
+      "parity_review": "Checks both exact callback and webhook paths are public. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-public-github-callbacks",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:19:3",
+      "status": "verified",
+      "parity_review": "Checks all four authenticated GitHub App route forms are protected. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-protected-github-routes",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:26:3",
+      "status": "verified",
+      "parity_review": "Checks all three prefix/suffix lookalikes remain protected. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-exact-public-paths",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:32:3",
+      "status": "verified",
+      "parity_review": "Checks all six existing public auth/OAuth routes. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-legacy-public-paths",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:47:3",
+      "status": "verified",
+      "parity_review": "Rust supplies user and secret; signs and verifies using production exports, then requires exact identity. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-session-roundtrip",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:52:3",
+      "status": "verified",
+      "parity_review": "Rust supplies unequal signing and verification secrets and requires null. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-wrong-secret",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:57:3",
+      "status": "verified",
+      "parity_review": "Independently signs a JWT with purpose preview and valid signature; production verifier must return null. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-purpose-token-rejected",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:71:3",
+      "status": "verified",
+      "parity_review": "Checks all five original header inputs and exact parsed/null results. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-bearer-shapes",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/http-auth.test.ts:79:3",
+      "status": "verified",
+      "parity_review": "Requires exported AUTH_COOKIE_NAME equal jait_token. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.auth-cookie-name",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/irreversible-commands.test.ts:7:3",
+      "status": "verified",
+      "parity_review": "Checks all five original observed commands have irreversible true and nonempty string reason. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.commands-observed-destructive",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/irreversible-commands.test.ts:18:3",
+      "status": "verified",
+      "parity_review": "Checks all four original destructive commands have irreversible true. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.commands-common-destructive",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/irreversible-commands.test.ts:27:3",
+      "status": "verified",
+      "parity_review": "Checks all eight original ordinary commands have irreversible false. Actual TypeScript exports execute in the test-only Bun driver; Rust owns inputs and assertions. This is reference-implementation reconstruction, not a Rust gateway runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.commands-ordinary-allowed",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/fdf58d54-7d06-41de-8ecd-ca3306778880/report.json"
+        }
+      ]
+    }
+  ]
+}

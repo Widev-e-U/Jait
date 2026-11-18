@@ -1,0 +1,688 @@
+[
+  {
+    "id": "internal.tailhelpers.plain-and-json-rounding",
+    "calls": [
+      {
+        "op": "tailhelpers.text",
+        "value": ""
+      },
+      {
+        "op": "tailhelpers.text",
+        "value": "abcd"
+      },
+      {
+        "op": "tailhelpers.json",
+        "value": "abcd"
+      },
+      {
+        "op": "tailhelpers.json",
+        "value": {
+          "a": "abcd"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": 0
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": 2
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": 1
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.unsupported-json",
+    "calls": [
+      {
+        "op": "tailhelpers.json",
+        "value": {
+          "$fixture": "undefined"
+        }
+      },
+      {
+        "op": "tailhelpers.json",
+        "value": {
+          "$fixture": "function"
+        }
+      },
+      {
+        "op": "tailhelpers.json",
+        "value": {
+          "$fixture": "circular"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": 0
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": 0
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.message-tool-calls",
+    "calls": [
+      {
+        "op": "tailhelpers.message",
+        "message": {
+          "role": "user",
+          "content": "abcd"
+        }
+      },
+      {
+        "op": "tailhelpers.message",
+        "message": {
+          "role": "assistant",
+          "content": "abcd",
+          "tool_calls": [
+            {
+              "name": "read_file",
+              "args": {
+                "path": "README.md"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "op": "tailhelpers.message",
+        "message": {
+          "role": "assistant",
+          "content": "abcd"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": 6
+      },
+      {
+        "path": "/1",
+        "kind": "gt-path",
+        "other": "/2",
+        "factor": 1
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.hidden-thinking",
+    "calls": [
+      {
+        "op": "tailhelpers.message",
+        "message": {
+          "role": "assistant",
+          "content": "abcd"
+        }
+      },
+      {
+        "op": "tailhelpers.message",
+        "message": {
+          "role": "assistant",
+          "content": "abcd",
+          "thinking": "Let me analyze this step by step. The user wants me to read the file."
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/1",
+        "kind": "gt-path",
+        "other": "/0",
+        "factor": 1
+      },
+      {
+        "path": "/1",
+        "kind": "difference-ge",
+        "value": 15,
+        "other": "/0"
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.large-thinking-usage",
+    "calls": [
+      {
+        "op": "tailhelpers.usage",
+        "messages": [
+          {
+            "role": "system",
+            "content": "system prompt"
+          },
+          {
+            "role": "user",
+            "content": "do the task"
+          },
+          {
+            "role": "assistant",
+            "content": "working on it",
+            "thinking": {
+              "$fixture": "repeat",
+              "text": "x",
+              "count": 100000
+            }
+          }
+        ],
+        "schemas": [],
+        "limit": 200000
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/history",
+        "kind": "gt",
+        "value": 27000
+      },
+      {
+        "path": "/0/ratio",
+        "kind": "gt",
+        "value": 0.13
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.history-priming",
+    "calls": [
+      {
+        "op": "tailhelpers.history",
+        "messages": [
+          {
+            "role": "system",
+            "content": "abcd"
+          },
+          {
+            "role": "user",
+            "content": "abcd"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": 15
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.usage-categories",
+    "calls": [
+      {
+        "op": "tailhelpers.usage",
+        "messages": [
+          {
+            "role": "system",
+            "content": "abcd"
+          },
+          {
+            "role": "user",
+            "content": "abcd"
+          },
+          {
+            "role": "tool",
+            "content": ""
+          }
+        ],
+        "schemas": [
+          {
+            "name": "read"
+          }
+        ],
+        "limit": 16
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/system",
+        "kind": "eq",
+        "value": 6
+      },
+      {
+        "path": "/0/history",
+        "kind": "eq",
+        "value": 6
+      },
+      {
+        "path": "/0/toolResults",
+        "kind": "eq",
+        "value": 4
+      },
+      {
+        "path": "/0/tools",
+        "kind": "eq",
+        "value": 31
+      },
+      {
+        "path": "/0/total",
+        "kind": "eq",
+        "value": 47
+      },
+      {
+        "path": "/0/limit",
+        "kind": "eq",
+        "value": 16
+      },
+      {
+        "path": "/0/ratio",
+        "kind": "eq",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.empty-schemas",
+    "calls": [
+      {
+        "op": "tailhelpers.schemas",
+        "schemas": []
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.usage-summed-categories",
+    "calls": [
+      {
+        "op": "tailhelpers.usage",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Follow the project rules."
+          },
+          {
+            "role": "user",
+            "content": "Inspect the code."
+          },
+          {
+            "role": "assistant",
+            "content": "I will read the relevant files."
+          },
+          {
+            "role": "tool",
+            "content": "packages/gateway/src/tools/token-estimator.ts"
+          }
+        ],
+        "schemas": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "description": "Read a file",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "limit": 10
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/system",
+        "kind": "gt",
+        "value": 0
+      },
+      {
+        "path": "/0/history",
+        "kind": "gt-path",
+        "other": "/0/system",
+        "factor": 1
+      },
+      {
+        "path": "/0/toolResults",
+        "kind": "gt",
+        "value": 0
+      },
+      {
+        "path": "/0/tools",
+        "kind": "gt",
+        "value": 0
+      },
+      {
+        "path": "/0/total",
+        "kind": "sum-paths-eq",
+        "paths": [
+          "/0/system",
+          "/0/history",
+          "/0/toolResults",
+          "/0/tools"
+        ]
+      },
+      {
+        "path": "/0/limit",
+        "kind": "eq",
+        "value": 10
+      },
+      {
+        "path": "/0/ratio",
+        "kind": "eq",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.coerce-nested-array",
+    "calls": [
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "todoList": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not-started",
+                      "in-progress",
+                      "completed"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "status"
+                ]
+              }
+            }
+          },
+          "required": [
+            "todoList"
+          ]
+        },
+        "input": {
+          "todoList": [
+            {
+              "id": "1",
+              "title": "Ship tests",
+              "status": "in-progress"
+            }
+          ]
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/result",
+        "kind": "eq",
+        "value": {
+          "valid": true,
+          "errors": []
+        }
+      },
+      {
+        "path": "/0/input",
+        "kind": "eq",
+        "value": {
+          "todoList": [
+            {
+              "id": 1,
+              "title": "Ship tests",
+              "status": "in-progress"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.nested-required-path",
+    "calls": [
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "threads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "runtimeMode": {
+                    "type": "string",
+                    "enum": [
+                      "full-access",
+                      "supervised"
+                    ]
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "input": {
+          "threads": [
+            {
+              "runtimeMode": "full-access"
+            }
+          ]
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/result/valid",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/result/errors",
+        "kind": "array-contains",
+        "value": "Missing required property: threads[0].title"
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.invalid-array-item",
+    "calls": [
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "urls": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "input": {
+          "urls": [
+            "https://example.com",
+            42
+          ]
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/result/valid",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/result/errors",
+        "kind": "array-contains",
+        "value": "Property 'urls[1]' expected type 'string', got 'number'"
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.parse-object-then-coerce",
+    "calls": [
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled"
+              ]
+            }
+          }
+        },
+        "input": {
+          "payload": "{\"enabled\":\"true\"}"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/result",
+        "kind": "eq",
+        "value": {
+          "valid": true,
+          "errors": []
+        }
+      },
+      {
+        "path": "/0/input",
+        "kind": "eq",
+        "value": {
+          "payload": {
+            "enabled": true
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.tailhelpers.reject-nonfinite",
+    "calls": [
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "timeoutMs": {
+              "type": "number"
+            },
+            "retryCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "timeoutMs",
+            "retryCount"
+          ]
+        },
+        "input": {
+          "timeoutMs": {
+            "$fixture": "nan"
+          },
+          "retryCount": 1
+        }
+      },
+      {
+        "op": "tailhelpers.validate",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "timeoutMs": {
+              "type": "number"
+            },
+            "retryCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "timeoutMs",
+            "retryCount"
+          ]
+        },
+        "input": {
+          "timeoutMs": 1000,
+          "retryCount": {
+            "$fixture": "infinity"
+          }
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/result",
+        "kind": "eq",
+        "value": {
+          "valid": false,
+          "errors": [
+            "Property 'timeoutMs' expected type 'number', got 'number'"
+          ]
+        }
+      },
+      {
+        "path": "/1/result",
+        "kind": "eq",
+        "value": {
+          "valid": false,
+          "errors": [
+            "Property 'retryCount' expected type 'integer', got 'number'"
+          ]
+        }
+      }
+    ]
+  }
+]

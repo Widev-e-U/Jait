@@ -43,6 +43,10 @@ import type {
   UserSecretRecord,
 } from '@jait/shared'
 
+export interface GithubIntakeRule { repository: string; sender: string; event: string; action: string }
+export interface GithubIntakeDecision { id: string; event: string; action: string; repository: string; sender: string; result: string; reason: string; createdAt: string }
+export interface GithubIntakeState { mode: 'observe'; rules: GithubIntakeRule[]; decisions: GithubIntakeDecision[] }
+
 const API_URL = getApiUrl()
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -186,6 +190,12 @@ export interface AgentGithubAppConnection {
 export interface AgentGithubAppState {
   connection: AgentGithubAppConnection | null
   webhookSecretAvailable: boolean
+  installationFlow?: 'stateful'
+}
+
+export interface AgentGithubAppInstallationStart {
+  state: string
+  installUrl: string
 }
 
 export interface AgentGithubAppSetupStart {
@@ -408,12 +418,12 @@ export class AgentsApi {
   }
 
   private _modelsInflight = new Map<string, Promise<ProviderModelsResponse>>()
-  private _modelsCachedAt = new Map<string, number>()
+  private _modelsCache = new Map<string, { result: ProviderModelsResponse; cachedAt: number }>()
 
   /** Drop the in-memory model cache so the next fetch pulls a fresh catalogue. */
   resetProviderModels(): void {
     this._modelsInflight.clear()
-    this._modelsCachedAt.clear()
+    this._modelsCache.clear()
   }
 
   async refreshProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
@@ -429,12 +439,15 @@ export class AgentsApi {
   async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
     const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
     const cacheKey = `${providerId}:${effectiveNodeId}`
-    const now = Date.now()
-    const cachedAt = this._modelsCachedAt.get(cacheKey) ?? 0
+    // Pending discovery can take longer than the cache TTL (remote CLI probes
+    // allow 90 seconds). Always share it until it settles.
     const existing = this._modelsInflight.get(cacheKey)
-    if (existing && now - cachedAt < 15_000) return existing
+    if (existing) return existing
+    const cached = this._modelsCache.get(cacheKey)
+    // Catalogues are stable across chat switches; explicit refresh/login flows
+    // can invalidate them through resetProviderModels().
+    if (cached && Date.now() - cached.cachedAt < 5 * 60_000) return cached.result
 
-    this._modelsCachedAt.set(cacheKey, now)
     const promise = (async () => {
       const nodeQuery = effectiveNodeId === 'gateway' ? '' : `?nodeId=${encodeURIComponent(effectiveNodeId)}`
       const res = await fetch(`${API_URL}/api/providers/${providerId}/models${nodeQuery}`, {
@@ -447,9 +460,14 @@ export class AgentsApi {
       return res.json() as Promise<ProviderModelsResponse>
     })()
     this._modelsInflight.set(cacheKey, promise)
-    promise.catch(() => {
+    void promise.then((result) => {
+      // Reset/refresh may have started a replacement while this was pending.
+      if (this._modelsInflight.get(cacheKey) !== promise) return
       this._modelsInflight.delete(cacheKey)
-      this._modelsCachedAt.delete(cacheKey)
+      this._modelsCache.set(cacheKey, { result, cachedAt: Date.now() })
+    }, () => {
+      if (this._modelsInflight.get(cacheKey) !== promise) return
+      this._modelsInflight.delete(cacheKey)
     })
     return promise
   }
@@ -496,10 +514,37 @@ export class AgentsApi {
     return res.json() as Promise<AgentGithubAppOverview>
   }
 
+  async getGithubIntake(agentId: string): Promise<GithubIntakeState> {
+    const res = await fetch(this.githubAppPath(agentId, '/intake'), { headers: this.getHeaders() })
+    if (!res.ok) throw await this.githubAppError(res, 'Could not load GitHub event intake')
+    return res.json() as Promise<GithubIntakeState>
+  }
+
+  async saveGithubIntake(agentId: string, rules: GithubIntakeRule[]): Promise<void> {
+    const res = await fetch(this.githubAppPath(agentId, '/intake'), { method: 'PUT', headers: this.getHeaders(true), body: JSON.stringify({ rules }) })
+    if (!res.ok) throw await this.githubAppError(res, 'Could not save GitHub event rules')
+  }
+
   async getAgentGithubApp(agentId: string): Promise<AgentGithubAppState> {
     const res = await fetch(this.githubAppPath(agentId), { headers: this.getHeaders() })
     if (!res.ok) throw await this.githubAppError(res, `Failed to read the GitHub App connection: ${res.statusText}`)
-    return res.json() as Promise<AgentGithubAppState>
+    const state = await res.json() as AgentGithubAppState
+    // Only an explicit server capability selects the native issuance flow.
+    return { connection: state.connection, webhookSecretAvailable: state.webhookSecretAvailable,
+      ...(res.headers.get('x-jait-github-installation-flow') === 'stateful' ? { installationFlow: 'stateful' as const } : {}) }
+  }
+
+  async startAgentGithubAppInstallation(agentId: string): Promise<AgentGithubAppInstallationStart> {
+    const res = await fetch(this.githubAppPath(agentId, '/installation-url'), { method: 'POST', headers: this.getHeaders() })
+    if (!res.ok) throw await this.githubAppError(res, `Failed to start the GitHub App installation: ${res.statusText}`)
+    const result = await res.json() as AgentGithubAppInstallationStart
+    const url = new URL(result.installUrl)
+    if (typeof result.state !== 'string' || !result.state || url.origin !== 'https://github.com'
+      || url.username || url.password || url.hash || !/^\/apps\/[a-zA-Z0-9-]+\/installations\/new$/.test(url.pathname)
+      || [...url.searchParams.keys()].length !== 1 || url.searchParams.get('state') !== result.state) {
+      throw new Error('Invalid GitHub installation URL')
+    }
+    return result
   }
 
   /** Register a brand-new App through GitHub's manifest flow for this agent. */
@@ -643,7 +688,10 @@ export class AgentsApi {
       headers: this.getHeaders(true),
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`Failed to send turn: ${res.statusText}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>
+      throw new Error(typeof body.error === 'string' ? body.error : `Failed to send turn: ${res.statusText}`)
+    }
   }
 
   async steerThread(id: string, message: string): Promise<void> {
@@ -682,7 +730,11 @@ export class AgentsApi {
       headers: this.getHeaders(true),
       body: JSON.stringify({ requestId, approved }),
     })
-    if (!res.ok) throw new Error(`Failed to approve: ${res.statusText}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null
+      const detail = typeof body?.error === 'string' ? body.error : `${res.status} ${res.statusText}`.trim()
+      throw new Error(`Failed to submit approval response: ${detail}`)
+    }
   }
 
   async createPullRequest(id: string, params: CreateThreadPrRequest): Promise<CreateThreadPrResponse> {

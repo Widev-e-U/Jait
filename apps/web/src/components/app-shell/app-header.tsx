@@ -1,30 +1,18 @@
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   BarChart3,
   Network,
-  Brain,
-  Calendar,
-  CalendarDays,
   Cast,
-  GitPullRequest,
   Menu,
-  ListChecks,
   LogOut,
-  Mail,
-  MessageSquare,
-  MessagesSquare,
-  UsersRound,
   Monitor,
   Moon,
   Settings,
   Sun,
-  Wifi,
 } from 'lucide-react'
 
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
-import { ViewModeSelector } from '@/components/chat/view-mode-selector'
-import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
 import { JaitIcon } from '@/components/icons/model-icons'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
@@ -39,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
+import { NotificationBell } from '@/components/ui/notification-center'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
@@ -46,6 +35,7 @@ import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/
 import type { ThemeMode } from '@/hooks/useAuth'
 
 interface AppHeaderProps {
+  agentControl?: React.ReactNode
   activeManagerThreads: any
   appPlatform: any
   automation: any
@@ -69,7 +59,6 @@ interface AppHeaderProps {
   setShowLoginDialog: any
   setShowProject: any
   setShowProjectEditor: any
-  setViewMode: any
   setVoiceOverlayOpen: any
   showScreenShare: any
   themeMode: any
@@ -79,7 +68,6 @@ interface AppHeaderProps {
   releases: any
   user: any
   userInitial: any
-  viewMode: any
   voiceAssistant: any
   voiceControlProps: any
   voiceOverlayOpen: any
@@ -88,11 +76,10 @@ interface AppHeaderProps {
 
 export function AppHeader(props: AppHeaderProps) {
   const {
+    agentControl,
     activeManagerThreads,
     appPlatform,
     automation,
-    closeScreenSharePanel,
-    currentView,
     desktopPlatform,
     desktopRuntime,
     handleApplyUpdate,
@@ -104,16 +91,13 @@ export function AppHeader(props: AppHeaderProps) {
     isMaximized,
     isMobile,
     onOpenMobileNav,
-    openScreenSharePanel,
     remainingPrompts,
     screenShare,
     setCurrentView,
     setShowLoginDialog,
     setShowProject,
     setShowProjectEditor,
-    setViewMode,
     setVoiceOverlayOpen,
-    showScreenShare,
     themeMode,
     updateApplying,
     updateAwaitingRestart,
@@ -121,76 +105,17 @@ export function AppHeader(props: AppHeaderProps) {
     releases,
     user,
     userInitial,
-    viewMode,
     voiceAssistant,
     voiceControlProps,
     voiceOverlayOpen,
     activeProjectTitle,
   } = props
 
-  // ── Dynamic nav: measure how much horizontal room is available for the
-  // inline nav buttons so items can overflow into the ⋯ menu progressively. ──
-  const navRef = useRef<HTMLElement>(null)
-  const rightRef = useRef<HTMLDivElement>(null)
-  const selectorRef = useRef<HTMLDivElement>(null)
-  const [navAvailableWidth, setNavAvailableWidth] = useState(0)
-
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
   const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
 
   const sidebarOwnsNavigation = !isMobile
-  const hasCentered = !voiceOverlayOpen && !sidebarOwnsNavigation
-
-  useEffect(() => {
-    const update = () => {
-      const nav = navRef.current
-      const right = rightRef.current
-      if (!nav || !right) return
-      const navLeft = nav.getBoundingClientRect().left
-      let boundary = right.getBoundingClientRect().left
-      // Keep the nav from sliding underneath the centered view-mode selector.
-      if (hasCentered && selectorRef.current) {
-        const sel = selectorRef.current.getBoundingClientRect()
-        boundary = Math.min(boundary, sel.left - 16)
-      }
-      setNavAvailableWidth(Math.max(0, boundary - navLeft))
-    }
-    update()
-    const ro = new ResizeObserver(update)
-    if (navRef.current) ro.observe(navRef.current)
-    if (rightRef.current) ro.observe(rightRef.current)
-    if (selectorRef.current) ro.observe(selectorRef.current)
-    window.addEventListener('resize', update)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', update)
-    }
-  }, [hasCentered])
-
-  // Nav items in display order (leftmost first). Items overflow right-to-left.
-  const navItems: ProgressiveNavItem[] = viewMode === 'manager' ? [
-    { id: 'agents', label: 'Agents', icon: UsersRound, active: currentView === 'agents', onSelect: () => setCurrentView('agents') },
-    { id: 'threads', label: 'Threads', icon: MessagesSquare, active: currentView === 'threads', onSelect: () => setCurrentView('threads') },
-  ] : [
-    { id: 'chat', label: 'Chat', icon: MessageSquare, active: currentView === 'chat', onSelect: () => setCurrentView('chat') },
-    { id: 'pulls', label: 'Pull Requests', shortLabel: 'PRs', icon: GitPullRequest, active: currentView === 'pulls', onSelect: () => setCurrentView('pulls') },
-    { id: 'todo', label: 'Todo', icon: ListChecks, active: currentView === 'todo', onSelect: () => setCurrentView('todo') },
-    { id: 'email', label: 'Email', icon: Mail, active: currentView === 'email', onSelect: () => setCurrentView('email') },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays, active: currentView === 'calendar', onSelect: () => setCurrentView('calendar') },
-    { id: 'memory', label: 'Memory', icon: Brain, active: currentView === 'memory', onSelect: () => setCurrentView('memory') },
-    { id: 'jobs', label: 'Jobs', icon: Calendar, active: currentView === 'jobs', onSelect: () => setCurrentView('jobs') },
-    { id: 'network', label: 'Network', icon: Wifi, active: currentView === 'network', onSelect: () => setCurrentView('network') },
-    ...(viewMode === 'developer' && !isMobile
-      ? [{
-          id: 'screenShare',
-          label: 'Screen Share',
-          icon: Cast,
-          active: showScreenShare,
-          onSelect: () => (showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()),
-        }]
-      : []),
-  ]
 
   // Linux uses native window-manager decorations. Besides matching KDE/GNOME
   // conventions, this avoids WebKitGTK/X11 swallowing clicks on controls that
@@ -201,10 +126,10 @@ export function AppHeader(props: AppHeaderProps) {
 
   return (
             <>
-            <header
+            <header data-app-header
               className={
                 isMobile
-                  ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
+                  ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 px-1 h-10 rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border'
                   : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isDesktop ? 'h-10 !pl-[0.8rem]' : 'h-10'}`
               }
               data-tauri-drag-region={hasCustomTitleBar || undefined}
@@ -218,58 +143,33 @@ export function AppHeader(props: AppHeaderProps) {
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
-          <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            <JaitIcon size={20} className="shrink-0" />
-            <VoiceMicButtonMobile {...voiceControlProps} />
-            {isMobile && activeManagerThreads.length > 0 && (
-              <ManagerActiveThreadsMenu
-                threads={activeManagerThreads}
-                getRepositoryForThread={automation.getRepositoryForThread}
-                threadPrStates={automation.threadPrStates}
-                ghAvailable={automation.ghAvailable}
-                onOpenThread={(threadId) => {
-                  setCurrentView('threads')
-                  automation.setSelectedThreadId(threadId)
-                  setShowProject(false)
-                  setShowProjectEditor(false)
-                }}
-                onStopThread={(threadId) => automation.handleStop(threadId)}
-              />
-            )}
+          <div className={`flex items-center shrink-0 ${isMobile ? 'gap-0 h-10' : 'gap-1'}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <span className={isMobile
+              ? `ml-2 h-10 w-5 shrink-0 items-center justify-center ${agentControl ? 'hidden min-[470px]:flex' : 'flex'}`
+              : 'inline-flex shrink-0'}>
+              <JaitIcon size={20} />
+            </span>
+            <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} />
+            {isMobile && agentControl}
           </div>
 
-          {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          {!isMobile && !sidebarOwnsNavigation && (
-            <ProgressiveNav
-              items={navItems}
-              availableWidth={navAvailableWidth}
-              navRef={navRef}
-              tauriDragRegion={hasCustomTitleBar}
-              className="flex-1"
-            />
-          )}
-
-
-          {/* Center: ViewModeSelector OR voice controls when voice active */}
-          {voiceOverlayOpen ? (
+          {/* Center: voice controls when voice active */}
+          {voiceOverlayOpen && (
             <VoiceActiveControls
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               voiceAssistant={voiceAssistant}
+              startVoiceSession={voiceControlProps.startVoiceSession}
               isMobile={isMobile}
               isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}
             />
-          ) : !sidebarOwnsNavigation ? (
-            <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-              <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
-            </div>
-          ) : null}
+          )}
 
-          {/* Spacer */}
+          {/* Spacer — on mobile this keeps the right cluster pinned to the trailing edge. */}
           <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
 
           {/* Right: Context + Model + Account */}
-          <div ref={rightRef} className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div className={`flex items-center gap-2 sm:gap-1.5 shrink-0 ${isMobile ? 'py-0.5 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
 
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
@@ -301,19 +201,23 @@ export function AppHeader(props: AppHeaderProps) {
 
             </div>
 
+            {!isMobile && agentControl}
             <UpdateButton appPlatform={appPlatform} updateInfo={updateInfo} releases={releases} updateApplying={updateApplying} updateAwaitingRestart={updateAwaitingRestart} onApplyUpdate={handleApplyUpdate} />
 
             {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0 shrink-0">
+                {isAuthenticated && <NotificationBell />}
                 {isAuthLoading ? (
                   <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />
                 ) : isAuthenticated ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button aria-label="Account menu" className="inline-flex items-center justify-center rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <button aria-label="Account menu" className="inline-flex h-10 w-8 !min-w-8 shrink-0 items-center justify-center rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-sm font-medium">{userInitial}</AvatarFallback>
+                          <AvatarFallback className="text-sm font-medium leading-none tracking-normal">
+                            {userInitial}
+                          </AvatarFallback>
                         </Avatar>
                       </button>
                     </DropdownMenuTrigger>
@@ -378,7 +282,7 @@ export function AppHeader(props: AppHeaderProps) {
                     Sign in
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
+                <Button variant="ghost" size="icon" className="h-10 w-8 !min-w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
                   <Menu className="h-4 w-4" />
                 </Button>
               </div>

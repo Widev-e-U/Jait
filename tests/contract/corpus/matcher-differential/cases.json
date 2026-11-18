@@ -1,0 +1,1403 @@
+[
+  {
+    "id": "property-bracket-index",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "items": [
+              1
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toHaveProperty",
+        "expected": "items[0]",
+        "propertyValue": 1
+      }
+    }
+  },
+  {
+    "id": "property-missing-index",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "items": [
+              1
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toHaveProperty",
+        "expected": "items[1]"
+      }
+    }
+  },
+  {
+    "id": "property-wrong-value",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "items": [
+              1
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toHaveProperty",
+        "expected": "items[0]",
+        "propertyValue": 2
+      }
+    }
+  },
+  {
+    "id": "set-unordered-equality",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              2,
+              1
+            ]
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              1,
+              2
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "set-different-members",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              1,
+              2
+            ]
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              1,
+              3
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "map-unordered-equality",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Map",
+          "value": {
+            "__jait_type": "map",
+            "entries": [
+              [
+                "b",
+                2
+              ],
+              [
+                "a",
+                1
+              ]
+            ]
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Map",
+          "value": {
+            "__jait_type": "map",
+            "entries": [
+              [
+                "a",
+                1
+              ],
+              [
+                "b",
+                2
+              ]
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "array-order-is-significant",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            2,
+            1
+          ]
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            1,
+            2
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "nested-date-is-not-iso-string-loose",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "x": {
+              "__jait_type": "date",
+              "value": "1970-01-01T00:00:00.000Z"
+            }
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "x": "1970-01-01T00:00:00.000Z"
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "nested-date-is-not-iso-string-strict",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "x": {
+              "__jait_type": "date",
+              "value": "1970-01-01T00:00:00.000Z"
+            }
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "x": "1970-01-01T00:00:00.000Z"
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toStrictEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "undefined-object-key-loose",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC",
+            "optional": {
+              "__jait_type": "undefined"
+            }
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC"
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "undefined-object-key-strict",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC",
+            "optional": {
+              "__jait_type": "undefined"
+            }
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC"
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toStrictEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "null-is-not-undefined-key",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC",
+            "optional": null
+          }
+        },
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "code": "ABC"
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "set-contains-member",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              "a",
+              "b"
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toContain",
+        "expected": "a"
+      }
+    }
+  },
+  {
+    "id": "set-contains-missing-member",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Set",
+          "value": {
+            "__jait_type": "set",
+            "values": [
+              "a",
+              "b"
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toContain",
+        "expected": "c"
+      }
+    }
+  },
+  {
+    "id": "identity-same-argument",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {}
+        },
+        "ref": 7,
+        "otherRef": 7
+      },
+      "rule": {
+        "matcher": "toBe",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "identity-distinct-equal-objects",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {}
+        },
+        "ref": 7,
+        "otherRef": 8
+      },
+      "rule": {
+        "matcher": "toBe",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "contains-identity-differs-from-structural",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            {
+              "id": 1
+            }
+          ]
+        },
+        "itemRefs": [
+          1
+        ],
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "id": 1
+          }
+        },
+        "otherRef": 2
+      },
+      "rule": {
+        "matcher": "toContain",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "contains-identity-accepts-same-member",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            {
+              "id": 1
+            }
+          ]
+        },
+        "itemRefs": [
+          1
+        ],
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "id": 1
+          }
+        },
+        "otherRef": 1
+      },
+      "rule": {
+        "matcher": "toContain",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "contains-equal-uses-structure",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            {
+              "id": 1
+            }
+          ]
+        },
+        "itemRefs": [
+          1
+        ],
+        "other": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "id": 1
+          }
+        },
+        "otherRef": 2
+      },
+      "rule": {
+        "matcher": "toContainEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "bigint-ordering-across-magnitudes",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "bigint",
+          "value": "99999999999999999999999999999999999999999"
+        },
+        "other": {
+          "type": "bigint",
+          "value": "100000000000000000000000000000000000000000"
+        }
+      },
+      "rule": {
+        "matcher": "toBeLessThan",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "bigint-ordering-negative",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "bigint",
+          "value": "-20"
+        },
+        "other": {
+          "type": "bigint",
+          "value": "-3"
+        }
+      },
+      "rule": {
+        "matcher": "toBeLessThan",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "lone-surrogate-length",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": {
+            "__jait_type": "utf16",
+            "units": [
+              55357,
+              120,
+              121
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toHaveLength",
+        "expected": 3
+      }
+    }
+  },
+  {
+    "id": "lone-surrogate-contains",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": {
+            "__jait_type": "utf16",
+            "units": [
+              55357,
+              120,
+              121
+            ]
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toContain",
+        "expected": "xy"
+      }
+    }
+  },
+  {
+    "id": "function-identity-equal-matcher",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "function",
+          "name": "f"
+        },
+        "other": {
+          "type": "function",
+          "name": "f"
+        },
+        "ref": 1,
+        "otherRef": 1
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "function-identity-toBe-distinct",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "function",
+          "name": "f"
+        },
+        "other": {
+          "type": "function",
+          "name": "f"
+        },
+        "ref": 1,
+        "otherRef": 2
+      },
+      "rule": {
+        "matcher": "toBe",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "exception-thrown-satisfies-toThrow",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "value": []
+        },
+        "threw": true,
+        "error": "boom"
+      },
+      "rule": {
+        "matcher": "toThrow"
+      }
+    }
+  },
+  {
+    "id": "exception-not-thrown-fails-toThrow",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "value": []
+        },
+        "threw": false
+      },
+      "rule": {
+        "matcher": "toThrow"
+      }
+    }
+  },
+  {
+    "id": "exception-message-substring",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "value": []
+        },
+        "threw": true,
+        "error": "boom happened"
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "expected": "happened"
+      }
+    }
+  },
+  {
+    "id": "class-instance-strict-equality-same-prototype",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "A",
+          "value": {}
+        },
+        "other": {
+          "type": "object",
+          "prototype": "A",
+          "value": {}
+        }
+      },
+      "rule": {
+        "matcher": "toStrictEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "class-instance-strict-equality-different-prototype",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "A",
+          "value": {}
+        },
+        "other": {
+          "type": "object",
+          "prototype": "B",
+          "value": {}
+        }
+      },
+      "rule": {
+        "matcher": "toStrictEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "nan-equals-nan",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "nonfinite",
+          "value": "NaN"
+        },
+        "other": {
+          "type": "nonfinite",
+          "value": "NaN"
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "nan-not-equal-to-number",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "nonfinite",
+          "value": "NaN"
+        },
+        "other": {
+          "type": "number",
+          "value": 0
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "dynamic": true
+      }
+    }
+  },
+  {
+    "id": "regex-anchored-start",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": "foobar"
+        }
+      },
+      "rule": {
+        "matcher": "toMatch",
+        "expected": {
+          "__jait_matcher": "textPattern",
+          "flags": "",
+          "expr": {
+            "id": 0,
+            "kind": "seq",
+            "nodes": [
+              {
+                "id": 1,
+                "kind": "start"
+              },
+              {
+                "id": 2,
+                "kind": "char",
+                "value": "f"
+              },
+              {
+                "id": 3,
+                "kind": "char",
+                "value": "o"
+              },
+              {
+                "id": 4,
+                "kind": "char",
+                "value": "o"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "regex-dollar-end-matches-exact",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": "x"
+        }
+      },
+      "rule": {
+        "matcher": "toMatch",
+        "expected": {
+          "__jait_matcher": "textPattern",
+          "flags": "",
+          "expr": {
+            "id": 0,
+            "kind": "seq",
+            "nodes": [
+              {
+                "id": 1,
+                "kind": "char",
+                "value": "x"
+              },
+              {
+                "id": 2,
+                "kind": "end"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "regex-dollar-rejects-trailing-newline",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": "x\n"
+        }
+      },
+      "rule": {
+        "matcher": "toMatch",
+        "expected": {
+          "__jait_matcher": "textPattern",
+          "flags": "",
+          "expr": {
+            "id": 0,
+            "kind": "seq",
+            "nodes": [
+              {
+                "id": 1,
+                "kind": "char",
+                "value": "x"
+              },
+              {
+                "id": 2,
+                "kind": "end"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "regex-multiline-dollar-before-terminator",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": "x\nrest"
+        }
+      },
+      "rule": {
+        "matcher": "toMatch",
+        "expected": {
+          "__jait_matcher": "textPattern",
+          "flags": "m",
+          "expr": {
+            "id": 0,
+            "kind": "seq",
+            "nodes": [
+              {
+                "id": 1,
+                "kind": "char",
+                "value": "x"
+              },
+              {
+                "id": 2,
+                "kind": "end"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "regex-class-and-boundary",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "string",
+          "value": "a1"
+        }
+      },
+      "rule": {
+        "matcher": "toMatch",
+        "expected": {
+          "__jait_matcher": "textPattern",
+          "flags": "",
+          "expr": {
+            "id": 0,
+            "kind": "seq",
+            "nodes": [
+              {
+                "id": 1,
+                "kind": "start"
+              },
+              {
+                "id": 2,
+                "kind": "class",
+                "negate": false,
+                "items": [
+                  {
+                    "category": "w"
+                  }
+                ]
+              },
+              {
+                "id": 3,
+                "kind": "class",
+                "negate": false,
+                "items": [
+                  {
+                    "category": "d"
+                  }
+                ]
+              },
+              {
+                "id": 4,
+                "kind": "end"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "object-containing-allows-extra-outer-fields",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            [
+              "http://localhost:20128/v1/models",
+              {
+                "headers": {},
+                "signal": "fixture"
+              }
+            ]
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toHaveBeenCalledWith",
+        "negate": false,
+        "expected": [
+          "http://localhost:20128/v1/models",
+          {
+            "__jait_matcher": "objectContaining",
+            "value": {
+              "headers": {}
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "object-containing-rejects-extra-nested-header",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            [
+              "http://localhost:20128/v1/models",
+              {
+                "headers": {
+                  "Authorization": "Bearer fixture"
+                },
+                "signal": "fixture"
+              }
+            ]
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toHaveBeenCalledWith",
+        "negate": false,
+        "expected": [
+          "http://localhost:20128/v1/models",
+          {
+            "__jait_matcher": "objectContaining",
+            "value": {
+              "headers": {}
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "object-containing-rejects-extra-nested-nonempty-field",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            [
+              "http://localhost:20128/v1/models",
+              {
+                "headers": {
+                  "Authorization": "Bearer fixture",
+                  "Accept": "application/json"
+                }
+              }
+            ]
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toHaveBeenCalledWith",
+        "negate": false,
+        "expected": [
+          "http://localhost:20128/v1/models",
+          {
+            "__jait_matcher": "objectContaining",
+            "value": {
+              "headers": {
+                "Authorization": "Bearer fixture"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "object-containing-explicit-nested-subset",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            [
+              "http://localhost:20128/v1/models",
+              {
+                "headers": {
+                  "Authorization": "Bearer fixture",
+                  "Accept": "application/json"
+                }
+              }
+            ]
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toHaveBeenCalledWith",
+        "negate": false,
+        "expected": [
+          "http://localhost:20128/v1/models",
+          {
+            "__jait_matcher": "objectContaining",
+            "value": {
+              "headers": {
+                "__jait_matcher": "objectContaining",
+                "value": {
+                  "Authorization": "Bearer fixture"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "match-object-retains-recursive-subset",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": {
+            "headers": {
+              "Authorization": "Bearer fixture",
+              "Accept": "application/json"
+            }
+          }
+        }
+      },
+      "rule": {
+        "matcher": "toMatchObject",
+        "negate": false,
+        "expected": {
+          "headers": {
+            "Authorization": "Bearer fixture"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "object-containing-missing-required-key",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Array",
+          "value": [
+            [
+              "http://localhost:20128/v1/models",
+              {
+                "method": "GET"
+              }
+            ]
+          ]
+        }
+      },
+      "rule": {
+        "matcher": "toHaveBeenCalledWith",
+        "negate": false,
+        "expected": [
+          "http://localhost:20128/v1/models",
+          {
+            "__jait_matcher": "objectContaining",
+            "value": {
+              "headers": {}
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "object-containing-empty-sample-matches-null",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "actual": {
+          "type": "object",
+          "prototype": "Object",
+          "value": null
+        }
+      },
+      "rule": {
+        "matcher": "toEqual",
+        "negate": false,
+        "expected": {
+          "__jait_matcher": "objectContaining",
+          "value": {}
+        }
+      }
+    }
+  },
+  {
+    "id": "throw-class-same-identity",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "threw": true,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [
+          1,
+          2,
+          3
+        ],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "dynamic": true,
+        "negate": false
+      }
+    }
+  },
+  {
+    "id": "throw-class-same-name-other-identity",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "threw": true,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [
+          4,
+          2,
+          3
+        ],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "dynamic": true,
+        "negate": false
+      }
+    }
+  },
+  {
+    "id": "throw-class-subclass",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "threw": true,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [
+          5,
+          1,
+          2,
+          3
+        ],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "dynamic": true,
+        "negate": false
+      }
+    }
+  },
+  {
+    "id": "throw-class-negated-other-identity",
+    "vitest": true,
+    "wire": {
+      "observation": {
+        "threw": true,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [
+          4,
+          2,
+          3
+        ],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "dynamic": true,
+        "negate": true
+      }
+    }
+  },
+  {
+    "id": "throw-class-error-alias-other-identity",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "threw": true,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [
+          4,
+          2,
+          3
+        ],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrowError",
+        "dynamic": true,
+        "negate": false
+      }
+    }
+  },
+  {
+    "id": "throw-class-requires-throw",
+    "vitest": false,
+    "wire": {
+      "observation": {
+        "threw": false,
+        "error": "fixture failure",
+        "errorTypes": [
+          "CollisionError",
+          "Error",
+          "Object"
+        ],
+        "other": {
+          "type": "function",
+          "name": "CollisionError"
+        },
+        "prototypes": [],
+        "expectedPrototype": 1
+      },
+      "rule": {
+        "matcher": "toThrow",
+        "dynamic": true,
+        "negate": false
+      }
+    }
+  }
+]

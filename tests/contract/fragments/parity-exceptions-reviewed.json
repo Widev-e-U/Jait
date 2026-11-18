@@ -1,0 +1,125 @@
+{
+  "review_scope": "parity-exceptions bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/agent-control.test.ts:32:3",
+      "status": "verified",
+      "parity_review": "Reviewed persists a halt, stops running work, and makes assertCanRun authoritative. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_agent_control_test_ts_32_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/agent-control.test.ts:80:3",
+      "status": "verified",
+      "parity_review": "Reviewed still halts when the teardown hook throws, reporting the failure separately. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_agent_control_test_ts_80_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/jait-llm.test.ts:80:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects bare Claude Code CLI aliases instead of sending them to Ollama. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_80_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/jait-llm.test.ts:145:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects bare Claude Code CLI aliases for non-Ollama backends too. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_145_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/subscription-usage-fetchers.test.ts:46:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects malformed Go counters and gives safe auth/entitlement errors. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_subscription_usage_fetchers_test_ts_46_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint3.test.ts:35:3",
+      "status": "verified",
+      "parity_review": "Reviewed blocks path traversal with ... Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint3_test_ts_35_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint3.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "Reviewed blocks null bytes. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint3_test_ts_40_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint3.test.ts:45:3",
+      "status": "verified",
+      "parity_review": "Reviewed blocks paths in global denied list. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint3_test_ts_45_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint3.test.ts:55:3",
+      "status": "verified",
+      "parity_review": "Reviewed blocks custom denied paths. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint3_test_ts_55_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint3.test.ts:69:3",
+      "status": "verified",
+      "parity_review": "Reviewed validates symlinks that escape project. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Five structural controls bind thrown/rejected constructors and actual operands to the original source. Runtime constructor identity is observed through prototype identity; distinct classes with the same name are rejected while subclasses pass. The same deterministic comparator reproduction failed before this change and passed afterward, and all 332 generated transports passed the exception identity regression. Dynamic message and no-expected exception observations remain bounded by the raw-domain guard. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-exceptions/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint3_test_ts_69_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    }
+  ]
+}

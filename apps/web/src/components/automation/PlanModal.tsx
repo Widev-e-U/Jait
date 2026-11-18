@@ -12,10 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Loader2, Sparkles, Play, Check, ChevronDown, ChevronRight,
-  Trash2, Plus, PlayCircle, SkipForward, Pencil,
-} from 'lucide-react'
+import { Loader2, Play, Check, ChevronDown, ChevronRight, Trash2, Plus, PlayCircle, SkipForward, Pencil, Bot } from 'lucide-react'
 import {
   agentsApi,
   type AutomationPlan,
@@ -368,7 +365,7 @@ export function PlanModal({
                   {generating ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Bot className="h-3.5 w-3.5" />
                   )}
                   Generate
                 </Button>

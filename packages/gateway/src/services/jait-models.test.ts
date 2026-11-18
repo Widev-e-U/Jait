@@ -73,3 +73,15 @@ it("discovers OpenCode Go models with routable instance IDs", async () => {
   expect(models.map(m => decodeJaitModelId(m.id))).toEqual([{backend: "opencode-go", instanceId: "go", model: "glm-5.2"}]);
   expect(models[0]?.group).toBe("My Go · OpenCode Go");
 });
+
+// An unreachable catalogue must still leave the explicitly configured model
+// selectable, otherwise saving a backend offline bricks the chat model picker.
+it("falls back to the pinned instance model when the catalogue is unreachable", async () => {
+  globalThis.fetch = vi.fn(async () => { throw new Error("offline"); }) as unknown as typeof fetch;
+  const models = await listJaitModels({ config, fallbackModels: [], apiKeys: {
+    JAIT_BACKEND_INSTANCES: JSON.stringify([{id: "main", type: "openai", name: "Main", baseUrl: "https://api.openai.com/v1", apiKey: "k", model: "gpt-4o-mini"}]),
+  }});
+  expect(models.map(m => decodeJaitModelId(m.id))).toEqual([{backend: "openai", instanceId: "main", model: "gpt-4o-mini"}]);
+  expect(models[0]?.isDefault).toBe(true);
+  expect(models[0]?.group).toBe("Main · OpenAI");
+});

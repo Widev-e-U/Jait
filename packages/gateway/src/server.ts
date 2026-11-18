@@ -1,3 +1,7 @@
+import { GithubIntakeService } from "./services/github-intake.js";
+import { registerMessengerRoutes } from './routes/messenger.js';
+import { TeamsReauthService } from './services/bridge-reauth.js';
+import { bridgeStatuses } from './services/bridge-status.js';
 import { TeamChatService } from "./services/team-chat.js";
 import { registerTeamChatRoutes } from "./routes/team-chat.js";
 import { createTeamChatTool } from "./tools/team-chat-tools.js";
@@ -20,7 +24,7 @@ const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 const HTML_EXTENSIONS = new Set([".html", ".htm"]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-import { registerChatRoutes, getPersonaChatRuntime } from "./routes/chat.js";
+import { registerChatRoutes, getPersonaChatRuntime, haltPersonaChatRuns } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -46,6 +50,7 @@ import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
 import { registerThreadRoutes } from "./routes/threads.js";
+import { registerAgentControlRoutes } from "./routes/agent-control.js";
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerPullRequestRoutes } from "./routes/pull-requests.js";
@@ -91,6 +96,9 @@ import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
 import type { ProjectStateService } from "./services/project-state.js";
 import type { ThreadService } from "./services/threads.js";
+import { AgentControlService, type AgentStopResult } from "./services/agent-control.js";
+import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestration/executor.js";
+import { OrchestrationService } from "./services/orchestration/orchestrator.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
 import type { PlanService } from "./services/plans.js";
@@ -112,6 +120,7 @@ import {
 import { getAgentGithubAppService } from "./services/agent-github-apps.js";
 
 export interface ServerDeps {
+  chatLoops?: import("./services/chat-loops.js").ChatLoopService;
   db?: JaitDB;
   sqlite?: SqliteDatabase;
   sessionService?: SessionService;
@@ -144,6 +153,7 @@ export interface ServerDeps {
   ) => Promise<ToolResult>;
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
+  screenShareControl?: import("./services/screen-share-control.js").ScreenShareControlCoordinator;
   threadService?: ThreadService;
   repoService?: RepositoryService;
   planService?: PlanService;
@@ -254,6 +264,35 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
 
+  const teamsReauth = deps.surfaceRegistry
+    ? new TeamsReauthService(deps.surfaceRegistry, () => { void bridgeStatuses(true); })
+    : undefined;
+  registerMessengerRoutes(app, config, deps.ws?.messenger, teamsReauth, (owner, message) => {
+    // Connected desktop/web clients are alerted over the socket, phones via push.
+    // The shared replaceId collapses it with the web store's own per-room notification.
+    deps.ws?.broadcastToUser(owner, {
+      type: 'notification',
+      sessionId: '',
+      timestamp: new Date().toISOString(),
+      payload: {
+        id: `matrix-message:${message.eventId}`,
+        replaceId: `matrix-room:${message.roomId}`,
+        title: message.title,
+        body: message.body,
+        level: 'info',
+        includeToast: false,
+        independentOfAttention: true,
+        roomId: message.roomId,
+        eventId: message.eventId,
+        imageAvailable: !!message.image,
+        timestamp: message.timestamp,
+        link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
+      },
+    });
+    void deps.mobilePush?.sendMessengerMessage(owner, message).catch((error) => {
+      app.log.warn({ error }, 'Messenger push failed');
+    });
+  });
   registerHealthRoutes(app, config, {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
     getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,
@@ -264,17 +303,67 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);
   }
+  // Owner-wide autonomous-execution kill switch. Created before the routes that
+  // consult it so every dispatch path shares one instance (and one durable row).
+  const agentControl: AgentControlService | undefined = deps.db
+    ? new AgentControlService(deps.db, {
+      stopRunning: async (userId) => {
+        const stopThreads = (app as unknown as { stopUserThreads?: (id: string) => Promise<AgentStopResult> }).stopUserThreads;
+        const orchestrated = orchestration?.stopForUser(userId) ?? { stopped: 0, errors: [] };
+        const results = await Promise.all([stopThreads?.(userId) ?? { stopped: 0, errors: [] }, haltPersonaChatRuns(userId), orchestrated]);
+        return { stopped: results.reduce((sum, result) => sum + result.stopped, 0), errors: results.flatMap(result => result.errors) };
+      },
+      onChange: ({ userId, state }) => {
+        deps.ws?.broadcastToUser(userId, {
+          type: "agent.halted",
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: state,
+        });
+        // Resume is the only path that clears a halt. Deliveries the stop held
+        // back are still queued, so lifting the halt has to restart the pump.
+        if (!state.halted) void teamChat?.pump();
+      },
+    })
+    : undefined;
+  // Plan orchestration shares the halt switch. Its executor stays unbound until the
+  // sub-agent runner is wired, so attempts fail closed as interrupted rather than run.
+  const orchestration: OrchestrationService | undefined = deps.db && agentControl
+    ? new OrchestrationService({
+      db: deps.db,
+      executor: new SubAgentTaskExecutor(unboundSubAgentRunner),
+      isHalted: userId => agentControl.isHalted(userId),
+    })
+    : undefined;
+  if (orchestration) {
+    // Attempts left in flight by a restart become interrupted. Nothing re-runs them.
+    try {
+      const interrupted = orchestration.recoverAfterRestart();
+      if (interrupted > 0) app.log.warn({ interrupted }, "plan attempts interrupted by restart; an operator must decide");
+    } catch (error) {
+      app.log.error({ error }, "plan orchestration recovery failed");
+    }
+  }
+  if (agentControl) {
+    if (deps.ws) deps.ws.getAgentControlState = userId => agentControl.getState(userId);
+    registerAgentControlRoutes(app, config, { agentControl, audit: deps.audit });
+  }
   const teamChat = deps.db && deps.sessionService && deps.threadService && deps.userService
     ? new TeamChatService(deps.db, deps.sessionService, deps.threadService, (userId, agent) => {
       const repository = agent.repositoryIds.map(id => deps.repoService?.getById(id)).find(repo => repo?.userId === userId);
       return repository?.localPath;
     }) : undefined;
   if (teamChat && deps.db && deps.userService && deps.sessionService) {
-    registerTeamChatRoutes(app, config, teamChat, deps.db, deps.userService, deps.threadService!);
+    if (agentControl) teamChat.setHaltGuard(userId => agentControl.isHalted(userId));
+    registerTeamChatRoutes(app, config, teamChat, deps.db, deps.userService, deps.threadService!, agentControl);
     deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService));
   }
   registerChatRoutes(app, config, {
+    previewService: deps.previewService,
+    userQuestionService: deps.userQuestionService,
+    chatLoops: deps.chatLoops,
     teamChat,
+    agentControl,
     db: deps.db,
     sessionService: deps.sessionService,
     toolRegistry: deps.toolRegistry,
@@ -378,11 +467,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerNetworkRoutes(app, deps.ws, deps.sqlite, deps.providerRegistry, deps.secretInputService, deps.surfaceRegistry);
 
   if (deps.screenShare && deps.ws) {
-    registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });
+    registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws, control: deps.screenShareControl, config, access });
   }
 
   registerFilesystemRoutes(app, deps.ws);
-  registerBrowserAssetRoutes(app);
+  registerBrowserAssetRoutes(app, config, deps, access);
   app.post("/api/preview/access", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
@@ -449,6 +538,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.threadService && deps.providerRegistry) {
     registerThreadRoutes(app, config, {
       personaChatRuntime: getPersonaChatRuntime,
+      cancelQueuedTeamDeliveries: teamChat ? (threadId, reason) => teamChat.cancelQueuedDeliveries(threadId, reason) : undefined,
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
@@ -457,6 +547,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       skillRegistry: deps.skillRegistry,
       ws: deps.ws,
       gitService: deps.gitService,
+      agentControl,
     });
   }
 
@@ -499,6 +590,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.db) {
     const threadService = deps.threadService;
     registerAgentGithubAppRoutes(app, config, {
+      intake: new GithubIntakeService(deps.db),
       service: getAgentGithubAppService({
         db: deps.db,
         userSecretService: deps.userSecretService,
@@ -576,6 +668,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   // MCP SSE server for external CLI agents
   if (deps.toolRegistry) {
     registerMcpRoutes(app, {
+      userQuestionService: deps.userQuestionService,
       toolRegistry: deps.toolRegistry,
       toolExecutor: deps.toolExecutor,
       config,
@@ -638,16 +731,40 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   return app;
 }
 
-function registerBrowserAssetRoutes(app: FastifyInstance): void {
+function registerBrowserAssetRoutes(app: FastifyInstance, config: AppConfig, deps: ServerDeps, access: ControlAccess): void {
   app.get("/api/browser/screenshot", async (request, reply) => {
-    const { path } = request.query as { path?: string };
+    const { path, sessionId } = request.query as { path?: string; sessionId?: string };
     if (!path || !path.trim()) {
       return reply.status(400).send({ error: "MISSING_PATH", message: "path is required" });
     }
 
-    const resolvedPath = resolve(path);
-    if (!isPathWithin(await realpath(process.cwd()), await realpath(resolvedPath).catch(() => resolvedPath))) {
-      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the gateway project" });
+    // Tool paths belong to the chat's project, which can differ from the
+    // gateway's launch directory. Never accept a client-supplied project root.
+    let projectRoot = process.cwd();
+    if (sessionId) {
+      const user = await requireAuth(request, reply, config.jwtSecret);
+      if (!user) return;
+      if (!access.session(sessionId, user.id)) {
+        return reply.status(404).send({ error: "NOT_FOUND", message: "Chat not found" });
+      }
+      const session = deps.sessionService?.getById(sessionId, user.id);
+      const thread = deps.threadService?.getById(sessionId);
+      const surface = deps.surfaceRegistry?.getSurface(`fs-${sessionId}`);
+      const surfaceRoot = surface?.state === "running" && surface.type === "filesystem"
+        ? surface.snapshot().metadata.projectRoot as string | undefined : undefined;
+      const root = session?.projectPath || thread?.workingDirectory || surfaceRoot;
+      if (!root) {
+        return reply.status(404).send({ error: "NO_PROJECT", message: "Chat has no project" });
+      }
+      projectRoot = root;
+    }
+
+    const resolvedRoot = resolve(projectRoot);
+    const resolvedPath = resolve(resolvedRoot, path);
+    const canonicalRoot = await realpath(resolvedRoot).catch(() => resolvedRoot);
+    const canonicalPath = await realpath(resolvedPath).catch(() => resolvedPath);
+    if (!isPathWithin(resolvedRoot, resolvedPath) || !isPathWithin(canonicalRoot, canonicalPath)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the chat project" });
     }
 
     const extension = extname(resolvedPath).toLowerCase();
@@ -865,7 +982,38 @@ function registerLiveViewProxyRoutes(app: FastifyInstance, config: AppConfig, de
       liveViewWss.emit("connection", ws, request);
     });
   });
+
+  // Touch viewers cannot see which remote element has focus; they poll this to open the phone keyboard for text fields.
+  const focusHandler = async (request: any, reply: any) => {
+    const port = Number(request.params?.port);
+    const user = await previewUser(request, reply, config, deps, "live:" + request.params?.port);
+    if (!user) return;
+    reply.header("Cache-Control", "no-store");
+    if (!Number.isInteger(port) || !canAccessPreviewPort(port, user.id, deps, access, true)) return reply.status(403).send({ error: "LIVE_VIEW_NOT_REGISTERED" });
+    const surface = (deps.surfaceRegistry?.listSurfaces() ?? []).find((candidate) =>
+      candidate.type === "browser" && (candidate as unknown as { getLiveViewInfo?: () => { websockifyPort: number } | null }).getLiveViewInfo?.()?.websockifyPort === port,
+    ) as unknown as { state?: string; evaluate?: (expression: string, options?: { timeoutMs?: number }) => Promise<{ ok: boolean; value?: unknown }> } | undefined;
+    if (!surface?.evaluate || surface.state !== "running") return { editing: false };
+    try {
+      const result = await surface.evaluate(EDITABLE_FOCUS_EXPRESSION, { timeoutMs: 1500 });
+      return { editing: result.ok && result.value === true };
+    } catch {
+      return { editing: false };
+    }
+  };
+  app.get("/api/live-view/:port/focus", focusHandler);
+  app.get("/preview/:previewToken/live/:port/focus", focusHandler);
 }
+
+/** True when the remote page's focused element accepts typed text. */
+const EDITABLE_FOCUS_EXPRESSION = `(() => {
+  let el = document.activeElement;
+  while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+  if (!el || el.disabled || el.readOnly) return false;
+  if (el.tagName === "TEXTAREA") return true;
+  if (el.tagName === "INPUT") return !["button", "submit", "reset", "checkbox", "radio", "file", "image", "range", "color", "hidden"].includes((el.type || "text").toLowerCase());
+  return el.isContentEditable === true;
+})()`;
 
 function canAccessPreviewPort(port: number, userId: string, deps: ServerDeps, access: ControlAccess, liveView = false): boolean {
   for (const preview of deps.previewService?.list() ?? []) {

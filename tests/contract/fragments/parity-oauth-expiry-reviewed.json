@@ -1,0 +1,53 @@
+{
+  "lane": "oauth-callback-expiry-review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/calendar/service.test.ts:135:1",
+      "status": "verified",
+      "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_calendar_service_test_ts_135_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/calendar/service.test.ts:156:1",
+      "status": "verified",
+      "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_calendar_service_test_ts_156_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/email/service.test.ts:163:1",
+      "status": "verified",
+      "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_163_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/email/service.test.ts:184:1",
+      "status": "verified",
+      "parity_review": "Reviewed all current original mailbox/calendar declarations. Every prior Rust matcher is unchanged (19 declarations; merge-expiry-selected.py and expiry-drift-id-map.json). Four new declarations retain fake-Date inputs, explicit expiry/boundary/replay outcomes and zero/single fetch assertions. All network access is stubbed and SQLite is in-memory. Fresh source-bound TypeScript reference evidence passes; runtime source reviews and native implementation acceptance remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_service_test_ts_184_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/22a63f62-fb46-428e-afae-b228c89b042e/report.json"
+        }
+      ]
+    }
+  ]
+}

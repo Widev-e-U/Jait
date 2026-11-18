@@ -27,6 +27,9 @@ import type {
 
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { generateDeviceId, detectPlatform } from '@/lib/device-id'
+import { desktopScreenShareControlAvailable } from '@/lib/desktop-computer-capabilities'
+import { hostedScreenShareCapture } from '@/lib/hosted-screen-share-capture'
+import { ScreenShareIceBuffer } from '@/lib/screen-share-ice'
 
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
@@ -76,6 +79,12 @@ export interface ScreenShareState {
   connectedDeviceId: string | null
   /** Pending share request (web browser needs user gesture to capture) */
   pendingShareRequest: PendingShareRequest | null
+  /** Chat that owns the active share, when it was started from a chat */
+  chatId: string | null
+  /** Who is driving the shared machine right now */
+  controlOwner: 'user' | 'agent'
+  /** Why the share was requested (agent-initiated shares) */
+  requestReason: string | null
 }
 
 export interface DesktopSource {
@@ -124,13 +133,31 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     error: null,
     connectedDeviceId: null,
     pendingShareRequest: null,
+    chatId: null,
+    controlOwner: 'user',
+    requestReason: null,
   })
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
+  const hostPeersRef = useRef(new Map<string, RTCPeerConnection>())
+  const hostViewerIdsRef = useRef(new Set<string>())
   const localStreamRef = useRef<MediaStream | null>(null)
   const remoteStreamRef = useRef<MediaStream | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const deviceIdRef = useRef<string>(generateDeviceId())
+  const iceBufferRef = useRef(new ScreenShareIceBuffer())
+  const peerSessionIdRef = useRef<string | null>(null)
+  const approvalInFlightRef = useRef(false)
+  const offerGenerationRef = useRef(0)
+  const viewerRequestGenerationRef = useRef(0)
+  const viewerRequestInFlightRef = useRef(false)
+  const desiredViewerSessionRef = useRef<string | null>(null)
+  const viewerLeaveRef = useRef<Promise<void>>(Promise.resolve())
+  // Invalidate asynchronous approvals and capture pickers when a share stops.
+  const captureGenerationRef = useRef(0)
+  const captureSessionIdRef = useRef<string | null>(null)
+  const hostRequestSessionIdRef = useRef<string | null>(null)
+  const hostChatIdRef = useRef<string | null>(null)
   const pendingOfferRef = useRef<{ sdp: string; hostDeviceId: string; sessionId: string } | null>(null)
 
   const headers = useCallback(() => {
@@ -139,6 +166,20 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     return h
   }, [token])
 
+  // Serialize viewer leaves with later joins. A delayed leave must not remove
+  // the same viewer after it has switched back to that share.
+  const queueViewerLeave = useCallback((sessionId: string) => {
+    const pending = viewerLeaveRef.current.then(async () => {
+      if (desiredViewerSessionRef.current === sessionId) return
+      await fetch(`${API_URL}/api/screen-share/leave`, {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({ sessionId, viewerDeviceId: deviceIdRef.current }),
+      }).catch(() => { /* best-effort */ })
+    })
+    viewerLeaveRef.current = pending
+    return pending
+  }, [headers])
+
   // ── Register this device on the gateway ───────────────────────────
   const registerDevice = useCallback(async () => {
     const deviceId = deviceIdRef.current
@@ -146,14 +187,17 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     const name = getDeviceName()
 
     const capabilities = ['screen-view']
-    if (platform === 'desktop') capabilities.push('screen-share', 'remote-input')
+    if (platform === 'desktop') {
+      capabilities.push('screen-share')
+      if (await desktopScreenShareControlAvailable(window.jaitDesktop)) capabilities.push('remote-input')
+    }
     if (platform === 'web') capabilities.push('screen-share')
 
     try {
       const res = await fetch(`${API_URL}/api/screen-share/devices/register`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ id: deviceId, name, platform, capabilities }),
+        body: JSON.stringify({ id: deviceId, name, platform: platform === 'capacitor' ? 'react-native' : platform, capabilities }),
       })
       if (res.ok) {
         setState(prev => ({ ...prev, localDeviceId: deviceId }))
@@ -163,40 +207,151 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     }
   }, [headers])
 
+  // ── Record the host's decision on an agent-initiated share ────────
+  const approveSession = useCallback(async (sessionId: string, approved: boolean) => {
+    const generation = captureGenerationRef.current
+    try {
+      const res = await fetch(`${API_URL}/api/screen-share/approve`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ sessionId, approved }),
+      })
+      if (!res.ok) {
+        console.warn('[screen-share] Approval not recorded:', res.status)
+        return false
+      }
+      const data = await res.json() as { session?: ScreenShareSessionState | null }
+      if (captureGenerationRef.current !== generation) return false
+      const session = data.session
+      if (!session || session.id !== sessionId || session.pendingApproval || (approved && session.status !== 'sharing')) return false
+      if (approved) for (const viewer of session.viewers ?? []) hostViewerIdsRef.current.add(viewer.deviceId)
+      setState(prev => ({
+        ...prev,
+        session,
+        isActive: session.status === 'sharing',
+        chatId: session.chatId ?? prev.chatId,
+        controlOwner: session.controlOwner ?? prev.controlOwner,
+      }))
+      return true
+    } catch (err) {
+      console.error('[screen-share] Failed to record approval:', err)
+      return false
+    }
+  }, [headers])
+
   // ── Fetch devices & session state from gateway ────────────────────
   const refreshState = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/screen-share/state`, { headers: headers() })
       if (!res.ok) return
       const data = await res.json() as { devices: ScreenShareDevice[]; activeSession: ScreenShareSessionState | null }
-      // Only update devices list and session metadata — don't override
-      // isHost/isViewer which are set by user actions
-      setState(prev => ({
-        ...prev,
-        session: data.activeSession ?? prev.session,
-        devices: data.devices,
-        isActive: data.activeSession?.status === 'sharing',
-      }))
+      // The state endpoint contains only the gateway-wide share. A chat-owned
+      // share can be connected while this request is in flight, so do not let
+      // an unrelated global share replace its session or active status.
+      setState(prev => {
+        const attachedId = captureSessionIdRef.current ?? hostRequestSessionIdRef.current
+          ?? desiredViewerSessionRef.current ?? peerSessionIdRef.current
+          ?? (prev.session?.chatId ? prev.session.id : null)
+        if (attachedId && data.activeSession?.id !== attachedId) {
+          return { ...prev, devices: data.devices }
+        }
+        return {
+          ...prev,
+          session: data.activeSession ?? prev.session,
+          devices: data.devices,
+          isActive: data.activeSession?.status === 'sharing',
+        }
+      })
     } catch (err) {
       console.error('Failed to refresh screen-share state:', err)
     }
   }, [headers])
 
   // ── WebRTC setup ──────────────────────────────────────────────────
-  const setupPeerConnection = useCallback((stream: MediaStream | null, isHost: boolean, sessionId: string) => {
-    console.log(`[screen-share] setupPeerConnection: isHost=${isHost} session=${sessionId.slice(0, 8)} prevPC=${!!pcRef.current} stream=${!!stream} device=${deviceIdRef.current}`)
+  const closeHostPeers = useCallback(() => {
+    for (const peer of hostPeersRef.current.values()) peer.close()
+    hostPeersRef.current.clear()
+    hostViewerIdsRef.current.clear()
+  }, [])
+
+  const setupHostPeer = useCallback((stream: MediaStream, sessionId: string, viewerId: string) => {
+    if (!viewerId || viewerId === deviceIdRef.current) return
+    hostPeersRef.current.get(viewerId)?.close()
+    const key = JSON.stringify([sessionId, viewerId])
+    iceBufferRef.current.clear(key)
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    hostPeersRef.current.set(viewerId, pc)
+    stream.getTracks().forEach(track => pc.addTrack(track, stream))
+    pc.onicecandidate = event => {
+      if (hostPeersRef.current.get(viewerId) !== pc || peerSessionIdRef.current !== sessionId) return
+      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'screen-share:ice-candidate',
+          payload: { sessionId, fromDeviceId: deviceIdRef.current, toDeviceId: viewerId,
+            candidate: event.candidate.candidate, sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex },
+        }))
+      }
+    }
+    pc.oniceconnectionstatechange = () => {
+      if (hostPeersRef.current.get(viewerId) !== pc) return
+      if (pc.iceConnectionState === 'failed') {
+        hostPeersRef.current.delete(viewerId)
+        iceBufferRef.current.clear(key)
+        pc.close()
+      }
+    }
+    void (async () => {
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      if (hostPeersRef.current.get(viewerId) !== pc || peerSessionIdRef.current !== sessionId) return
+      if (wsRef.current?.readyState !== WebSocket.OPEN) throw new Error('Signaling is disconnected')
+      wsRef.current.send(JSON.stringify({
+        type: 'screen-share:offer',
+        payload: { sessionId, hostDeviceId: deviceIdRef.current, toDeviceId: viewerId, sdp: offer.sdp },
+      }))
+    })().catch(error => {
+      if (hostPeersRef.current.get(viewerId) !== pc) return
+      hostPeersRef.current.delete(viewerId)
+      pc.close()
+      console.error('[screen-share] Host peer setup failed:', error)
+      setState(prev => ({ ...prev, error: 'Could not connect a viewer.' }))
+    })
+  }, [])
+
+  const answerOffer = useCallback((pc: RTCPeerConnection, offer: { sessionId: string; sdp: string }) => {
+    const generation = ++offerGenerationRef.current
+    const current = () => pcRef.current === pc && peerSessionIdRef.current === offer.sessionId
+      && offerGenerationRef.current === generation
+    void (async () => {
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
+      if (!current()) return
+      await iceBufferRef.current.flush(offer.sessionId, pc)
+      if (!current()) return
+      const answer = await pc.createAnswer()
+      if (!current()) return
+      await pc.setLocalDescription(answer)
+      if (!current() || wsRef.current?.readyState !== WebSocket.OPEN) return
+      wsRef.current.send(JSON.stringify({
+        type: 'screen-share:answer',
+        payload: { sessionId: offer.sessionId, viewerDeviceId: deviceIdRef.current, sdp: answer.sdp },
+      }))
+    })().catch(err => {
+      if (current()) console.error('[screen-share] Offer handling failed:', err)
+    })
+  }, [])
+
+  const setupPeerConnection = useCallback((sessionId: string) => {
+    console.log(`[screen-share] setting up viewer for session=${sessionId.slice(0, 8)}`)
     pcRef.current?.close()
+    remoteStreamRef.current = null
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     pcRef.current = pc
-
-    if (isHost && stream) {
-      const tracks = stream.getTracks()
-      console.log(`[screen-share] Adding ${tracks.length} track(s):`, tracks.map(t => `${t.kind}:${t.label}:${t.readyState}`))
-      tracks.forEach(track => pc.addTrack(track, stream))
-    }
+    peerSessionIdRef.current = sessionId
 
     pc.ontrack = (event) => {
+      if (pcRef.current !== pc || peerSessionIdRef.current !== sessionId) return
       const [remoteStream] = event.streams
       console.log(`[screen-share] ontrack: streams=${event.streams.length} tracks=${remoteStream?.getTracks().map(t => `${t.kind}:${t.readyState}`).join(',')}`)
       if (remoteStream) {
@@ -207,6 +362,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     }
 
     pc.onicecandidate = (event) => {
+      if (pcRef.current !== pc || peerSessionIdRef.current !== sessionId) return
       if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'screen-share:ice-candidate',
@@ -222,53 +378,54 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     }
 
     pc.oniceconnectionstatechange = () => {
+      if (pcRef.current !== pc || peerSessionIdRef.current !== sessionId) return
       console.log('[screen-share] ICE state:', pc.iceConnectionState)
       if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
         setState(prev => ({ ...prev, error: `Connection ${pc.iceConnectionState}` }))
       }
     }
 
-    if (isHost) {
-      pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer)
-        console.log('[screen-share] Sending offer via WS')
-        wsRef.current?.send(JSON.stringify({
-          type: 'screen-share:offer',
-          payload: { sessionId, hostDeviceId: deviceIdRef.current, sdp: offer.sdp },
-        }))
-      })
-    }
-
-    // If we're a viewer and there's a pending offer that arrived before PC was ready, process it now
-    if (!isHost && pendingOfferRef.current) {
+    // An offer may arrive before the viewer has created its connection.
+    if (pendingOfferRef.current?.sessionId === sessionId) {
       const offer = pendingOfferRef.current
       pendingOfferRef.current = null
       console.log('[screen-share] Processing queued offer')
-      pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
-        .then(() => pc.createAnswer())
-        .then(answer => {
-          pc.setLocalDescription(answer)
-          wsRef.current?.send(JSON.stringify({
-            type: 'screen-share:answer',
-            payload: {
-              sessionId: offer.sessionId,
-              viewerDeviceId: deviceIdRef.current,
-              sdp: answer.sdp,
-            },
-          }))
-        })
-        .catch(err => console.error('[screen-share] Failed to process queued offer:', err))
+      answerOffer(pc, offer)
     }
-  }, [])
+  }, [answerOffer])
 
   // ── Start sharing THIS device's screen (HOST side) ────────────────
   // Called automatically when receiving a start-request, or manually
   const startHosting = useCallback(async (sessionId?: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }))
 
-    try {
-      let stream: MediaStream
+    // Already capturing this session (e.g. a chat opened and attached as a
+    // new viewer): renegotiate a fresh offer instead of opening a second
+    // capture stream, which would prompt the user for their screen twice.
+    const existing = localStreamRef.current
+    if (existing && sessionId && peerSessionIdRef.current === sessionId) {
+      console.log('[screen-share] Already hosting — attaching viewers to the existing capture')
+      setState(prev => ({ ...prev, isHost: true, isViewer: false, isActive: true, loading: false }))
+      for (const viewerId of hostViewerIdsRef.current) {
+        if (!hostPeersRef.current.has(viewerId)) setupHostPeer(existing, sessionId, viewerId)
+      }
+      return
+    }
 
+    if (existing) {
+      const oldSessionId = peerSessionIdRef.current
+      if (oldSessionId) hostedScreenShareCapture.clear(oldSessionId)
+      void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
+      existing.getTracks().forEach(track => track.stop())
+      localStreamRef.current = null
+      for (const peer of hostPeersRef.current.values()) peer.close()
+      hostPeersRef.current.clear()
+      peerSessionIdRef.current = null
+    }
+    const generation = ++captureGenerationRef.current
+    captureSessionIdRef.current = sessionId ?? null
+    let stream: MediaStream | null = null
+    try {
       // Both Desktop and web browsers use getDisplayMedia.
       // In Desktop, the main process handles source selection via
       // setDisplayMediaRequestHandler (auto-selects primary screen).
@@ -284,6 +441,10 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
         audio: false,
       })
       console.log('[screen-share] Screen capture obtained:', stream.getVideoTracks()[0]?.label)
+      if (captureGenerationRef.current !== generation) {
+        stream.getTracks().forEach(track => track.stop())
+        return
+      }
 
       localStreamRef.current = stream
 
@@ -300,37 +461,108 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
         }
         const data = await res.json() as { session: ScreenShareSessionState }
         sessionId = data.session.id
+        if (captureGenerationRef.current !== generation) {
+          stream.getTracks().forEach(track => track.stop())
+          if (localStreamRef.current === stream) localStreamRef.current = null
+          await fetch(`${API_URL}/api/screen-share/stop`, {
+            method: 'POST', headers: headers(), body: JSON.stringify({ sessionId }),
+          }).catch(() => { /* best-effort */ })
+          return
+        }
         setState(prev => ({ ...prev, session: data.session }))
       }
 
+      captureSessionIdRef.current = null
+      hostRequestSessionIdRef.current = null
+      const videoTrack = stream.getVideoTracks()[0]
+      if (sessionId && hostChatIdRef.current && videoTrack) {
+        hostedScreenShareCapture.set(sessionId, hostChatIdRef.current, videoTrack)
+        const capturedSessionId = sessionId
+        videoTrack.addEventListener?.('ended', () => {
+          hostedScreenShareCapture.clear(capturedSessionId)
+          if (peerSessionIdRef.current !== capturedSessionId) return
+          void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
+          captureGenerationRef.current++
+          localStreamRef.current = null
+          closeHostPeers()
+          remoteStreamRef.current = null
+          pcRef.current?.close()
+          pcRef.current = null
+          peerSessionIdRef.current = null
+          iceBufferRef.current.clear()
+          setState(prev => ({ ...prev, session: null, isActive: false, isHost: false, isViewer: false }))
+          void fetch(`${API_URL}/api/screen-share/stop`, {
+            method: 'POST', headers: headers(), body: JSON.stringify({ sessionId: capturedSessionId }),
+          }).catch(() => { /* best-effort */ })
+        }, { once: true })
+      }
       setState(prev => ({ ...prev, isHost: true, isViewer: false, isActive: true, loading: false }))
-      console.log('[screen-share] Host capturing — setting up peer connection for session:', sessionId)
-      setupPeerConnection(stream, true, sessionId ?? '')
+      console.log('[screen-share] Host capturing — connecting viewers for session:', sessionId)
+      pcRef.current?.close()
+      pcRef.current = null
+      peerSessionIdRef.current = sessionId ?? null
+      if (sessionId) for (const viewerId of hostViewerIdsRef.current) setupHostPeer(stream, sessionId, viewerId)
     } catch (err) {
+      stream?.getTracks().forEach(track => track.stop())
+      if (localStreamRef.current === stream) localStreamRef.current = null
+      if (captureGenerationRef.current !== generation) return
+      captureSessionIdRef.current = null
+      hostRequestSessionIdRef.current = null
+      hostChatIdRef.current = null
+      closeHostPeers()
+      if (sessionId) {
+        hostedScreenShareCapture.clear(sessionId)
+        void fetch(`${API_URL}/api/screen-share/stop`, {
+          method: 'POST', headers: headers(), body: JSON.stringify({ sessionId }),
+        }).catch(() => { /* best-effort */ })
+      }
       console.error('[screen-share] Capture failed:', err)
       setState(prev => ({
         ...prev,
+        session: prev.session?.id === sessionId ? null : prev.session,
         loading: false,
+        isActive: false,
         isHost: false,
         error: err instanceof Error ? err.message : 'Failed to start screen capture',
       }))
     }
-  }, [registerDevice, headers, setupPeerConnection])
+  }, [registerDevice, headers, setupHostPeer, closeHostPeers])
 
   // ── Request a remote device to share its screen (VIEWER side) ─────
-  const requestRemoteShare = useCallback(async (targetDeviceId: string) => {
+  const requestRemoteShare = useCallback(async (targetDeviceId: string, existingSessionId?: string) => {
+    const generation = ++viewerRequestGenerationRef.current
+    viewerRequestInFlightRef.current = true
+    desiredViewerSessionRef.current = existingSessionId ?? null
+    const previous = pcRef.current ? peerSessionIdRef.current : null
+    if (previous && previous !== existingSessionId) {
+      pcRef.current?.close()
+      pcRef.current = null
+      peerSessionIdRef.current = null
+      remoteStreamRef.current = null
+      pendingOfferRef.current = null
+      iceBufferRef.current.clear()
+      void queueViewerLeave(previous)
+    }
     setState(prev => ({ ...prev, loading: true, error: null, connectedDeviceId: targetDeviceId }))
 
     try {
+      await viewerLeaveRef.current
+      if (generation !== viewerRequestGenerationRef.current) return
       await registerDevice()
+      if (generation !== viewerRequestGenerationRef.current) return
 
-      const res = await fetch(`${API_URL}/api/screen-share/start`, {
+      // Attaching to a share that already exists (e.g. a chat opening against
+      // a live node share) must never call /start: that would replace the
+      // session, drop its owning chat, and make the node share twice.
+      const endpoint = existingSessionId ? 'join' : 'start'
+      const body = existingSessionId
+        ? { sessionId: existingSessionId, viewerDeviceId: deviceIdRef.current }
+        : { hostDeviceId: targetDeviceId, viewerDeviceIds: [deviceIdRef.current] }
+
+      const res = await fetch(`${API_URL}/api/screen-share/${endpoint}`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({
-          hostDeviceId: targetDeviceId,
-          viewerDeviceIds: [deviceIdRef.current],
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) {
@@ -339,8 +571,14 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       }
 
       const { session } = await res.json() as { session: ScreenShareSessionState }
+      if (generation !== viewerRequestGenerationRef.current) {
+        if (session.id !== desiredViewerSessionRef.current) void queueViewerLeave(session.id)
+        return
+      }
+      desiredViewerSessionRef.current = session.id
+      viewerRequestInFlightRef.current = false
 
-      setState(prev => ({ ...prev, session, isViewer: true, isActive: true, loading: false }))
+      setState(prev => ({ ...prev, session, isViewer: true, isActive: session.status === 'sharing' && !session.pendingApproval, loading: false }))
 
       // Set up WebRTC as viewer (receive-only) — the REST route already
       // sends a WS start-request to the host device, so we just need to
@@ -350,13 +588,16 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       // Re-creating it would destroy the active connection and cause
       // a black screen (dead stream still in remoteStreamRef).
       console.log(`[screen-share] requestRemoteShare: HTTP done, session=${session.id.slice(0, 8)} pcRef=${!!pcRef.current}`)
-      if (!pcRef.current) {
-        console.log('[screen-share] requestRemoteShare: creating viewer PC (no WS-created PC yet)')
-        setupPeerConnection(null, false, session.id)
+      if (!pcRef.current || peerSessionIdRef.current !== session.id) {
+        console.log('[screen-share] requestRemoteShare: creating viewer PC')
+        setupPeerConnection(session.id)
       } else {
         console.log('[screen-share] requestRemoteShare: PC already exists, skipping creation')
       }
     } catch (err) {
+      if (generation !== viewerRequestGenerationRef.current) return
+      viewerRequestInFlightRef.current = false
+      desiredViewerSessionRef.current = null
       setState(prev => ({
         ...prev,
         loading: false,
@@ -364,23 +605,40 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
         error: err instanceof Error ? err.message : 'Failed to connect to remote device',
       }))
     }
-  }, [registerDevice, headers, setupPeerConnection])
+  }, [registerDevice, headers, setupPeerConnection, queueViewerLeave])
 
   // ── Disconnect ────────────────────────────────────────────────────
   const disconnect = useCallback(async () => {
+    const sessionId = peerSessionIdRef.current ?? captureSessionIdRef.current ?? hostRequestSessionIdRef.current
+    const isHosting = !!localStreamRef.current || !!captureSessionIdRef.current || !!hostRequestSessionIdRef.current
+    viewerRequestGenerationRef.current++
+    viewerRequestInFlightRef.current = false
+    desiredViewerSessionRef.current = null
+    captureGenerationRef.current++
+    captureSessionIdRef.current = null
+    hostRequestSessionIdRef.current = null
+    hostChatIdRef.current = null
+    if (sessionId) hostedScreenShareCapture.clear(sessionId)
+    if (localStreamRef.current) void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
     localStreamRef.current?.getTracks().forEach(t => t.stop())
     localStreamRef.current = null
+    closeHostPeers()
     remoteStreamRef.current = null
     pcRef.current?.close()
     pcRef.current = null
+    peerSessionIdRef.current = null
+    pendingOfferRef.current = null
+    iceBufferRef.current.clear()
 
-    try {
-      await fetch(`${API_URL}/api/screen-share/stop`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({}),
-      })
-    } catch { /* best-effort */ }
+    if (sessionId) {
+      try {
+        await fetch(`${API_URL}/api/screen-share/${isHosting ? 'stop' : 'leave'}`, {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify(isHosting ? { sessionId } : { sessionId, viewerDeviceId: deviceIdRef.current }),
+        })
+      } catch { /* best-effort */ }
+    }
 
     setState(prev => ({
       ...prev,
@@ -391,20 +649,65 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       connectedDeviceId: null,
       pendingShareRequest: null,
     }))
-  }, [headers])
+  }, [headers, closeHostPeers])
+
+  // Record the decision before capturing or sending any WebRTC signals.
+  const approveAndStart = useCallback(async (sessionId: string) => {
+    if (approvalInFlightRef.current) return false
+    approvalInFlightRef.current = true
+    const generation = captureGenerationRef.current
+    hostRequestSessionIdRef.current = sessionId
+    try {
+      const approved = await approveSession(sessionId, true)
+      if (captureGenerationRef.current !== generation) return false
+      if (!approved) {
+        setState(prev => ({ ...prev, error: 'Could not record screen-share approval. Try again.' }))
+        return false
+      }
+      setState(prev => prev.pendingShareRequest?.sessionId === sessionId ? { ...prev, pendingShareRequest: null } : prev)
+      await startHosting(sessionId)
+      return true
+    } finally {
+      approvalInFlightRef.current = false
+    }
+  }, [approveSession, startHosting])
 
   // ── Accept a pending share request (user clicked the prompt) ──────
   const acceptPendingShare = useCallback(() => {
     const pending = state.pendingShareRequest
-    if (!pending) return
-    setState(prev => ({ ...prev, pendingShareRequest: null }))
-    startHosting(pending.sessionId)
-  }, [state.pendingShareRequest, startHosting])
+    if (pending) void approveAndStart(pending.sessionId)
+  }, [state.pendingShareRequest, approveAndStart])
 
   // ── Reject a pending share request ────────────────────────────────
   const rejectPendingShare = useCallback(() => {
+    const pending = state.pendingShareRequest
     setState(prev => ({ ...prev, pendingShareRequest: null }))
-  }, [])
+    if (pending) approveSession(pending.sessionId, false)
+  }, [state.pendingShareRequest, approveSession])
+
+  // ── Ask the gateway to move control of the shared screen ──────────
+  const requestControlHandoff = useCallback(async (controlOwner: 'user' | 'agent', chatId?: string) => {
+    const sessionId = peerSessionIdRef.current ?? state.session?.id
+    if (!sessionId) return false
+    const owner = chatId ?? state.chatId
+    try {
+      const res = await fetch(`${API_URL}/api/screen-share/handoff`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(owner ? { sessionId, controlOwner, chatId: owner } : { sessionId, controlOwner }),
+      })
+      if (!res.ok) {
+        console.warn('[screen-share] Handoff rejected:', res.status)
+        return false
+      }
+      const data = await res.json() as { session?: ScreenShareSessionState }
+      if (data.session?.id === sessionId) setState(prev => ({ ...prev, session: data.session!, controlOwner }))
+      return true
+    } catch (err) {
+      console.error('[screen-share] Failed to request control handoff:', err)
+      return false
+    }
+  }, [headers, state.session?.id, state.chatId])
 
   // ── Get Desktop desktop sources ──────────────────────────────────
   const getDesktopSources = useCallback(async (): Promise<DesktopSource[]> => {
@@ -418,11 +721,6 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     // Without this guard the hook reconnects every 2 s during the auth gate,
     // causing state churn and drag-lag on Windows/Desktop.
     if (!token) return
-
-    // On the web (non-Desktop) the screen-share WS is only useful when
-    // the user actively requests a share.  Skip the always-on connection
-    // to avoid noisy reconnect loops in the gateway logs.
-    if (!window.jaitDesktop) return
 
     let mounted = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -448,25 +746,58 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
           switch (msg.type) {
             case 'screen-share:state-update': {
               const session = msg.payload as ScreenShareSessionState
+              if (session.hostDeviceId !== deviceIdRef.current && !session.viewers?.some(viewer => viewer.deviceId === deviceIdRef.current)) break
               if (session.status === 'idle') {
-                // Session ended remotely — full cleanup
-                localStreamRef.current?.getTracks().forEach(t => t.stop())
-                localStreamRef.current = null
-                remoteStreamRef.current = null
-                pcRef.current?.close()
-                pcRef.current = null
+                const isPeer = peerSessionIdRef.current === session.id
+                const isCapture = captureSessionIdRef.current === session.id
+                const isRequest = hostRequestSessionIdRef.current === session.id
+                if (!isPeer && !isCapture && !isRequest) break
+                if (isCapture || isRequest) captureGenerationRef.current++
+                if (isCapture) captureSessionIdRef.current = null
+                if (isRequest) { hostRequestSessionIdRef.current = null; hostChatIdRef.current = null }
+                hostedScreenShareCapture.clear(session.id)
+                // A stopped pending request must not close a different active peer.
+                if (isPeer) {
+                  if (localStreamRef.current) void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
+                  localStreamRef.current?.getTracks().forEach(t => t.stop())
+                  localStreamRef.current = null
+                  closeHostPeers()
+                  remoteStreamRef.current = null
+                  pcRef.current?.close()
+                  pcRef.current = null
+                  peerSessionIdRef.current = null
+                  iceBufferRef.current.clear()
+                }
+                if (isPeer || !peerSessionIdRef.current) {
+                  setState(prev => ({
+                    ...prev, session: null, isHost: false, isViewer: false, isActive: false,
+                    connectedDeviceId: null, pendingShareRequest: null,
+                  }))
+                } else {
+                  setState(prev => prev.pendingShareRequest?.sessionId === session.id
+                    ? { ...prev, pendingShareRequest: null } : prev)
+                }
+              } else {
+                if (session.hostDeviceId === deviceIdRef.current && peerSessionIdRef.current === session.id) {
+                  const viewers = new Set(session.viewers.map(viewer => viewer.deviceId))
+                  for (const [viewerId, peer] of hostPeersRef.current) {
+                    if (!viewers.has(viewerId)) {
+                      peer.close()
+                      hostPeersRef.current.delete(viewerId)
+                      hostViewerIdsRef.current.delete(viewerId)
+                      iceBufferRef.current.clear(JSON.stringify([session.id, viewerId]))
+                    }
+                  }
+                }
+                // Session metadata update — DON'T override isHost/isViewer
+                const meta = session as { chatId?: string | null; controlOwner?: 'user' | 'agent' }
                 setState(prev => ({
                   ...prev,
-                  session: null,
-                  isHost: false,
-                  isViewer: false,
-                  isActive: false,
-                  connectedDeviceId: null,
-                  pendingShareRequest: null,
+                  session,
+                  isActive: session.status === 'sharing',
+                  chatId: meta.chatId ?? prev.chatId,
+                  controlOwner: meta.controlOwner ?? prev.controlOwner,
                 }))
-              } else {
-                // Session metadata update — DON'T override isHost/isViewer
-                setState(prev => ({ ...prev, session, isActive: session.status === 'sharing' }))
               }
               break
             }
@@ -478,18 +809,48 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 sessionId: string
                 hostDeviceId: string
                 viewerDeviceIds?: string[]
+                chatId?: string | null
+                nodeId?: string | null
+                initiatedBy?: 'user' | 'agent'
+                requireConsent?: boolean
+                reason?: string | null
               }
 
               console.log(`[screen-share] start-request: host=${req.hostDeviceId} local=${deviceIdRef.current} viewers=[${req.viewerDeviceIds?.join(',')}] isHostMatch=${req.hostDeviceId === deviceIdRef.current} pcRef=${!!pcRef.current}`)
 
               if (req.hostDeviceId === deviceIdRef.current) {
+                const existingCapture = peerSessionIdRef.current === req.sessionId ? localStreamRef.current : null
+                const sameRequest = hostRequestSessionIdRef.current === req.sessionId || captureSessionIdRef.current === req.sessionId
+                if (!existingCapture && !sameRequest) hostViewerIdsRef.current.clear()
+                for (const viewerId of req.viewerDeviceIds ?? []) hostViewerIdsRef.current.add(viewerId)
+                if (existingCapture) {
+                  for (const viewerId of req.viewerDeviceIds ?? []) setupHostPeer(existingCapture, req.sessionId, viewerId)
+                  break
+                }
+                // A join while approval or the capture picker is pending only
+                // adds its viewer; it must not create a second prompt.
+                if (sameRequest) break
+                hostRequestSessionIdRef.current = req.sessionId
                 // ── HOST side: we're being asked to share our screen ────
                 const viewerId = req.viewerDeviceIds?.[0] ?? 'unknown'
                 const autoApproved = getAutoApprovedDevices()
+                const chatId = req.chatId ?? null
+                hostChatIdRef.current = chatId
+                const reason = req.reason ?? null
+                // An agent asking to capture this screen always needs an
+                // explicit, per-request yes from the person at the machine.
+                const needsExplicitConsent = req.initiatedBy === 'agent' || Boolean(chatId)
 
-                if (autoApproved.has(viewerId) || autoApproved.has('*')) {
+                setState(prev => ({
+                  ...prev,
+                  chatId,
+                  requestReason: reason,
+                  controlOwner: 'user',
+                }))
+
+                if (!needsExplicitConsent && (autoApproved.has(viewerId) || autoApproved.has('*'))) {
                   console.log('[screen-share] Auto-approved share request from', viewerId)
-                  startHosting(req.sessionId)
+                  void approveAndStart(req.sessionId)
                   break
                 }
 
@@ -497,21 +858,44 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
                 if (platform === 'desktop') {
                   window.jaitDesktop?.notify({
-                    title: 'Screen Share Request',
-                    body: 'A remote device wants to view your screen.',
+                    title: needsExplicitConsent ? 'Agent wants to view this screen' : 'Screen Share Request',
+                    body: reason ?? 'A remote device wants to view your screen.',
                   }).catch(() => { /* best-effort */ })
+                }
+
+                if (needsExplicitConsent) {
+                  // Agent-initiated: approve/deny only, never "always allow".
+                  const consentToast = toast('An agent wants to view this screen', {
+                    description: reason ?? 'Approving lets the agent see your screen for this chat.',
+                    duration: Infinity,
+                    action: {
+                      label: 'Approve',
+                      onClick: () => {
+                        void approveAndStart(req.sessionId)
+                        toast.dismiss(consentToast)
+                      },
+                    },
+                    cancel: {
+                      label: 'Deny',
+                      onClick: () => {
+                        approveSession(req.sessionId, false)
+                        toast.dismiss(consentToast)
+                      },
+                    },
+                  })
+                  break
                 }
 
                 // Single toast combining share + always-allow options
                 const toastId = toast('Screen share requested', {
-                  description: 'A remote device wants to view your screen.',
+                  description: reason ?? 'A remote device wants to view your screen.',
                   duration: Infinity,
                   action: {
                     label: 'Always Allow',
                     onClick: () => {
                       console.log('[screen-share] User accepted + enabled always-approve')
                       addAutoApprovedDevice('*')
-                      startHosting(req.sessionId)
+                      void approveAndStart(req.sessionId)
                       toast.dismiss(toastId)
                     },
                   },
@@ -519,7 +903,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                     label: 'Share Once',
                     onClick: () => {
                       console.log('[screen-share] User accepted share request (once)')
-                      startHosting(req.sessionId)
+                      void approveAndStart(req.sessionId)
                       toast.dismiss(toastId)
                     },
                   },
@@ -530,16 +914,20 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 req.viewerDeviceIds.length === 0 ||
                 req.viewerDeviceIds.includes(deviceIdRef.current)
               ) {
+                // Ignore an older start while a different explicit join is in flight.
+                if (viewerRequestInFlightRef.current && desiredViewerSessionRef.current !== req.sessionId) break
                 // ── VIEWER side: set up WebRTC to receive the host's stream ─
                 // Skip if we already initiated via requestRemoteShare (PC already created)
-                if (pcRef.current) {
+                if (pcRef.current && peerSessionIdRef.current === req.sessionId) {
                   console.log('[screen-share] Viewer PC already set up, skipping duplicate start-request')
                   break
                 }
                 // Stop any local capture if we were previously hosting
                 if (localStreamRef.current) {
+                  void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
                   localStreamRef.current.getTracks().forEach(t => t.stop())
                   localStreamRef.current = null
+                  closeHostPeers()
                 }
                 console.log('[screen-share] Setting up as viewer for session:', req.sessionId, 'host:', req.hostDeviceId)
                 setState(prev => ({
@@ -549,7 +937,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                   isActive: true,
                   connectedDeviceId: req.hostDeviceId,
                 }))
-                setupPeerConnection(null, false, req.sessionId)
+                setupPeerConnection(req.sessionId)
               }
 
               break
@@ -563,22 +951,9 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
               }
               console.log(`[screen-share] Received offer from host=${offer.hostDeviceId} pcRef=${!!pcRef.current}`)
               const pc = pcRef.current
+              if (pc && peerSessionIdRef.current !== offer.sessionId) break
               if (pc) {
-                pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
-                  .then(() => pc.createAnswer())
-                  .then(answer => {
-                    pc.setLocalDescription(answer)
-                    console.log('[screen-share] Sending answer')
-                    wsRef.current?.send(JSON.stringify({
-                      type: 'screen-share:answer',
-                      payload: {
-                        sessionId: offer.sessionId,
-                        viewerDeviceId: deviceIdRef.current,
-                        sdp: answer.sdp,
-                      },
-                    }))
-                  })
-                  .catch(err => console.error('[screen-share] Offer handling failed:', err))
+                answerOffer(pc, offer)
               } else {
                 // PC not ready yet (viewer still in requestRemoteShare) — queue the offer
                 console.log('[screen-share] PC not ready, queuing offer')
@@ -587,16 +962,32 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
               break
             }
 
+            case 'screen-share:control-handoff': {
+              const handoff = msg.payload as { sessionId?: string; controlOwner?: 'user' | 'agent' }
+              if (handoff.sessionId !== peerSessionIdRef.current) break
+              if (handoff.controlOwner !== 'user' && handoff.controlOwner !== 'agent') break
+              const owner = handoff.controlOwner
+              console.log('[screen-share] Control handoff ->', owner)
+              setState(prev => ({ ...prev, controlOwner: owner }))
+              break
+            }
+
             case 'screen-share:answer': {
-              const answer = msg.payload as { sdp: string; viewerDeviceId: string }
+              const answer = msg.payload as { sessionId: string; sdp: string; viewerDeviceId: string }
               if (answer.viewerDeviceId === deviceIdRef.current) {
                 console.log('[screen-share] Ignoring own answer (we are the viewer)')
                 break
               }
               console.log(`[screen-share] Received answer from viewer=${answer.viewerDeviceId}`)
-              pcRef.current?.setRemoteDescription(
-                new RTCSessionDescription({ type: 'answer', sdp: answer.sdp })
-              )
+              const pc = hostPeersRef.current.get(answer.viewerDeviceId)
+              if (pc && peerSessionIdRef.current === answer.sessionId) {
+                const key = JSON.stringify([answer.sessionId, answer.viewerDeviceId])
+                void pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answer.sdp }))
+                  .then(() => {
+                    if (hostPeersRef.current.get(answer.viewerDeviceId) === pc) return iceBufferRef.current.flush(key, pc)
+                  })
+                  .catch(err => console.error('[screen-share] Answer handling failed:', err))
+              }
               break
             }
 
@@ -606,14 +997,22 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 sdpMid: string | null
                 sdpMLineIndex: number | null
                 fromDeviceId: string
+                sessionId: string
               }
               if (ice.fromDeviceId === deviceIdRef.current) break
               console.log(`[screen-share] ICE candidate from=${ice.fromDeviceId} pcRef=${!!pcRef.current}`)
-              pcRef.current?.addIceCandidate(new RTCIceCandidate({
-                candidate: ice.candidate,
-                sdpMid: ice.sdpMid,
-                sdpMLineIndex: ice.sdpMLineIndex,
-              }))
+              if (typeof ice.sessionId !== 'string') break
+              const candidate = { candidate: ice.candidate, sdpMid: ice.sdpMid, sdpMLineIndex: ice.sdpMLineIndex }
+              if (localStreamRef.current && peerSessionIdRef.current === ice.sessionId) {
+                const pc = hostPeersRef.current.get(ice.fromDeviceId) ?? null
+                // Unknown viewers cannot create candidate queues on the host.
+                if (pc) {
+                  const key = JSON.stringify([ice.sessionId, ice.fromDeviceId])
+                  iceBufferRef.current.add(key, candidate, pc, key)
+                }
+              } else {
+                iceBufferRef.current.add(ice.sessionId, candidate, pcRef.current, peerSessionIdRef.current)
+              }
               break
             }
           }
@@ -623,6 +1022,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       }
 
       ws.onclose = () => {
+        if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
         wsRef.current = null
         // Auto-reconnect after 30s (no rush when idle)
         if (mounted) {
@@ -640,16 +1040,42 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     return () => {
       mounted = false
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      const sessionId = captureSessionIdRef.current ?? hostRequestSessionIdRef.current
+        ?? (localStreamRef.current ? peerSessionIdRef.current : null)
+      const viewerSessionId = pcRef.current ? peerSessionIdRef.current : null
+      captureGenerationRef.current++
+      viewerRequestGenerationRef.current++
+      viewerRequestInFlightRef.current = false
+      desiredViewerSessionRef.current = null
+      captureSessionIdRef.current = null
+      hostRequestSessionIdRef.current = null
+      hostChatIdRef.current = null
+      if (sessionId) hostedScreenShareCapture.clear(sessionId)
+      if (localStreamRef.current) void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
+      localStreamRef.current?.getTracks().forEach(track => track.stop())
+      localStreamRef.current = null
+      closeHostPeers()
+      remoteStreamRef.current = null
+      pcRef.current?.close()
+      pcRef.current = null
+      peerSessionIdRef.current = null
+      iceBufferRef.current.clear()
       wsRef.current?.close()
       wsRef.current = null
+      if (sessionId) {
+        void fetch(`${API_URL}/api/screen-share/stop`, {
+          method: 'POST', headers: headers(), body: JSON.stringify({ sessionId }),
+        }).catch(() => { /* best-effort */ })
+      } else if (viewerSessionId) {
+        void queueViewerLeave(viewerSessionId)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  // Register on mount, fetch initial state once (no polling — WS pushes updates)
-  // Only on Desktop — web browser doesn't participate in screen sharing.
+  // Viewers and hosts both need a device identity and signaling connection.
   useEffect(() => {
-    if (!token || !window.jaitDesktop) return
+    if (!token) return
     registerDevice()
     refreshState()
   }, [token, registerDevice, refreshState])
@@ -669,9 +1095,18 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     disconnect,
     acceptPendingShare,
     rejectPendingShare,
+    approveSession,
+    requestControlHandoff,
     getDesktopSources,
     refreshState,
     localStream: localStreamRef.current,
     remoteStream: remoteStreamRef.current,
   }
 }
+
+/**
+ * Value returned by the screen-share hook. One instance must own the device
+ * identity and signaling socket for a browser, so panels consume this type
+ * through `ScreenShareProvider` instead of calling the hook again.
+ */
+export type ScreenShareHandle = ReturnType<typeof useScreenShare>

@@ -1,0 +1,102 @@
+{
+  "barrel.exports": [
+    "EncryptedRoomEvent",
+    "LogLevel",
+    "LogService",
+    "MatrixClient",
+    "RustSdkCryptoStorageProvider",
+    "SimpleFsStorageProvider"
+  ],
+  "barrel.logLevels": [
+    [
+      "TRACE",
+      null,
+      -1
+    ],
+    [
+      "DEBUG",
+      null,
+      0
+    ],
+    [
+      "INFO",
+      null,
+      1
+    ],
+    [
+      "WARN",
+      null,
+      2
+    ],
+    [
+      "ERROR",
+      null,
+      3
+    ]
+  ],
+  "event.plain": {
+    "type": "m.room.message",
+    "event_id": "$p",
+    "content": {
+      "msgtype": "m.text",
+      "body": "hi"
+    },
+    "unsigned": {
+      "age": 5,
+      "jaitEncrypted": false
+    }
+  },
+  "event.plainNoUnsigned": {
+    "type": "m.room.message",
+    "event_id": "$p2",
+    "content": {
+      "body": "x"
+    },
+    "unsigned": {
+      "jaitEncrypted": false
+    }
+  },
+  "event.decryptOk": {
+    "type": "m.room.message",
+    "event_id": "$e",
+    "content": {
+      "msgtype": "m.text",
+      "body": "secret"
+    },
+    "unsigned": {
+      "age": 1,
+      "jaitEncrypted": true
+    }
+  },
+  "event.historyFallback": {
+    "type": "m.room.encrypted",
+    "event_id": "$e",
+    "content": {
+      "msgtype": "m.text",
+      "body": "from-history"
+    },
+    "unsigned": {
+      "jaitEncrypted": true
+    }
+  },
+  "event.decryptFail": {
+    "type": "m.room.encrypted",
+    "event_id": "$e",
+    "content": {
+      "algorithm": "m.megolm.v1.aes-sha2",
+      "ciphertext": "xx"
+    },
+    "unsigned": {}
+  },
+  "event.decryptFailNoHistory": {
+    "type": "m.room.encrypted",
+    "event_id": "$e",
+    "content": {
+      "algorithm": "m.megolm.v1.aes-sha2",
+      "ciphertext": "xx"
+    },
+    "unsigned": {}
+  },
+  "encryptedRoomEvent.isEncryptedPlain": "m.room.message",
+  "encryptedRoomEvent.algorithm": "m.megolm.v1.aes-sha2"
+}

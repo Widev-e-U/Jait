@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { MessageText } from '@/components/ui/message-text'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { TeamRoomMessage } from '@jait/shared'
 import { ArrowDown, ArrowLeft, ExternalLink, MoreHorizontal } from 'lucide-react'
 import { teamChatApi, type TeamRoomSnapshot } from '@/lib/team-chat-api'
@@ -8,7 +10,8 @@ import type { ChatAttachment } from '@/hooks/useChat'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AgentAvatar } from './agent-avatar'
-import { TeamAvatar } from './team-avatar'
+import { TeamAvatar, type TeamAvatarMember } from './team-avatar'
+import { segmentTeamMentions, type TeamMentionMember } from '@/lib/team-mentions'
 import { agentsApi } from '@/lib/agents-api'
 import { useStickToBottom } from '@/components/chat/use-stick-to-bottom'
 
@@ -17,6 +20,30 @@ export function TeamMessageAvatar({ message }: { message: TeamRoomMessage }) {
   if (message.sender.kind === 'agent') return <AgentAvatar avatar={message.sender.avatar || 'Nova'} className="h-8 w-8 shrink-0" />
   return <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs">{message.sender.name.slice(0, 2)}</span>
 }
+export function TeamMessageBody({ content, members }: { content: string; members: readonly TeamMentionMember[] }) {
+  const segments = segmentTeamMentions(content, members)
+  return <p className="mt-1 whitespace-pre-wrap break-words text-sm">{segments.map((segment, index) => segment.kind === 'text'
+    ? <span key={index}><MessageText>{segment.text}</MessageText></span>
+    : <span key={index} className="inline-flex items-center gap-1 align-baseline" data-testid="team-mention">
+        <AgentAvatar avatar={segment.member.avatar || 'Nova'} className="h-4 w-4 shrink-0" />
+        <span className="font-medium text-primary">{segment.text}</span>
+      </span>)}</p>
+}
+
+const TEAM_PAGE_SIZE = 10
+
+/** Fold the polled newest page into already-loaded history, keeping older pages the user scrolled to. */
+function mergeLatestPage(prev: TeamRoomSnapshot | null, next: TeamRoomSnapshot): TeamRoomSnapshot {
+  if (!prev || prev.room.id !== next.room.id || !next.messages.length) return next
+  const overlap = prev.messages.findIndex(message => message.id === next.messages[0]!.id)
+  // No overlap means more than a page arrived between polls (or first load): restart from the newest page.
+  if (overlap < 0) return next
+  const older = prev.messages.slice(0, overlap)
+  const olderIds = new Set(older.map(message => message.id))
+  return { ...next, messages: [...older, ...next.messages], hasMore: prev.hasMore,
+    deliveries: [...prev.deliveries.filter(delivery => olderIds.has(delivery.messageId)), ...next.deliveries] }
+}
+
 const expandedRoomGoals = new Map<string, boolean>()
 const roomGoalStorageKey = (roomId: string) => 'jait:team-goal:' + roomId
 
@@ -44,8 +71,9 @@ export function TeamGoalPanel({ roomId, goal }: { roomId: string; goal: NonNulla
   </details>
 }
 
-export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = '', onInputChange, onRuntimeChange, backLabel = 'Back to agents', showBack = true }: {
+export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false, initialInput = '', onInputChange, onRuntimeChange, backLabel = 'Back to agents', showBack = true }: {
   roomId: string
+  initialIdentity?: { id: string; name: string; members: readonly TeamAvatarMember[] }
   backLabel?: string
   showBack?: boolean
   onBack: () => void
@@ -65,6 +93,26 @@ export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = 
   const [sending, setSending] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const { scrollRef, contentRef, isAtBottom, onScroll, scrollToBottom } = useStickToBottom()
+  const messages = snapshot?.messages
+  const messageById = useMemo(() => new Map(messages?.map(message => [message.id, message])), [messages])
+  const deliveriesByMessage = useMemo(() => {
+    const grouped = new Map<string, NonNullable<TeamRoomSnapshot['deliveries']>>()
+    for (const delivery of snapshot?.deliveries ?? []) {
+      const group = grouped.get(delivery.messageId) ?? []
+      group.push(delivery)
+      grouped.set(delivery.messageId, group)
+    }
+    return grouped
+  }, [snapshot?.deliveries])
+  const virtualizer = useVirtualizer({
+    count: messages?.length ?? 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 140,
+    getItemKey: index => messages?.[index]?.id ?? index,
+    overscan: 5,
+    gap: 20,
+    scrollMargin: 16,
+  })
   const retryKey = useRef<{ content: string; signature: string; key: string } | null>(null)
 
   useEffect(() => {
@@ -72,9 +120,9 @@ export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = 
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = async () => {
       try {
-        const next = await teamChatApi.get(roomId)
+        const next = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE })
         if (!active) return
-        setSnapshot(next); setListError(null)
+        setSnapshot(prev => mergeLatestPage(prev, next)); setListError(null)
         // Deliveries are persisted history; confirm execution before animating.
         const sources = new Map<string, { kind: 'sessions' | 'threads'; id: string; agentId: string }>()
         const addSource = (kind: 'sessions' | 'threads', id: string, agentId: string) => {
@@ -99,6 +147,27 @@ export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = 
     void refresh()
     return () => { active = false; clearTimeout(timer) }
   }, [roomId])
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const loadingOlderRef = useRef(false)
+  const loadOlder = async () => {
+    const first = snapshot?.messages[0]
+    if (!first || !snapshot.hasMore || loadingOlderRef.current) return
+    loadingOlderRef.current = true; setLoadingOlder(true)
+    try {
+      const page = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE, before: first.id })
+      setSnapshot(prev => {
+        if (!prev || prev.room.id !== roomId || prev.messages[0]?.id !== first.id) return prev
+        return { ...prev, messages: [...page.messages, ...prev.messages], hasMore: page.hasMore, deliveries: [...page.deliveries.filter(delivery => page.messages.some(message => message.id === delivery.messageId)), ...prev.deliveries] }
+      })
+      // Keep the previously-first message in view after prepending.
+      requestAnimationFrame(() => virtualizer.scrollToIndex(page.messages.length, { align: 'start' }))
+    } catch (error) { setListError(error instanceof Error ? error.message : 'Could not load older messages') }
+    finally { loadingOlderRef.current = false; setLoadingOlder(false) }
+  }
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    onScroll(event)
+    if (event.currentTarget.scrollTop < 120) void loadOlder()
+  }
   const loadedRoomId = snapshot?.room.id
   useLayoutEffect(() => {
     if (loadedRoomId) scrollToBottom('auto')
@@ -114,27 +183,39 @@ export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = 
     try {
       await teamChatApi.post(roomId, { content, attachments, clientKey: key })
       retryKey.current = null; changeInput('')
-      setSnapshot(await teamChatApi.get(roomId))
+      const next = await teamChatApi.get(roomId, { limit: TEAM_PAGE_SIZE })
+      setSnapshot(prev => mergeLatestPage(prev, next))
     } catch (error) { changeInput(content); attachments.forEach(attachment => composer.current?.addAttachment(attachment)); setError(error instanceof Error ? error.message : 'Could not send message') }
     finally { setSending(false) }
   }
+  // Reuse the list's identity until the authoritative room snapshot arrives.
+  // Unknown membership must remain distinct from a confirmed empty team.
+  const identity = snapshot?.room.id === roomId
+    ? { ...snapshot.room, members: snapshot.members }
+    : initialIdentity?.id === roomId ? initialIdentity : undefined
   return <div className="flex min-h-0 flex-1 flex-col">
     {!embedded && <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
       {showBack && <Button size="icon" variant="ghost" onClick={onBack} aria-label={backLabel}><ArrowLeft className="h-4 w-4" /></Button>}
-      <TeamAvatar members={snapshot?.members ?? []} runningIds={runningIds} />
-      <div className="min-w-0"><h1 className="truncate font-semibold">{snapshot?.room.name ?? 'Team conversation'}</h1>
-        <p className="truncate text-xs text-muted-foreground">{snapshot?.members.map(member => member.name).join(', ')}</p></div>
+      {identity ? <TeamAvatar members={identity.members} runningIds={runningIds} />
+        : <span role="img" aria-label="Loading team members" className="h-12 w-12 shrink-0 rounded-full bg-muted" />}
+      <div className="min-w-0"><h1 className="truncate font-semibold">{identity?.name ?? 'Team conversation'}</h1>
+        <p className="truncate text-xs text-muted-foreground">{identity?.members.map(member => member.name).join(', ')}</p></div>
     </header>}
     {snapshot?.room.goal && <TeamGoalPanel key={roomId} roomId={roomId} goal={snapshot.room.goal} />}
     <div className="relative min-h-0 flex-1">
-    <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain p-4" aria-label="Team conversation" role="log" aria-live="polite">
+    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto overscroll-contain p-4" aria-label="Team conversation" role="log" aria-live="polite">
       <div ref={contentRef} className="min-h-full">
+      {snapshot?.hasMore && <div className="mx-auto mb-3 max-w-3xl text-center">
+        <Button variant="ghost" size="sm" disabled={loadingOlder} onClick={() => { void loadOlder() }}>{loadingOlder ? 'Loading older messages…' : 'Load older messages'}</Button>
+      </div>}
       {listError && <p role="alert" className="text-sm text-destructive">{listError}</p>}
       {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The team will route your message to the right agent.</p>}
-      <div className="mx-auto max-w-3xl space-y-5">{snapshot?.messages.map(message => {
-        const decision = message.routingDecision ?? snapshot.messages.find(parent => parent.id === message.parentMessageId)?.routingDecision
-        const deliveries = snapshot.deliveries.filter(delivery => delivery.messageId === message.id)
-        return <article key={message.id} className="flex items-start gap-3" data-testid="team-message">
+      <div className="relative mx-auto max-w-3xl" style={{ height: virtualizer.getTotalSize() }}>{snapshot && virtualizer.getVirtualItems().map(row => {
+        const message = snapshot.messages[row.index]
+        if (!message) return null
+        const decision = message.routingDecision ?? messageById.get(message.parentMessageId ?? '')?.routingDecision
+        const deliveries = deliveriesByMessage.get(message.id) ?? []
+        return <article key={row.key} ref={virtualizer.measureElement} data-index={row.index} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${row.start - 16}px)` }} className="flex items-start gap-3" data-testid="team-message">
           <TeamMessageAvatar message={message} />
           <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
             <div className="flex flex-wrap items-baseline gap-2"><strong className="text-sm">{message.sender.name}</strong>
@@ -146,7 +227,7 @@ export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = 
                 <DropdownMenuItem onSelect={() => setDecisionMessage({ ...message, routingDecision: decision })}>View routing decision</DropdownMenuItem>
               </DropdownMenuContent></DropdownMenu>
             </div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.content}</p>
+            <TeamMessageBody content={message.content} members={snapshot.members} />
             {message.attachments?.map((attachment, index) => <p key={index} className="mt-1 text-xs text-muted-foreground">📎 {attachment.name}</p>)}
             {message.recipientIds.length > 0 && <p className="mt-2 text-xs text-muted-foreground">To: {message.recipientIds.map(id => snapshot.members.find(member => member.id === id)?.name ?? id).join(', ')}</p>}
             {message.sender.kind === 'chat' && message.sender.sourceSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.sender.sourceSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Source chat <ExternalLink className="h-3 w-3" /></a>}

@@ -3,7 +3,16 @@ import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { siLinux, siApple, siAndroid } from 'simple-icons'
+import type { NetworkResource } from '@jait/shared'
+import { groupNetworkResources } from '@/lib/network-resources'
+import linuxSvg from 'simple-icons/icons/linux.svg?raw'
+import appleSvg from 'simple-icons/icons/apple.svg?raw'
+import androidSvg from 'simple-icons/icons/android.svg?raw'
+import dockerSvg from 'simple-icons/icons/docker.svg?raw'
+import nginxSvg from 'simple-icons/icons/nginx.svg?raw'
+import redisSvg from 'simple-icons/icons/redis.svg?raw'
+import postgresqlSvg from 'simple-icons/icons/postgresql.svg?raw'
+import homeassistantSvg from 'simple-icons/icons/homeassistant.svg?raw'
 import {
   Search,
   RefreshCw,
@@ -17,9 +26,12 @@ import {
   Shield,
   Terminal,
   Rocket,
+  Box,
+  Layers,
 } from 'lucide-react'
 import { SecurityWorkbench } from './security-workbench'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -75,13 +87,15 @@ interface TopologyMeshNode {
   online: boolean
 }
 
-type TopologyNode = TopologyGateway | TopologyDevice | TopologyHost | TopologyMeshNode
+type TopologyNode = TopologyGateway | TopologyDevice | TopologyHost | TopologyMeshNode | NetworkResource
 
 interface TopologyResponse {
   gateway: TopologyGateway
   devices: TopologyDevice[]
   hosts: TopologyHost[]
   meshNodes: TopologyMeshNode[]
+  resources?: NetworkResource[]
+  inventory?: { status: 'available' | 'unavailable'; truncated: boolean }
   routerIp?: string | null
   scannedAt: string | null
 }
@@ -110,6 +124,7 @@ const NODE_COLORS: Record<string, string> = {
   device: '#3b82f6',
   mesh: '#a855f7',
   host: '#6b7280',
+  resource: '#0ea5e9',
 }
 
 const NODE_SIZES: Record<string, number> = {
@@ -117,6 +132,7 @@ const NODE_SIZES: Record<string, number> = {
   device: 20,
   mesh: 20,
   host: 16,
+  resource: 18,
 }
 
 function getNodeColor(node: TopologyNode | null): string {
@@ -174,12 +190,23 @@ function preloadImage(src: string): HTMLImageElement {
   return img
 }
 
+const logoUri = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace('<svg ', '<svg fill="#ffffff" '))}`
+
 const OS_IMAGES: Record<string, HTMLImageElement> = {
   windows: preloadImage(buildSvgDataUri(WINDOWS_PATH, '#ffffff')),
-  macos: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
-  linux: preloadImage(buildSvgDataUri(siLinux.path, '#ffffff')),
-  android: preloadImage(buildSvgDataUri(siAndroid.path, '#ffffff')),
-  ios: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
+  macos: preloadImage(logoUri(appleSvg)),
+  linux: preloadImage(logoUri(linuxSvg)),
+  android: preloadImage(logoUri(androidSvg)),
+  ios: preloadImage(logoUri(appleSvg)),
+}
+
+const RESOURCE_IMAGES: Record<NetworkResource['icon'], HTMLImageElement> = {
+  docker: preloadImage(logoUri(dockerSvg)),
+  jait: preloadImage('/icon.svg'),
+  nginx: preloadImage(logoUri(nginxSvg)),
+  redis: preloadImage(logoUri(redisSvg)),
+  postgresql: preloadImage(logoUri(postgresqlSvg)),
+  homeassistant: preloadImage(logoUri(homeassistantSvg)),
 }
 
 /** Detect OS family from an osVersion string like "Windows 11 Pro", "Ubuntu 24.04 LTS", etc. */
@@ -195,6 +222,7 @@ function detectOsFamily(osVersion: string | null | undefined): string | null {
 }
 
 function getOsImage(data: TopologyNode): HTMLImageElement | null {
+  if (data.type === 'resource') return RESOURCE_IMAGES[data.icon] ?? RESOURCE_IMAGES.docker
   // Use platform field directly (gateway/device/mesh)
   if ('platform' in data && typeof data.platform === 'string' && OS_IMAGES[data.platform]) {
     return OS_IMAGES[data.platform]!
@@ -211,9 +239,16 @@ function getOsImage(data: TopologyNode): HTMLImageElement | null {
 // Detail Panel
 // ---------------------------------------------------------------------------
 
-function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; onClose: () => void; onDeploy?: (ip: string) => void }) {
+function NodeDetail({ node, onClose, onDeploy, resources, onSelect, expanded, onToggleGroup }: {
+  node: TopologyNode | null; onClose: () => void; onDeploy?: (ip: string) => void
+  resources: NetworkResource[]; onSelect: (node: TopologyNode) => void
+  expanded: boolean; onToggleGroup: () => void
+}) {
+  const [resourceQuery, setResourceQuery] = useState('')
+  useEffect(() => { setResourceQuery('') }, [node?.id])
   const Icon = node
-    ? (node.type === 'gateway' ? Server
+    ? (node.type === 'resource' ? (node.kind === 'group' ? Layers : Box)
+      : node.type === 'gateway' ? Server
       : node.type === 'device' ? ('platform' in node && (node.platform === 'android' || node.platform === 'ios') ? Smartphone : Monitor)
         : node.type === 'mesh' ? Globe
           : ('isRouter' in node && node.isRouter) ? Wifi
@@ -254,7 +289,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
   return (
     <div
       className={cn(
-        'absolute right-0 top-0 bottom-0 w-72 bg-background border-l z-10 flex flex-col transition-transform duration-200 ease-in-out',
+        'absolute right-0 top-0 bottom-0 w-80 max-w-full bg-background border-l z-10 flex flex-col transition-transform duration-200 ease-in-out',
         node ? 'translate-x-0' : 'translate-x-full',
       )}
     >
@@ -264,13 +299,15 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
           <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
             <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: `${color}22`, color }}>
-              <Icon className="h-4 w-4" />
+              {node.type === 'resource'
+                ? <img src={RESOURCE_IMAGES[node.icon]?.src ?? RESOURCE_IMAGES.docker.src} alt={`${node.icon} logo`} className="h-6 w-6" />
+                : <Icon className="h-4 w-4" />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{node.name}</div>
-              <div className="text-xs text-muted-foreground capitalize">{'isRouter' in node && node.isRouter ? 'router' : node.type}</div>
+              <div className="text-xs text-muted-foreground capitalize">{node.type === 'resource' ? (node.kind === 'group' ? 'Resource group' : node.category === 'sandbox' ? 'Jait sandbox · Docker' : 'Docker container') : 'isRouter' in node && node.isRouter ? 'router' : node.type}</div>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose} aria-label="Close node details">
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -280,9 +317,33 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             {/* Status */}
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${node.online ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span>{node.online ? 'Online' : 'Offline'}</span>
+              <span>{node.type === 'resource' ? node.status : node.online ? 'Online' : 'Offline'}</span>
             </div>
 
+            {node.type === 'resource' && <>
+              <div className="text-xs text-muted-foreground">Runs on this gateway · {node.source}</div>
+              {node.addresses.length > 0 && <div><span className="text-muted-foreground">Addresses</span><div className="break-all font-mono text-xs">{node.addresses.join(', ')}</div></div>}
+              {node.facts.map(fact => <div key={fact.label} className="space-y-1">
+                <div className="text-xs text-muted-foreground">{fact.label}</div>
+                <TooltipHint content={fact.value}><div className="break-all text-xs">{fact.value}</div></TooltipHint>
+              </div>)}
+              <div className="text-xs text-muted-foreground">Observed {new Date(node.observedAt).toLocaleString()}</div>
+              {node.kind === 'group' && <>
+                <Button size="sm" variant="outline" onClick={onToggleGroup}>{expanded ? 'Collapse sandboxes' : 'Expand sandboxes'}</Button>
+                <input aria-label="Find sandbox" placeholder="Find sandbox…" value={resourceQuery} onChange={event => setResourceQuery(event.target.value)} className="w-full rounded border bg-background px-2 py-1 text-xs" />
+                <div className="space-y-1" aria-label="Sandbox resources">
+                  {resources.filter(resource => resource.category === 'sandbox' && resource.name.toLowerCase().includes(resourceQuery.toLowerCase())).map(resource => <button key={resource.id} type="button" onClick={() => onSelect(resource)} className="block w-full rounded border px-2 py-2 text-left hover:bg-muted">
+                    <div className="truncate text-xs font-medium">{resource.name}</div>
+                    <div className="text-xs text-muted-foreground">{resource.status} · {resource.addresses.join(', ') || 'No address'}</div>
+                  </button>)}
+                </div>
+              </>}
+            </>}
+
+            {node.type !== 'resource' && <div className="space-y-1 text-xs text-muted-foreground">
+              <div>{node.type === 'host' ? 'Source: Network discovery' : node.type === 'device' ? 'Source: Connected Jait device' : 'Source: Jait gateway'}</div>
+              <div>{node.type === 'host' ? (node.sshReachable ? 'SSH port reachable · login unverified' : 'Discovered address · access unverified') : 'Connected to Jait'}</div>
+            </div>}
             {/* Platform */}
             {'platform' in node && node.platform && (
               <div className="flex items-center justify-between">
@@ -589,6 +650,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+  const [sandboxesExpanded, setSandboxesExpanded] = useState(false)
   const [deployIp, setDeployIp] = useState<string | null>(null)
 
   const headers = useCallback((): Record<string, string> => {
@@ -692,24 +754,29 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
       links.push({ source: h.id, target: 'gateway', type: 'scanned' })
     }
 
+    for (const resource of groupNetworkResources(topology.resources ?? [], sandboxesExpanded)) {
+      nodes.push({ id: resource.id, data: resource })
+      links.push({ source: resource.id, target: resource.parentId, type: 'connected' })
+    }
     return { nodes: assignInitialPositions(nodes), links }
-  }, [topology])
+  }, [topology, sandboxesExpanded])
 
   useEffect(() => {
     if (!selectedNode) return
-    const updatedNode = graphData.nodes.find((node) => node.data.id === selectedNode.id)?.data ?? null
+    const updatedNode = graphData.nodes.find((node) => node.data.id === selectedNode.id)?.data
+      ?? topology?.resources?.find(resource => resource.id === selectedNode.id) ?? null
     if (updatedNode !== selectedNode) setSelectedNode(updatedNode)
-  }, [graphData, selectedNode])
+  }, [graphData, selectedNode, topology])
 
-  // Set a tighter initial zoom once the graph first has data
+  // Set the initial zoom once the graph and its container are ready
   const didInitialZoom = useRef(false)
   useEffect(() => {
-    if (didInitialZoom.current || graphData.nodes.length === 0) return
-    didInitialZoom.current = true
+    if (didInitialZoom.current || graphData.nodes.length === 0 || !dimensions.width || !dimensions.height) return
     // Defer so ForceGraph2D has mounted and graphRef is populated
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       const fg = graphRef.current
       if (!fg) return
+      didInitialZoom.current = true
       // Moderate repulsion — more distance between nodes than default
       const charge = fg.d3Force('charge')
       if (charge && typeof (charge as any).strength === 'function') {
@@ -720,9 +787,10 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
       if (link && typeof (link as any).distance === 'function') {
         ;(link as any).distance(80)
       }
-      fg.zoom(3.5, 0)
+      fg.zoom(dimensions.width < 640 ? 1.2 : 3.5, 0)
     })
-  }, [graphData])
+    return () => cancelAnimationFrame(frame)
+  }, [graphData, dimensions.width, dimensions.height])
 
   // Draw node
   const drawNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -793,6 +861,12 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
     const label = data.name.length > 20 ? data.name.slice(0, 18) + '\u2026' : data.name
     ctx.fillText(label, x, y + size + 3)
 
+    // Resource role remains readable even when a logo is unfamiliar.
+    if (data.type === 'resource') {
+      ctx.font = `${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = color
+      ctx.fillText(data.kind === 'group' ? data.status : 'DOCKER', x, y + size + fontSize + 5)
+    }
     // Type badge for gateway
     if (data.type === 'gateway') {
       ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
@@ -858,7 +932,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
   }, [])
 
   const deviceCount = topology
-    ? 1 + topology.devices.length + topology.meshNodes.length + topology.hosts.length
+    ? 1 + topology.devices.length + topology.meshNodes.length + topology.hosts.length + (topology.resources?.length ?? 0)
     : 0
 
   if (showServiceChecks) return <div className="h-full flex flex-col">
@@ -871,25 +945,41 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
 
   return (
     <div className="h-full flex flex-col">
+      {topology?.inventory?.status === 'unavailable' && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">Docker inventory unavailable; showing network discoveries.</div>}
+      {topology?.inventory?.truncated && <div role="status" className="px-4 py-1 text-xs text-muted-foreground">Showing the first 512 containers.</div>}
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-3 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 shrink-0">
         <div className="flex min-w-0 items-center gap-2">
           <Wifi className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Network</h2>
           {deviceCount > 0 && (
-            <Badge variant="secondary" className="w-[4.75rem] justify-center px-1 text-2xs tabular-nums">
-              {deviceCount} {deviceCount === 1 ? 'node' : 'nodes'}
+            <Badge variant="secondary" className="justify-center px-1 text-2xs tabular-nums">
+              {deviceCount} resources
             </Badge>
           )}
+          <span className="text-xs text-muted-foreground" aria-label="Visible graph nodes">{graphData.nodes.length} shown</span>
           {topology?.scannedAt && (
             <span className="text-2xs text-muted-foreground hidden sm:inline">
               Last scan: {new Date(topology.scannedAt).toLocaleTimeString()}
             </span>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <select aria-label="Inspect resource" value={selectedNode?.id ?? ''}
+            onChange={event => {
+              const id = event.target.value
+              setSelectedNode(graphData.nodes.find(node => node.id === id)?.data ?? topology?.resources?.find(resource => resource.id === id) ?? null)
+            }} className="h-7 max-w-40 rounded border bg-background px-1 text-xs">
+            <option value="">Inspect resource…</option>
+            {[...new Map([...graphData.nodes.map(node => node.data), ...(topology?.resources ?? [])].map(node => [node.id, node])).values()].map(node =>
+              <option key={node.id} value={node.id}>{node.name}</option>)}
+          </select>
+          {(topology?.resources?.filter(resource => resource.category === 'sandbox').length ?? 0) > 1 &&
+            <Button size="sm" variant="outline" onClick={() => { setSandboxesExpanded(value => !value); setSelectedNode(null) }}>
+              {sandboxesExpanded ? 'Collapse sandboxes' : 'Expand sandboxes'}
+            </Button>}
           <Button size="sm" variant="outline" onClick={() => setShowServiceChecks(true)}>Security checks</Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs sm:px-2.5" onClick={() => void fetchTopology()}>
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs sm:px-2.5" onClick={() => void fetchTopology()} aria-label="Refresh">
             <RefreshCw className="h-3 w-3 sm:mr-1" />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
@@ -1003,7 +1093,9 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
         )}
 
         {/* Node detail sidebar */}
-        <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} onDeploy={(ip) => setDeployIp(ip)} />
+        <NodeDetail node={selectedNode} resources={topology?.resources ?? []} onSelect={setSelectedNode}
+          expanded={sandboxesExpanded} onToggleGroup={() => setSandboxesExpanded(value => !value)}
+          onClose={() => setSelectedNode(null)} onDeploy={(ip) => setDeployIp(ip)} />
 
         {/* Deploy view (overlays sidebar area) */}
         <div className={cn(

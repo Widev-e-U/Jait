@@ -29,7 +29,7 @@ describe('chat reference chip rendering', () => {
   it('renders chat references as chips in sent user message bubbles', () => {
     const source = readSource('./message.tsx')
     const chatBranch = source.match(
-      /segment\.type === 'chat' \? \(\s*<TooltipHint([\s\S]*?)\) : null,/,
+      /segment\.type === 'chat' \? \(\s*<TooltipHint([\s\S]*?)\) : null\s*\}<\/span>/,
     )?.[1] ?? ''
 
     // Regression: the sent bubble branch ended at `skill`, so dragging a chat

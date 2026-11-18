@@ -15,6 +15,7 @@
         http://example.com/?host=HOST&port=PORT&scale=true
     -->
     <title>noVNC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
         :root {
@@ -42,7 +43,7 @@
             overflow: hidden;
         }
 
-        #mobile_keyboard_button {
+        #mobile_keyboard_button, #mobile_pointer_button {
             position: fixed;
             right: max(16px, env(safe-area-inset-right));
             bottom: max(16px, env(safe-area-inset-bottom));
@@ -50,27 +51,41 @@
             display: none;
             align-items: center;
             justify-content: center;
-            min-width: 52px;
-            min-height: 52px;
-            padding: 0 14px;
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0 12px;
             border: 0;
             border-radius: 999px;
             background: rgba(24, 24, 27, 0.9);
             color: #fff;
-            font: 600 16px/1 system-ui, sans-serif;
+            font: 600 14px/1 system-ui, sans-serif;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
             -webkit-tap-highlight-color: transparent;
         }
 
-        #mobile_keyboard_button.visible {
+        /* Sit above the parent's floating view toolbar (Adjust view / zoom) when it overlays the iframe bottom. */
+        body.controls-overlay #mobile_keyboard_button, body.controls-overlay #mobile_pointer_button {
+            bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+        }
+
+        #mobile_keyboard_button.visible, #mobile_pointer_button.visible {
             display: inline-flex;
         }
+
+        #mobile_pointer_button { left: max(16px, env(safe-area-inset-left)); right: auto; font-size: 12px; }
 
         #mobile_keyboard_button.active {
             background: rgba(37, 99, 235, 0.95);
         }
 
+        /* A text field is focused remotely but the OS refused to open the keyboard on its own. */
+        #mobile_keyboard_button.attention {
+            outline: 3px solid rgba(37, 99, 235, 0.95);
+            outline-offset: 2px;
+        }
+
         #mobile_keyboard_input {
+            font-size: 16px;
             width: 1px;
             height: 1px;
             position: fixed;
@@ -87,6 +102,8 @@
     <script type="module" crossorigin="anonymous">
         // RFB holds the API to connect and communicate with a VNC server
         import RFB from './core/rfb.js';
+        import { setupClipboard } from './jait-clipboard.js';
+        import { setupTouchPointer } from './jait-touch-pointer.js';
         import Keyboard from './core/input/keyboard.js';
         import KeyTable from './core/input/keysym.js';
         import keysyms from './core/input/keysymdef.js';
@@ -95,6 +112,7 @@
         let rfb;
         let desktopName;
         let touchKeyboard;
+        let touchPointer;
         let lastKeyboardInput = null;
         const defaultKeyboardInputLen = 100;
 
@@ -107,6 +125,7 @@
 
         // This function is called when we are disconnected
         function disconnectedFromServer(e) {
+            hideVirtualKeyboard();
             window.parent.postMessage({ type: 'jait-vnc-status', status: 'disconnected' }, '*');
             document.getElementById('top_bar').style.display = 'block';
             if (e.detail.clean) {
@@ -157,10 +176,10 @@
         }
 
         function showVirtualKeyboard() {
-            if (!isTouchDevice) return;
+            if (!isTouchDevice || rfb.viewOnly) return;
             const input = keyboardInputElement();
             if (document.activeElement === input) return;
-            input.focus();
+            input.focus({ preventScroll: true });
             try {
                 const len = input.value.length;
                 input.setSelectionRange(len, len);
@@ -183,17 +202,21 @@
         }
 
         function onVirtualKeyboardFocus() {
+            window.parent.postMessage({ type: 'jait-vnc-keyboard', open: true }, '*');
             keyboardButtonElement().classList.add('active');
+            keyboardButtonElement().setAttribute('aria-pressed', 'true');
             if (rfb) rfb.focusOnClick = false;
         }
 
         function onVirtualKeyboardBlur() {
+            window.parent.postMessage({ type: 'jait-vnc-keyboard', open: false }, '*');
             keyboardButtonElement().classList.remove('active');
+            keyboardButtonElement().setAttribute('aria-pressed', 'false');
             if (rfb) rfb.focusOnClick = true;
         }
 
         function onVirtualKeyboardInput(event) {
-            if (!rfb) return;
+            if (!rfb || rfb.viewOnly) return;
 
             const newValue = event.target.value;
             if (!lastKeyboardInput) keyboardInputReset();
@@ -241,15 +264,17 @@
 
             const button = keyboardButtonElement();
             const input = keyboardInputElement();
-            button.classList.add('visible');
+            button.classList.toggle('visible', !rfb.viewOnly);
+            // Preserve the input focus until click decides whether to close the keyboard.
+            button.addEventListener('pointerdown', event => event.preventDefault());
             button.addEventListener('click', toggleVirtualKeyboard);
 
             touchKeyboard = new Keyboard(input);
             touchKeyboard.onkeyevent = (keysym, code, down) => {
-                if (!rfb) return;
+                if (!rfb || rfb.viewOnly) return;
                 rfb.sendKey(keysym, code, down);
             };
-            touchKeyboard.grab();
+            if (!rfb.viewOnly) touchKeyboard.grab();
 
             input.addEventListener('focus', onVirtualKeyboardFocus);
             input.addEventListener('blur', onVirtualKeyboardBlur);
@@ -259,9 +284,72 @@
             // Keep the OS keyboard open while interacting with the remote page
             // after the user explicitly enabled typing.
             document.getElementById('screen').addEventListener('touchstart', () => {
-                if (document.activeElement === input) {
-                    setTimeout(() => input.focus(), 0);
+                if (!rfb.viewOnly && document.activeElement === input) {
+                    setTimeout(() => { if (!rfb.viewOnly) input.focus(); }, 0);
                 }
+            }, { passive: true });
+        }
+
+        // Open the phone keyboard by itself when a tap lands on a text field of the remote page.
+        // The VNC stream carries no focus information, so ask the gateway after each tap.
+        function setupAutoKeyboard(websockifyPath) {
+            if (!isTouchDevice || !/(^|\/)live(-view)?\/\d+\/websockify$/.test(websockifyPath)) return;
+            const focusUrl = new URL('/' + websockifyPath.replace(/websockify$/, 'focus'), window.location.href);
+            const input = keyboardInputElement();
+            const button = keyboardButtonElement();
+            let checking = false;
+            let autoOpened = false;
+            let tapId = 0;
+            let touchStart = null;
+
+            async function check(id, last) {
+                if ((checking && !last) || id !== tapId || !rfb || rfb.viewOnly) return;
+                checking = true;
+                try {
+                    const response = await fetch(focusUrl, { credentials: 'include', cache: 'no-store' });
+                    if (!response.ok || id !== tapId) return;
+                    const { editing } = await response.json();
+                    if (id !== tapId) return;
+                    if (editing) {
+                        // Mobile browsers only show the keyboard for a focus() inside a user gesture,
+                        // which the tap handler already did; this is a fallback for desktop-like browsers.
+                        if (document.activeElement !== input) showVirtualKeyboard();
+                        autoOpened = document.activeElement === input;
+                        button.classList.toggle('attention', !autoOpened);
+                        tapId += 1;
+                    } else if (last) {
+                        button.classList.remove('attention');
+                        if (autoOpened) hideVirtualKeyboard();
+                        autoOpened = false;
+                    }
+                } catch {
+                    // transient network error: the manual keyboard button still works
+                } finally {
+                    checking = false;
+                }
+            }
+
+            // Typing stays possible via the button; a manual toggle ends the automatic mode.
+            button.addEventListener('click', () => { autoOpened = false; tapId += 1; button.classList.remove('attention'); });
+            const screen = document.getElementById('screen');
+            screen.addEventListener('touchstart', event => {
+                const t = event.touches[0];
+                touchStart = event.touches.length === 1 && t ? { x: t.clientX, y: t.clientY } : null;
+            }, { passive: true });
+            screen.addEventListener('touchend', event => {
+                const t = event.changedTouches[0];
+                const tap = touchStart && t && Math.hypot(t.clientX - touchStart.x, t.clientY - touchStart.y) < 12;
+                touchStart = null;
+                if (!tap || !rfb || rfb.viewOnly) return;
+                const id = ++tapId;
+                // Optimistically focus inside the tap gesture so the OS keyboard is allowed to open;
+                // it is closed again below if the tapped element turns out not to be editable.
+                if (document.activeElement !== input) {
+                    showVirtualKeyboard();
+                    autoOpened = document.activeElement === input;
+                }
+                setTimeout(() => check(id, false), 250);
+                setTimeout(() => check(id, true), 700);
             }, { passive: true });
         }
 
@@ -318,6 +406,7 @@
                       { credentials: { password: password } });
 
         // Add listeners to important events from the RFB module
+        setupClipboard(rfb, document);
         rfb.addEventListener("connect",  connectedToServer);
         rfb.addEventListener("disconnect", disconnectedFromServer);
         rfb.addEventListener("credentialsrequired", credentialsAreRequired);
@@ -328,6 +417,25 @@
         rfb.scaleViewport = readQueryVariable('scale', false);
 
         setupTouchKeyboard();
+        setupAutoKeyboard(path);
+        if (isTouchDevice) touchPointer = setupTouchPointer(rfb, document.getElementById('screen'), document.getElementById('mobile_pointer_button'));
+
+        // Only this viewer's embedding parent may update an existing connection.
+        // Messages from pages, other frames and unrelated origins cannot take control.
+        window.addEventListener('message', event => {
+            if (window.parent === window || event.source !== window.parent ||
+                !document.referrer || event.origin !== new URL(document.referrer).origin ||
+                event.data?.type !== 'jait-vnc-control' || typeof event.data.viewOnly !== 'boolean') return;
+            touchPointer?.reset(); // Release held mouse buttons before disabling input.
+            if (event.data.viewOnly) { hideVirtualKeyboard(); touchKeyboard?.ungrab(); }
+            rfb.viewOnly = event.data.viewOnly;
+            document.body.classList.toggle('controls-overlay', event.data.controlsOverlay === true);
+            if (isTouchDevice) {
+                keyboardButtonElement().classList.toggle('visible', !rfb.viewOnly);
+                if (!rfb.viewOnly) touchKeyboard?.grab();
+                touchPointer?.update();
+            }
+        });
     </script>
 </head>
 
@@ -339,7 +447,8 @@
     <div id="screen">
         <!-- This is where the remote screen will appear -->
     </div>
-    <button id="mobile_keyboard_button" type="button" aria-label="Toggle keyboard">⌨</button>
-    <input id="mobile_keyboard_input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" />
+    <button id="mobile_pointer_button" type="button" aria-label="Toggle mouse mode" aria-pressed="true">Mouse</button>
+    <button id="mobile_keyboard_button" type="button" aria-label="Toggle keyboard" aria-pressed="false">⌨</button>
+    <input id="mobile_keyboard_input" aria-label="Remote keyboard input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" />
 </body>
 </html>

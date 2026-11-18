@@ -52,3 +52,25 @@ test('opens and closes the editor beside two streaming conversations', async ({ 
   await expect(panels).toHaveCount(2)
   expect(errors).toEqual([])
 })
+
+
+test('divider ignores a browser workspace overlay inserted between chats', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto('/parallel-chat-repro.html')
+  await page.waitForFunction(() => Reflect.get(window, '__panelStreamsReady')?.())
+  const panels = page.getByRole('region', { name: 'Secondary chat panel' })
+  const divider = page.getByRole('separator', { name: 'Resize chat panels' })
+  await divider.evaluate(element => {
+    const overlay = document.createElement('div')
+    overlay.setAttribute('data-browser-workspace-overlay', '')
+    Object.assign(overlay.style, { position: 'absolute', inset: '0', pointerEvents: 'none' })
+    element.before(overlay)
+  })
+  const initial = (await panels.first().boundingBox())!.width
+  const box = (await divider.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, 300)
+  await page.mouse.down()
+  await page.mouse.move(box.x - 120, 300, { steps: 8 })
+  await page.mouse.up()
+  expect((await panels.first().boundingBox())!.width).toBeCloseTo(initial - 122, 0)
+})

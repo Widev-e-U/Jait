@@ -7,44 +7,8 @@ import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
 
-export type EmailProvider = 'gmail' | 'outlook'
-
-export interface EmailAccount {
-  id: string
-  userId: string | null
-  provider: EmailProvider
-  email: string
-  displayName: string
-  status: 'connected' | 'error'
-  error?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface EmailMessageSummary {
-  id: string
-  threadId?: string
-  from: string
-  to: string
-  subject: string
-  snippet: string
-  date: string
-  unread: boolean
-  labels: string[]
-  hasAttachments: boolean
-}
-
-export interface EmailMessageFull extends EmailMessageSummary {
-  cc: string
-  bodyText: string
-  bodyHtml: string
-}
-
-export interface EmailFolder {
-  id: string
-  name: string
-  unreadCount?: number
-}
+import type { EmailProvider, OAuthEmailProvider, EmailAccount, EmailMessageSummary, EmailMessageFull, EmailFolder, ConnectMailboxInput, EmailAccountSettings, DiscoveredMailSettings } from '@jait/shared'
+export type { EmailProvider, OAuthEmailProvider, EmailAccount, EmailMessageSummary, EmailMessageFull, EmailFolder, ConnectMailboxInput, EmailAccountSettings } from '@jait/shared'
 
 export interface SendEmailInput {
   accountId?: string
@@ -55,6 +19,7 @@ export interface SendEmailInput {
   bcc?: string
   replyToMessageId?: string
   html?: boolean
+  includeSignature?: boolean
 }
 
 async function asJson<T>(res: Response): Promise<T> {
@@ -64,13 +29,32 @@ async function asJson<T>(res: Response): Promise<T> {
 }
 
 export const emailApi = {
-  async config(): Promise<Record<EmailProvider, boolean>> {
+  async remoteImages(accountId: string, urls: string[]): Promise<Record<string, string>> {
+    const res = await apiFetch(`${API_URL}/api/email/images`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountId, urls }) })
+    const data = await asJson<{ images: Record<string, string> }>(res)
+    return data.images
+  },
+  async discover(address: string): Promise<DiscoveredMailSettings> {
+    const res = await apiFetch(`${API_URL}/api/email/discover?email=${encodeURIComponent(address)}`)
+    return asJson(res)
+  },
+  async connectMailbox(input: ConnectMailboxInput): Promise<EmailAccount> {
+    const res = await apiFetch(`${API_URL}/api/email/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+    const data = await asJson<{ account: EmailAccount }>(res)
+    return data.account
+  },
+  async updateAccount(id: string, input: EmailAccountSettings): Promise<EmailAccount> {
+    const res = await apiFetch(`${API_URL}/api/email/accounts/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+    const data = await asJson<{ account: EmailAccount }>(res)
+    return data.account
+  },
+  async config(): Promise<Record<OAuthEmailProvider, boolean>> {
     const res = await apiFetch(`${API_URL}/api/email/config`)
-    const data = await asJson<{ providers: Record<EmailProvider, boolean> }>(res)
+    const data = await asJson<{ providers: Record<OAuthEmailProvider, boolean> }>(res)
     return data.providers
   },
 
-  async saveAppCredentials(provider: EmailProvider, clientId: string, clientSecret: string): Promise<void> {
+  async saveAppCredentials(provider: OAuthEmailProvider, clientId: string, clientSecret: string): Promise<void> {
     const res = await apiFetch(`${API_URL}/api/email/config/${provider}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,7 +69,7 @@ export const emailApi = {
     return data.accounts
   },
 
-  async connectUrl(provider: EmailProvider): Promise<string> {
+  async connectUrl(provider: OAuthEmailProvider): Promise<string> {
     const res = await apiFetch(`${API_URL}/api/email/connect/${provider}`)
     const data = await asJson<{ authUrl: string }>(res)
     return data.authUrl
@@ -107,6 +91,13 @@ export const emailApi = {
     if (opts.limit) params.set('limit', String(opts.limit))
     const res = await apiFetch(`${API_URL}/api/email/messages?${params.toString()}`)
     return asJson(res)
+  },
+
+  async cachedInbox(accountId: string): Promise<EmailMessageSummary[] | null> {
+    const params = new URLSearchParams({ accountId, cached: 'true' })
+    const res = await apiFetch(`${API_URL}/api/email/messages?${params}`)
+    const data = await asJson<{ messages: EmailMessageSummary[] | null }>(res)
+    return data.messages
   },
 
   async getMessage(id: string, accountId?: string): Promise<EmailMessageFull> {

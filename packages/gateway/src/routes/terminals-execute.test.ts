@@ -66,3 +66,37 @@ describe("PowerShell terminal execution", () => {
     expect(result.output).toBe("PS report > complete");
   });
 });
+
+
+describe("terminal tool listing", () => {
+  it("returns registered tool metadata for the terminal client", async () => {
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "terminal-list-test-secret" };
+    const registry = new ToolRegistry();
+    registry.register({ name: "terminal.coverage_fixture", description: "Fixture tool", category: "terminal",
+      tier: "standard", source: "builtin", parameters: { type: "object", properties: {} },
+      execute: async () => ({ ok: true, message: "ok" }),
+    });
+    registerTerminalRoutes(app, {} as SurfaceRegistry, registry, { write: vi.fn() } as unknown as AuditWriter,
+      undefined, undefined, { config, access: {} as ControlAccess });
+    try {
+      const token = await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret);
+      const response = await app.inject({ method: "GET", url: "/api/tools", headers: { authorization: `Bearer ${token}` } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tools).toEqual([expect.objectContaining({ name: "terminal.coverage_fixture",
+        description: "Fixture tool", category: "terminal", source: "builtin" })]);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+
+it.each([
+  ["permission denied", 126],
+  ["command not found", 127],
+  ["completed", 0],
+])("uses prompt completion and reports fallback status for %s", async (output, exitCode) => {
+  const result = await executeWithOutput("run-fixture", [[0, `run-fixture\r\n${output}\r\nPS C:\\project> `]]);
+  expect(result).toMatchObject({ output, exitCode, timedOut: false });
+});

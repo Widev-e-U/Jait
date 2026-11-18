@@ -3,6 +3,10 @@ import { clearSessionTodos, createTodoTool, getSessionTodos } from "./todo.js";
 const context = { sessionId: "todo-tests", actionId: "todo-action", projectRoot: "/project", requestedBy: "test" };
 afterEach(() => { clearSessionTodos(context.sessionId); clearSessionTodos("other-session"); });
 describe("todo", () => {
+  it("directs persistent follow-ups to the saved todo tool", () => {
+    expect(createTodoTool().description).toContain("temporary plan");
+    expect(createTodoTool().description).toContain("jait.todos");
+  });
   it("replaces the complete plan and keeps sessions independent", async () => {
     const tool = createTodoTool();
     const item = { id: 1, title: "Verify browser actions", status: "in-progress" as const };
