@@ -264,7 +264,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
-  providerUsageService.attachNotifications(notifications);
+  // Intentionally not attaching notifications to providerUsageService: the user
+  // does not want "Approaching usage limit" notifications for subscription usage.
 
   // Reclaim disk jait allocates but never frees. The notify hook matters: when
   // scratch lives in a shared sticky temp root, the entries may belong to
