@@ -57,6 +57,25 @@ logs/
 /jait.db
 /todo.json
 
+# Generated local artifacts
+/.tmp/
+/e2e/test-results/
+/test-results/
+/packages/gateway/jait.db*
+/apps/mobile/App.js
+/apps/mobile/App.js.map
+/apps/mobile/App.d.ts
+/apps/mobile/App.d.ts.map
+/scripts/generate-android-icons.js
+/scripts/generate-android-icons.js.map
+/scripts/generate-android-icons.d.ts
+/scripts/generate-android-icons.d.ts.map
+/scripts/generate-app-icons.js
+/scripts/generate-app-icons.js.map
+/scripts/generate-app-icons.d.ts
+/scripts/generate-app-icons.d.ts.map
+/artifacts/
+
 # Testing
 .coverage
 htmlcov/
@@ -108,3 +127,12 @@ apps/desktop/src-tauri/tests/harness/out/
 # download stashes, investigation dirs). Keep only the tracked architecture map.
 .jait/*
 !.jait/architecture.mmd
+
+# Generated Vite config shadows the maintained TypeScript configuration.
+apps/web/vite.config.js
+apps/web/vite.config.js.map
+apps/web/vite.config.d.ts
+apps/web/vite.config.d.ts.map
+
+# Rust contract build cache
+/tests/contract/target/

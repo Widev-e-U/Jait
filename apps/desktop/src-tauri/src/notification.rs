@@ -31,7 +31,15 @@ pub fn toast_xml(payload: &Value) -> String {
     let title = xml_escape(payload.get("title").and_then(Value::as_str).unwrap_or("Jait"));
     let body = xml_escape(payload.get("body").and_then(Value::as_str).unwrap_or_default());
     let uri = xml_escape(&activation_uri(payload));
-    format!(r#"<toast activationType="protocol" launch="{uri}"><visual><binding template="ToastGeneric"><text>{title}</text><text>{body}</text></binding></visual><actions><action content="Open in Jait" activationType="protocol" arguments="{uri}"/></actions></toast>"#)
+    let read_action = payload.get("markReadLink").and_then(Value::as_str)
+        .filter(|link| link.starts_with("/messenger?") && !link.contains('\\') && !link.chars().any(char::is_control))
+        .map(|link| {
+            let mut action_payload = payload.clone();
+            action_payload["link"] = json!(link);
+            let action_uri = xml_escape(&activation_uri(&action_payload));
+            format!(r#"<action content="Mark as read" activationType="protocol" arguments="{action_uri}"/>"#)
+        }).unwrap_or_default();
+    format!(r#"<toast activationType="protocol" launch="{uri}"><visual><binding template="ToastGeneric"><text>{title}</text><text>{body}</text></binding></visual><actions><action content="Open in Jait" activationType="protocol" arguments="{uri}"/>{read_action}</actions></toast>"#)
 }
 
 /// Windows tags are limited to 16 characters. Stable across process restarts.
@@ -74,6 +82,20 @@ mod tests {
         assert_eq!(a["id"], "chat:1");
         assert_eq!(a["link"], p["link"]);
         assert_eq!(a["scope"], p["scope"]);
+    }
+    #[test]
+    fn read_action_preserves_exact_target_and_scope() {
+        let read = "/messenger?action=mark-read&roomId=%21room&eventId=%24old&account=%40me&homeserver=https%3A%2F%2Fmatrix.test";
+        let payload = json!({"id":"matrix:$old", "title":"Private", "link":"/messenger?roomId=%21room", "scope":"https://gateway.test", "markReadLink":read});
+        let xml = toast_xml(&payload);
+        assert!(xml.contains("content=\"Mark as read\""));
+        let mut action_payload = payload.clone();
+        action_payload["link"] = json!(read);
+        let activation = activation_from_arg(&activation_uri(&action_payload)).unwrap();
+        assert_eq!(activation["link"], read);
+        assert_eq!(activation["id"], "matrix:$old");
+        assert_eq!(activation["scope"], "https://gateway.test");
+        assert!(!toast_xml(&json!({"markReadLink":"https://evil.test"})).contains("Mark as read"));
     }
     #[test]
     fn rejects_untrusted_activation_and_escapes_text() {

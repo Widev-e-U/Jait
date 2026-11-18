@@ -1,0 +1,40 @@
+{
+  "name": "jait.link",
+  "displayName": "Show Jait link",
+  "description": "Render a clickable link in chat to where a Jait change happened, or a relevant Jait page the user requested. Optional navigation card for a relevant user-viewable result inside Jait. Ordinary Markdown links are clickable and preferred in replies; do not call this after unrelated code edits or internal task tracking. This only displays a link and does not navigate automatically or modify anything. Use a short descriptive label, e.g. View the updated team. Supported pages: Chat: /, Messenger: /messenger, Agents: /agents, Threads: /threads, Pull Requests: /pulls, Todo: /todo, Email: /emails, Calendar: /calendar, Memory: /memory, Jobs: /jobs, Network: /network, Settings: /settings. Specific chats support /chat?sessionId=<id>; threads support /threads?threadId=<id>. Searchable pages support q, e.g. /emails?q=from%3Aalice or /settings?q=providers. Use search to set q with automatic URL encoding, or put parameters directly in href. jait.catalog exposes each page's supported queryParameters, including settings tab and nested search fields. Do not invent unsupported detail routes.",
+  "tier": "core",
+  "category": "meta",
+  "page": "chat",
+  "source": "builtin",
+  "risk": "low",
+  "defaultConsentLevel": "none",
+  "discovery": {
+    "aliases": [
+      "render link",
+      "show link",
+      "change destination",
+      "Jait navigation"
+    ]
+  },
+  "parameters": {
+    "type": "object",
+    "required": [
+      "href",
+      "label"
+    ],
+    "properties": {
+      "href": {
+        "type": "string",
+        "description": "Internal Jait path from jait.catalog, e.g. /agents, /jobs, /settings or /network. Use only supported query parameters."
+      },
+      "search": {
+        "type": "string",
+        "description": "Optional search bar text for a page supporting q (chat, email, settings, todo, messenger). Encoded automatically into href; an empty string clears the search. For other search bars use the page queryParameters from jait.catalog in href."
+      },
+      "label": {
+        "type": "string",
+        "description": "Short user-facing link text describing what changed, e.g. View the updated team."
+      }
+    }
+  }
+}

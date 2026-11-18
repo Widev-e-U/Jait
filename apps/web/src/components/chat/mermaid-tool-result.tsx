@@ -1,4 +1,7 @@
 import { useEffect, useId, useState } from 'react'
+import { Dialog, DialogTrigger } from '@/components/ui/dialog'
+import { Maximize2 } from 'lucide-react'
+import { ImageViewerContent } from './image-viewer'
 import { unwrapCatalogData } from './catalog-tool-result'
 
 // Mermaid uses global configuration and a render queue; keep chat jobs ordered.
@@ -36,7 +39,15 @@ export function MermaidToolResult({ data }: { data: unknown }) {
   return <section className="space-y-2 rounded-md border bg-background p-3" data-testid="mermaid-tool-result">
     <h3 className="text-sm font-medium">{title}</h3>
     {ready && result.error ? <p role="alert" className="text-sm text-destructive">Diagram could not render: {result.error}</p>
-      : ready && result.svg ? <iframe title={title} sandbox="" className="h-[420px] w-full rounded border-0 bg-white" srcDoc={`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><style>body{margin:12px}svg{max-width:100%;height:auto}</style>${result.svg}`} />
+      : ready && result.svg ? <Dialog>
+        <div className="relative">
+          <iframe title={title} sandbox="" className="pointer-events-none h-[420px] w-full rounded border-0 bg-white" srcDoc={`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><style>body{margin:12px}svg{max-width:100%;height:auto}</style>${result.svg}`} />
+          <DialogTrigger asChild><button type="button" aria-label={`Expand diagram ${title}`} className="absolute inset-0 w-full cursor-zoom-in rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+            <span className="absolute right-2 top-2 rounded bg-background/90 p-2 shadow-sm"><Maximize2 className="h-4 w-4" aria-hidden="true" /></span>
+          </button></DialogTrigger>
+        </div>
+        <ImageViewerContent src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`} alt={title} />
+      </Dialog>
       : <p role="status" className="text-xs text-muted-foreground">Rendering diagram…</p>}
     <details><summary className="cursor-pointer text-xs text-muted-foreground">Mermaid source</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap text-xs">{diagram}</pre></details>
   </section>

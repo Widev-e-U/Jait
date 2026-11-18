@@ -70,6 +70,17 @@ export type TrajectoryStep =
       promptCount?: number
       ts: number
     }
+  | {
+      kind: 'steering'
+      role: 'steering'
+      index: number
+      turn: number
+      message: string
+      displayContent?: string
+      hidden: boolean
+      deferred: boolean
+      ts: number
+    }
   | { kind: 'error'; role: 'error'; index: number; turn: number; message: string; ts: number }
 
 export interface Trajectory {
@@ -128,6 +139,15 @@ type StepInput =
       message: string
       sessionId?: string
       promptCount?: number
+      ts: number
+    }
+  | {
+      kind: 'steering'
+      role: 'steering'
+      message: string
+      displayContent?: string
+      hidden: boolean
+      deferred: boolean
       ts: number
     }
   | { kind: 'error'; role: 'error'; message: string; ts: number }
@@ -204,6 +224,24 @@ export function buildTrajectory(events: SSEDebugEvent[]): Trajectory {
         assistantIdx = steps.length - 1
         // A new turn invalidates any in-flight tool state
         running.clear()
+        break
+      }
+
+      // Steering messages are injected between rounds. Internal nudges (hidden)
+      // never reach the chat transcript, so the trajectory is where they show up.
+      case 'steering': {
+        const displayContent = typeof data.displayContent === 'string' && data.displayContent
+          ? data.displayContent
+          : undefined
+        push({
+          kind: 'steering',
+          role: 'steering',
+          message: String(data.message ?? data.content ?? ''),
+          ...(displayContent ? { displayContent } : {}),
+          hidden: data.hidden === true,
+          deferred: data.deferred === true,
+          ts: ev.ts,
+        })
         break
       }
 

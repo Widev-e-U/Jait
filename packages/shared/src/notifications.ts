@@ -93,6 +93,14 @@ export function notificationBodyWithAgent(body: string, agent?: NotificationAgen
   return body ? `${lead} · ${body}` : lead;
 }
 
+/** Exact completion identity used by read acknowledgements and native dismissal. */
+export interface ChatNotificationState {
+  id: string;
+  sessionId: string;
+  replaceId: string;
+  read: boolean;
+}
+
 export interface NotificationActivation {
   id: string;
   link: string;

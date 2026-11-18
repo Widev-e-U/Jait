@@ -1,0 +1,173 @@
+{
+  "review_scope": "parity-calls bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/providers/model-fetchers.test.ts:259:3",
+      "status": "verified",
+      "parity_review": "Reviewed current model-fetcher, steering and screenshot declarations against regenerated Rust matcher rules. All prior matcher rules are unchanged except the exact deferred=true steering event addition, checked by merge-current-drift-selected.py. New cloud catalogue tests retain ordered deduplication, group/description, opt-in/sign-in, cache/force and failure assertions. Screenshot display-copy tests retain project-root, existence, bytes and gateway-CWD noncreation assertions; the three existing path declarations remain executed. Fresh source-bound translated TypeScript report passes. Declaration equivalence only; runtime/native/platform acceptance remains separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_model_fetchers_test_ts_259_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/contracts/86f07faf-af54-410f-9b79-971ca37ebee4/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/pull-requests.test.ts:54:3",
+      "status": "verified",
+      "parity_review": "Reviewed resolves pull request operations per authenticated user. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_pull_requests_test_ts_54_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/pull-requests.test.ts:223:3",
+      "status": "verified",
+      "parity_review": "Reviewed forwards conflict resolution and validates resolution sides. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_pull_requests_test_ts_223_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/security-assessments.test.ts:57:1",
+      "status": "verified",
+      "parity_review": "Reviewed binds filesystem roots to an owned local session and rejects remote projects. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_security_assessments_test_ts_57_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/safe-update.test.ts:73:3",
+      "status": "verified",
+      "parity_review": "Reviewed restores and verifies the old version when the new gateway fails startup. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_safe_update_test_ts_73_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/provider-updates.test.ts:5:3",
+      "status": "verified",
+      "parity_review": "Reviewed detects an available Codex update and caches the result. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_provider_updates_test_ts_5_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/subscription-usage-fetchers.test.ts:28:3",
+      "status": "verified",
+      "parity_review": "Reviewed uses only the fixed Ollama origin and never follows redirects. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_subscription_usage_fetchers_test_ts_28_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/subscription-usage-fetchers.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "Reviewed fetches all Go windows with Bearer authentication. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_subscription_usage_fetchers_test_ts_40_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/computer-tools.test.ts:85:3",
+      "status": "verified",
+      "parity_review": "Reviewed starts a target-side session and routes actions through its node. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_85_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/computer-tools.test.ts:156:3",
+      "status": "verified",
+      "parity_review": "Reviewed cancels target startup after a transport timeout. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_156_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/homeassistant-tools.test.ts:23:3",
+      "status": "verified",
+      "parity_review": "Reviewed uses the HA_URL and HA_TOKEN names exposed by Settings. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_homeassistant_tools_test_ts_23_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/project-message-tool.test.ts:88:3",
+      "status": "verified",
+      "parity_review": "Reviewed creates a new project + chat and starts an agent turn there. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_88_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/security-workbench-tools.test.ts:9:1",
+      "status": "verified",
+      "parity_review": "Reviewed binds monitoring to the stored exact target/profile and disables expired scopes. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_security_workbench_tools_test_ts_9_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/thread-tools.test.ts:441:3",
+      "status": "verified",
+      "parity_review": "Reviewed generates scheduler-created delivery thread titles from the prompt when no title is provided. Original body, lexical setup, imports, lifecycle, enclosing function bindings and every actual and expected operand match the bounded completion audit. Last-call and nth-call assertions preserve mock call history and their complete expected argument vectors, including the ordinal for nth-call checks. Five structural controls reject changed ordinals, call kind, arguments and receiver. Thirty-two ordering verdicts agree across real Vitest and Rust for positive/negative last/nth predicates. Partial-object call expectations guard every compared property while permitting functions and uncustomized AbortSignals only in omitted fields; nine domain controls reject unsupported compared or serialized values. Other predicates retain plain-data checks. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-calls/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_441_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

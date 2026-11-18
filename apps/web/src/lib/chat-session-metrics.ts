@@ -11,6 +11,7 @@ export interface SessionMetricsMessage {
   thinking?: string
   contextFlow?: {
     rounds?: LlmContextFlowRound[]
+    usageSummary?: import("@jait/shared").UsageSummary
   }
 }
 
@@ -65,11 +66,11 @@ export function aggregateSessionMetrics(messages: SessionMetricsMessage[] | unde
       textWritten += (msg.content?.length ?? 0) + (msg.thinking?.length ?? 0)
     }
 
-    const rounds = msg.contextFlow?.rounds
+    const rounds = msg.contextFlow?.usageSummary ? [{ metrics: msg.contextFlow.usageSummary }] : msg.contextFlow?.rounds
     if (!rounds) continue
 
     for (const round of rounds) {
-      const m = round.metrics
+      const m = round.metrics as LlmContextFlowRound["metrics"]
       if (!m) continue
       if (m.tokenUsageEstimated) tokenUsageEstimated = true
 

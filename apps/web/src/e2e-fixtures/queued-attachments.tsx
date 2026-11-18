@@ -5,6 +5,7 @@ import { MessageQueue, type QueuedMessage } from '@/components/chat/message-queu
 import { PromptInput } from '@/components/chat/prompt-input'
 import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { editQueuedChatMessage } from '@/hooks/useChat'
 import '@/index.css'
 
 const attachments = [
@@ -17,7 +18,7 @@ function Harness() {
   return <TooltipProvider><ConfirmDialogProvider>
     <main className="mx-auto max-w-xl space-y-4 p-3">
       <section data-testid="composer"><PromptInput value={value} onChange={setValue} onSubmit={() => {}} initialAttachments={attachments} /></section>
-      <section data-testid="queue"><MessageQueue items={items} iconOnly onEdit={(id, content) => setItems(prev => prev.map(item => item.id === id ? { ...item, content } : item))} /></section>
+      <section data-testid="queue"><MessageQueue items={items} iconOnly onEdit={(id, content, attachments, displaySegments) => setItems(prev => prev.map(item => item.id === id ? editQueuedChatMessage(item, content, attachments, displaySegments) : item))} /></section>
       <section data-testid="sent"><Message role="user" content="Review these files" attachments={attachments} /></section>
     </main>
   </ConfirmDialogProvider></TooltipProvider>

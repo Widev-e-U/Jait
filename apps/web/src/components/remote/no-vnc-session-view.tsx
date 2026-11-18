@@ -1,6 +1,7 @@
+import { createPortal } from 'react-dom'
 import { usePreviewAccess } from '@/hooks/use-preview-access'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Info } from 'lucide-react'
+import { Info, Maximize, Minimize, Move } from 'lucide-react'
 import { buildNoVncViewerUrl, isNoVncViewerUrl, isWebSocketUrl, type NoVncResizeMode, type NoVncSessionOptions } from '@/lib/no-vnc'
 import { getApiUrl } from '@/lib/gateway-url'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -10,7 +11,10 @@ export interface NoVncSessionViewProps extends NoVncSessionOptions {
   title?: string
   className?: string
   overlay?: ReactNode
+  hideControls?: boolean
+  controlsContainer?: HTMLElement | null
   onLoad?: () => void
+  onKeyboardOpenChange?: (open: boolean) => void
 }
 
 export function resolveNoVncSessionUrl(source: string | null | undefined, options: NoVncSessionOptions = {}): string | null {
@@ -72,7 +76,10 @@ export function NoVncSessionView({
   title = 'Remote session',
   className = 'h-full w-full bg-white',
   overlay,
+  hideControls = false,
+  controlsContainer,
   onLoad,
+  onKeyboardOpenChange,
 }: NoVncSessionViewProps) {
   const resolvedSource = resolveNoVncSessionUrl(source, {
     viewerUrl,
@@ -98,7 +105,17 @@ export function NoVncSessionView({
     const target = new URL(resolvedSource, gateway)
     return target.origin === gateway.origin && target.pathname.startsWith('/noVNC/')
   })()
-  const src = usePreviewAccess(resolvedSource, revision)
+  // Our lite viewer accepts control changes over a checked message channel.
+  // Keep its URL (and preview grant) stable so switching control never reconnects.
+  // Start read-only until the parent applies the current, verified control state.
+  const connectionSource = tracksConnection ? resolveNoVncSessionUrl(resolvedSource, { viewOnly: true }) : resolvedSource
+  const src = usePreviewAccess(connectionSource, revision)
+  const liveViewOnly = viewOnly ?? (tracksConnection && resolvedSource ? new URL(resolvedSource, 'http://gateway').searchParams.has('view_only') : true)
+  const syncControl = useCallback(() => {
+    if (!src || !tracksConnection) return
+    iframeRef.current?.contentWindow?.postMessage({ type: 'jait-vnc-control', viewOnly: liveViewOnly || hideControls, controlsOverlay: !hideControls && !controlsContainer }, new URL(src, window.location.href).origin)
+  }, [src, tracksConnection, liveViewOnly, hideControls, controlsContainer])
+  useEffect(syncControl, [syncControl])
   const retry = useCallback(() => {
     attempts.current = 0
     setConnection('connecting')
@@ -108,25 +125,36 @@ export function NoVncSessionView({
   useEffect(() => {
     attempts.current = 0
     setConnection('connecting')
-  }, [resolvedSource])
+  }, [connectionSource])
 
   useEffect(() => {
     if (!src || !tracksConnection) return
     const receive = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow ||
-          event.origin !== new URL(src, window.location.href).origin ||
-          event.data?.type !== 'jait-vnc-status') return
+          event.origin !== new URL(src, window.location.href).origin) return
+      if (event.data?.type === 'jait-vnc-keyboard') {
+        onKeyboardOpenChange?.(event.data.open === true && !viewOnly && !hideControls)
+        return
+      }
+      if (event.data?.type !== 'jait-vnc-status') return
       if (event.data.status === 'connected') {
+        syncControl()
         attempts.current = 0
         setConnection('connected')
-      } else if (event.data.status === 'disconnected') setConnection('disconnected')
+      } else if (event.data.status === 'disconnected') {
+        onKeyboardOpenChange?.(false)
+        setConnection('disconnected')
+      }
     }
     window.addEventListener('message', receive)
-    return () => window.removeEventListener('message', receive)
-  }, [src, tracksConnection])
+    return () => {
+      window.removeEventListener('message', receive)
+      onKeyboardOpenChange?.(false)
+    }
+  }, [src, tracksConnection, onKeyboardOpenChange, viewOnly, hideControls, syncControl])
 
   useEffect(() => {
-    if (!resolvedSource || !tracksConnection || connection === 'connected') return
+    if (!connectionSource || !tracksConnection || connection === 'connected') return
     if (connection === 'connecting') {
       const deadline = setTimeout(() => setConnection('disconnected'), 10000)
       return () => clearTimeout(deadline)
@@ -138,7 +166,7 @@ export function NoVncSessionView({
       setRevision(value => value + 1)
     }, reconnectDelayMs ?? Math.min(1000 * 2 ** attempts.current, 8000))
     return () => clearTimeout(timer)
-  }, [connection, resolvedSource, revision, tracksConnection, reconnect, reconnectDelayMs])
+  }, [connection, connectionSource, revision, tracksConnection, reconnect, reconnectDelayMs])
 
   useEffect(() => {
     const resume = () => {
@@ -163,15 +191,17 @@ export function NoVncSessionView({
   }
 
   return (
-    <ZoomPanWrapper overlay={overlay} controls={tracksConnection ? <button type="button" onClick={retry} className="rounded bg-background/90 px-2 py-1 text-xs shadow hover:bg-muted">Reconnect browser</button> : undefined}>
+    <ZoomPanWrapper controlsContainer={controlsContainer} hideControls={hideControls} overlay={overlay} controls={tracksConnection ? <button type="button" onClick={retry} className="rounded bg-background/90 px-2 py-1 text-xs shadow hover:bg-muted">Reconnect browser</button> : undefined}>
       {src && <iframe
         ref={iframeRef}
         key={`${src}:${revision}`}
         src={src}
         title={title}
+        allow="clipboard-read; clipboard-write"
+        tabIndex={hideControls ? -1 : undefined}
         className={className}
         sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-        onLoad={() => { if (!tracksConnection) setConnection('connected'); onLoad?.() }}
+        onLoad={() => { syncControl(); if (!tracksConnection) setConnection('connected'); onLoad?.() }}
       />}
       {tracksConnection && connection !== 'connected' && <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background/95 p-4 text-center text-sm">
         <p role="status">{connection === 'connecting' ? 'Connecting to browser…' : 'Browser connection interrupted.'}</p>
@@ -186,31 +216,48 @@ export function NoVncSessionView({
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 5
 
-function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; overlay?: ReactNode; controls?: ReactNode }) {
+function ZoomPanWrapper({ children, overlay, controls, controlsContainer, hideControls = false }: { children: ReactNode; overlay?: ReactNode; controls?: ReactNode; controlsContainer?: HTMLElement | null; hideControls?: boolean }) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [isHintExpanded, setIsHintExpanded] = useState(false)
-  // "navigating" = overlay is active → scroll zooms, middle-drag pans.
-  // "interacting" = overlay is transparent → clicks/scrolls go to iframe.
-  const [navigating, setNavigating] = useState(true)
+  // Page input passes through until the user explicitly adjusts the local view.
+  const [adjusting, setAdjusting] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [fullscreenError, setFullscreenError] = useState('')
   const lastPos = useRef({ x: 0, y: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
-  // Keep zoom/pan in refs so the document-level handler can read them
-  // without re-registering. The handler is intentionally only registered
-  // once (empty deps) to avoid capture-listener churn.
+  // Wheel and pointer handlers use the latest transform between renders.
   const zoomRef = useRef(zoom)
   const panRef = useRef(pan)
   zoomRef.current = zoom
   panRef.current = pan
 
-  // Re-enable overlay when parent window regains focus.
   useEffect(() => {
-    const handleFocus = () => setNavigating(true)
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    const changed = () => {
+      const root = containerRef.current
+      setFullscreen(!!root && !!document.fullscreenElement && document.fullscreenElement.contains(root))
+    }
+    document.addEventListener('fullscreenchange', changed)
+    return () => document.removeEventListener('fullscreenchange', changed)
   }, [])
+
+  const toggleFullscreen = async () => {
+    const root = containerRef.current
+    if (!root) return
+    setFullscreenError('')
+    try {
+      if (document.fullscreenElement?.contains(root)) await document.exitFullscreen()
+      else {
+        const target = root.closest<HTMLElement>('[data-browser-panel]') ?? root.closest<HTMLElement>('[data-browser-layout]') ?? root
+        if (!target.requestFullscreen) throw new Error('Fullscreen is unavailable in this browser.')
+        await target.requestFullscreen()
+      }
+    } catch {
+      setFullscreenError('Could not open fullscreen. Try the fullscreen button again.')
+    }
+  }
 
   // Zoom toward a point in container-space (CSS pixels from container edge).
   // The transform is `translate(pan) scale(zoom)` with origin 0,0, so a
@@ -242,28 +289,11 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
     return true
   }, [])
 
-  // Document-level capture handler — catches Ctrl+wheel even when the
-  // cross-origin iframe has focus. Capture phase + passive:false lets us
-  // preventDefault() before Chrome applies its native page zoom.
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return
-      if (applyZoom(e.deltaY, e.deltaMode, e.clientX, e.clientY)) {
-        e.preventDefault()
-        e.stopPropagation()
-      }
-    }
-    document.addEventListener('wheel', onWheel, { passive: false, capture: true })
-    return () => document.removeEventListener('wheel', onWheel, { capture: true })
-  }, [applyZoom])
-
-  // Overlay handler — plain scroll (no Ctrl needed) also zooms while
-  // navigating, giving an immediate zoom experience on hover.
+  // Only the explicit adjustment overlay consumes wheel input for local zoom.
   useEffect(() => {
     const el = overlayRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) return // handled by document capture
       e.preventDefault()
       applyZoom(e.deltaY, e.deltaMode, e.clientX, e.clientY)
     }
@@ -271,18 +301,15 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
     return () => el.removeEventListener('wheel', onWheel)
   }, [applyZoom])
 
-  // Middle-mouse drag → pan
+  // Drag anywhere on the adjustment overlay to pan.
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button === 1) {
+    if (e.button === 0 || e.button === 1) {
       e.preventDefault()
       e.stopPropagation()
       setIsDragging(true)
       lastPos.current = { x: e.clientX, y: e.clientY }
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-      return
     }
-    // Left / right click → switch to interact mode so the iframe gets focus.
-    setNavigating(false)
   }, [])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -299,8 +326,8 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
   }, [isDragging])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 1) return
     setIsDragging(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
   }, [])
 
   // Double-click → reset zoom & pan
@@ -311,11 +338,6 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
     zoomRef.current = 1
     panRef.current = { x: 0, y: 0 }
   }, [])
-
-  // Re-enable overlay when cursor leaves the preview area.
-  const handlePointerLeave = useCallback(() => {
-    if (!isDragging) setNavigating(true)
-  }, [isDragging])
 
   const isTransformed = zoom !== 1 || pan.x !== 0 || pan.y !== 0
 
@@ -353,46 +375,41 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
     zoomRef.current = 1
     panRef.current = { x: 0, y: 0 }
   }, [])
-  const toggleMode = useCallback(() => {
-    setNavigating(n => !n)
-  }, [])
+  const toggleAdjustment = () => {
+    setAdjusting(value => !value)
+    containerRef.current?.focus()
+  }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Scope shortcuts to these controls, never the remote page or editable fields.
+    if (event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return
+    if ((event.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return
+    const key = event.key.toLowerCase()
+    if (key === 'v') toggleAdjustment()
+    else if (key === 'f') void toggleFullscreen()
+    else if (key === 'escape' && adjusting) {
+      setAdjusting(false)
+      setIsDragging(false)
+      containerRef.current?.querySelector('iframe')?.focus()
+    } else if (adjusting && (key === '+' || key === '=')) zoomIn()
+    else if (adjusting && key === '-') zoomOut()
+    else if (adjusting && key === '0') resetView()
+    else if (adjusting && ['arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(key)) {
+      const next = {
+        x: panRef.current.x + (key === 'arrowleft' ? -40 : key === 'arrowright' ? 40 : 0),
+        y: panRef.current.y + (key === 'arrowup' ? -40 : key === 'arrowdown' ? 40 : 0),
+      }
+      panRef.current = next
+      setPan(next)
+    } else return
+    event.preventDefault()
+    event.stopPropagation()
+  }
   const toggleHint = useCallback(() => {
     setIsHintExpanded(expanded => !expanded)
   }, [])
 
-  return (
-    <div
-      ref={containerRef}
-      className="relative h-full overflow-hidden"
-      onPointerLeave={handlePointerLeave}
-    >
-      <div
-        style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          width: '100%',
-          height: '100%',
-          willChange: isTransformed ? 'transform' : undefined,
-        }}
-      >
-        {children}
-      </div>
-      {/* Event intercept overlay — captures scroll (zoom), middle-mouse
-          (pan), and double-click (reset). Deactivates on left-click so the
-          iframe can receive normal VNC interaction. */}
-      <div
-        ref={overlayRef}
-        className="absolute inset-0 z-10"
-        style={{
-          pointerEvents: navigating || isDragging ? 'auto' : 'none',
-          cursor: isDragging ? 'grabbing' : navigating ? 'default' : undefined,
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-      />
-      <div className="absolute left-2 top-2 z-20 flex items-start gap-2">
+  const viewControls = <>
+      <div hidden={hideControls} className={hideControls ? "hidden" : controlsContainer ? "flex items-start gap-2" : "absolute left-2 top-2 z-20 flex items-start gap-2"}>
         <div className="pointer-events-auto flex items-start gap-2">
           <TooltipHint content={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}>
           <button
@@ -407,7 +424,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
           </TooltipHint>
           {isHintExpanded ? (
             <div className="max-w-[260px] rounded-xl bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow backdrop-blur-sm">
-              Scroll to zoom. Middle-drag to pan. Click the preview to interact.
+              Click and scroll the page normally. Use Adjust view to zoom with the wheel and drag to pan. With view controls focused: V toggles adjustment, F toggles fullscreen. While adjusting: + / − zoom, 0 resets, arrow keys pan, Esc returns to the page.
             </div>
           ) : null}
         </div>
@@ -417,31 +434,40 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
           </div>
         ) : null}
       </div>
-      {controls ? (
-        <div className="absolute right-2 top-2 z-20">
+      {controls && !hideControls ? (
+        <div className={controlsContainer ? "" : "absolute right-2 top-2 z-20"}>
           {controls}
         </div>
       ) : null}
-      {/* Floating controls — always accessible */}
-      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 rounded bg-background/90 px-2 py-1.5 text-sm text-muted-foreground shadow sm:gap-0.5 sm:px-1.5 sm:py-1 sm:text-xs">
-        <TooltipHint content={navigating ? 'Switch to interact mode (click VNC)' : 'Switch to navigate mode (scroll to zoom)'}>
+      {fullscreenError && <p role="alert" className={controlsContainer ? "text-xs text-destructive" : "absolute bottom-14 right-2 z-30 rounded bg-background p-2 text-xs text-destructive"}>{fullscreenError}</p>}
+      {/* In chat these controls live in the header; other viewers keep the floating toolbar. */}
+      <div hidden={hideControls} className={hideControls ? "hidden" : `${controlsContainer ? "flex flex-wrap" : "absolute bottom-2 right-2 z-20 flex shadow"} items-center gap-1 rounded bg-background/90 px-2 py-1.5 text-sm text-muted-foreground sm:gap-0.5 sm:px-1.5 sm:py-1 sm:text-xs`}>
+        <TooltipHint content="Adjust view (V when view controls are focused)">
         <button
           type="button"
-          className={`min-h-10 rounded px-2 sm:min-h-0 sm:px-1.5 sm:py-0.5 ${navigating ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}
-          onClick={toggleMode}
+          aria-label="Adjust view"
+          aria-pressed={adjusting}
+          className={`flex min-h-10 items-center gap-1 rounded px-2 sm:min-h-0 sm:px-1.5 sm:py-0.5 ${adjusting ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}
+          onClick={toggleAdjustment}
         >
-          {navigating ? '🔍 Navigate' : '👆 Interact'}
+          <Move className="h-3.5 w-3.5" />{adjusting ? 'Done adjusting' : 'Adjust view'}
         </button>
+        </TooltipHint>
+        <TooltipHint content={fullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)'}>
+          <button type="button" aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            onClick={() => void toggleFullscreen()} className="min-h-10 rounded px-2 hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5">
+            {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          </button>
         </TooltipHint>
         <span className="mx-0.5 text-border">│</span>
         <TooltipHint content="Zoom out">
-        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomOut}>
+        <button type="button" aria-label="Zoom out" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomOut}>
           −
         </button>
         </TooltipHint>
-        <span className="min-w-[3ch] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+        <span aria-label="View zoom" className="min-w-[3ch] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
         <TooltipHint content="Zoom in">
-        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomIn}>
+        <button type="button" aria-label="Zoom in" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomIn}>
           +
         </button>
         </TooltipHint>
@@ -450,6 +476,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
           <button
             type="button"
             className="ml-0.5 min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0"
+            aria-label="Reset view"
             onClick={resetView}
           >
             ↺
@@ -457,6 +484,44 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
           </TooltipHint>
         ) : null}
       </div>
+  </>
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative h-full overflow-hidden bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      tabIndex={hideControls ? -1 : 0}
+      role="group"
+      aria-label="Remote view controls"
+      onKeyDown={handleKeyDown}
+    >
+      <div
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          width: '100%',
+          height: '100%',
+          willChange: isTransformed ? 'transform' : undefined,
+        }}
+      >
+        {children}
+      </div>
+      {/* Overlay is opt-in; normal clicks and scrolling always reach the page. */}
+      <div
+        ref={overlayRef}
+        className="absolute inset-0 z-10"
+        style={{
+          pointerEvents: adjusting || isDragging ? 'auto' : 'none',
+          cursor: isDragging ? 'grabbing' : adjusting ? 'grab' : undefined,
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onLostPointerCapture={() => setIsDragging(false)}
+        onDoubleClick={handleDoubleClick}
+      />
+      {controlsContainer ? createPortal(viewControls, controlsContainer) : viewControls}
     </div>
   )
 }

@@ -17,8 +17,7 @@ import type { OpenCodeGoUsage } from "./subscription-usage-fetchers.js";
 import { and, eq } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { providerUsage } from "../db/schema.js";
-import type { NotificationService } from "./notifications.js";
-import type { CodexRateLimitsResponse, OllamaUsageResponse } from "./provider-quota-fetchers.js";
+import type { CodexRateLimitResetCredits, CodexRateLimitsResponse, OllamaUsageResponse } from "./provider-quota-fetchers.js";
 import { isOllamaQuotaUsageResponse } from "./provider-quota-fetchers.js";
 import { deriveOllamaResetWindow, parseOllamaResetSource, type OllamaResetSource } from "./provider-reset-windows.js";
 
@@ -54,6 +53,8 @@ export interface ProviderUsageSnapshot {
     unlimited?: boolean;
     balance?: string | null;
   } | null;
+  /** Unused "reset usage" credits (Codex's periodically granted reset buttons). */
+  resetCredits: CodexRateLimitResetCredits | null;
   models: Array<{ name: string; requestCount: number }>;
   activityCost: string | null;
   requestCount?: number | null;
@@ -65,40 +66,36 @@ export interface ProviderUsageSnapshot {
 
 const WARNING_THRESHOLD = 0.9;
 
-function labelForRateLimitType(type: string): string {
-  switch (type) {
-    case "five_hour":
-      return "session limit";
-    case "seven_day":
-      return "weekly limit";
-    case "seven_day_opus":
-      return "Opus weekly limit";
-    case "seven_day_sonnet":
-      return "Sonnet weekly limit";
-    case "overage":
-      return "extra usage";
-    default:
-      return type;
-  }
-}
-
 export class ProviderUsageService {
-  private notifications: NotificationService | undefined;
-  /** Tracks which (accountId, rateLimitType) pairs already crossed the warning threshold, to avoid re-notifying on every event until it resets. */
-  private readonly warned = new Set<string>();
-
   constructor(private readonly db: JaitDB) {}
 
-  attachNotifications(notifications: NotificationService): void {
-    this.notifications = notifications;
+  recordClaudeRateLimit(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
+    // Claude reports every window's utilization in unifiedWindows; the top-level
+    // fields only describe the representative window and often lack utilization.
+    const windows = info.unifiedWindows;
+    if (windows && typeof windows === "object" && !Array.isArray(windows)) {
+      const { unifiedWindows: _windows, ...rest } = info;
+      for (const [type, window] of Object.entries(windows as Record<string, { utilization?: unknown; resetsAt?: unknown }>)) {
+        if (!window || typeof window !== "object") continue;
+        const representative = type === info.rateLimitType;
+        this.recordClaudeWindow(accountId, providerType, {
+          ...rest,
+          status: representative ? info.status : (typeof window.utilization === "number" && window.utilization >= 1 ? "rejected" : "allowed"),
+          rateLimitType: type as ClaudeRateLimitInfo["rateLimitType"],
+          utilization: typeof window.utilization === "number" ? window.utilization : undefined,
+          resetsAt: typeof window.resetsAt === "number" ? window.resetsAt : undefined,
+        });
+      }
+      if (info.rateLimitType && info.rateLimitType in windows) return;
+    }
+    this.recordClaudeWindow(accountId, providerType, info);
   }
 
-  recordClaudeRateLimit(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
+  private recordClaudeWindow(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
     const rateLimitType = info.rateLimitType ?? "unknown";
     const updatedAt = new Date().toISOString();
     const resetsAt = typeof info.resetsAt === "number" ? new Date(info.resetsAt * 1000).toISOString() : null;
     const utilization = typeof info.utilization === "number" ? info.utilization : null;
-    const warnKey = `${accountId}:${rateLimitType}`;
 
     const existing = this.db
       .select()
@@ -126,20 +123,17 @@ export class ProviderUsageService {
     } else {
       this.db.insert(providerUsage).values(row).run();
     }
-
-    const isNearLimit = info.status === "allowed_warning" || info.status === "rejected" || (utilization !== null && utilization >= WARNING_THRESHOLD);
-    if (isNearLimit && !this.warned.has(warnKey)) {
-      this.warned.add(warnKey);
-      const label = labelForRateLimitType(rateLimitType);
-      const detail = utilization !== null ? `at ${Math.round(utilization * 100)}%` : "near its limit";
-      this.notifications?.warning("Approaching usage limit", `Claude Code's ${label} is ${detail}.`, "/settings?tab=usage");
-    } else if (!isNearLimit && this.warned.has(warnKey)) {
-      this.warned.delete(warnKey);
-    }
   }
 
   recordCodexRateLimits(accountId: string, response: CodexRateLimitsResponse): void {
     const { rateLimits } = response;
+    // A team/workspace account can be blocked while its window percentages are
+    // still below 100 (for example when workspace credits run out), so the
+    // account-level flag is authoritative for "full". hasCredits only describes
+    // extra usage credits; having none does not exhaust included subscription usage.
+    const accountExhausted = response.ordinaryUsageAllowed === false ||
+      rateLimits.spendControlReached === true ||
+      rateLimits.rateLimitReachedType === "workspace_member_credits_depleted";
     const windows = [
       ["primary", rateLimits.primary],
       ["secondary", rateLimits.secondary],
@@ -152,14 +146,18 @@ export class ProviderUsageService {
         accountId,
         rateLimitType,
         providerType: "codex",
-        status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
+        status: utilization >= 1 || accountExhausted ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
+        // Codex reports epoch seconds (verified against codex-cli 0.163).
         resetsAt: typeof window.resetsAt === "number" ? new Date(window.resetsAt * 1000).toISOString() : null,
         isUsingOverage: false,
         raw: {
           planType: rateLimits.planType ?? null,
+          ordinaryUsageAllowed: response.ordinaryUsageAllowed ?? null,
           windowDurationMins: window.windowDurationMins,
+          resetSource: typeof window.resetsAt === "number" ? "provider-reported" : null,
           credits: rateLimits.credits ?? null,
+          resetCredits: response.rateLimitResetCredits ?? null,
           rateLimitReachedType: rateLimits.rateLimitReachedType ?? null,
           spendControlReached: rateLimits.spendControlReached ?? null,
         },
@@ -188,6 +186,11 @@ export class ProviderUsageService {
     }
     if (!isOllamaQuotaUsageResponse(response)) return;
     this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, "request_activity"))).run();
+    if (response.source === "balance") {
+      for (const [type, limit] of [["five_hour", response.limits.session], ["seven_day", response.limits.weekly], ["monthly", response.limits.monthly]] as const) {
+        if (!limit) this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, type))).run();
+      }
+    }
     const buckets = [
       ["five_hour", response.limits.session, 300],
       ["seven_day", response.limits.weekly, 10_080],
@@ -232,19 +235,21 @@ export class ProviderUsageService {
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        resetsAt: response.source === "settings" ? limit.resetsAt ?? null : resetWindow.resetsAt,
+        resetsAt: (response.source === "settings" || response.source === "balance") ? limit.resetsAt ?? null : resetWindow.resetsAt,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
           windowDurationMins,
           accountLabel: accountLabel ?? null,
           windowStartAt: resetWindow.windowStartAt,
-          resetSource: response.source === "settings" ? (limit.resetsAt ? "provider-reported" : null) : resetWindow.source,
+          resetSource: (response.source === "settings" || response.source === "balance") ? (limit.resetsAt ? "provider-reported" : null) : resetWindow.source,
           models: limit.models.map((model) => ({
             name: model.name,
             requestCount: model.request_count,
           })),
-          activityCost: response.activity?.cost ?? null,
+          activityCost: response.source === "balance" && rateLimitType === "monthly" && response.includedBalance != null && response.includedAllowance != null
+            ? `$${(response.includedAllowance - response.includedBalance).toFixed(2)} of $${response.includedAllowance.toFixed(2)} included` : response.activity?.cost ?? null,
+          credits: response.source === "balance" && rateLimitType === "monthly" && response.purchasedBalance != null ? { balance: response.purchasedBalance.toFixed(2) } : null,
         },
       });
     }
@@ -258,7 +263,11 @@ export class ProviderUsageService {
       this.recordSnapshot({ accountId, rateLimitType, providerType: "opencode-go",
         status: window.status === "rate-limited" ? "rejected" : window.percent >= 90 ? "allowed_warning" : "allowed",
         utilization: window.percent / 100, resetsAt: window.resetsAt, isUsingOverage: false,
-        raw: { planType: "Go", windowDurationMins },
+        raw: {
+          planType: "Go",
+          windowDurationMins,
+          resetSource: window.resetsAt ? "provider-reported" : null,
+        },
       });
     }
   }
@@ -335,6 +344,7 @@ export class ProviderUsageService {
           windowDurationMins: typeof raw.windowDurationMins === "number" ? raw.windowDurationMins : null,
           resetSource: parseOllamaResetSource(raw.resetSource),
           credits,
+          resetCredits: raw.resetCredits && typeof raw.resetCredits === "object" ? raw.resetCredits as ProviderUsageSnapshot["resetCredits"] : null,
           models,
           quotaRefreshMissing: row.providerType === "ollama" && row.rateLimitType !== "request_activity" && activityAccounts.has(row.accountId),
           requestCount: typeof raw.requestCount === "number" ? raw.requestCount : null,

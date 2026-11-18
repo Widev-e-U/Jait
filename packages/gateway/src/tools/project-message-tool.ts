@@ -123,7 +123,7 @@ export function createProjectMessageTool(deps: ProjectMessageToolDeps): ToolDefi
       "project X that the deploy failed.\" Resolves the target project by projectId or projectRoot (creating it " +
       "if it doesn't exist yet). When called from a live chat, THAT chat is used: it is assigned to the project " +
       "and the turn runs in it (queued while the current turn is still streaming) — no new chat is created. " +
-      "Only background callers (cron) create a new chat in the project.",
+      "Only background callers (cron) create a new chat in the project. To create a separate project chat from a live chat, use project.chat.create instead.",
     tier: "standard",
     category: "gateway",
     source: "builtin",
@@ -280,6 +280,8 @@ export function createProjectMessageTool(deps: ProjectMessageToolDeps): ToolDefi
             sessionId: session.id,
             message,
             workingDirectory: project.rootPath ?? undefined,
+            ...(readString(body, "providerId") ? { providerId: readString(body, "providerId") } : {}),
+            ...(readString(body, "model") ? { model: readString(body, "model") } : {}),
             start: true,
           },
           threadContext,

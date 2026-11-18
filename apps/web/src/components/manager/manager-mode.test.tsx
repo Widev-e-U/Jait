@@ -1,7 +1,13 @@
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ManagerMode } from './manager-mode'
+import { AuthProvider } from '@/hooks/useAuth'
+
+function renderWithAuth(element: ReactElement) {
+  return renderToStaticMarkup(<AuthProvider>{element}</AuthProvider>)
+}
 
 const account = {
   username: 'Jakob',
@@ -15,8 +21,8 @@ const account = {
 
 describe('ManagerMode', () => {
   it('keeps navigation, repository tools, and account in the expanded sidebar', () => {
-    const markup = renderToStaticMarkup(
-      <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account} viewMode="manager" onViewModeChange={() => {}}>
+    const markup = renderWithAuth(
+      <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account}>
         <div>Thread activity</div>
       </ManagerMode>,
     )
@@ -40,8 +46,8 @@ describe('ManagerMode', () => {
   it('shows icon controls and keeps the expand control in the collapsed header', () => {
     vi.stubGlobal('window', { localStorage: { getItem: () => 'true' } })
     try {
-      const markup = renderToStaticMarkup(
-        <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account} viewMode="manager" onViewModeChange={() => {}}>
+      const markup = renderWithAuth(
+        <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account}>
           <div>Thread activity</div>
         </ManagerMode>,
       )
@@ -51,10 +57,10 @@ describe('ManagerMode', () => {
       expect(markup).toContain('aria-label="Account menu"')
       expect(markup).not.toContain('>Jakob</span>')
       // The expand control lives in the sidebar header (swapped with the
-      // brand), above the mode toggle and the account section.
+      // brand), above the navigation and the account section.
       const expandIndex = markup.indexOf('aria-label="Expand sidebar"')
       expect(expandIndex).toBeGreaterThan(markup.indexOf('aria-label="Workspace sidebar"'))
-      expect(expandIndex).toBeLessThan(markup.indexOf('manager mode'))
+      expect(expandIndex).toBeLessThan(markup.indexOf('aria-label="Account menu"'))
       expect(markup).not.toContain('>Repositories</span>')
     } finally {
       vi.unstubAllGlobals()
@@ -62,8 +68,8 @@ describe('ManagerMode', () => {
   })
 
   it('keeps the sidebar on Agents', () => {
-    const markup = renderToStaticMarkup(
-      <ManagerMode currentPage="agents" onPageChange={() => {}} isMobile={false} account={account} viewMode="manager" onViewModeChange={() => {}}>
+    const markup = renderWithAuth(
+      <ManagerMode currentPage="agents" onPageChange={() => {}} isMobile={false} account={account}>
         <div>Agents page</div>
       </ManagerMode>,
     )

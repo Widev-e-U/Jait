@@ -1,9 +1,19 @@
+import { ProviderSteeringDispatcher } from "../providers/steering-dispatcher.js";
+import type { SteeringMessage } from "../tools/agent-loop.js";
+import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
+import type { UserQuestionService } from "../services/user-questions.js";
+import { sessionWaits } from "../services/session-waits.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
+import { createLoopTools } from "../tools/loop-tools.js";
+import { TurnUsageAccumulator, summarizeUsage } from "../providers/usage.js";
+import { agentHaltedBody, type AgentControlService, type AgentStopResult } from "../services/agent-control.js";
 import type { TeamChatService } from "../services/team-chat.js";
 import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
-import { chatNotificationLink, notificationPreview, notificationAgentContext, notificationTitleWithAgent, notificationBodyWithAgent } from "@jait/shared";
+import { getPersonalChatNodeId, chatNotificationLink, notificationPreview, notificationAgentContext, notificationTitleWithAgent, notificationBodyWithAgent } from "@jait/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { cliSessionIdle } from "../providers/session-idle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { inferContextWindow, type AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
@@ -18,7 +28,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { TrajectoryStreamEvent } from "@jait/shared";
-import type { SessionStateService } from "../services/session-state.js";
+import { SessionStateService } from "../services/session-state.js";
 import type { MobilePushService } from "../services/mobile-push.js";
 import type { ProjectService } from "../services/projects.js";
 import type { ProviderRegistry } from "../providers/registry.js";
@@ -53,10 +63,13 @@ import {
   type LlmContextFlowRound,
   type OpenAIToolCall,
   type RoundMetrics,
+  type SteeringMessageMeta,
+  type SteeringAttachment,
+  steeringTranscriptAttachments,
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
-import { buildBackgroundCommandContinuationPayload } from "../services/background-command-continuation.js";
+import { buildBackgroundCommandContinuationPayload, LoopSelectionRequiredError } from "../services/background-command-continuation.js";
 import { matchSkills } from "../services/thread-router.js";
 import {
   type ChatMode,
@@ -106,6 +119,7 @@ interface LlmContextFlow {
   provider: string;
   model?: string;
   rounds: LlmContextFlowRound[];
+  usageSummary?: import("@jait/shared").UsageSummary;
   note?: string;
   memory?: LlmContextFlowMemory;
 }
@@ -154,6 +168,7 @@ function compactContextMemory(memory: LlmContextFlowMemory | undefined, severe =
 }
 
 function serializePersistedContextFlow(flow: LlmContextFlow): string {
+  flow = { ...flow, usageSummary: "truncatedRounds" in flow || "truncated" in flow ? flow.usageSummary ?? summarizeUsage(flow.rounds) : summarizeUsage(flow.rounds) };
   let json = JSON.stringify(flow);
   if (Buffer.byteLength(json, "utf8") <= MAX_PERSISTED_CONTEXT_FLOW_BYTES) return json;
 
@@ -233,7 +248,7 @@ function formatExternalProviderFirstTurn(systemPrompt: string, userContent: stri
  * (e.g. a test run) finishes, so the re-triggered agent can react to the result.
  */
 export function formatBackgroundCommandNotification(result: BackgroundCommandResult): string {
-  const status = result.exitCode === 0
+  const status = result.timedOut ? "timed out (execution stopped)" : result.exitCode === 0
     ? "succeeded (exit code 0)"
     : result.exitCode == null
       ? "finished (exit code unavailable)"
@@ -262,7 +277,7 @@ export function formatBackgroundCommandNotification(result: BackgroundCommandRes
  * is only fed to the agent.
  */
 function formatBackgroundCommandNotice(result: BackgroundCommandResult): string {
-  const status = result.exitCode === 0 || result.exitCode == null
+  const status = result.timedOut ? "timed out" : result.exitCode === 0 || result.exitCode == null
     ? "finished"
     : "failed";
   const seconds = Math.max(1, Math.round(result.durationMs / 1000));
@@ -279,12 +294,21 @@ const SSE_HEADERS = {
   "Content-Encoding": "identity",
 } as const;
 
-function writeSseHead(reply: { raw: { writeHead: (statusCode: number, headers: Record<string, string>) => void; flushHeaders?: () => void } }, headers: Record<string, string> = {}): void {
+function writeSseHead(reply: { raw: { writeHead: (statusCode: number, headers: Record<string, string>) => void; flushHeaders?: () => void }; hijack?: () => void }, headers: Record<string, string> = {}): void {
   reply.raw.writeHead(200, {
     ...SSE_HEADERS,
     ...headers,
   });
   reply.raw.flushHeaders?.();
+  // The stream owns the raw response from here on, so take it away from fastify.
+  // Without this a handler that rejects after the head was written (a teardown
+  // write failing on SQLite busy, a broadcast to a closing socket, ...) makes
+  // fastify's fallback error handler try to send a second header block, which
+  // throws ERR_HTTP_HEADERS_SENT from inside the error path and surfaces as an
+  // unhandled rejection. A hijacked reply short-circuits both branches of
+  // fastify's thenable wrapper: the resolve branch returns silently and the
+  // reject branch logs the *original* error instead of a bogus header crash.
+  reply.hijack?.();
 }
 
 function writeSseChunk(reply: { raw: { write: (chunk: string) => unknown; flush?: () => void } }, chunk: string): void {
@@ -401,6 +425,10 @@ export function normalizeProviderSessionError(message: string): string {
     "limit exceeded",
   ].some((needle) => lower.includes(needle));
   return isAuthOrLimitError ? "Authentication required" : compact;
+}
+
+export function isChatTurnActive(sessionId: string): boolean {
+  return activeStreams.has(sessionId) || activeCliTurns.has(sessionId);
 }
 
 export function canUseGatewayProviderForProject(projectNodeId: string | null | undefined): boolean {
@@ -1164,7 +1192,7 @@ interface StreamingAccumulator {
     | { type: "text"; content: string }
     | { type: "thinking"; content: string }
     | { type: "toolGroup"; callIds: string[] }
-    | { type: "steering"; content: string; displayContent?: string }
+    | { type: "steering"; content: string; displayContent?: string; attachments?: SteeringAttachment[] }
     | { type: "error"; content: string }
   >;
   thinking: string;
@@ -1174,6 +1202,26 @@ const activePersonaOwners = new Map<string, string>();
 
 export function getAgentSessionRuntime(sessionId: string): { running: boolean } {
   return { running: activeStreams.has(sessionId) };
+}
+
+/** Abort saved-agent chat turns as part of the owner halt; personal chats remain usable. */
+export async function haltPersonaChatRuns(userId: string): Promise<AgentStopResult> {
+  const sessions = [...activeStreams].filter(id => activePersonaOwners.get(id) === userId && sessionStreamingState.get(id)?.persona?.id);
+  const result: AgentStopResult = { stopped: 0, errors: [] };
+  await Promise.all(sessions.map(async id => {
+    const active = activeCliSessions.get(id);
+    sessionAbortControllers.get(id)?.abort();
+    try {
+      if (active) {
+        await active.provider.stopSession(active.providerSessionId);
+        if (activeCliSessions.get(id) === active) activeCliSessions.delete(id);
+      }
+      result.stopped++;
+    } catch (error) {
+      result.errors.push(`${id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }));
+  return result;
 }
 
 export function getPersonaChatRuntime(userId: string, personaId: string): { count: number; state: "running" | "waiting" | "idle" } {
@@ -1402,12 +1450,13 @@ function accumulateThinking(sessionId: string, content: string): void {
 }
 
 /** Record user guidance at its live position so reload snapshots retain it. */
-function accumulateSteering(sessionId: string, content: string, displayContent?: string): void {
+function accumulateSteering(sessionId: string, content: string, displayContent?: string, attachments?: SteeringAttachment[]): void {
   const acc = getOrCreateAccumulator(sessionId);
   acc.segments.push({
     type: "steering",
     content,
     ...(displayContent ? { displayContent } : {}),
+    ...steeringTranscriptAttachments(attachments),
   });
   notifyStreamDirty(sessionId);
 }
@@ -1706,7 +1755,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
+  | { type: "request"; turnId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; systemNotice?: boolean; noticeText?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -1726,6 +1775,7 @@ const DEFAULT_UI_MESSAGE_LIMIT = 5;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
+  clientMessageId?: string;
   persona?: PersonaChatSnapshot;
   id: string;
   role: "user" | "assistant" | "system";
@@ -2099,7 +2149,7 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
 
 type PersistedUIMessageRow = Pick<
   typeof messagesTable.$inferSelect,
-  "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
+  "id" | "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
 > & {
   contextMetadataId: string | null;
   hasMemoryProvenance: boolean | null;
@@ -2123,6 +2173,7 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
     persona: readPersonaSnapshot(row.persona),
     content,
   };
+  if (row.role === "user" && row.id.startsWith("user-")) msg.clientMessageId = row.id;
   if (row.toolCalls) {
     try { msg.toolCalls = JSON.parse(row.toolCalls); } catch { /* ignore */ }
   }
@@ -2205,6 +2256,7 @@ function persistedMessageWindow(
   const rows = start < end
     ? db
       .select({
+        id: messagesTable.id,
         role: messagesTable.role,
         content: messagesTable.content,
         toolCalls: messagesTable.toolCalls,
@@ -2618,6 +2670,10 @@ export const __chatTestUtils = {
 };
 
 export interface ChatRouteDeps {
+  previewService?: Pick<import("../services/preview.js").PreviewService, "setSharedWithAgent">;
+  userQuestionService?: UserQuestionService;
+  chatLoops?: ChatLoopService;
+  agentControl?: AgentControlService;
   teamChat?: TeamChatService;
   db?: JaitDB;
   sessionService?: SessionService;
@@ -2664,6 +2720,10 @@ export function registerChatRoutes(
   let skillRegistry: SkillRegistry | undefined;
   let architectureDiagrams: ArchitectureDiagramService | undefined;
   let teamChat: TeamChatService | undefined;
+  let agentControl: AgentControlService | undefined;
+  let chatLoops: ChatLoopService | undefined;
+  let userQuestionService: UserQuestionService | undefined;
+  let previewService: ChatRouteDeps["previewService"];
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -2683,10 +2743,137 @@ export function registerChatRoutes(
     skillRegistry = deps.skillRegistry;
     architectureDiagrams = deps.architectureDiagrams;
     teamChat = deps.teamChat;
+    agentControl = deps.agentControl;
+    chatLoops = deps.chatLoops;
+    userQuestionService = deps.userQuestionService;
+    previewService = deps.previewService;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
   }
+
+  // The provider and model the user picked for a chat live in session state, so
+  // this service must exist even when a caller does not inject one; otherwise
+  // autonomous turns cannot see the user's choice and would always have to ask.
+  if (!sessionStateService && db) sessionStateService = new SessionStateService(db);
+
+  if (!chatLoops && sessionService && userService && sessionStateService) chatLoops = new ChatLoopService(sessionService, ws);
+  if (chatLoops && toolRegistry) {
+    for (const tool of createLoopTools(chatLoops)) {
+      if (!toolRegistry.get(tool.name)) toolRegistry.register(tool);
+    }
+  }
+
+  const loopTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const loopDispatches = new Set<string>();
+  let loopsClosed = false;
+  const wakeLoop = (sessionId: string): void => {
+    if (loopsClosed || loopDispatches.has(sessionId)) return;
+    const existing = loopTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      loopTimers.delete(sessionId);
+      void dispatchLoop(sessionId);
+    }, Math.max(250, (chatLoops?.get(sessionId)?.continuation?.waitUntil ?? 0) - Date.now()));
+    timer.unref?.();
+    loopTimers.set(sessionId, timer);
+  };
+  const dispatchLoop = async (sessionId: string): Promise<void> => {
+    if (loopsClosed || !chatLoops || !sessionService || !userService || activeStreams.has(sessionId) || drainingQueuedSessions.has(sessionId) || loopDispatches.has(sessionId)) return;
+    const session = sessionService.getById(sessionId);
+    let loop = chatLoops.get(sessionId);
+    if (!session?.userId || session.status !== "active" || loop?.status !== "running") return;
+    if ((loop.continuation?.waitUntil ?? 0) > Date.now()) { wakeLoop(sessionId); return; }
+    if (sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
+    const queue = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"]);
+    if (queue[0] && !queue[0].held) return;
+    const user = userService.findById(session.userId);
+    if (!user) return;
+    loopDispatches.add(sessionId);
+    try {
+      loop = await chatLoops.reviewContinuation(sessionId, loop.revision, userService.getSettings(user.id).apiKeys);
+      if (!loop || loop.status !== "running" || activeStreams.has(sessionId) || sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
+      if (loop.iteration > 0 && loop.continuation?.iteration !== loop.iteration) return;
+      const nextQueued = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"])[0];
+      if (nextQueued && !nextQueued.held) return;
+      if ((loop.continuation?.waitUntil ?? 0) > Date.now()) return;
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      // A pause/goal edit may have arrived while signing the internal request.
+      if (loopsClosed || chatLoops.get(sessionId)?.revision !== loop.revision) return;
+      const continuation = buildBackgroundCommandContinuationPayload({
+        sessionId, userId: user.id, userService, sessionState: sessionStateService, sessionMetadata: session.metadata,
+        notification: [chatLoopInstructions(loop), `Next message to yourself: ${JSON.stringify(loop.nextMessage || "Begin working towards the goal. Check existing work first.")}`].join("\n\n"),
+      });
+      // Never merge the persisted turn options into a continuation: they carry the
+      // provider/model of a previous turn (possibly from another chat), which would
+      // let saved UI state retarget the provider and model of this loop turn.
+      const response = await app.inject({
+        method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
+        payload: { ...continuation, _loopRevision: loop.revision },
+      });
+      if (response.statusCode >= 400) {
+        chatLoops.finishTurn(sessionId, `Loop continuation failed (HTTP ${response.statusCode}). Resume to retry.`);
+        notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
+      }
+    } catch (error) {
+      if (error instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId }, "Chat loop stopped: no user-selected provider/model");
+        chatLoops.pauseForUser(sessionId, error.message);
+        notifyLoopAttention(sessionId, "Loop needs a provider and model", error.message);
+        return;
+      }
+      app.log.error({ error, sessionId }, "Chat loop continuation failed");
+      chatLoops.finishTurn(sessionId, "Loop continuation failed. Review the chat before resuming.");
+      notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
+    } finally {
+      loopDispatches.delete(sessionId);
+      if (chatLoops.get(sessionId)?.status === "running") wakeLoop(sessionId);
+    }
+  };
+  const notifyLoopAttention = (sessionId: string, title: string, body: string): void => {
+    const session = sessionService?.getById(sessionId);
+    if (!session?.userId) return;
+    const notification = {
+      id: `chat-loop:${sessionId}:${randomUUID()}`, replaceId: `chat-complete:${sessionId}`,
+      kind: "attention" as const, sessionId, title, body: notificationPreview(body) || "Open the chat to review.",
+      link: chatNotificationLink(sessionId, session.projectId),
+    };
+    ws?.publishChatNotification(session.userId, notification);
+    void mobilePush?.sendChatCompleted(session.userId, notification).catch(() => {});
+  };
+  if (chatLoops) chatLoops.onWake = wakeLoop;
+  const unsubscribeLoopWaits = sessionWaits.subscribe(({ sessionId, waits }) => {
+    if (!waits.some(wait => wait.blocking) && chatLoops?.get(sessionId)?.status === "running") wakeLoop(sessionId);
+  });
+  app.addHook("onReady", async () => {
+    for (const { sessionId } of chatLoops?.running() ?? []) wakeLoop(sessionId);
+  });
+  app.addHook("onClose", async () => {
+    loopsClosed = true;
+    if (userQuestionService) userQuestionService.onDetachedResolved = undefined;
+    unsubscribeLoopWaits();
+    for (const timer of loopTimers.values()) clearTimeout(timer);
+    loopTimers.clear();
+    if (chatLoops) chatLoops.onWake = undefined;
+  });
+
+  app.get("/api/sessions/:sessionId/loop", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (!sessionService?.getById(sessionId, user.id)) return reply.status(404).send({ error: "NOT_FOUND" });
+    return { loop: chatLoops?.get(sessionId, user.id) ?? null };
+  });
+  app.post("/api/sessions/:sessionId/loop", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (!sessionService?.getById(sessionId, user.id)) return reply.status(404).send({ error: "NOT_FOUND" });
+    const body = request.body as Record<string, unknown> | null;
+    if (!chatLoops || !body || !["pause", "resume"].includes(body.action as string)) return reply.status(400).send({ error: "VALIDATION_ERROR" });
+    try { return { loop: chatLoops.control(sessionId, body.action as "pause" | "resume", user.id) }; }
+    catch (error) { return reply.status(409).send({ error: "LOOP_CONFLICT", details: error instanceof Error ? error.message : "Cannot update loop" }); }
+  });
 
   // Store refs for persistence from extracted functions
   _dbRef = db;
@@ -2722,9 +2909,41 @@ export function registerChatRoutes(
 
       const attempts = marker.recoveryAttempts ?? 0;
       const exhausted = attempts >= MAX_AUTOMATIC_RECOVERY_ATTEMPTS;
+      // Autonomous recovery is only allowed on the provider and model the user
+      // recorded for this chat. Build the continuation up front so the message
+      // we persist never promises an automatic continuation we will not start.
+      let continuation: ReturnType<typeof buildBackgroundCommandContinuationPayload> | null = null;
+      // A turn started for a persona runs on the provider+model the user saved
+      // on that persona, so resuming it honors the user's choice instead of
+      // inventing one. Without a persona (or without a saved model) the turn
+      // may only resume on the chat's own recorded selection.
+      const personaSelection = (() => {
+        const personaId = marker.personaAgentId;
+        if (!personaId) return undefined;
+        const profile = teamChat?.profileById(user.id, personaId);
+        if (!profile?.providerId || !profile.model) return undefined;
+        return { providerId: profile.providerId, model: profile.model };
+      })();
+      try {
+        continuation = buildBackgroundCommandContinuationPayload({
+          sessionId,
+          selection: personaSelection,
+          notification:
+            "The gateway process terminated during the previous assistant turn. Continue the user's unfinished task from the persisted conversation and current workspace state. Treat partial assistant output and completed tool calls as progress, verify side effects before repeating actions, and finish with a user-visible response.",
+          userId: user.id,
+          userService,
+          sessionState: sessionStateService,
+          sessionMetadata: session.metadata,
+        });
+      } catch (error) {
+        if (!(error instanceof LoopSelectionRequiredError)) throw error;
+        app.log.warn({ sessionId }, "Interrupted turn not resumed: no user-selected provider/model");
+      }
       const interruptionMessage = exhausted
         ? "Gateway process terminated while this chat was running. Partial progress was checkpointed, but automatic recovery stopped after repeated gateway failures. Send Continue to resume manually."
-        : "Gateway process terminated while this chat was running. Partial progress was checkpointed. Jait is automatically continuing from the saved conversation and current workspace state.";
+        : !continuation
+          ? "Gateway process terminated while this chat was running. Partial progress was checkpointed. Choose a provider and model for this chat, then send Continue to resume."
+          : "Gateway process terminated while this chat was running. Partial progress was checkpointed. Jait is automatically continuing from the saved conversation and current workspace state.";
       try {
         db.insert(messagesTable).values({
           id: `gateway-interruption-${marker.turnId}`,
@@ -2746,24 +2965,21 @@ export function registerChatRoutes(
         // Best effort: the list icon is cosmetic.
       }
 
-      if (exhausted) {
+      if (exhausted || !continuation) {
         sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        if (!continuation && !exhausted) {
+          notifyLoopAttention(
+            sessionId,
+            "Turn not resumed",
+            "Pick a provider and model for this chat, then send Continue. Jait will not choose one for you.",
+          );
+        }
         return;
       }
-
       sessionStateService.set(sessionId, {
         [ACTIVE_TURN_STATE_KEY]: { ...marker, recoveryAttempts: attempts + 1 },
       });
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
-      const continuation = buildBackgroundCommandContinuationPayload({
-        sessionId,
-        notification:
-          "The gateway process terminated during the previous assistant turn. Continue the user's unfinished task from the persisted conversation and current workspace state. Treat partial assistant output and completed tool calls as progress, verify side effects before repeating actions, and finish with a user-visible response.",
-        userId: user.id,
-        userService,
-        sessionState: sessionStateService,
-        sessionMetadata: session.metadata,
-      });
       const response = await app.inject({
         method: "POST",
         url: "/api/chat",
@@ -2773,9 +2989,9 @@ export function registerChatRoutes(
           mode: marker.mode,
           responseStyle: marker.responseStyle,
           ...(marker.personaAgentId !== undefined ? { personaAgentId: marker.personaAgentId } : {}),
-          ...(marker.provider ? { provider: marker.provider } : {}),
+          ...(marker.provider && !continuation.provider ? { provider: marker.provider } : {}),
           ...(marker.runtimeMode ? { runtimeMode: marker.runtimeMode } : {}),
-          ...(marker.model ? { model: marker.model } : {}),
+          ...(marker.model && !continuation.model ? { model: marker.model } : {}),
           ...(Object.prototype.hasOwnProperty.call(marker, "reasoningEffort")
             ? { reasoningEffort: marker.reasoningEffort ?? null }
             : {}),
@@ -2789,6 +3005,14 @@ export function registerChatRoutes(
         );
       }
     } catch (error) {
+      if (error instanceof LoopSelectionRequiredError) {
+        // Autonomous recovery must not pick a provider or model. Drop the
+        // marker so it is not retried, and leave the chat for the user.
+        sessionStateService?.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        app.log.warn({ sessionId }, "Interrupted turn not resumed: no user-selected provider/model");
+        notifyLoopAttention(sessionId, "Turn not resumed", error.message);
+        return;
+      }
       app.log.error({ error, sessionId }, "Interrupted chat recovery failed");
     } finally {
       recoveringInterruptedTurns.delete(sessionId);
@@ -2939,6 +3163,32 @@ export function registerChatRoutes(
         const user = userService.findById(session.userId);
         if (!user) return;
 
+        // The queued message was written by the user, but the provider and model
+        // it must run on are whatever the user selected on this chat. Resolve
+        // that recorded selection here and pass it explicitly: the drain must
+        // never let the turn resolve a provider/model of its own, and it must
+        // never fall back to an account default or a model remembered under a
+        // different provider. If the user has not chosen, stop and ask instead
+        // of running the turn on something they did not pick.
+        const selection = resolveThreadSelectionDefaults({
+          sessionId,
+          sessionState: sessionStateService,
+        });
+        const queuedProvider = nextMessage.provider ?? selection.providerId;
+        const queuedModel = nextMessage.model ?? selection.model;
+        if (!queuedProvider || !queuedModel) {
+          app.log.warn(
+            { sessionId, queuedMessageId: nextMessage.id, hasProvider: Boolean(queuedProvider), hasModel: Boolean(queuedModel) },
+            "Queued chat message needs the user to choose a provider and model",
+          );
+          notifyLoopAttention(
+            sessionId,
+            "Choose a provider and model",
+            "A queued message is waiting. Pick a provider and model to send it — the chat will not choose one for you.",
+          );
+          return;
+        }
+
         sessionStateService.set(sessionId, { queued_messages: rest.length > 0 ? rest : null });
         broadcastQueuedMessagesState(sessionId, rest.length > 0 ? rest : null);
 
@@ -2951,11 +3201,11 @@ export function registerChatRoutes(
             content: nextMessage.content,
             sessionId,
             ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
-            ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
+            provider: queuedProvider,
+            model: queuedModel,
             ...(nextMessage.personaAgentId !== undefined ? { personaAgentId: nextMessage.personaAgentId } : {}),
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
-            ...(nextMessage.model ? { model: nextMessage.model } : {}),
             ...(Object.prototype.hasOwnProperty.call(nextMessage, "reasoningEffort")
               ? { reasoningEffort: nextMessage.reasoningEffort ?? null }
               : {}),
@@ -2985,6 +3235,7 @@ export function registerChatRoutes(
       app.log.warn({ err, sessionId }, "Queued chat message drain failed");
     } finally {
       drainingQueuedSessions.delete(sessionId);
+      if (chatLoops?.get(sessionId)?.status === "running") wakeLoop(sessionId);
     }
   };
 
@@ -3002,7 +3253,13 @@ export function registerChatRoutes(
   // When a background terminal command (e.g. a test run) finishes, steer the
   // running turn if one is active; otherwise start a hidden system-notification
   // turn so the idle agent wakes up and reacts to the result.
-  backgroundCommandMonitor.setCompletionHandler(async (result: BackgroundCommandResult) => {
+  const pendingCommandCompletions = new Map<string, BackgroundCommandResult[]>();
+  const queueCommandCompletion = (result: BackgroundCommandResult): void => {
+    const pending = pendingCommandCompletions.get(result.sessionId) ?? [];
+    pending.push(result);
+    pendingCommandCompletions.set(result.sessionId, pending);
+  };
+  const deliverCommandCompletion = async (result: BackgroundCommandResult): Promise<void> => {
     const note = formatBackgroundCommandNotification(result);
     // Every `return` below drops the notification for good, and the agent has
     // already told the user it would report back — so say why in the log.
@@ -3014,7 +3271,7 @@ export function registerChatRoutes(
     };
 
     try {
-      const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note);
+      const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note, { hidden: true });
       if (steer.status === "steered") return;
     } catch {
       /* fall through to the thread/idle path */
@@ -3031,7 +3288,8 @@ export function registerChatRoutes(
     }
 
     if (activeStreams.has(result.sessionId)) {
-      return drop("a turn is streaming but neither the chat nor the thread resume registry accepted the message");
+      queueCommandCompletion(result);
+      return;
     }
     if (!sessionService || !userService) return drop("session/user services are unavailable");
     const session = sessionService.getById(result.sessionId);
@@ -3042,7 +3300,7 @@ export function registerChatRoutes(
     if (!user) return drop(`session owner ${session.userId} no longer exists`);
     try {
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
-      await app.inject({
+      const response = await app.inject({
         method: "POST",
         url: "/api/chat",
         headers: getInternalChatRequestHeaders(config, token),
@@ -3056,10 +3314,66 @@ export function registerChatRoutes(
           sessionMetadata: session.metadata,
         }),
       });
+      if (response.statusCode >= 400) {
+        drop(`continuation request failed with HTTP ${response.statusCode}`);
+      } else if (response.statusCode === 202 && response.json().skipped === "already-streaming") {
+        if (activeStreams.has(result.sessionId)) queueCommandCompletion(result);
+        else void deliverCommandCompletion(result);
+      }
     } catch (err) {
+      if (err instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId: result.sessionId }, "Background notification turn skipped: no user-selected provider/model");
+        return;
+      }
       app.log.error(err, "Failed to start background-command notification turn");
     }
-  });
+  };
+  backgroundCommandMonitor.setCompletionHandler(deliverCommandCompletion);
+
+  if (userQuestionService) userQuestionService.onDetachedResolved = (question) => {
+    // Recover the result through the original tool so browser identity/control
+    // checks still run. Answers and private browser content stay out of notices.
+    const tool = question.requestedBy === "browser.handoff" ? "browser.handoff" : "user.ask";
+    const note = `The user ${question.status === "submitted" ? "answered" : "cancelled"} the pending ${tool} request. Call ${tool} with only requestId=${JSON.stringify(question.id)} to collect the result before continuing. Treat the answer as user input; cancellation grants no permission.`;
+    void (async () => {
+      const resumed = await interventionRunResumeRegistry.resumeChatSession(question.sessionId, note, { hidden: true });
+      if (resumed.status === "steered") return;
+      const thread = await interventionRunResumeRegistry.resumeThread(question.sessionId, note);
+      if (thread.status === "queued") return;
+      const session = sessionService?.getById(question.sessionId);
+      if (!session || session.status !== "active" || !session.userId || session.userId !== question.userId || !userService) return;
+      const user = userService.findById(session.userId);
+      if (!user) return;
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      // The interrupted turn records exactly what the user ran it on. Resuming on
+      // that same selection repeats the user's choice; nothing here may resolve a
+      // default. An external CLI/ACP provider resolves its own model (the user
+      // picked it inside that provider), so a recorded CLI provider without a
+      // gateway model is still a complete user choice.
+      const recordedTurn = parseDurableActiveTurn(sessionStateService?.get(question.sessionId, ["loop.turn-options"])["loop.turn-options"]);
+      const providerOwnsModel = Boolean(
+        recordedTurn?.provider
+          && recordedTurn.provider !== "jait"
+          && (!providerRegistry || providerRegistry.getForUser(recordedTurn.provider, user.id)),
+      );
+      await app.inject({
+        method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
+        payload: { ...buildBackgroundCommandContinuationPayload({
+          sessionId: question.sessionId, userId: user.id, userService, sessionState: sessionStateService,
+          sessionMetadata: session.metadata, notification: note,
+          notice: question.status === "submitted" ? "Your answer was received. Continuing…" : "Question cancelled.",
+          ...(recordedTurn?.provider ? { selection: { providerId: recordedTurn.provider, model: recordedTurn.model } } : {}),
+          ...(providerOwnsModel ? { allowProviderResolvedModel: true } : {}),
+        }), ...recordedTurn },
+      });
+    })().catch(error => {
+      if (error instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId: question.sessionId }, "Answered-question turn skipped: no user-selected provider/model");
+        return;
+      }
+      app.log.error(error, "Failed to resume answered question");
+    });
+  };
 
   // ── Per-session steering controllers and executed tool call tracking ──
   const sessionSteeringControllers = new Map<string, SteeringController>();
@@ -3067,12 +3381,18 @@ export function registerChatRoutes(
   /** Plans produced by plan mode — keyed by session ID */
   const sessionPlans = new Map<string, { id: string; summary: string; actions: PlannedAction[] }>();
 
-  const steerActiveSession = async (sessionId: string, message: string): Promise<{ ok: boolean; reason?: string }> => {
+  const steerActiveSession = async (
+    sessionId: string,
+    message: string,
+    meta?: SteeringMessageMeta,
+  ): Promise<{ ok: boolean; reason?: string }> => {
     if (!message.trim()) return { ok: false, reason: "empty-message" };
     if (!activeStreams.has(sessionId)) return { ok: false, reason: "not-streaming" };
     const controller = sessionSteeringControllers.get(sessionId);
     if (!controller) return { ok: false, reason: "no-controller" };
-    controller.steer(message);
+    // Keep queued until a loop boundary or provider acknowledgement consumes it
+    // and emits the correlated `steering` event back to the client.
+    controller.steer(message, meta);
     return { ok: true };
   };
 
@@ -3144,10 +3464,10 @@ export function registerChatRoutes(
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot, clientMessageId?: string): void {
     if (!db) return;
     try {
-      const messageId = randomUUID();
+      const messageId = clientMessageId ?? randomUUID();
       persistSubAgentHistories(db, sessionId, messageId, toolCalls);
       db.insert(messagesTable)
         .values({
@@ -3298,13 +3618,21 @@ export function registerChatRoutes(
       : null;
     const projectRootPath = projectService?.effectiveRootPath(projectRecord, authUser.id)
       ?? sessionRecord?.projectPath;
-    const wsRoot = surfaceRegistry
+    const personalNodeId = getPersonalChatNodeId(sessionRecord);
+    if (personalNodeId && personalNodeId !== "gateway" && !ws?.canAccessNode?.(personalNodeId, authUser.id)) {
+      return reply.status(403).send({ error: "NODE_FORBIDDEN", details: "The selected node does not belong to this user" });
+    }
+    const wsRoot = personalNodeId
+      ? personalNodeId === "gateway" ? process.cwd() : "."
+      : surfaceRegistry
       ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
       : (projectRootPath?.trim() || process.cwd());
 
     // Only the gateway's own providers are pre-warmed (see route comment).
-    const projectNodeId = projectRecord?.nodeId?.trim();
-    const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
+    const projectNodeId = projectRecord?.nodeId?.trim() ?? getPersonalChatNodeId(sessionRecord);
+    const remoteSurfaceNodeId = getPersonalChatNodeId(sessionRecord)
+          ? undefined
+          : surfaceRegistry?.getBySession(sessionId)
       .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
       .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
       ?.nodeId as string | undefined;
@@ -3330,7 +3658,10 @@ export function registerChatRoutes(
 
     await settlePendingCliSessionStart(sessionId);
     const cached = activeCliSessions.get(sessionId);
-    if (cached) {
+    if (cached && cached.provider.hasSession?.(cached.providerSessionId) === false) {
+      activeCliSessions.delete(sessionId);
+    }
+    if (cached && activeCliSessions.has(sessionId)) {
       // Already warm for these settings, or holding a real conversation we must
       // not restart. Either way the turn path handles it.
       // `workingDirectory` is only set by this route, so a session started by a
@@ -3415,6 +3746,10 @@ export function registerChatRoutes(
         : typeof body["session_id"] === "string"
           ? (body["session_id"] as string)
           : randomUUID();
+    // The client supplies a unique message ID so snapshots cannot confuse two
+    // identical prompts from different clients. Older clients remain supported.
+    const clientMessageId = typeof body["clientMessageId"] === "string" && /^user-[a-zA-Z0-9-]{8,100}$/.test(body["clientMessageId"])
+      ? body["clientMessageId"] : undefined;
     let chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     let isQuestionBranch = false;
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
@@ -3477,6 +3812,9 @@ export function registerChatRoutes(
       ? (requestedPersonaId ? teamChat?.profileById(authUser.id, requestedPersonaId) : undefined)
       : teamChat?.profileForSession(authUser.id, sessionId);
     if (requestedPersonaId && !personaProfile) return reply.status(404).send({ error: "NOT_FOUND", details: "Agent profile not found" });
+    if (personaProfile && agentControl?.isHalted(authUser.id)) {
+      return reply.status(409).send(agentHaltedBody(agentControl.getState(authUser.id), "agent-chat"));
+    }
     if (personaProfile?.paused) return reply.status(409).send({ error: "AGENT_PAUSED", details: "Agent is paused" });
     const persona: PersonaChatSnapshot | undefined = personaProfile ? {
       id: personaProfile.id, name: personaProfile.name, avatar: personaProfile.avatar, role: personaProfile.role,
@@ -3497,6 +3835,10 @@ export function registerChatRoutes(
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
+      const selectedNodeId = getPersonalChatNodeId(session);
+      if (selectedNodeId && selectedNodeId !== "gateway" && !ws?.canAccessNode?.(selectedNodeId, authUser.id)) {
+        return reply.status(403).send({ error: "NODE_FORBIDDEN", details: "The selected node does not belong to this user" });
+      }
       const boundProfile = teamChat?.profileForSession(authUser.id, sessionId);
       let hasTeamWork = false;
       try { hasTeamWork = !!JSON.parse(session.metadata ?? "{}").teamWork; } catch { /* malformed historical metadata */ }
@@ -3511,6 +3853,25 @@ export function registerChatRoutes(
       }
       isQuestionBranch = isQuestionBranchMetadata(session.metadata);
       if (isQuestionBranch) chatMode = "ask";
+    }
+
+    if (clientMessageId && db?.select({ id: messagesTable.id }).from(messagesTable).where(eq(messagesTable.id, clientMessageId)).get()) {
+      return reply.status(409).send({ error: "MESSAGE_ID_ALREADY_EXISTS" });
+    }
+
+    if (body["_loopRevision"] !== undefined) {
+      const loop = chatLoops?.get(sessionId, authUser.id);
+      if (!systemNotification || loop?.status !== "running" || loop.revision !== body["_loopRevision"]) {
+        return reply.status(202).send({ ok: true, skipped: "loop-changed" });
+      }
+    }
+
+    if (!systemNotification && !isQueuedDrainRequest) cliSessionIdle.recordUserMessage(sessionId);
+
+    // A direct user reply releases a loop's explicit question checkpoint.
+    // Paused loops require an explicit resume and never restart on ordinary chat.
+    if (!systemNotification && chatLoops?.get(sessionId, authUser.id)?.status === "waiting") {
+      chatLoops.resumeAfterAnswer(sessionId, undefined, authUser.id);
     }
 
     // Queue identity belongs to the gateway, including explicit client sends.
@@ -3563,6 +3924,7 @@ export function registerChatRoutes(
         broadcastQueuedMessagesState(sessionId, nextQueue);
       }
 
+      previewService?.setSharedWithAgent(sessionId, true);
       const reqOrigin = request.headers.origin ?? "*";
       reply.raw.writeHead(202, {
         "Content-Type": "text/event-stream",
@@ -3584,6 +3946,47 @@ export function registerChatRoutes(
       return;
     }
 
+    // Turns nobody authored in this request (loop dispatches, background-command
+    // continuations, queue drains) are autonomous: they may only run on the
+    // provider and model the user chose for this chat. Refusing here is what
+    // stops them from silently inheriting the account default provider or the
+    // backend's default model.
+    const autonomousTurn = body["_loopRevision"] !== undefined
+      || systemNotification !== undefined
+      || isQueuedDrainRequest;
+    // External CLI/ACP adapters (Codex, Claude Code, …) resolve the model
+    // themselves: the user picks it inside that provider, not in Jait. Recorded
+    // provider + no gateway model therefore repeats a complete user decision
+    // rather than inventing one. The HTTP backend gets no such allowance — a
+    // missing model there means "backend default", which is the autonomy this
+    // guard exists to remove.
+    const providerResolvesOwnModel = Boolean(
+      requestProvider
+        && requestProvider !== "jait"
+        && (!providerRegistry || providerRegistry.getForUser(requestProvider, authUser.id)),
+    );
+    if (autonomousTurn && (!requestProvider || (!requestBodyModel && !providerResolvesOwnModel))) {
+      // The provider and model recorded on this chat are the user's own
+      // selection (the only writer of these values is the UI, when the user
+      // picks them). Reusing that recorded decision is the single case where an
+      // autonomous turn does not have to ask. Anything else — the account
+      // default provider, a model remembered for a different provider, or a
+      // backend default — is forbidden here, so the lookups below never touch
+      // user settings.
+      const recordedSelection = resolveThreadSelectionDefaults({
+        sessionId,
+        sessionState: sessionStateService,
+      });
+      if (!requestProvider) requestProvider = recordedSelection.providerId;
+      if (!requestBodyModel) requestBodyModel = recordedSelection.model ?? "";
+    }
+    if (autonomousTurn && (!requestProvider || (!requestBodyModel && !providerResolvesOwnModel))) {
+      return reply.status(400).send({
+        error: "SELECTION_REQUIRED",
+        details: `This turn would run on its own without a user-chosen provider and model (provider: ${requestProvider ?? "none"}, model: ${requestBodyModel || "none"}). Choose a provider and model, then retry.`,
+      });
+    }
+
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     // When the request targets a CLI/ACP provider (Claude Code, Codex, …),
@@ -3591,7 +3994,22 @@ export function registerChatRoutes(
     // by Jait's HTTP backend. Passing it to resolveJaitLlmConfig would trip
     // the ACP_ONLY_MODEL_ALIASES guard and return an instant HTTP 400 before
     // the request ever reaches the CLI provider path.
-    const isCliProviderRequest = Boolean(requestProvider && requestProvider !== "jait");
+    // A provider id is only a CLI/ACP provider when the registry actually has it
+    // for this user. Treating every non-"jait" string as a CLI provider let an
+    // unknown or removed provider id run a turn against an empty HTTP base URL
+    // ("Failed to parse URL from /chat/completions") instead of failing loudly.
+    // An explicit provider id that the registry does not know must never be
+    // swapped for a different provider. The CLI path below reports
+    // "Unknown provider" (or "provider unavailable") and the turn fails, so the
+    // user — not the gateway — decides what runs next.
+    const isCliProviderRequest = Boolean(
+      requestProvider && requestProvider !== "jait" && (!providerRegistry || providerRegistry.getForUser(requestProvider, authUser.id)),
+    );
+    // The model the user picked in the provider selector is persisted in their
+    // settings. It must win over the deployment default even when the request
+    // body does not repeat it, otherwise a turn silently runs — and bills — a
+    // model nobody selected.
+    const persistedModel = userSettings?.selectedModel?.trim() || "";
     const jaitCoordinatorModel = (swarmWorkerProvider || isCliProviderRequest) ? "" : requestBodyModel;
     // Use the user's preferred backend, but fall back to the server-level config
     // when the user still has the initial default ("openai") and the server is
@@ -3604,17 +4022,34 @@ export function registerChatRoutes(
     try {
       // CLI adapters own authentication and model resolution. These values
       // only describe the shared prompt; no HTTP backend is used for the turn.
-      llmRuntime = isCliProviderRequest ? {
-        backend: "openai",
-        openaiApiKey: "",
-        openaiBaseUrl: "",
-        openaiModel: requestBodyModel || "default",
-        contextWindow: config.contextWindow,
-      } : resolveJaitLlmConfig({
+      llmRuntime = isCliProviderRequest ? (() => {
+        // The pick from the provider selector wins; when nothing has been
+        // picked yet the CLI adapter resolves its own default, which is what
+        // the selector displays on a fresh install.
+        // An autonomous turn may not borrow the account-level remembered model
+        // here: that value belongs to whichever provider is selected globally,
+        // so passing it to a different CLI provider would hand this provider a
+        // model the user never chose for it. The adapter's own default is the
+        // user's choice inside that provider.
+        return {
+          backend: "openai" as const,
+          openaiApiKey: "",
+          openaiBaseUrl: "",
+          openaiModel: requestBodyModel || (autonomousTurn ? "" : persistedModel),
+          contextWindow: config.contextWindow,
+        };
+      })() : resolveJaitLlmConfig({
         config,
         apiKeys: userApiKeys,
-        requestedModel: jaitCoordinatorModel || undefined,
+        requestedModel: jaitCoordinatorModel || persistedModel || undefined,
         jaitBackend,
+        // Rejecting a model-less turn outright would break turns the user did
+        // not author (background-command notices, queue drains) and a fresh
+        // install where nothing is picked yet. The rule instead is: once a
+        // model has been picked, the turn must run on exactly that model —
+        // strictModel then makes any fall-through an error rather than a
+        // silent, billable run on OLLAMA_MODEL / OPENAI_MODEL.
+        strictModel: Boolean(jaitCoordinatorModel || persistedModel),
       });
       if (!(jaitCoordinatorModel || userApiKeys["OPENAI_MODEL"]?.trim())) {
         llmRuntime = { ...llmRuntime, contextWindow: config.contextWindow };
@@ -3635,6 +4070,11 @@ export function registerChatRoutes(
       // Claim synchronously before prompt ranking can yield to a competing retry.
       if (queuedMessageId) getConsumedQueueIds(sessionId).add(queuedMessageId);
       removeQueuedMessageByContent(sessionId, content, attachments, personaProfile?.id ?? null);
+    }
+
+    // A new user-authored turn returns the browser; automated continuations do not.
+    if (!systemNotification && !isQueuedDrainRequest && body["_loopRevision"] === undefined) {
+      previewService?.setSharedWithAgent(sessionId, true);
     }
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
@@ -3664,7 +4104,10 @@ export function registerChatRoutes(
     // working directory.
     const projectRootPath = projectService?.effectiveRootPath(projectRecord, authUser.id)
       ?? sessionRecord?.projectPath;
-    const wsRoot = surfaceRegistry
+    const personalNodeId = getPersonalChatNodeId(sessionRecord);
+    const wsRoot = personalNodeId
+      ? personalNodeId === "gateway" ? process.cwd() : "."
+      : surfaceRegistry
       ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
       : (projectRootPath?.trim() || process.cwd());
     // Graphify: surface the saved project architecture graph so the agent
@@ -3684,8 +4127,9 @@ export function registerChatRoutes(
     const projectInstructions = sessionRecord?.projectId
       ? projectService?.resolveInstructionChain(sessionRecord.projectId, authUser.id) ?? undefined
       : undefined;
-    const projectNode = projectRecord?.nodeId && projectRecord.nodeId !== "gateway"
-      ? ws?.findNodeByDeviceId(projectRecord.nodeId)
+    const chatNodeId = projectRecord?.nodeId ?? getPersonalChatNodeId(sessionRecord);
+    const projectNode = chatNodeId && chatNodeId !== "gateway"
+      ? ws?.findNodeByDeviceId(chatNodeId)
       : undefined;
     const projectPlatform = projectNode?.platform ?? process.platform;
     if (hasPersonaSelection && sessionService && sessionRecord) {
@@ -3693,15 +4137,18 @@ export function registerChatRoutes(
       try { metadata = JSON.parse(sessionRecord.metadata ?? "{}"); } catch { /* malformed historical metadata */ }
       sessionService.update(sessionId, { metadata: { ...metadata, chatPersonaAgentId: requestedPersonaId } }, authUser.id);
     }
+    const loopTurnStartedAt = performance.now();
+    const loopAtTurnStart = chatLoops?.get(sessionId, authUser.id) ?? null;
+    const loopInstructions = chatLoopInstructions(loopAtTurnStart);
     const teamInstructions = personaProfile ? teamChat?.context(authUser.id, sessionId, personaProfile) : undefined;
     const availableSkills = (skillRegistry?.listEnabled() ?? []).filter(skill => !personaProfile || personaProfile.usesAllSkills || personaProfile.skillIds.includes(skill.id));
     const promptCtx: PromptContext = {
       systemOne: systemOneEnabled(userApiKeys) && !userSettings?.disabledTools?.includes("decision.evaluate"),
       projectRoot: wsRoot,
-      skills: await rankSystemOne(userApiKeys, content, availableSkills, skill => `${skill.name}: ${skill.description}`, "skill for the system prompt"),
+      skills: availableSkills,
       architectureGraph,
       responseStyle,
-      ...((projectInstructions || teamInstructions) ? { projectInstructions: [projectInstructions, teamInstructions].filter(Boolean).join("\n\n") } : {}),
+      ...((projectInstructions || teamInstructions || loopInstructions) ? { projectInstructions: [projectInstructions, teamInstructions, loopInstructions].filter(Boolean).join("\n\n") } : {}),
       backend: llmRuntime.backend,
       platform: /^(win32|windows)$/.test(projectPlatform) ? "Windows" : /^(darwin|macos)$/.test(projectPlatform) ? "macOS" : "Linux",
       shell: /^(win32|windows)$/.test(projectPlatform) ? "PowerShell" : projectNode ? "bash" : process.env.SHELL?.split("/").pop() ?? "bash",
@@ -3725,10 +4172,11 @@ export function registerChatRoutes(
     // The in-memory activeStreams set disappears on process death. Persist a
     // compact marker before recording the turn so startup can distinguish an
     // interrupted run from a normally completed chat and resume it.
+    const activeTurnId = randomUUID();
     if (sessionStateService) {
       const activeTurn: DurableActiveTurn = {
         personaAgentId: personaProfile?.id ?? null,
-        turnId: randomUUID(),
+        turnId: activeTurnId,
         startedAt: new Date().toISOString(),
         mode: chatMode,
         responseStyle,
@@ -3738,7 +4186,7 @@ export function registerChatRoutes(
         ...(requestReasoningEffortProvided ? { reasoningEffort: requestReasoningEffort ?? null } : {}),
         ...(recoveryAttempts > 0 ? { recoveryAttempts } : {}),
       };
-      sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: activeTurn });
+      sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: activeTurn, "loop.turn-options": activeTurn });
     }
 
     // Build user message — multimodal if attachments are present. A background
@@ -3768,10 +4216,10 @@ export function registerChatRoutes(
         }
       }
       history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona);
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
     } else {
       history.push({ role: "user", content, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona);
+      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
     }
     if (!systemNotification && getConsumedQueueIds(sessionId).size > 0) {
       // Only save the receipt once the user turn has been recorded.
@@ -3910,12 +4358,41 @@ export function registerChatRoutes(
     };
     let cliEventUnsubscribe: (() => void) | null = null;
     let cliTurnDoneUnsubscribe: (() => void) | null = null;
+    let cliSteering: ProviderSteeringDispatcher | undefined;
     const cleanupCliListeners = () => {
+      cliSteering?.dispose();
       cliTurnDoneUnsubscribe?.();
       cliTurnDoneUnsubscribe = null;
       cliEventUnsubscribe?.();
       cliEventUnsubscribe = null;
     };
+
+    // ── Outer guard ──────────────────────────────────────────────────────────
+    // This `try` must open *before* the first registry mutation below
+    // (`activePersonaOwners` / `activeStreams`) and before the awaited memory
+    // retrieval further down, so that every failure after the session is
+    // registered is covered by the `finally` teardown at the end of this
+    // handler. Anything that throws before the guard — most plausibly
+    // `await retrieveRelevantMemoryContext(...)` — would otherwise leave the
+    // session in `activeStreams` for the life of the process: it would report
+    // `streaming: true` forever, later sends would queue or 409 behind it, and
+    // the Stop button could not clear it because /cancel only aborts the
+    // controller. That is the "run won't stop" wedge.
+    //
+    // A `finally` cannot see `let`/`const` bindings created inside its own
+    // `try` block, so the three names the teardown needs are declared here,
+    // outside the guard. The body below is intentionally left un-indented to
+    // match the file's existing style and keep this change reviewable.
+    let clientDisconnected = false;
+    const safeWrite = (data: string) => {
+      if (!clientDisconnected) {
+        try { writeSseChunk(reply, data); } catch { clientDisconnected = true; }
+      }
+    };
+    let keepalive: ReturnType<typeof setInterval> | null = null;
+    let unregisterInterventionResume: (() => void) | null = null;
+    try {
+    if (personaProfile) agentControl?.assertCanRun(authUser.id, "agent-chat");
     getOrCreateAccumulator(sessionId).persona = persona;
     activePersonaOwners.set(sessionId, authUser.id);
     activeStreams.add(sessionId);
@@ -3954,14 +4431,9 @@ export function registerChatRoutes(
       });
     }
 
-    let clientDisconnected = false;
+    // `clientDisconnected` and `safeWrite` are hoisted above the outer guard:
+    // the teardown in `finally` writes to the client with `safeWrite`.
     reply.raw.on("close", () => { clientDisconnected = true; });
-
-    const safeWrite = (data: string) => {
-      if (!clientDisconnected) {
-        try { writeSseChunk(reply, data); } catch { clientDisconnected = true; }
-      }
-    };
 
     // ── SSE keepalive heartbeat ──
     // While the agentic loop runs a long tool or waits for a slow LLM response,
@@ -3970,11 +4442,11 @@ export function registerChatRoutes(
     // "fetch failed" on the frontend and dropping the in-progress assistant
     // message. Emit an SSE comment (": keepalive\n\n") every 15s — comments are
     // ignored by the EventSource/reader parser but keep the TCP connection alive.
-    const keepalive = setInterval(() => {
-      if (clientDisconnected) { clearInterval(keepalive); return; }
+    keepalive = setInterval(() => {
+      if (clientDisconnected) { if (keepalive) clearInterval(keepalive); return; }
       safeWrite(`: keepalive\n\n`);
     }, 15_000);
-    reply.raw.on("close", () => { clearInterval(keepalive); });
+    reply.raw.on("close", () => { if (keepalive) clearInterval(keepalive); });
 
     // Start of a new turn: emit a synthetic `request` event so trajectory/
     // debug consumers get a turn boundary with the prompt + provider metadata.
@@ -3983,8 +4455,15 @@ export function registerChatRoutes(
     // `request` push — the gateway is the single source for turn boundaries.
     const requestEvent: StreamEvent = {
       type: "request",
+      turnId: activeTurnId,
       ...(persona ? { persona } : {}),
       content,
+      // A continuation turn has no prompt of its own, so `content` is empty and
+      // the visible text is the notice line the gateway also persists. Send it
+      // on the event too, otherwise the live transcript shows nothing until the
+      // session is reloaded.
+      ...(systemNotification ? { systemNotice: true } : {}),
+      ...(systemNotice ? { noticeText: systemNotice } : {}),
       ...(queuedMessageId ? { queuedMessageId } : {}),
       ...(displaySegments.length ? { displaySegments } : {}),
       attachmentCount: attachments.length,
@@ -3996,11 +4475,19 @@ export function registerChatRoutes(
     safeWrite(`data: ${JSON.stringify(requestEvent)}\n\n`);
     emitToSubscribers(sessionId, requestEvent);
 
+    const providerLabel = providerRegistry?.getForUser(requestProvider ?? "jait", authUser.id)?.info.name
+      ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
+
+    // Include turn preparation in the cancellation and error handling path.
+    try {
     const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
-    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content, userApiKeys);
+    const relevantMemory = await waitForCliProviderRequest(
+      () => retrieveRelevantMemoryContext(memoryService, content, userApiKeys),
+      streamAbort.signal,
+    );
     const memoryToolCall = relevantMemory?.flow.retrieved.length
       ? buildSyntheticMemoryToolCall(content, memoryService)
       : null;
@@ -4020,25 +4507,26 @@ export function registerChatRoutes(
     const memoryBlock = relevantMemory?.block;
     const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
 
-    const providerLabel = providerRegistry?.getForUser(requestProvider ?? "jait", authUser.id)?.info.name
-      ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
-
     // Create steering controller for this session
-    const steering = new SteeringController();
+    const steering = new SteeringController(activeTurnId);
     sessionSteeringControllers.set(sessionId, steering);
-    const unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message) => {
+    unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message, options) => {
       if (!activeStreams.has(sessionId)) return { status: "not-running" as const };
       const controller = sessionSteeringControllers.get(sessionId);
       if (!controller) return { status: "not-running" as const };
-      controller.steer(message);
+      controller.steer(message, options);
       return { status: "steered" as const };
     });
 
-    try {
+    // ── Turn body ───────────────────────────────────────────────────────────
+    // The enclosing guard also reports failures during turn preparation.
       let usedCliProvider = false;
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
-        const cliWsRoot = surfaceRegistry
+        const personalRemoteNode = getPersonalChatNodeId(sessionRecord);
+        const cliWsRoot = personalRemoteNode
+          ? personalRemoteNode !== "gateway" ? "." : process.cwd()
+          : surfaceRegistry
           ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
           : (projectRootPath?.trim() || process.cwd());
 
@@ -4046,8 +4534,10 @@ export function registerChatRoutes(
         let isRemote = false;
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
         let remoteNodeClientId: string | undefined;
-        const projectNodeId = projectRecord?.nodeId?.trim();
-        const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
+        const projectNodeId = projectRecord?.nodeId?.trim() ?? getPersonalChatNodeId(sessionRecord);
+        const remoteSurfaceNodeId = getPersonalChatNodeId(sessionRecord)
+          ? undefined
+          : surfaceRegistry?.getBySession(sessionId)
           .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
           .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
           ?.nodeId as string | undefined;
@@ -4095,13 +4585,16 @@ export function registerChatRoutes(
           streamAbort.signal,
         );
         if (!available) {
-          // Provider is offline or not installed — fall back to Jait
+          // Never substitute a different provider on the user's behalf. The
+          // provider was chosen explicitly, so report the failure and let the
+          // user choose again — a silent switch would change both provider and
+          // model without the user deciding either.
           const reason = cliProvider.info.unavailableReason ?? "CLI not found";
-          if (personaProfile) throw new Error(`Agent provider unavailable: ${reason}`);
-          console.log(`[chat/cli] Provider ${requestProvider} unavailable (${reason}), falling back to jait`);
-          const fallbackEvent = { type: "provider_fallback", from: requestProvider, to: "jait", reason } as unknown as StreamEvent;
-          safeWrite(`data: ${JSON.stringify(fallbackEvent)}\n\n`);
-          emitToSubscribers(sessionId, fallbackEvent);
+          throw new Error(
+            personaProfile
+              ? `Agent provider unavailable: ${reason}`
+              : `Provider ${requestProvider} is unavailable (${reason}). Choose a provider and model to continue.`,
+          );
         } else {
 
         console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.projectPath="${sessionRecord?.projectPath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
@@ -4151,9 +4644,9 @@ export function registerChatRoutes(
         // restart, sleep/wake) wipes the client's in-memory provider process,
         // so the old providerSessionId would point at nothing and silently
         // hang instead of erroring.
-        const remoteConnectionUnchanged = !isRemote || (
+        const remoteConnectionUnchanged = (isRemote === Boolean(cachedCliSession?.remoteClientId)) && (!isRemote || (
           !!cachedCliSession?.remoteClientId && cachedCliSession.remoteClientId === remoteNodeClientId
-        );
+        ));
 
         // A pre-warmed process was started before the turn resolved its project
         // root. If the roots disagree the subprocess is running in the wrong
@@ -4163,6 +4656,7 @@ export function registerChatRoutes(
 
         if (
           cachedCliSession
+          && cachedCliSession.provider.hasSession?.(cachedCliSession.providerSessionId) !== false
           && (cachedCliSession.awaitingFirstTurn || cachedCliSession.personaFingerprint === personaFingerprint)
           && cachedCliSession.providerId === requestProvider
           && cachedCliSession.runtimeMode === runtimeMode
@@ -4248,7 +4742,7 @@ export function registerChatRoutes(
           | { type: "text"; content: string }
           | { type: "toolGroup"; callIds: string[] }
           | { type: "error"; content: string }
-          | { type: "steering"; content: string }
+          | { type: "steering"; content: string; displayContent?: string; attachments?: SteeringAttachment[] }
         > = [];
         /** Error message from a session.error event — persisted instead of normal content. */
         let sessionError: string | null = null;
@@ -4282,6 +4776,12 @@ export function registerChatRoutes(
           }
         };
 
+        const usageKey = "chat.providerUsage";
+        const savedUsage = sessionStateService?.get(sessionId, [usageKey])[usageKey] as { providerSessionId?: string; baseline?: import("@jait/shared").ModelUsage } | undefined;
+        const usageAccumulator = new TurnUsageAccumulator(
+          savedUsage?.providerSessionId === providerSessionId ? savedUsage.baseline : undefined,
+          isNewCliSession,
+        );
         activeCliTurns.add(sessionId);
         cliEventUnsubscribe = cliProvider.onEvent((event: ProviderEvent) => {
           if (event.sessionId !== providerSessionId) {
@@ -4290,6 +4790,15 @@ export function registerChatRoutes(
 
           // Map provider events to SSE events the frontend understands
           switch (event.type) {
+            case "turn.started":
+              cliSteering?.start();
+              break;
+            case "usage":
+              usageAccumulator.add(event.usage);
+              if (usageAccumulator.baseline) sessionStateService?.set(sessionId, {
+                [usageKey]: { providerSessionId, baseline: usageAccumulator.baseline },
+              });
+              break;
             case "token":
               // If there's a pending tool group, flush it first
               flushToolGroup();
@@ -4482,11 +4991,17 @@ export function registerChatRoutes(
           promptCtx,
         );
         const cliContentWithAttachments = appendUploadedAttachmentPromptBlock(systemNotification ?? content, attachments);
+        const cliImageAttachments = attachments.filter((attachment) => attachment.mimeType.startsWith("image/"));
         const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${cliContentWithAttachments}` : cliContentWithAttachments;
         const recentContextBlock = isNewCliSession
           ? buildExternalProviderRecentContext(history, isQuestionBranch ? 20 : 4)
           : null;
-        let cliContent = cliUserContent;
+        // A reused CLI session keeps its original system prompt. Refresh the
+        // loop checkpoint on every turn so errors, pauses and resume requests
+        // cannot leave the provider working with a stale or missing goal.
+        let cliContent = loopInstructions && !isNewCliSession
+          ? `<chatGoalLoop>\n${loopInstructions}\n</chatGoalLoop>\n\n${cliUserContent}`
+          : cliUserContent;
         if (isNewCliSession) {
           cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent, recentContextBlock);
         } else if (responseStyleBlock) {
@@ -4512,10 +5027,50 @@ export function registerChatRoutes(
             || event.type === "turn.completed"
           ) {
             if (event.type === "session.error") activeCliSessions.delete(sessionId);
+            void cliSteering?.pause();
             resolveTurnDone();
           }
         });
 
+        const recordSteering = (pending: SteeringMessage) => {
+          flushToolGroup();
+          flushTextSegment();
+          if (!pending.hidden) {
+            cliSegments.push({
+              type: "steering",
+              content: pending.message,
+              ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+              ...steeringTranscriptAttachments(pending.attachments),
+            });
+          }
+          // Mirror the agent loop's consumption event so a client that had the
+          // message queued can promote it into the transcript exactly once.
+          const steerEvent = {
+            type: "steering" as const,
+            message: pending.message,
+            ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            ...steeringTranscriptAttachments(pending.attachments),
+            ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
+            ...(pending.hidden ? { hidden: true } : {}),
+            deferred: true,
+          };
+          emitToSubscribers(sessionId, steerEvent as unknown as StreamEvent);
+          // Hidden steers are recorded for the trajectory log only — never
+          // written into the chat stream.
+          if (!pending.hidden) safeWrite(`data: ${JSON.stringify(steerEvent)}\n\n`);
+          lastSegmentWasText = false;
+        };
+        cliSteering = new ProviderSteeringDispatcher(
+          steering,
+          (message, pending) => cliProvider!.steerTurn?.(
+            providerSessionId,
+            appendUploadedAttachmentPromptBlock(message, pending.attachments ?? []),
+            undefined,
+            (pending.attachments ?? []).filter(item => item.mimeType.startsWith("image/")),
+          ) ?? Promise.resolve(false),
+          recordSteering,
+          error => app.log.warn({ err: error }, "Provider steering failed; keeping message queued for follow-up"),
+        );
         // Send the turn — with recovery if the session died between messages.
         // Race the provider request with its completion event because some
         // adapters keep sendTurn pending until after turn.completed is emitted.
@@ -4549,7 +5104,7 @@ export function registerChatRoutes(
           contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           await waitForCliProviderRequest(
             () => Promise.race([
-              cliProvider!.sendTurn(providerSessionId, cliContent),
+              cliProvider!.sendTurn(providerSessionId, cliContent, cliImageAttachments),
               turnDonePromise,
             ]),
             streamAbort.signal,
@@ -4561,6 +5116,7 @@ export function registerChatRoutes(
             cliTurnDoneUnsubscribe = null;
             throw new Error(sessionError);
           }
+          await cliSteering.pause();
           const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
           if (isNonRecoverableProviderRequestError(sendErr)) {
             console.warn(`[chat/cli] sendTurn rejected without recovery: ${providerErrorMessage}`);
@@ -4609,6 +5165,7 @@ export function registerChatRoutes(
               || event.type === "turn.completed"
             ) {
               if (event.type === "session.error") activeCliSessions.delete(sessionId);
+              void cliSteering?.pause();
               resolveTurnDone();
             }
           });
@@ -4648,7 +5205,7 @@ export function registerChatRoutes(
           try {
             await waitForCliProviderRequest(
               () => Promise.race([
-                cliProvider!.sendTurn(providerSessionId, recoveryContent),
+                cliProvider!.sendTurn(providerSessionId, recoveryContent, cliImageAttachments),
                 turnDonePromise,
               ]),
               streamAbort.signal,
@@ -4668,20 +5225,19 @@ export function registerChatRoutes(
           streamAbort.signal,
         );
 
-        // ── Drain steering messages: send follow-up turns for any messages
-        // injected via the /steer endpoint while the CLI provider was running. ──
+        await cliSteering.pause();
+
+        // Unsupported steering and turn-end races retain the queued follow-up path.
         while (!streamAbort.signal.aborted && !sessionError) {
+          await cliSteering.pause();
           const steered = steering.drain();
           if (steered.length === 0) break;
 
-          flushToolGroup();
-          flushTextSegment();
-          for (const message of steered) {
-            cliSegments.push({ type: "steering", content: message });
-          }
-          lastSegmentWasText = false;
-
-          const steerContent = steered.map(m => `[STEERING] ${m}`).join("\n\n");
+          for (const pending of steered) recordSteering(pending);
+          const steerContent = steered
+            .map(m => appendUploadedAttachmentPromptBlock(`[STEERING] ${m.message}`, m.attachments ?? []))
+            .join("\n\n");
+          const steerImages = steered.flatMap(m => (m.attachments ?? []).filter(item => item.mimeType.startsWith("image/")));
           app.log.info(`[chat/cli] Steering follow-up for session ${sessionId}: ${steerContent.slice(0, 100)}`);
 
           // Set up a new turn-completion listener
@@ -4701,6 +5257,7 @@ export function registerChatRoutes(
                 markTurnErrored(sessionError);
                 activeCliSessions.delete(sessionId);
               }
+              void cliSteering?.pause();
               unsubSteerDone();
               steerDoneResolve?.();
             }
@@ -4709,7 +5266,7 @@ export function registerChatRoutes(
           try {
             await waitForCliProviderRequest(
               () => Promise.race([
-                cliProvider!.sendTurn(providerSessionId, steerContent),
+                cliProvider!.sendTurn(providerSessionId, steerContent, steerImages),
                 steerDonePromise,
               ]),
               streamAbort.signal,
@@ -4735,7 +5292,10 @@ export function registerChatRoutes(
         if (contextFlowJson) {
           try {
             const flow = JSON.parse(contextFlowJson) as LlmContextFlow;
-            attachCliTurnMetrics(flow, fullContent, cliToolCalls, Date.now() - turnStartedAt);
+            const measuredUsage = usageAccumulator.metrics(Date.now() - turnStartedAt);
+            if (measuredUsage && flow.rounds[0]) flow.rounds[0].metrics = measuredUsage;
+            else attachCliTurnMetrics(flow, fullContent, cliToolCalls, Date.now() - turnStartedAt);
+            flow.usageSummary = summarizeUsage(flow.rounds);
             contextFlowJson = serializePersistedContextFlow(flow);
             const usage = flow.rounds[0]?.metrics?.contextUsage;
             if (usage) {
@@ -4828,8 +5388,12 @@ export function registerChatRoutes(
 
         const onEvent = (event: AgentLoopEvent) => {
           if (streamAbort.signal.aborted) return;
+          // Persist first — the trajectory log keeps every event, including the
+          // internal steering nudges that the chat transcript must never show.
           emitToSubscribers(sessionId, event as StreamEvent);
-          safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+          if (!(event.type === "steering" && event.hidden)) {
+            safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+          }
 
           // ── Update streaming accumulator so reload snapshots include partial content ──
           if (event.type === "token") accumulateToken(sessionId, event.content);
@@ -4903,7 +5467,13 @@ export function registerChatRoutes(
         const injectedMemoryMessage: ChatMessage | null = memoryBlock
           ? { role: "system", content: memoryBlock }
           : null;
-        if (injectedMemoryMessage) history.push(injectedMemoryMessage);
+        if (injectedMemoryMessage) {
+          // Keep retrieved context before the current user request, so the
+          // final input remains the instruction the assistant must answer.
+          let latestUserIndex = history.length - 1;
+          while (latestUserIndex >= 0 && history[latestUserIndex]?.role !== "user") latestUserIndex -= 1;
+          history.splice(latestUserIndex < 0 ? history.length : latestUserIndex, 0, injectedMemoryMessage);
+        }
         let result: Awaited<ReturnType<typeof runAgentLoop>>;
         try {
           // A provider can ignore AbortSignal and leave its request pending forever.
@@ -4993,6 +5563,8 @@ export function registerChatRoutes(
             steering,
           ), streamAbort.signal);
         } finally {
+          // The model loop has ended; persistence/compaction is not a steerable turn.
+          if (sessionSteeringControllers.get(sessionId) === steering) sessionSteeringControllers.delete(sessionId);
           if (injectedMemoryMessage) {
             const index = history.indexOf(injectedMemoryMessage);
             if (index >= 0) history.splice(index, 1);
@@ -5075,9 +5647,21 @@ export function registerChatRoutes(
           ? partialToolCalls
           : (acc?.toolCalls ?? []);
         const errorMessage = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
-        const streamedSegments = resultSegmentsJson
-          ? JSON.parse(resultSegmentsJson) as Array<{ type: string; content?: string }>
-          : [...(acc?.segments ?? [])];
+        // A streaming checkpoint can leave a truncated segments blob behind, so
+        // this parse is not guaranteed to succeed. Fall back to the live
+        // accumulator rather than losing the partial transcript (and, before
+        // the enclosing `finally` existed, the whole stream teardown) to a
+        // malformed JSON payload.
+        let streamedSegments: Array<{ type: string; content?: string }>;
+        if (resultSegmentsJson) {
+          try {
+            streamedSegments = JSON.parse(resultSegmentsJson) as Array<{ type: string; content?: string }>;
+          } catch {
+            streamedSegments = [...(acc?.segments ?? [])];
+          }
+        } else {
+          streamedSegments = [...(acc?.segments ?? [])];
+        }
         if (!streamedSegments.some((segment) => segment.type === "error" && segment.content === errorMessage)) {
           streamedSegments.push({ type: "error", content: errorMessage });
         }
@@ -5172,19 +5756,9 @@ export function registerChatRoutes(
       }
     }
 
-    // Stop the SSE keepalive heartbeat now that the turn is finishing.
-    clearInterval(keepalive);
-    // Tear down the time-based streaming checkpoint: drop the dirty hook so
-    // late accumulator mutations (cleanup-order edge cases) can't schedule
-    // another checkpoint, and clear any pending debounce timer. The fallback
-    // persist above (or the loop's onPersist) is the authoritative final write;
-    // if the turn never produced anything persistable, a pending timer would
-    // otherwise fire after `activeStreams.delete` and write one anyway.
-    streamDirtyHooks.delete(sessionId);
-    if (streamCheckpointDebounce) {
-      clearTimeout(streamCheckpointDebounce);
-      streamCheckpointDebounce = null;
-    }
+    // The SSE keepalive heartbeat and the time-based streaming checkpoint are
+    // torn down in the `finally` below, before `activeStreams.delete`, so they
+    // are stopped even when the persistence above throws.
 
     try {
       sessionStateService?.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
@@ -5206,10 +5780,52 @@ export function registerChatRoutes(
       app.log.error({ error, sessionId }, "Failed to record chat error state");
     }
 
+    } finally {
+      // ── Unconditional stream teardown ──────────────────────────────────────
+      // Runs on the normal path, on provider error, on user cancel, and on any
+      // throw raised by the catch handler or the fallback persist above. Every
+      // statement here is idempotent, so running it twice is harmless.
+      //
+      // Ordering matters and mirrors the previous normal-path sequence: stop
+      // the heartbeat, then drop the checkpoint dirty hook and cancel any
+      // pending debounce *before* `activeStreams.delete` — otherwise a timer
+      // scheduled moments ago could still fire after the delete and write a
+      // stray assistant row for a turn that is already over.
+      if (keepalive) clearInterval(keepalive);
+      streamDirtyHooks.delete(sessionId);
+      if (streamCheckpointDebounce) {
+        clearTimeout(streamCheckpointDebounce);
+        streamCheckpointDebounce = null;
+      }
+
+      activeStreams.delete(sessionId);
+      activePersonaOwners.delete(sessionId);
+      activeAssistantCheckpointIds.delete(sessionId);
+      activeCliTurns.delete(sessionId);
+      cleanupCliListeners();
+      ws?.broadcastToUser(authUser.id, {
+        type: "session.streaming",
+        sessionId,
+        timestamp: new Date().toISOString(),
+        payload: { sessionId, streaming: false },
+      });
+      sessionAbortControllers.delete(sessionId);
+      sessionSteeringControllers.delete(sessionId);
+      unregisterInterventionResume?.();
+      sessionStreamingState.delete(sessionId);
+    }
+
     // A reply finishing after the user leaves is new activity, even when the
-    // prompt itself was already read. Publish before done so visible readers
-    // can acknowledge this server timestamp when the final content paints.
-    sessionService?.touch(sessionId);
+    // prompt itself was already read. Publish after the teardown above so this
+    // also runs when the turn body threw, and so readers see `streaming: false`
+    // before the refreshed session row. Guarded like the sibling blocks above:
+    // a failed write here (SQLite busy, disk full) must not abort the remaining
+    // turn-finalisation work, or the client would never see its `done` event.
+    try {
+      sessionService?.touch(sessionId);
+    } catch (error) {
+      app.log.error({ error, sessionId }, "Failed to touch session on turn end");
+    }
     const completedSession = sessionService?.getById(sessionId, authUser.id);
     if (completedSession) {
       ws?.broadcastToUser(authUser.id, {
@@ -5219,22 +5835,6 @@ export function registerChatRoutes(
         payload: { session: completedSession },
       });
     }
-
-    activeStreams.delete(sessionId);
-    activePersonaOwners.delete(sessionId);
-    activeAssistantCheckpointIds.delete(sessionId);
-    activeCliTurns.delete(sessionId);
-    cleanupCliListeners();
-    ws?.broadcastToUser(authUser.id, {
-      type: "session.streaming",
-      sessionId,
-      timestamp: new Date().toISOString(),
-      payload: { sessionId, streaming: false },
-    });
-    sessionAbortControllers.delete(sessionId);
-    sessionSteeringControllers.delete(sessionId);
-    unregisterInterventionResume();
-    sessionStreamingState.delete(sessionId);
 
     // Preserve completed tool-call/result pairs for the next request. If a
     // cancellation genuinely interrupted a call, synthesize only its missing
@@ -5285,7 +5885,10 @@ export function registerChatRoutes(
 
     // One event identity on every transport: push and the open app must not
     // independently invent IDs for the same completed turn.
-    if (!loopErrorMessage && !turnCancelledOrErrored && !hitMaxRounds) {
+    const loopAtCompletion = chatLoops?.get(sessionId) ?? null;
+    const isGoalLoopTurn = loopAtTurnStart?.status === "running"
+      || (loopAtCompletion !== null && (loopAtCompletion.id !== loopAtTurnStart?.id || loopAtCompletion.revision !== loopAtTurnStart?.revision));
+    if (!isGoalLoopTurn && !loopErrorMessage && !turnCancelledOrErrored && !hitMaxRounds) {
       const queuedState = sessionStateService?.get(sessionId, ["queued_messages"]);
       if (parseQueuedChatMessages(queuedState?.queued_messages).length === 0) {
         const projectName = completedSession?.projectId ? projectService?.getById(completedSession.projectId, authUser.id)?.title : null;
@@ -5317,13 +5920,20 @@ export function registerChatRoutes(
           includeToast: false,
           ...notificationAgentContext(agentIdentity),
         };
-        ws?.broadcastToUser(authUser.id, {
-          type: "notification", sessionId, timestamp: new Date().toISOString(), payload: notification,
-        });
+        ws?.publishChatNotification(authUser.id, notification);
         void mobilePush?.sendChatCompleted(authUser.id, notification).catch(() => { /* best effort */ });
       }
     }
-    void drainQueuedChatMessages(sessionId);
+    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored, performance.now() - loopTurnStartedAt, fullContent) : null;
+    if (loopAtEnd?.status === "error") notifyLoopAttention(sessionId, "Loop stopped", loopAtEnd.summary);
+    if (loopAtEnd?.status === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question")) {
+      notifyLoopAttention(sessionId, "Loop needs your answer", loopAtEnd.summary);
+    }
+    const completions = pendingCommandCompletions.get(sessionId);
+    const completion = completions?.shift();
+    if (completions?.length === 0) pendingCommandCompletions.delete(sessionId);
+    if (completion) void deliverCommandCompletion(completion);
+    else void drainQueuedChatMessages(sessionId);
   });
 
   app.post("/api/sessions/:sessionId/approve", async (request, reply) => {
@@ -5384,7 +5994,19 @@ export function registerChatRoutes(
       sessionStateService!.set(sessionId, { queued_messages: reordered });
       broadcastQueuedMessagesState(sessionId, reordered);
     }
-    if (controller) {
+    if (chatLoops?.get(sessionId, authUser.id)?.status === "running") chatLoops.control(sessionId, "pause", authUser.id);
+    // A registered controller is not proof that a turn is still live. When the
+    // turn body throws before its `finally` teardown, the controller object
+    // outlives the turn it belonged to, so `abort()` is a silent no-op that
+    // still answered `cancelled: true`. Distinguish the two cases honestly so
+    // callers can reconcile a stop that cancelled nothing.
+    //
+    // Deliberately NOT gated on `activeStreams.has(sessionId)`: the controller
+    // is registered at sessionAbortControllers.set() well before
+    // activeStreams.add(), so that check would refuse to abort a live turn
+    // during provider warm-up. `signal.aborted` is the only safe test — it
+    // never blocks a first, real cancellation.
+    if (controller && !controller.signal.aborted) {
       if (activeCliTurns.has(sessionId)) {
         stopAndDeleteActiveCliSession(sessionId);
       }
@@ -5863,6 +6485,7 @@ export function registerChatRoutes(
         type: "snapshot",
         messages: snapshotMessages,
         streaming: isStreaming,
+        turnId: sessionSteeringControllers.get(sessionId)?.turnId,
         seq: sessionStreamSeq.get(sessionId) ?? 0,
         total,
         hasMore,
@@ -6217,22 +6840,48 @@ export function registerChatRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const message = typeof body["message"] === "string" ? body["message"] : "";
     const displayContent = typeof body["displayContent"] === "string" ? body["displayContent"] : undefined;
-    if (!message.trim()) {
-      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
+    // Every accepted steer carries an id the client can correlate with the
+    // `steering` event emitted on loop consumption or provider acknowledgement.
+    // The client supplies its own id (so it can render the pending entry
+    // before the HTTP response lands); synthesize one for other callers.
+    const steerAttachments = parseChatAttachments(body["attachments"], parseUserDisplaySegments(body["displaySegments"]));
+    const requestedSteerId = typeof body["queuedMessageId"] === "string" ? body["queuedMessageId"].trim() : "";
+    const queuedMessageId = requestedSteerId || `steer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (!message.trim() && steerAttachments.length === 0) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message or attachments are required" });
     }
 
-    if (!activeStreams.has(sessionId)) {
+    if (!activeStreams.has(sessionId) || sessionAbortControllers.get(sessionId)?.signal.aborted) {
       return reply.status(409).send({ error: "CONFLICT", details: "No active stream for this session — steering only works during streaming" });
     }
 
     const controller = sessionSteeringControllers.get(sessionId);
     if (!controller) {
-      return reply.status(404).send({ error: "NOT_FOUND", details: "No steering controller for this session" });
+      return reply.status(409).send({ error: "CONFLICT", details: "No active turn for this session" });
     }
 
-    controller.steer(message);
-    accumulateSteering(sessionId, message, displayContent);
-    return { ok: true, steered: true };
+    const expectedTurnId = body["expectedTurnId"];
+    if (expectedTurnId !== undefined && (typeof expectedTurnId !== "string" || !expectedTurnId.trim())) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "expectedTurnId must be a non-empty string" });
+    }
+    if (expectedTurnId !== undefined && expectedTurnId !== controller.turnId) {
+      return reply.status(409).send({ error: "CONFLICT", details: "Active turn does not match expectedTurnId" });
+    }
+
+    const meta: SteeringMessageMeta = {
+      ...(displayContent ? { displayContent } : {}),
+      ...(steerAttachments.length ? { attachments: steerAttachments } : {}),
+      queuedMessageId,
+    };
+    cliSessionIdle.recordUserMessage(sessionId);
+    previewService?.setSharedWithAgent(sessionId, true);
+    controller.steer(message, meta);
+    accumulateSteering(sessionId, message, displayContent, steerAttachments);
+    // `deferred` tells the client this is accepted-but-not-yet-injected: the
+    // message must stay rendered as queued until the loop's `steering` event
+    // arrives after loop consumption or provider acknowledgement.
+    return { ok: true, steered: true, deferred: true, queuedMessageId, turnId: controller.turnId };
   });
 
   // ══ GET /api/sessions/:sessionId/plan — Get pending plan ═══════════

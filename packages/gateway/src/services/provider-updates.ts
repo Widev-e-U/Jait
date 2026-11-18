@@ -100,7 +100,7 @@ export class ProviderUpdateService {
   }
 
   supports(providerType: string): boolean {
-    return Boolean(UPDATE_SPECS[providerType]);
+    return Object.hasOwn(UPDATE_SPECS, providerType);
   }
 
   async getStatus(providerType: string, force = false): Promise<ProviderUpdateInfo | null> {
@@ -118,7 +118,7 @@ export class ProviderUpdateService {
   }
 
   async update(providerType: string): Promise<ProviderUpdateResult> {
-    const spec = UPDATE_SPECS[providerType];
+    const spec = this.supports(providerType) ? UPDATE_SPECS[providerType] : undefined;
     if (!spec) throw new Error(`Updates are not supported for provider ${providerType}`);
 
     const nativeClaude = providerType === "claude-code" && isNativeClaudeInstall(this.resolvePath(spec.command));
@@ -146,7 +146,7 @@ export class ProviderUpdateService {
   }
 
   private async check(providerType: string): Promise<ProviderUpdateInfo> {
-    const spec = UPDATE_SPECS[providerType];
+    const spec = this.supports(providerType) ? UPDATE_SPECS[providerType] : undefined;
     if (!spec) throw new Error(`Updates are not supported for provider ${providerType}`);
     const [{ stdout, stderr }, response] = await Promise.all([
       this.run(spec.command, ["--version"], { timeout: CHECK_TIMEOUT_MS, maxBuffer: 1024 * 1024 }),

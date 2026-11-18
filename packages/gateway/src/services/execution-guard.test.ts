@@ -2,6 +2,25 @@ import { describe, expect, it } from "vitest";
 import { ExecutionGuard } from "./execution-guard.js";
 
 describe("bounded execution", () => {
+  it("reports the sharing blocker across browser tools instead of a generic failure", () => {
+    const guard = new ExecutionGuard();
+    for (const tool of ["browser.screenshot", "preview.inspect", "browser.snapshot"]) {
+      guard.beforeCall();
+      guard.record(tool, { ok: false, message: "This preview is not shared with the agent. Use Share with agent in the chat browser card or preview tab to allow browser tools." });
+    }
+    expect(guard.stopReason).toContain("Browser sharing required");
+    expect(guard.stopReason).toContain("Share with agent");
+  });
+
+  it("identifies missing Playwright executables as a browser dependency blocker", () => {
+    const guard = new ExecutionGuard();
+    for (let i = 0; i < 3; i++) {
+      guard.beforeCall();
+      guard.record("screenshot.capture", { ok: false, message: "Screenshot failed: browserType.launch: Executable doesn't exist at /cache/chromium/headless_shell" });
+    }
+    expect(guard.stopReason).toContain("Browser executable unavailable");
+  });
+
   it("does not pool unrelated missing files into a project failure", () => {
     const guard = new ExecutionGuard();
     for (const path of ["design.md", "review.json", "optional.log"]) {

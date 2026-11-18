@@ -1,0 +1,386 @@
+[
+  {
+    "id": "internal.fixtures.bm25-tokens",
+    "calls": [
+      { "op": "fixtures.tokens", "input": "Icons and tooltips" },
+      { "op": "fixtures.tokens", "input": "a b_c 42" },
+      { "op": "fixtures.tokens", "input": "what does this do in the app" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": ["icon", "tooltip"] },
+      { "path": "/1", "kind": "eq", "value": ["b_c", "42"] },
+      { "path": "/2", "kind": "eq", "value": ["app"] }
+    ]
+  },
+  {
+    "id": "internal.fixtures.bm25-rank",
+    "calls": [
+      {
+        "op": "fixtures.rank",
+        "query": "app quarantined",
+        "input": [
+          "The app should retry failed webhooks.",
+          "The app uses pnpm for installs.",
+          "The app deploys from main.",
+          "The app renders markdown reasoning.",
+          "Quarantined tool calls must not end the turn."
+        ]
+      },
+      {
+        "op": "fixtures.rank",
+        "query": "database migration rollback",
+        "input": [
+          "Use compact todo controls with icons.",
+          "Roll back the migration before deploying."
+        ]
+      },
+      {
+        "op": "fixtures.rank",
+        "query": "retries",
+        "input": [
+          "Retries are capped at three.",
+          { "$concat": ["Retries. ", { "$repeat": ["Unrelated background prose about deployment and tooling. ", 20] }] }
+        ]
+      },
+      { "op": "fixtures.rank", "query": "!", "input": ["anything at all"] },
+      { "op": "fixtures.rank", "query": "anything", "input": [] }
+    ],
+    "assertions": [
+      { "path": "/0/0/score", "kind": "gt", "value": 0 },
+      { "path": "/0/4/score", "kind": "gt", "value": 0 },
+      { "path": "/0/4/score", "kind": "gt-path", "other": "/0/0/score", "factor": 3 },
+      { "path": "/1/0/score", "kind": "eq", "value": 0 },
+      { "path": "/1/1/score", "kind": "gt", "value": 0 },
+      { "path": "/2/0/score", "kind": "gt-path", "other": "/2/1/score", "factor": 1 },
+      { "path": "/3/0", "kind": "eq", "value": { "item": "anything at all", "score": 0 } },
+      { "path": "/4", "kind": "length", "value": 0 }
+    ]
+  },
+  {
+    "id": "internal.fixtures.bounded-json-small-unchanged",
+    "calls": [
+      { "op": "fixtures.bounded", "input": { "tool": "file.read", "data": { "path": "README.md" } }, "max": 1024 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "{\"tool\":\"file.read\",\"data\":{\"path\":\"README.md\"}}" },
+      { "path": "/0", "parse": "", "kind": "eq", "value": { "tool": "file.read", "data": { "path": "README.md" } } }
+    ]
+  },
+  {
+    "id": "internal.fixtures.bounded-json-oversize-string",
+    "calls": [
+      { "op": "fixtures.bounded", "input": { "output": { "$repeat": ["x", 100000] } }, "max": 4096 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "bytes-le", "value": 4096 },
+      { "path": "/0", "kind": "contains", "value": "truncated by Jait" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.limit-utf8-oversize",
+    "calls": [
+      { "op": "fixtures.utf8", "input": { "$repeat": ["🙂", 1000] }, "max": 257 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "bytes-le", "value": 257 },
+      { "path": "/0", "kind": "contains", "value": "truncated by Jait" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.limit-utf8-code-point-boundary",
+    "calls": [
+      { "op": "fixtures.utf8", "input": { "$repeat": ["🙂", 1000] }, "max": 28 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "🙂… [truncated by Jait]" },
+      { "path": "/0", "kind": "bytes-le", "value": 28 },
+      { "path": "/0", "kind": "contains", "value": "truncated by Jait" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.bounded-json-circular",
+    "calls": [
+      { "op": "fixtures.bounded", "input": { "name": "cycle" }, "circular": true, "max": 1024 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "bytes-le", "value": 1024 },
+      { "path": "/0", "kind": "contains", "value": "circular reference" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.limit-serialized-json-invalid",
+    "calls": [
+      { "op": "fixtures.limit-json", "input": { "$concat": ["not-json-", { "$repeat": ["x", 50000] }] }, "max": 2048 }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "bytes-le", "value": 2048 },
+      { "path": "/0", "parse": "/__jait_truncated__", "kind": "eq", "value": true },
+      { "path": "/0", "parse": "/reason", "kind": "eq", "value": "invalid JSON" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.command-timeout",
+    "calls": [
+      { "op": "fixtures.timeout" },
+      { "op": "fixtures.timeout", "input": 0 },
+      { "op": "fixtures.timeout", "input": -5000 },
+      { "op": "fixtures.timeout", "special": "NaN" },
+      { "op": "fixtures.timeout", "input": "not-a-number" },
+      { "op": "fixtures.timeout", "input": 7200000 },
+      { "op": "fixtures.timeout", "input": 500 },
+      { "op": "fixtures.timeout", "input": 42.7 },
+      { "op": "fixtures.timeout", "input": 86400001 },
+      { "op": "fixtures.timeout", "input": 9007199254740991 },
+      { "op": "fixtures.timeout", "special": "-Infinity" },
+      { "op": "fixtures.timeout", "special": "Infinity" },
+      { "op": "fixtures.timeout", "input": "" },
+      { "op": "fixtures.timeout", "input": "0" },
+      { "op": "fixtures.timeout", "input": null },
+      { "op": "fixtures.timeout", "env": { "JAIT_TERMINAL_TIMEOUT_MS": "120000" } },
+      { "op": "fixtures.timeout", "input": 18000000, "env": { "JAIT_TERMINAL_TIMEOUT_MS": "120000", "JAIT_TERMINAL_TIMEOUT_MAX_MS": "60000" } },
+      { "op": "fixtures.timeout", "env": { "JAIT_TERMINAL_TIMEOUT_MS": "-1", "JAIT_TERMINAL_TIMEOUT_MAX_MS": "zero" } },
+      { "op": "fixtures.timeout", "input": -1 }
+    ],
+    "assertions": [
+      { "path": "/0/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/0/default", "kind": "eq", "value": 3600000 },
+      { "path": "/0/max", "kind": "eq", "value": 86400000 },
+      { "path": "/1/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/1/resolved", "kind": "gt", "value": 0 },
+      { "path": "/2/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/2/resolved", "kind": "gt", "value": 0 },
+      { "path": "/3/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/3/resolved", "kind": "gt", "value": 0 },
+      { "path": "/4/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/5/resolved", "kind": "eq", "value": 7200000 },
+      { "path": "/6/resolved", "kind": "eq", "value": 500 },
+      { "path": "/7/resolved", "kind": "eq", "value": 43 },
+      { "path": "/8/resolved", "kind": "eq", "value": 86400000 },
+      { "path": "/9/resolved", "kind": "eq", "value": 86400000 },
+      { "path": "/10/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/10/resolved", "kind": "gt", "value": 0 },
+      { "path": "/11/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/11/resolved", "kind": "gt", "value": 0 },
+      { "path": "/12/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/12/resolved", "kind": "gt", "value": 0 },
+      { "path": "/13/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/13/resolved", "kind": "gt", "value": 0 },
+      { "path": "/14/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/14/resolved", "kind": "gt", "value": 0 },
+      { "path": "/15/default", "kind": "eq", "value": 120000 },
+      { "path": "/15/resolved", "kind": "eq", "value": 120000 },
+      { "path": "/16/max", "kind": "eq", "value": 120000 },
+      { "path": "/16/resolved", "kind": "eq", "value": 120000 },
+      { "path": "/17/default", "kind": "eq", "value": 3600000 },
+      { "path": "/17/max", "kind": "eq", "value": 86400000 },
+      { "path": "/18/resolved", "kind": "eq", "value": 3600000 },
+      { "path": "/18/resolved", "kind": "gt", "value": 0 }
+    ]
+  },
+  {
+    "id": "internal.fixtures.sub-agent-extract",
+    "calls": [
+      { "op": "fixtures.extract", "raw": true },
+      { "op": "fixtures.extract", "raw": true, "input": null },
+      { "op": "fixtures.extract", "raw": true, "input": "" },
+      { "op": "fixtures.extract", "raw": true, "input": "not-json" },
+      { "op": "fixtures.extract", "input": [
+        { "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } },
+        { "callId": "call-2", "tool": "agent", "data": { "subAgentId": "sub-1", "content": "full body text", "performative": "delegation", "rounds": 3, "durationMs": 1200, "segments": [{ "type": "text", "text": "hello" }], "toolCalls": [{ "callId": "call-1", "tool": "file.read" }] } }
+      ] },
+      { "op": "fixtures.extract", "input": [
+        { "callId": "call-1", "tool": "agent", "data": { "subAgentId": "sub-2", "partialContent": "partial body" } }
+      ] },
+      { "op": "fixtures.extract", "input": { "callId": "call-1", "tool": "agent", "data": { "subAgentId": "sub-1", "content": "full body text", "performative": "delegation", "rounds": 3, "durationMs": 1200, "segments": [{ "type": "text", "text": "hello" }], "toolCalls": [{ "callId": "call-1", "tool": "file.read" }] } } },
+      { "op": "fixtures.extract", "input": [
+        { "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } },
+        { "callId": "call-2", "tool": "agent", "data": { "subAgentId": "sub-1" } }
+      ] },
+      { "op": "fixtures.extract", "input": [
+        "plain-string",
+        { "callId": "call-1", "tool": "agent", "data": "not-an-object" },
+        { "callId": "call-2", "tool": "agent", "data": { "subAgentId": "sub-1" } }
+      ] }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "length", "value": 0 },
+      { "path": "/1", "kind": "length", "value": 0 },
+      { "path": "/2", "kind": "length", "value": 0 },
+      { "path": "/3", "kind": "length", "value": 0 },
+      { "path": "/4", "kind": "length", "value": 1 },
+      { "path": "/4/0", "kind": "eq", "value": { "subAgentId": "sub-1", "content": "full body text", "performative": "delegation", "rounds": 3, "durationMs": 1200, "segments": [{ "type": "text", "text": "hello" }], "toolCalls": [{ "callId": "call-1", "tool": "file.read" }] } },
+      { "path": "/5", "kind": "length", "value": 1 },
+      { "path": "/5/0/content", "kind": "eq", "value": "partial body" },
+      { "path": "/6", "kind": "length", "value": 1 },
+      { "path": "/6/0/subAgentId", "kind": "eq", "value": "sub-1" },
+      { "path": "/7", "kind": "length", "value": 1 },
+      { "path": "/7/0/subAgentId", "kind": "eq", "value": "sub-1" },
+      { "path": "/8", "kind": "length", "value": 1 },
+      { "path": "/8/0/subAgentId", "kind": "eq", "value": "sub-1" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.sub-agent-strip",
+    "calls": [
+      { "op": "fixtures.strip", "raw": true },
+      { "op": "fixtures.strip", "raw": true, "input": null },
+      { "op": "fixtures.strip", "raw": true, "input": "" },
+      { "op": "fixtures.strip", "raw": true, "input": "not-json" },
+      { "op": "fixtures.strip", "input": [
+        { "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } },
+        { "callId": "call-2", "tool": "agent", "data": { "subAgentId": "sub-1", "content": "full body text", "performative": "delegation", "rounds": 3, "durationMs": 1200, "segments": [{ "type": "text", "text": "hello" }], "toolCalls": [{ "callId": "call-1", "tool": "file.read" }] } }
+      ] },
+      { "op": "fixtures.strip", "input": [
+        { "callId": "call-1", "tool": "agent", "data": { "subAgentId": "sub-1", "content": "body" } }
+      ] },
+      { "op": "fixtures.strip", "input": { "callId": "call-1", "tool": "agent", "data": { "subAgentId": "sub-1", "content": "full body text", "performative": "delegation", "rounds": 3, "durationMs": 1200, "segments": [{ "type": "text", "text": "hello" }], "toolCalls": [{ "callId": "call-1", "tool": "file.read" }] } } },
+      { "op": "fixtures.strip", "input": [
+        { "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } }
+      ] }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null },
+      { "path": "/1", "kind": "eq", "value": null },
+      { "path": "/2", "kind": "eq", "value": null },
+      { "path": "/3", "kind": "eq", "value": null },
+      { "path": "/4", "parse": "", "kind": "length", "value": 2 },
+      { "path": "/4", "parse": "/0", "kind": "eq", "value": { "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } } },
+      { "path": "/4", "parse": "/1", "kind": "eq", "value": { "callId": "call-2", "tool": "agent", "data": { "subAgentId": "sub-1", "performative": "delegation", "rounds": 3, "durationMs": 1200 } } },
+      { "path": "/5", "parse": "/0/data", "kind": "eq", "value": { "subAgentId": "sub-1" } },
+      { "path": "/6", "parse": "/data", "kind": "eq", "value": { "subAgentId": "sub-1", "performative": "delegation", "rounds": 3, "durationMs": 1200 } },
+      { "path": "/7", "kind": "eq", "value": "[{\"callId\":\"call-1\",\"tool\":\"file.read\",\"data\":{\"path\":\"a.ts\"}}]" },
+      { "path": "/7", "parse": "", "kind": "eq", "value": [{ "callId": "call-1", "tool": "file.read", "data": { "path": "a.ts" } }] }
+    ]
+  },
+  {
+    "id": "internal.fixtures.persisted-tool-calls",
+    "calls": [
+      { "op": "fixtures.persisted", "raw": true },
+      { "op": "fixtures.persisted", "raw": true, "input": "" },
+      { "op": "fixtures.persisted", "raw": true, "input": "not-json" },
+      { "op": "fixtures.persisted", "raw": true, "input": "{\"tool\":\"file.read\"}" },
+      { "op": "fixtures.persisted", "input": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true }] },
+      { "op": "fixtures.persisted", "input": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "output": { "$repeat": ["x", 200000] } }], "options": { "maxBytes": 4096 } },
+      { "op": "fixtures.persisted", "input": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true }], "options": { "forceCompact": true } },
+      { "op": "fixtures.persisted", "input": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true }], "options": { "forceCompact": true, "markCompacted": true } },
+      { "op": "fixtures.persisted", "input": [
+        { "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "data": { "huge": { "$repeat": ["x", 1000000] } }, "output": { "$repeat": ["y", 1000000] } },
+        { "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "data": { "huge": { "$repeat": ["x", 1000000] } }, "output": { "$repeat": ["y", 1000000] } },
+        { "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "data": { "huge": { "$repeat": ["x", 1000000] } }, "output": { "$repeat": ["y", 1000000] } },
+        { "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "data": { "huge": { "$repeat": ["x", 1000000] } }, "output": { "$repeat": ["y", 1000000] } },
+        { "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "data": { "huge": { "$repeat": ["x", 1000000] } }, "output": { "$repeat": ["y", 1000000] } }
+      ], "options": { "maxBytes": 1024 } },
+      { "op": "fixtures.persisted", "input": [
+        { "callId": "img", "tool": "image.view", "ok": true, "args": { "path": "big.png" }, "data": { "path": "big.png", "mimeType": "image/png", "size": 90000, "dataUri": { "$concat": ["data:image/png;base64,", { "$repeat": ["A", 120000] }] }, "base64": { "$repeat": ["A", 120000] } } },
+        { "callId": "c2", "tool": "terminal", "ok": true, "args": {}, "output": { "$repeat": ["x", 200000] } }
+      ], "options": { "maxBytes": 4096 } },
+      { "op": "fixtures.persisted", "input": [
+        { "callId": "img", "tool": "image.view", "ok": true, "args": { "path": "big.png" }, "data": { "path": "big.png", "mimeType": "image/png", "size": 90000, "inline": false } },
+        { "callId": "c2", "tool": "terminal", "ok": true, "args": {}, "output": { "$repeat": ["x", 200000] } }
+      ], "options": { "maxBytes": 4096 } },
+      { "op": "fixtures.persisted", "input": [{ "callId": "c1", "tool": "file.read", "args": {}, "ok": true, "startedAt": 1700000000000, "completedAt": 1700000000100, "retryCount": 2, "status": "completed" }], "options": { "forceCompact": true } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null },
+      { "path": "/1", "kind": "eq", "value": null },
+      { "path": "/2", "kind": "eq", "value": "[]" },
+      { "path": "/3", "kind": "eq", "value": "[]" },
+      { "path": "/4", "kind": "eq", "value": "[{\"callId\":\"c1\",\"tool\":\"file.read\",\"args\":{\"path\":\"README.md\"},\"ok\":true}]" },
+      { "path": "/4", "parse": "", "kind": "eq", "value": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true }] },
+      { "path": "/5", "kind": "bytes-le", "value": 4096 },
+      { "path": "/5", "parse": "/0/callId", "kind": "eq", "value": "c1" },
+      { "path": "/5", "parse": "/0/tool", "kind": "eq", "value": "file.read" },
+      { "path": "/6", "kind": "ne", "value": "[{\"callId\":\"c1\",\"tool\":\"file.read\",\"args\":{\"path\":\"README.md\"},\"ok\":true}]" },
+      { "path": "/6", "parse": "", "kind": "eq", "value": [{ "callId": "c1", "tool": "file.read", "args": { "path": "README.md" }, "ok": true, "message": "" }] },
+      { "path": "/7", "parse": "/0/storageCompacted", "kind": "eq", "value": true },
+      { "path": "/8", "kind": "bytes-le", "value": 1024 },
+      { "path": "/8", "parse": "", "kind": "each-fields-absent", "value": ["data", "output"] },
+      { "path": "/8", "parse": "/0/callId", "kind": "eq", "value": "c1" },
+      { "path": "/9", "kind": "bytes-le", "value": 4096 },
+      { "path": "/9", "parse": "/0/data/dataUri", "kind": "bytes-le", "value": 4000 },
+      { "path": "/9", "parse": "/0/data/dataUri", "kind": "contains", "value": "data:image/png;base64," },
+      { "path": "/10", "kind": "bytes-le", "value": 4096 },
+      { "path": "/10", "parse": "/0/data", "kind": "eq", "value": { "path": "big.png", "mimeType": "image/png", "size": 90000, "inline": false } },
+      { "path": "/11", "parse": "/0/startedAt", "kind": "eq", "value": 1700000000000 },
+      { "path": "/11", "parse": "/0/completedAt", "kind": "eq", "value": 1700000000100 },
+      { "path": "/11", "parse": "/0/retryCount", "kind": "eq", "value": 2 },
+      { "path": "/11", "parse": "/0/status", "kind": "eq", "value": "completed" }
+    ]
+  },
+  {
+    "id": "internal.fixtures.cron-validation",
+    "calls": [
+      { "op": "fixtures.cron", "input": "* * * * *" },
+      { "op": "fixtures.cron", "input": "0 9 * * 1" },
+      { "op": "fixtures.cron", "input": "*/15 * * * *" },
+      { "op": "fixtures.cron", "input": "0,15,30,45 0-23 1-31 1-12 0-6" },
+      { "op": "fixtures.cron", "input": "  0\t9 * * 1  " },
+      { "op": "fixtures.cron", "input": "" },
+      { "op": "fixtures.cron", "input": "not-a-cron" },
+      { "op": "fixtures.cron", "input": "* * * *" },
+      { "op": "fixtures.cron", "input": "* * * * * *" },
+      { "op": "fixtures.cron", "input": "60 * * * *" },
+      { "op": "fixtures.cron", "input": "0 24 * * *" },
+      { "op": "fixtures.cron", "input": "0 9 0 * *" },
+      { "op": "fixtures.cron", "input": "0 9 * 13 *" },
+      { "op": "fixtures.cron", "input": "0 9 * * 7" },
+      { "op": "fixtures.cron", "input": "*/0 * * * *" },
+      { "op": "fixtures.cron", "input": "*/2junk * * * *" },
+      { "op": "fixtures.cron", "input": "0junk 9 * * *" },
+      { "op": "fixtures.cron", "input": "30-10 * * * *" },
+      { "op": "fixtures.cron", "input": "0, * * * *" },
+      { "op": "fixtures.cron", "input": "0-60 * * * *" },
+      { "op": "fixtures.cron", "input": "MON * * * *" },
+      { "op": "fixtures.cron", "input": "0-59/2 * * * *" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": true },
+      { "path": "/1", "kind": "eq", "value": true },
+      { "path": "/2", "kind": "eq", "value": true },
+      { "path": "/3", "kind": "eq", "value": true },
+      { "path": "/4", "kind": "eq", "value": true },
+      { "path": "/5", "kind": "eq", "value": false },
+      { "path": "/6", "kind": "eq", "value": false },
+      { "path": "/7", "kind": "eq", "value": false },
+      { "path": "/8", "kind": "eq", "value": false },
+      { "path": "/9", "kind": "eq", "value": false },
+      { "path": "/10", "kind": "eq", "value": false },
+      { "path": "/11", "kind": "eq", "value": false },
+      { "path": "/12", "kind": "eq", "value": false },
+      { "path": "/13", "kind": "eq", "value": false },
+      { "path": "/14", "kind": "eq", "value": false },
+      { "path": "/15", "kind": "eq", "value": false },
+      { "path": "/16", "kind": "eq", "value": false },
+      { "path": "/17", "kind": "eq", "value": false },
+      { "path": "/18", "kind": "eq", "value": false },
+      { "path": "/19", "kind": "eq", "value": false },
+      { "path": "/20", "kind": "eq", "value": false },
+      { "path": "/21", "kind": "eq", "value": false }
+    ]
+  },
+  {
+    "id": "internal.fixtures.cron-malformed-minute",
+    "calls": [
+      { "op": "fixtures.matches-minute", "input": { "cron": "0junk 9 * * *", "now": "2026-10-13T09:00:00Z" } },
+      { "op": "fixtures.matches-minute", "input": { "cron": "*/2junk 9 * * *", "now": "2026-10-13T09:00:00Z" } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": false },
+      { "path": "/1", "kind": "eq", "value": false }
+    ]
+  },
+  {
+    "id": "internal.fixtures.scheduler-guard",
+    "calls": [
+      { "op": "fixtures.scheduler-guard" }
+    ],
+    "assertions": [
+      { "path": "/0/createThrew", "kind": "eq", "value": true },
+      { "path": "/0/createMessage", "kind": "contains", "value": "cron" },
+      { "path": "/0/listLength", "kind": "eq", "value": 0 },
+      { "path": "/0/updateThrew", "kind": "eq", "value": true },
+      { "path": "/0/updateMessage", "kind": "contains", "value": "cron" },
+      { "path": "/0/job", "kind": "eq", "value": { "name": "Weekly health review", "cron": "0 9 * * 1", "enabled": false } }
+    ]
+  }
+]

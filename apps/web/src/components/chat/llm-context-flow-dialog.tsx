@@ -1,3 +1,4 @@
+import { UsageReceipt } from "./usage-receipt"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Editor from '@monaco-editor/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -175,7 +176,7 @@ function TraceExpandableCard({
 
 function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
   const rounds = flow.rounds
-  const hasMetrics = rounds.some(r => r.metrics)
+  const hasMetrics = Boolean(flow.usageSummary) || rounds.some(r => r.metrics)
   if (!hasMetrics) return null
 
   let totalDuration = 0
@@ -188,8 +189,8 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
   let weightedTokSec = 0
   let tokSecWeight = 0
 
-  for (const r of rounds) {
-    const m = r.metrics
+  for (const r of (flow.usageSummary ? [{ metrics: flow.usageSummary }] : rounds)) {
+    const m = r.metrics as RoundMetrics | undefined
     if (!m) continue
     if (m.durationMs > 0) {
       totalDuration += m.durationMs
@@ -206,9 +207,13 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
     if (m.contextUsage) lastContextUsage = m.contextUsage
   }
 
+  lastContextUsage = [...rounds].reverse().find(r => r.metrics?.contextUsage)?.metrics?.contextUsage
+
   const avgTokSec = tokSecWeight > 0 ? Math.round((weightedTokSec / tokSecWeight) * 10) / 10 : undefined
 
   return (
+    <div className="space-y-2">
+    <UsageReceipt usage={flow.usageSummary ?? { durationMs: totalDuration, promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, ...(rounds.every(r => r.metrics?.cachedPromptTokens !== undefined) ? { cachedPromptTokens: totalCachedPromptTokens } : {}), tokenUsageEstimated: rounds.some(r => r.metrics?.tokenUsageEstimated) }} />
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -264,6 +269,7 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
           </>
         )}
       </div>
+    </div>
     </div>
   )
 }

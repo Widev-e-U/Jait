@@ -1,11 +1,15 @@
+import { UserQuestionService } from "../services/user-questions.js";
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
+import { AuditWriter } from "../services/audit.js";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import type { CliProviderAdapter, ProviderEvent, ProviderInfo, ProviderSession, StartSessionOptions } from "../providers/contracts.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { ChatLoopService } from "../services/chat-loops.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
@@ -36,7 +40,10 @@ describe("buildCliProviderSystemPrompt", () => {
 
     expect(prompt).toContain("always use `jait.terminal`");
     expect(prompt).toContain("/work/project");
-    expect(prompt).toContain("/skills/debugging/SKILL.md");
+    // Skills are lazy-discovered now: the prompt carries the discovery
+    // instruction, not the skill's file path.
+    expect(prompt).toContain("<skillDiscovery>");
+    expect(prompt).not.toContain("/skills/debugging/SKILL.md");
     expect(prompt).toContain("Use the repository conventions.");
     expect(prompt).not.toContain("graph TD");
     expect(prompt).not.toContain("## Preambles and progress updates");
@@ -129,7 +136,7 @@ class MockChatProvider implements CliProviderAdapter {
     };
   });
 
-  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
     setTimeout(() => {
       this.emit({ type: "token", sessionId, content: "ok" });
       this.emit({ type: "turn.completed", sessionId });
@@ -336,6 +343,74 @@ async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promis
 }
 
 describe("chat external provider runtime mode selection", () => {
+  it.each(["error", "paused"] as const)("refreshes a %s goal in reused CLI sessions", async (status) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("goal-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Saved goal" });
+    const chatLoops = new ChatLoopService(sessionService);
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry, chatLoops });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const send = (content: string) => app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content, provider: "codex", runtimeMode: "full-access" } });
+    try {
+      expect((await send("Inspect current work")).statusCode).toBe(200);
+      chatLoops.goal(session.id, "Finish saved migration", ["All components verified"]);
+      if (status === "error") chatLoops.finishTurn(session.id, "Workspace is out of credits");
+      else chatLoops.control(session.id, "pause");
+      expect((await send("Why did the goal stop?")).statusCode).toBe(200);
+      expect(provider.startSession).toHaveBeenCalledOnce();
+      expect(provider.sendTurn).toHaveBeenCalledTimes(2);
+      const prompt = provider.sendTurn.mock.calls[1]![1];
+      expect(prompt).toContain("<chatGoalLoop>");
+      expect(prompt).toContain(`Loop status: ${status}`);
+      expect(prompt).toContain("Finish saved migration");
+      expect(prompt).toContain("loop.resume before working on it");
+      if (status === "error") expect(prompt).toContain("Workspace is out of credits");
+      // Asking about the failure grants no automatic resume authority.
+      expect(chatLoops.get(session.id)?.status).toBe(status);
+    } finally { await app.close(); sqlite.close(); }
+  });
+
+  it.each([false, true])("delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)", async (recovery) => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const image = { name: "colleague.png", mimeType: "image/png", data: "aGVsbG8=" };
+    const document = { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("colleague notes").toString("base64") };
+    try {
+      const headers = await authHeaders();
+      for (const payload of [
+        { content: "help me fix it", attachments: [image, document], displaySegments: [{ type: "image", ...image }] },
+        { content: "", displaySegments: [{ type: "image", ...image }] },
+      ]) {
+        if (recovery && provider.sendTurn.mock.calls.length > 0) {
+          provider.sendTurn.mockRejectedValueOnce(new Error("Session process exited"));
+        }
+        const response = await app.inject({
+          method: "POST", url: "/api/chat", headers,
+          payload: { ...payload, sessionId: `uploaded-images-session-${recovery}`, provider: "codex" },
+        });
+        expect(response.body).toContain('"type":"done"');
+      }
+      expect(provider.startSession).toHaveBeenCalledTimes(recovery ? 2 : 1);
+      expect(provider.sendTurn).toHaveBeenCalledTimes(recovery ? 3 : 2);
+      for (const call of provider.sendTurn.mock.calls) expect(call[2]).toEqual([image]);
+      expect(provider.sendTurn.mock.calls[0]?.[1]).toContain("colleague notes");
+      expect(provider.sendTurn.mock.calls[0]?.[1]).not.toContain(image.data);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("runs Codex without an API key for the configured OpenCode Go backend", async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
@@ -352,6 +427,93 @@ describe("chat external provider runtime mode selection", () => {
       expect(response.body).toContain('"type":"done"');
       expect(provider.sendTurn).toHaveBeenCalledOnce();
     } finally {
+      await app.close();
+    }
+  });
+
+  it.each(["user.ask", "browser.handoff"])("resumes an idle CLI after a delayed %s answer through HTTP", async (requestedBy) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("question-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const questions = new UserQuestionService();
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService,
+      providerRegistry, userQuestionService: questions });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      await app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content: "Continue after my answer", provider: "codex", runtimeMode: "full-access" } });
+      vi.useFakeTimers();
+      const id = questions.startResumable({ sessionId: session.id, userId: user.id, requestedBy,
+        questions: [{ id: "browser", header: "Browser", question: "Finish this step" }] });
+      const wait = questions.waitForAnswer(id, session.id, user.id);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await wait).toEqual({ status: "pending" });
+      vi.useRealTimers();
+      expect(provider.sendTurn).toHaveBeenCalledTimes(1);
+      const submitted = await app.inject({ method: "POST", url: `/api/user-questions/requests/${id}/submit`, headers,
+        payload: { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } } });
+      expect(submitted.statusCode).toBe(200);
+      await vi.waitFor(() => expect(provider.sendTurn).toHaveBeenCalledTimes(2));
+      expect(provider.sendTurn.mock.calls[1]![1]).toContain(`${requestedBy} with only requestId=`);
+      expect(provider.startSession.mock.calls.at(-1)![0].mode).toBe("full-access");
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages`, headers });
+      expect(history.body).not.toContain("Call browser.handoff with only requestId=");
+    } finally {
+      vi.useRealTimers();
+      await app.close();
+      sqlite.close();
+    }
+  });
+
+  it("delivers background completions to an active CLI without exposing internal steering", async () => {
+    const sessionId = "cli-hidden-background-completion";
+    const monitorSpy = vi.spyOn(backgroundCommandMonitor, "setCompletionHandler");
+    let completeCommand: () => Promise<void> = async () => {};
+    class BackgroundProvider extends MockChatProvider {
+      override readonly sendTurn = vi.fn(async (providerSessionId: string, _content?: string): Promise<void> => {
+        if (this.sendTurn.mock.calls.length === 1) await completeCommand();
+        setTimeout(() => {
+          this.emitForTest({ type: "token", sessionId: providerSessionId, content: "verified" });
+          this.emitForTest({ type: "turn.completed", sessionId: providerSessionId });
+        }, 0);
+      });
+    }
+    const provider = new BackgroundProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const handler = monitorSpy.mock.calls.at(-1)![0];
+    completeCommand = async () => { await handler({
+      sessionId, terminalId: "tty-hidden", command: "check-private-output", exitCode: 0,
+      output: "private completion evidence", durationMs: 1000,
+    }); };
+    try {
+      const headers = await authHeaders();
+      const response = await app.inject({
+        method: "POST", url: "/api/chat", headers,
+        payload: { content: "verify", sessionId, provider: "codex", runtimeMode: "full-access" },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(provider.sendTurn).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("private completion evidence");
+      expect(response.body).toContain('"type":"done"');
+      expect(response.body).not.toContain('"type":"steering"');
+      expect(response.body).not.toContain("private completion evidence");
+      expect(response.body).not.toContain("[system-notification:");
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/messages`, headers });
+      expect(history.statusCode).toBe(200);
+      expect(history.body).not.toContain("private completion evidence");
+      expect(history.body).not.toContain('"type":"steering"');
+    } finally {
+      monitorSpy.mockRestore();
       await app.close();
     }
   });
@@ -1199,7 +1361,7 @@ it("marks replies completed after a reader leaves as new unread activity", async
   }
 });
 
-it("keeps remote CLI startup and its prompt on the Windows project", async () => {
+it.each([false, true])("keeps remote CLI startup on the selected device (personal=%s)", async (personal) => {
   const { ProjectService } = await import("../services/projects.js");
   const { SurfaceRegistry } = await import("../surfaces/registry.js");
   const { FileSystemSurfaceFactory } = await import("../surfaces/filesystem.js");
@@ -1214,7 +1376,8 @@ it("keeps remote CLI startup and its prompt on the Windows project", async () =>
   const node = { id: "windows-node", name: "Windows desktop", platform: "windows", clientId: "connected", providers: ["codex"] };
   const project = projectService.create({ userId: user.id, title: "Tankstelle", rootPath: root, nodeId: node.id });
   const sessionService = new SessionService(db);
-  const session = sessionService.create({ userId: user.id, projectId: project.id, projectPath: root });
+  const session = sessionService.create(personal ? { userId: user.id } : { userId: user.id, projectId: project.id, projectPath: root });
+  if (personal) sessionService.updateChatSelection(session.id, { nodeId: node.id }, user.id);
   const provider = new MockChatProvider();
   const spies = [
     vi.spyOn(RemoteCliProvider.prototype, "startSession").mockImplementation(provider.startSession),
@@ -1224,6 +1387,7 @@ it("keeps remote CLI startup and its prompt on the Windows project", async () =>
     vi.spyOn(RemoteCliProvider.prototype, "stopSession").mockResolvedValue(),
   ];
   const ws = {
+    canAccessNode: (_id: string, userId: string | null) => userId === user.id,
     getFsNodes: () => [node], findNodeByDeviceId: () => node,
     broadcast: vi.fn(), broadcastToUser: vi.fn(), registerGatewayFsNode: vi.fn(),
     proxyFsOp: vi.fn(async () => ({ isDirectory: true })),
@@ -1231,17 +1395,49 @@ it("keeps remote CLI startup and its prompt on the Windows project", async () =>
   const surfaceRegistry = new SurfaceRegistry();
   surfaceRegistry.register(new FileSystemSurfaceFactory());
   const remote = new RemoteFileSystemSurface("windows-files", ws);
-  await remote.start({ sessionId: session.id, projectRoot: root, nodeId: node.id });
-  surfaceRegistry.registerInstance(remote.id, remote);
-  const app = await createServer(testConfig, { db, sqlite, sessionService, projectService, userService, surfaceRegistry, ws, providerRegistry: new ProviderRegistry() });
+  if (!personal) {
+    await remote.start({ sessionId: session.id, projectRoot: root, nodeId: node.id });
+    surfaceRegistry.registerInstance(remote.id, remote);
+  }
+  const gatewayProvider = new MockChatProvider();
+  const registry = new ProviderRegistry();
+  registry.register(gatewayProvider);
+  const app = await createServer(testConfig, { db, sqlite, sessionService, projectService, userService, surfaceRegistry, ws, providerRegistry: registry, audit: new AuditWriter(db) });
   try {
     const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
     const response = await app.inject({ method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` }, payload: { sessionId: session.id, content: "hello", provider: "codex" } });
     expect(response.body).toContain('"type":"done"');
-    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: root }));
-    expect(surfaceRegistry.getBySession(session.id).map((s) => s.type)).toEqual(["remote-filesystem"]);
+    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: personal ? "." : root }));
+    expect(surfaceRegistry.getBySession(session.id).map((s) => s.type)).toEqual(personal ? [] : ["remote-filesystem"]);
     expect(provider.sendTurn.mock.calls[0]?.[1]).toContain("OS: Windows");
     expect(provider.sendTurn.mock.calls[0]?.[1]).toContain("Shell: PowerShell");
+    if (personal) {
+      const headers = { authorization: `Bearer ${token}` };
+      const prewarm = await app.inject({ method: "POST", url: "/api/chat/prewarm", headers, payload: { sessionId: session.id, provider: "codex" } });
+      expect(prewarm.json().status).toBe("skipped");
+      ws.getFsNodes = () => [];
+      const offline = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "offline turn", provider: "codex" } });
+      expect(offline.body).toContain("unavailable");
+      expect(gatewayProvider.startSession).not.toHaveBeenCalled();
+      // A filesystem surface left by an earlier project must not override
+      // the explicit personal selection when switching back to the gateway.
+      await remote.start({ sessionId: session.id, projectRoot: root, nodeId: node.id });
+      surfaceRegistry.registerInstance(remote.id, remote);
+      const changed = await app.inject({ method: "PATCH", url: `/api/sessions/${session.id}`, headers, payload: { nodeId: "gateway" } });
+      expect(changed.statusCode).toBe(200);
+      const local = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "gateway turn", provider: "codex" } });
+      expect(local.body).toContain('"type":"done"');
+      expect(gatewayProvider.startSession).toHaveBeenCalledTimes(1);
+      expect(gatewayProvider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
+      expect(spies[4]).toHaveBeenCalled();
+      // A saved binding does not authorize a device after ownership changes.
+      sessionService.updateChatSelection(session.id, { nodeId: node.id }, user.id);
+      ws.canAccessNode = () => false;
+      const denied = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "revoked device", provider: "codex" } });
+      expect(denied.statusCode).toBe(403);
+      expect(denied.json().error).toBe("NODE_FORBIDDEN");
+      expect(gatewayProvider.startSession).toHaveBeenCalledTimes(1);
+    }
   } finally {
     await app.close();
     sqlite.close();

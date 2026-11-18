@@ -1,0 +1,17 @@
+{
+  "review_scope": "parity-typed bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/email/remote-images.test.ts:29:3",
+      "status": "verified",
+      "parity_review": "Reviewed pins public TLS and fetches without cookies or authorization. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. The mail image request retains its object-containing options, Function asymmetric argument and absence-of-cookie/authorization checks. Twenty-seven raw controls include genuine function and cancellation-signal observations and reject marker spoofing and custom function serialization. Raw Function values are accepted only where the original assertion requests Function; source constructor bindings remain checked. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-typed/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_remote_images_test_ts_29_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    }
+  ]
+}

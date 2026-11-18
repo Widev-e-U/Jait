@@ -1,9 +1,10 @@
 # Repository Guidelines
 
 ## Product Direction
-Jait is a local-first workbench for AI-assisted network and cybersecurity. Prioritize discovering assets, understanding exposure, investigating weaknesses, preparing fixes, and verifying improvements on owned or explicitly authorized networks. The first proving ground is the maintainer's home network and homelab. Coding and general automation support this security workflow. Read `docs/vision.md` and `docs/security-roadmap.md` when planning product work.
+Jait is your personal agent harness: a local-first system connecting the user's chosen model to real tools (terminal, filesystem, browser, SSH, scheduling, memory, messaging) with visible, consent-controlled execution. It is general-purpose, not a security-only tool; network and security assessment is one capability among many. Read `docs/vision.md` and `docs/security-roadmap.md` when planning product work.
 
 ## Security Assessment Guidelines
+These apply when working on the security assessment capability.
 - Build dedicated typed security tools around established engines; skills and free-form shell prompts alone do not enforce assessment boundaries.
 - Record authorized targets, exclusions, methods, expiry, and execution node/vantage point. Enforce scope across tools, routes, nodes, DNS resolution, redirects, template callbacks, and scheduled jobs. Reachability or a private IP does not imply authorization.
 - Default to low-impact discovery and read-only checks with target, rate, concurrency, duration, output, and cancellation limits. Apply authorization appropriate to intrusive testing and system changes; reuse existing consent paths.
@@ -13,6 +14,14 @@ Jait is a local-first workbench for AI-assisted network and cybersecurity. Prior
 - Test scope escapes, argument injection, malformed scanner output, partial failures, cancellation, redaction, and issue-present/fix/issue-absent behavior for new assessment tools.
 - Keep existing path/SSRF protections intact. Implement authorized private-network checks through a dedicated scoped execution path.
 - Public documentation and marketing must distinguish shipping capabilities from planned security adapters.
+
+## Rust Gateway Migration
+- Before Rust gateway work, read `docs/gateway-rust-migration.md` for gates and `docs/gateway-rust-architecture.md`, especially **Session ownership and concurrency**, for the design and acceptance checks. Runtime commands and checkpoint evidence are in `packages/gateway-rust/README.md`.
+- For concurrency/capacity work, read `docs/gateway-rust-capacity.md`: distinguish connected sessions, active provider turns and heavyweight effects; the ambition is thousands of concurrent sessions and eventually more than 10,000 where resources allow, with 500 as an early milestone. Each stage requires measured load/soak evidence and responsive control, fair progress and bounded resources, not increased limits alone.
+- Prefer one owner per active session, bounded work across independent sessions, supervised cancellation/cleanup, durable event replay and explicit effect authority. Keep tools sequential unless reviewed independence and resource-conflict rules permit concurrency. Apply the documented direction incrementally; proposed architecture is not implemented parity.
+- Audit `packages/gateway-rust/native-coverage.json` and live source drift before choosing a port or reporting progress. Several TypeScript references can share one canonical Rust module; do not duplicate services or award scaffold/refactor credit.
+- Preserve observable contracts with differential tests. Record an explicit compatibility decision and client evidence for intentional changes to ordering, overload, disconnect, retries or recovery. Keep native component coverage, reconstructed test coverage and production readiness separate; production remains TypeScript until replacement gates pass.
+- Coverage claims are gated mechanically, not by prose. Run `bun run hooks:install` once per clone to point `core.hooksPath` at `tests/contract/hooks`; the `pre-commit` hook runs `node tests/contract/run.mjs coverage` and blocks a commit that stages `packages/gateway-rust/native-coverage.json`, `tests/contract/coverage.json` or `tests/contract/source-reviews.json` while the gate is red. Ordinary commits pay only a `git diff --cached`. `SKIP_COVERAGE_GATE=1 git commit ...` is the reviewed exception; `.github/workflows/contract.yml` runs the same gate on push, so a bypass is still caught.
 
 ## Project Structure & Module Organization
 Jait is a Bun/TypeScript monorepo.
@@ -30,11 +39,14 @@ Run from repository root unless noted.
 - `bun install --frozen-lockfile`: install workspace dependencies.
 - `bun run dev`: start workspace dev processes.
 - `bun run build`: build all workspaces.
+- `bun run build:local`: Linux/systemd production build with a temporary 6 GiB soft / 8 GiB hard memory budget, 6 GiB Node heap, and 10-minute timeout. Prefer this inside Jait terminals; the scope disappears on exit and terminal defaults remain unchanged.
 - `bun run typecheck`: strict TypeScript checks.
 - `bun run test`: run Vitest unit/integration tests.
 - `bun run lint`: run `oxlint` across repo.
 - `bun run healthcheck`: run the release guard, typecheck, build, tests, and lint in CI order.
+- `node scripts/release.mjs --bump patch`: the supported way to do a version up — bump, regenerate `CHANGELOG.md`, recapture `tests/contract/interfaces.json`, run the release guard, commit, and push so CI tags and publishes. Use `--dry-run` to preview; never bump versions by hand.
 - `bun run test:e2e`: run the Playwright suite from the repo root.
+- `bun run test:e2e:ui`: run the isolated UI fixture checks with two workers and a frontend only. Keep API-backed tests in the standard single-worker suite; use `--workers=1` to compare timings. The two-worker UI suite and production builds need an explicit, bounded terminal memory budget above the default 1.5 GiB throttle / 2 GiB cap (the measured UI suite peaked at 3.3 GiB). Use a temporary 6 GiB high / 8 GiB max budget for these checks and restore it afterward; raising Node's heap alone does not raise the cgroup limit.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (ES modules, strict mode).
@@ -43,6 +55,7 @@ Run from repository root unless noted.
 - Components: PascalCase for React component files and exports.
 - Prefer explicit, descriptive names (`sessionService`, not `ss`).
 - Keep shared contracts in `packages/shared` and reuse instead of duplicating types.
+- For Jait web UI tooltips, use the shared shadcn/Radix tooltip in `apps/web/src/components/ui/tooltip.tsx`, as used by the chat input. Do not use native `title` hover tooltips or image `alt` text as a tooltip. Preserve accessible names, image alt text, and iframe titles where they serve accessibility.
 
 ## Testing Guidelines
 - Unit tests: colocate as `*.test.ts` under `packages/*/src` or `apps/*/src`.
@@ -68,6 +81,8 @@ Run from repository root unless noted.
 The monorepo uses an automated release pipeline driven by a single version bump.
 Everything lives in `.github/workflows/release.yml`:
 
+> **Always use `node scripts/release.mjs` for a version up.** When asked to "bump the version", "cut a release", "up version and push", or anything equivalent, supply parameters to that script — do not hand-edit `version` fields, do not hand-write the `CHANGELOG.md` entry, do not compose the release commit yourself. The script performs steps 1–2 below atomically (version bump, changelog regeneration, interface manifest recapture, `release:check`, scoped commit, push) and rolls every file back if any step fails. Preview with `--dry-run`; see *Doing a version up* below for the flag list.
+
 1. **Regenerate the changelog.** When doing a "version up", update `CHANGELOG.md` with the new release's entry by deriving it from git history:
    ```
    git log --oneline --no-merges v<previous>..v<new>
@@ -83,7 +98,35 @@ Everything lives in `.github/workflows/release.yml`:
 
 The workflow can also be triggered by pushing a `v*` tag directly or via `workflow_dispatch`.
 
-**No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions. The changelog is the one thing you *do* update by hand on every version up.
+**No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions.
+
+### Fast local deployment
+
+Use `bun run deploy:local` for a verified local Linux/systemd deployment without
+changing public versions or pushing. `--plan` shows the gates; `--prepare` runs
+the selected gates and stages without restarting. Build, typecheck, lint and activation health checks are mandatory. Unit, workflow,
+browser-tool and Rust migration/contract tests are skipped by default; include them
+with `--tests` when requested. Chromium E2E and UI fixture suites are independently
+opt-in with `--e2e`. Unit, workflow and browser-tool checks are mandatory
+prerequisites of `node scripts/release.mjs` before version edits, commit and push.
+Full Rust migration/contract checks are required for Rust gateway releases or changes,
+but are not required solely for a TypeScript release. Build a frozen snapshot, preserve the running service arguments,
+and use the independent activation controller with health rollback. See
+`docs/local-deployment.md` for evidence, limits and rollback. Public releases
+continue to use `node scripts/release.mjs`; local deployment never replaces it.
+
+### Doing a version up
+
+Use `scripts/release.mjs` instead of running steps 1–2 by hand. It bumps the gateway (and any `--also` sub-packages), regenerates `CHANGELOG.md` from git history, recaptures `tests/contract/interfaces.json` so the contract drift gate stays green, runs `release:check`, commits only the release files as `chore(release): v<version>`, and pushes to `main` so CI tags and publishes. Because the manifest fingerprints audited sources as well as the bumped `package.json` files, it refuses to run while `packages/gateway/src`, `packages/shared/src`, `packages/gateway/bin`, or `packages/gateway/scripts` carry uncommitted edits — commit or stash those first so the manifest records released source. `--allow-dirty` does not relax this check.
+
+```bash
+node scripts/release.mjs --bump patch --dry-run        # preview, changes nothing
+node scripts/release.mjs --bump patch                  # bump, changelog, commit, push
+node scripts/release.mjs --bump minor --also shared,web
+node scripts/release.mjs --set 0.1.960 --notes "Prose paragraph for the changelog."
+```
+
+Flags: `--bump patch|minor|major`, `--set <version>`, `--also <list>`, `--notes <text>`, `--message <text>`, `--date <date>`, `--remote`, `--branch`, `--no-push`, `--dry-run`, `--allow-dirty`, `--skip-checks`, `--self-test`. It never force-pushes, refuses to run on the wrong branch or on an already-tagged version, and restores every touched file if anything fails partway.
 
 To deploy to a server after publish: `npm install -g @jait/gateway@<version>` and restart the service.
 

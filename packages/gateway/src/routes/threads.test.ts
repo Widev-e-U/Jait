@@ -103,6 +103,68 @@ class MockThreadProvider implements CliProviderAdapter {
 }
 
 describe("CLI execution safeguards", () => {
+  it("requires an explicit thread approval decision and request identity", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const thread = threadService.create({ userId: "user-1", title: "Approval", providerId: "codex" });
+    threadService.update(thread.id, { providerSessionId: "mock-session-1" });
+    const provider = new MockThreadProvider();
+    const respond = vi.spyOn(provider, "respondToApproval");
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "approval-secret" };
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    for (const payload of [{}, { requestId: "req" }, { requestId: "req", approved: "yes" }, { requestId: "  ", approved: true }]) {
+      const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(respond).not.toHaveBeenCalled();
+    const denied = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "req", approved: false } });
+    expect(denied.statusCode).toBe(200);
+    expect(respond).toHaveBeenCalledWith("mock-session-1", "req", false);
+    respond.mockRejectedValueOnce(new Error("stale"));
+    const stale = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "stale", approved: true } });
+    expect(stale.statusCode).toBe(409);
+    expect(threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")).toHaveLength(1);
+    threadService.update(thread.id, { executionNodeId: "remote-node" });
+    const remote = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "remote", approved: true } });
+    expect(remote.statusCode).toBe(409);
+    expect(respond).toHaveBeenCalledTimes(2);
+    expect(threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")).toHaveLength(1);
+    await app.close();
+    sqlite.close();
+  });
+  it("reopens a retired session on a follow-up and replays saved thread history", async () => {
+    const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const thread = service.create({ userId: "user-1", title: "Idle fixture", providerId: "codex", workingDirectory: process.cwd() });
+    const provider = new MockThreadProvider();
+    const registry = new ProviderRegistry(); registry.register(provider);
+    const app = Fastify(); const config = loadConfig();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry });
+    try {
+      const headers = await authHeader(config.jwtSecret, "user-1");
+      const first = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers,
+        payload: { message: "Remember the parser accepts UTF-8", titleTask: "" } });
+      expect(first.statusCode).toBe(200);
+      await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+      const sessionId = service.getById(thread.id)!.providerSessionId!;
+      provider.emit({ type: "turn.completed", sessionId });
+      provider.emit({ type: "session.completed", sessionId });
+      expect(service.getById(thread.id)?.providerSessionId).toBeNull();
+      const followup = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/send`, headers,
+        payload: { message: "Continue with the parser", titleTask: "" } });
+      expect(followup.statusCode).toBe(200);
+      await waitFor(() => provider.sendTurn.mock.calls.length === 2);
+      expect(provider.startSessionCalls).toHaveLength(2);
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Remember the parser accepts UTF-8");
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Continue with the parser");
+    } finally { await app.close(); sqlite.close(); }
+  });
+
   it.each(["quota", "environment"])("keeps %s failure terminal despite late provider completion", async failure => {
     const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
     const threadService = new ThreadService(db);
@@ -623,8 +685,12 @@ describe("thread routes", () => {
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("selected-defaults-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
+    // The account-level default points at a provider that is not even registered:
+    // it must never be what a spawned thread runs on. Only the choice made in the
+    // chat itself counts.
+    users.updateSettings(user.id, { chatProvider: "ollama" });
     sessionState.set("session-selected-defaults", {
+      "chat.provider": "codex",
       "chat.providerRuntimeMode": "supervised",
       "chat.cliModels": { codex: "gpt-5-codex" },
     });
@@ -717,8 +783,8 @@ describe("thread routes", () => {
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("effort-inherit-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
-    sessionState.set("session-effort", { "chat.reasoningEffort": "high" });
+    users.updateSettings(user.id, { chatProvider: "ollama" });
+    sessionState.set("session-effort", { "chat.provider": "codex", "chat.reasoningEffort": "high" });
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(new MockThreadProvider("codex"));
 
@@ -862,9 +928,15 @@ describe("thread routes", () => {
     expect(response.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
     const turnMessage = provider.sendTurn.mock.calls.at(-1)?.[1] as string;
-    expect(turnMessage).toContain("<available_skills>");
-    expect(turnMessage).toContain("<name>Word / DOCX</name>");
+    // Discovery-first contract: no eager <available_skills> catalog with file
+    // paths — just the lazy <skillDiscovery> instruction, with the auto-matched
+    // skill named in the routing summary.
+    expect(turnMessage).toContain("<skillDiscovery>");
+    expect(turnMessage).toContain("skills.search");
+    expect(turnMessage).toContain("Word / DOCX");
     expect(turnMessage).toContain("Inspect the DOCX template");
+    expect(turnMessage).not.toContain("<available_skills>");
+    expect(turnMessage).not.toContain("C:/skills/word-docx/SKILL.md");
 
     await app.close();
     sqlite.close();
@@ -923,8 +995,12 @@ describe("thread routes", () => {
     expect(response.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
     const turnMessage = provider.sendTurn.mock.calls.at(-1)?.[1] as string;
-    expect(turnMessage).toContain("<name>Word / DOCX</name>");
-    expect(turnMessage).not.toContain("<name>Browser Research</name>");
+    // Only the pinned skill is auto-activated; the unpinned one is not named,
+    // and neither leaks its file path — skills are discovered lazily.
+    expect(turnMessage).toContain("<skillDiscovery>");
+    expect(turnMessage).toContain("Word / DOCX");
+    expect(turnMessage).not.toContain("Browser Research");
+    expect(turnMessage).not.toContain("C:/skills/");
 
     await app.close();
     sqlite.close();

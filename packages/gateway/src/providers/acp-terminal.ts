@@ -51,10 +51,16 @@ export class AcpTerminal {
     });
     this.child.on("error", (err) => {
       this.appendOutput(`\n[terminal error: ${err instanceof Error ? err.message : String(err)}]`);
+      // A failed spawn emits error/close without exit: no process remains to wait for.
+      if (this.child.pid === undefined && this.exitStatus === null) {
+        this.exitStatus = { exitCode: null, signal: null };
+        this.resolveExit(this.exitStatus);
+      }
     });
     this.child.stdout?.on("data", (chunk: Buffer) => this.appendOutput(chunk.toString("utf8")));
     this.child.stderr?.on("data", (chunk: Buffer) => this.appendOutput(chunk.toString("utf8")));
     this.child.on("exit", (code, signal) => {
+      if (this.exitStatus !== null) return;
       this.exitStatus = { exitCode: code, signal: signal ?? null };
       this.resolveExit(this.exitStatus);
     });
@@ -62,12 +68,22 @@ export class AcpTerminal {
 
   private appendOutput(text: string): void {
     this.output += text;
-    if (this.outputByteLimit && Buffer.byteLength(this.output, "utf8") > this.outputByteLimit) {
-      while (this.output.length > 0 && Buffer.byteLength(this.output, "utf8") > this.outputByteLimit) {
-        this.output = this.output.slice(1);
-      }
-      this.truncated = true;
+    const limit = this.outputByteLimit;
+    if (!limit) return;
+    // Encoded bytes include replacement characters for unpaired UTF-16 units.
+    let bytes = Buffer.from(this.output, "utf8").byteLength;
+    if (bytes <= limit) return;
+    let start = 0;
+    while (start < this.output.length && bytes > limit) {
+      const unit = this.output.charCodeAt(start);
+      const next = this.output.charCodeAt(start + 1);
+      const pair = unit >= 0xd800 && unit <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+      // Removing a high surrogate from a pair changes four bytes to three.
+      bytes -= pair || unit < 0x80 ? 1 : unit < 0x800 ? 2 : 3;
+      start += 1;
     }
+    this.output = this.output.slice(start);
+    this.truncated = true;
   }
 
   get isRunning(): boolean {

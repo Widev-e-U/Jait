@@ -12,6 +12,7 @@ import { existsSync, copyFileSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
+import { launchLocalBrowser } from "../surfaces/browser.js";
 
 interface ScreenshotCaptureInput {
   /** URL (http/https), "dev" (frontend dev url), or a local HTML file path. */
@@ -46,7 +47,7 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
   return {
     name: "screenshot.capture",
     description:
-      "Capture a headless browser screenshot (PNG) of a URL, local HTML file, or the running dev frontend ('dev') and return the saved PNG path. The image renders inline in chat. Use this to visually show the user UI state, designs, or layout issues.",
+      "Capture a headless browser screenshot (PNG) of a URL, local HTML file, or the running dev frontend ('dev') and return the saved PNG path. The image already renders inline in chat; do not call image.view afterward or display the same image again. Use this to visually show the user UI state, designs, or layout issues.",
     tier: "standard",
     category: "screen",
     source: "builtin",
@@ -108,7 +109,9 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
 
       let browser: { close: () => Promise<void> } | null = null;
       try {
-        browser = (await (chromium as { launch: () => Promise<unknown> }).launch()) as { close: () => Promise<void> };
+        browser = await launchLocalBrowser(chromium as {
+          launch: (options: Record<string, unknown>) => Promise<{ close: () => Promise<void> }>;
+        });
         const ctx = await (browser as unknown as {
           newContext: (opts: unknown) => Promise<{
             newPage: () => Promise<{
@@ -164,15 +167,17 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
           await page.screenshot({ path: outPath, fullPage });
         }
 
-        // The image route serves only gateway-local files. Keep a display
-        // cache there without relocating the original project artifact.
-        const displayDir = resolve(process.cwd(), ".jait", "shots");
+        // The image route serves only files inside the chat's project root, so
+        // the display cache must live there too. Never use process.cwd(): the
+        // gateway is often launched from a different directory than the chat's
+        // project, which makes every capture unservable (403 PATH_FORBIDDEN).
+        const displayDir = resolve(context.projectRoot, ".jait", "shots");
         mkdirSync(displayDir, { recursive: true });
         const displayPath = join(displayDir, `screenshot-display-${randomUUID()}.png`);
         copyFileSync(outPath, displayPath);
         return {
           ok: true,
-          message: `Screenshot saved to ${outPath}`,
+          message: `Screenshot saved to ${outPath} and displayed in chat. Do not call image.view or display this screenshot again.`,
           data: { path: displayPath, capturePath: outPath, target: input.target, url, width, height, mobile: Boolean(input.mobile) },
         };
       } catch (err) {

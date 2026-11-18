@@ -1,0 +1,88 @@
+{
+  "name": "user.ask",
+  "description": "Ask the user one or more structured questions and wait until they answer or cancel, without a timeout. MCP calls may return pending with a requestId: keep calling user.ask with only that requestId until answered or cancelled; do not create another question or proceed without the answer. Questions are surfaced on every connected Jait client; attention only controls notification emphasis.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "requestId": {
+        "type": "string",
+        "description": "Resume waiting for a pending request. Supply only this field; use the exact returned requestId."
+      },
+      "title": {
+        "type": "string",
+        "description": "Short title shown above the questions."
+      },
+      "attention": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "urgent"
+        ],
+        "description": "Use urgent only for time-sensitive notification emphasis; it does not control where the question is displayed."
+      },
+      "questions": {
+        "type": "array",
+        "description": "Questions for a new request. Required unless resuming with requestId. Use stable IDs so answers are easy to map.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Stable answer key, for example 'deploy_target'."
+            },
+            "header": {
+              "type": "string",
+              "description": "Short label for this question."
+            },
+            "question": {
+              "type": "string",
+              "description": "The question text shown to the user."
+            },
+            "multiSelect": {
+              "type": "boolean",
+              "description": "Whether multiple options may be selected."
+            },
+            "allowFreeformInput": {
+              "type": "boolean",
+              "description": "Whether the user may type a custom answer."
+            },
+            "options": {
+              "type": "array",
+              "description": "Optional answer choices.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "description": "Choice label."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional choice description."
+                  },
+                  "recommended": {
+                    "type": "boolean",
+                    "description": "Whether this choice is recommended."
+                  }
+                },
+                "required": [
+                  "label"
+                ]
+              }
+            }
+          },
+          "required": [
+            "id",
+            "header",
+            "question"
+          ]
+        }
+      }
+    }
+  },
+  "tier": "core",
+  "category": "gateway",
+  "source": "builtin",
+  "risk": "low",
+  "defaultConsentLevel": "none"
+}

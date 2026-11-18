@@ -5,6 +5,8 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
+import { clickWithVisibleCursor, guardedFieldAction, type BrowserClickGuard, type CursorPage } from "./browser-cursor.cjs";
+export type { BrowserClickGuard } from "./browser-cursor.cjs";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
@@ -31,6 +33,9 @@ export interface BrowserInteractiveElement {
   selected?: boolean;
   active?: boolean;
   value?: string;
+  inputType?: string;
+  readOnly?: boolean;
+  options?: Array<{ value: string; label: string; disabled: boolean }>;
 }
 
 export interface BrowserSelectorSuggestion {
@@ -81,10 +86,15 @@ export interface BrowserTargetDiagnostics extends BrowserInteractiveElement {
 }
 
 export interface BrowserPageSnapshot {
+  /** Internal document URL used to reject navigation while resolving a target. */
+  documentUrl?: string;
+  documentTimeOrigin?: number;
+  scrollPosition?: { x: number; y: number; height: number };
   url: string;
   title: string;
   text: string;
   elements: BrowserInteractiveElement[];
+  visualContent?: { canvas: boolean; iframe: boolean };
   activeElement?: BrowserActiveElement | null;
   dialogs?: BrowserDialogPresence[];
   obstruction?: BrowserObstructionDiagnostics;
@@ -99,6 +109,56 @@ export interface BrowserRuntimeEvent {
   url?: string;
   method?: string;
   status?: number;
+}
+
+export interface BrowserNetworkEntry {
+  seq: number;
+  requestId: string;
+  url: string | null;
+  method: string | null;
+  resourceType: string | null;
+  status: number | null;
+  statusText: string | null;
+  mimeType: string | null;
+  failed: string | null;
+  finished: boolean;
+  startedAt: number;
+  requestHeaders: Record<string, string> | null;
+  responseHeaders: Record<string, string> | null;
+  requestBody: { text?: string; error?: string } | null;
+  responseBody: { text?: string; error?: string } | null;
+}
+
+export interface BrowserNetworkQuery {
+  limit?: number;
+  bodyLimit?: number;
+  sinceSeq?: number;
+  urlIncludes?: string;
+  urlRegex?: string;
+  method?: string;
+  statusAtLeast?: number;
+  includeHeaders?: boolean;
+  includeBodies?: boolean;
+  clear?: boolean;
+}
+
+export interface BrowserNetworkLog {
+  url: string | null;
+  nextSeq: number;
+  cleared?: boolean;
+  entries: BrowserNetworkEntry[];
+}
+
+export interface BrowserEvaluateResult {
+  ok: boolean;
+  type?: string | null;
+  subtype?: string | null;
+  value?: unknown;
+  unserializableValue?: string | null;
+  description?: string | null;
+  error?: string;
+  lineNumber?: number | null;
+  columnNumber?: number | null;
 }
 
 export interface BrowserPerformanceMetrics {
@@ -141,17 +201,24 @@ export interface BrowserDriver {
   isConnected?(): boolean;
   navigate(url: string, signal?: AbortSignal): Promise<void>;
   reload?(signal?: AbortSignal): Promise<void>;
+  history?(direction: "back" | "forward", signal?: AbortSignal): Promise<void>;
   getDevToolsConnection?(): Promise<{ endpoint: string; targetId: string } | null>;
-  click(selector: string, signal?: AbortSignal): Promise<void>;
-  typeText(selector: string, text: string, signal?: AbortSignal): Promise<void>;
+  click(selector: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void>;
+  typeText(selector: string, text: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void>;
   scroll(x: number, y: number, signal?: AbortSignal): Promise<void>;
-  select(selector: string, value: string, signal?: AbortSignal): Promise<void>;
+  select(selector: string, value: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void>;
   waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
-  screenshot(path?: string, signal?: AbortSignal): Promise<string>;
-  snapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot>;
+  screenshot(path?: string, signal?: AbortSignal, viewportOnly?: boolean): Promise<string>;
+  snapshot(signal?: AbortSignal, fastTarget?: string): Promise<BrowserPageSnapshot>;
   diagnose(selector: string, signal?: AbortSignal): Promise<BrowserTargetDiagnostics>;
   getMetrics(signal?: AbortSignal): Promise<BrowserPerformanceMetrics>;
   getEvents(): BrowserRuntimeEvent[];
+  evaluate?(
+    expression: string,
+    options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+  ): Promise<BrowserEvaluateResult>;
+  networkLog?(query?: BrowserNetworkQuery, signal?: AbortSignal): Promise<BrowserNetworkLog>;
+  sendCdp?(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   close(): Promise<void>;
   liveView?: {
     display: string;
@@ -166,21 +233,24 @@ export interface BrowserSurfaceOptions {
   driverFactory?: (input: SurfaceStartInput) => Promise<BrowserDriver>;
 }
 
-type PlaywrightPage = {
+type PlaywrightPage = CursorPage & {
   goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
   reload: (opts?: Record<string, unknown>) => Promise<unknown>;
+  goBack: (opts?: Record<string, unknown>) => Promise<unknown>;
+  goForward: (opts?: Record<string, unknown>) => Promise<unknown>;
   click: (selector: string) => Promise<void>;
   fill: (selector: string, text: string) => Promise<void>;
   evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
   waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
   screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
   isClosed?: () => boolean;
+  bringToFront?: () => Promise<void>;
   on?: (event: string, handler: (...args: any[]) => void) => void;
   url?: () => string;
 };
 
 type PlaywrightContext = {
-  on?: (event: string, handler: () => void) => void;
+  on?: (event: string, handler: (...args: any[]) => void) => void;
   newPage: () => Promise<PlaywrightPage>;
   pages?: () => PlaywrightPage[];
   close: () => Promise<void>;
@@ -461,6 +531,19 @@ export class BrowserSurface implements Surface {
     return snap;
   }
 
+  async history(direction: "back" | "forward", signal?: AbortSignal): Promise<BrowserPageSnapshot> {
+    this.touch();
+    const driver = this.requireDriver();
+    if (!driver.history) throw new Error("This browser does not support history navigation.");
+    await driver.history(direction, signal);
+    this._actionCount++;
+    const snap = await driver.snapshot(signal);
+    this.captureSnapshotMeta(snap);
+    this.touch();
+    this.onOutput?.(`history ${direction} ${snap.url}`);
+    return snap;
+  }
+
   async describe(signal?: AbortSignal): Promise<string> {
     this.touch();
     const snap = await this.requireDriver().snapshot(signal);
@@ -507,11 +590,35 @@ export class BrowserSurface implements Surface {
     return { snapshot, target, metrics };
   }
 
-  async click(selector: string, signal?: AbortSignal): Promise<void> {
+  /** Collect all matching click controls without transferring unrelated page text. */
+  async fastClickSnapshot(target: string, signal?: AbortSignal): Promise<BrowserPageSnapshot> {
+    this.touch();
+    const snapshot = await this.requireDriver().snapshot(signal, target);
+    this.captureSnapshotMeta(snapshot);
+    this.touch();
+    return snapshot;
+  }
+
+  async click(selector: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void> {
     this.touch();
     try {
-      await this.requireDriver().click(selector, signal);
+      await this.requireDriver().click(selector, signal, guard);
     } catch (err) {
+      // A guarded target may have changed or become private while the model
+      // was running. Do not inspect or expose the replacement page on failure.
+      if (guard) {
+        if (signal?.aborted) throw new Error("Cancelled");
+        const reason = err instanceof Error ? err.message : "";
+        const safeReasons: Record<string, string> = {
+          GUARDED_CLICK_TARGET_COUNT: "The selector no longer matched exactly one target.",
+          GUARDED_CLICK_IDENTITY_MISMATCH: "The target or page may have changed and no longer matched the observed identity and visibility checks.",
+          GUARDED_CLICK_EXECUTION_FAILED: "The verified target could not be clicked; it may have been obscured, detached, or otherwise not actionable.",
+        };
+        const error = new Error(`${safeReasons[reason] ?? "The guarded click failed before its cause could be determined."} Inspect the page before retrying.`);
+        // These checks happen before click dispatch; other failures may have applied an effect.
+        if (reason === "GUARDED_CLICK_TARGET_COUNT" || reason === "GUARDED_CLICK_IDENTITY_MISMATCH") Object.assign(error, { code: "BROWSER_STALE_TARGET" });
+        throw error;
+      }
       const diagnostics = await this.tryDiagnose(selector, signal);
       throw enrichBrowserActionError("click", selector, err, diagnostics);
     }
@@ -519,9 +626,16 @@ export class BrowserSurface implements Surface {
     this.touch();
   }
 
-  async typeText(selector: string, text: string, signal?: AbortSignal): Promise<void> {
+  async typeText(selector: string, text: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void> {
     this.touch();
-    await this.requireDriver().typeText(selector, text, signal);
+    try {
+      await this.requireDriver().typeText(selector, text, signal, guard);
+    } catch (error) {
+      if (guard && !signal?.aborted && error instanceof Error && ["The browser target is ambiguous or has changed.", "The browser target or page has changed."].includes(error.message)) {
+        Object.assign(error, { code: "BROWSER_STALE_TARGET" });
+      }
+      throw error;
+    }
     this._actionCount++;
     this.touch();
   }
@@ -533,9 +647,9 @@ export class BrowserSurface implements Surface {
     this.touch();
   }
 
-  async select(selector: string, value: string, signal?: AbortSignal): Promise<void> {
+  async select(selector: string, value: string, signal?: AbortSignal, guard?: BrowserClickGuard): Promise<void> {
     this.touch();
-    await this.requireDriver().select(selector, value, signal);
+    await this.requireDriver().select(selector, value, signal, guard);
     this._actionCount++;
     this.touch();
   }
@@ -547,10 +661,10 @@ export class BrowserSurface implements Surface {
     this.touch();
   }
 
-  async screenshot(path?: string, signal?: AbortSignal): Promise<string> {
+  async screenshot(path?: string, signal?: AbortSignal, viewportOnly?: boolean): Promise<string> {
     this.touch();
     this._actionCount++;
-    const result = await this.requireDriver().screenshot(path, signal);
+    const result = await this.requireDriver().screenshot(path, signal, viewportOnly);
     this.touch();
     return result;
   }
@@ -565,6 +679,43 @@ export class BrowserSurface implements Surface {
   getEvents(): BrowserRuntimeEvent[] {
     this.touch();
     return this.requireDriver().getEvents();
+  }
+
+  async evaluate(
+    expression: string,
+    options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+  ): Promise<BrowserEvaluateResult> {
+    const driver = this.requireDriver();
+    if (typeof driver.evaluate !== "function") {
+      throw new Error("Browser driver does not support expression evaluation");
+    }
+    this.touch();
+    this._actionCount++;
+    const result = await driver.evaluate(expression, options);
+    this.touch();
+    return result;
+  }
+
+  async networkLog(query?: BrowserNetworkQuery, signal?: AbortSignal): Promise<BrowserNetworkLog> {
+    const driver = this.requireDriver();
+    if (typeof driver.networkLog !== "function") {
+      throw new Error("Browser driver does not support network capture");
+    }
+    this.touch();
+    const result = await driver.networkLog(query, signal);
+    this.touch();
+    return result;
+  }
+
+  async sendCdp(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const driver = this.requireDriver();
+    if (typeof driver.sendCdp !== "function") {
+      throw new Error("Browser driver does not support raw CDP commands");
+    }
+    this.touch();
+    const result = await driver.sendCdp(method, params, signal);
+    this.touch();
+    return result;
   }
 
   private captureSnapshotMeta(snap: BrowserPageSnapshot): void {
@@ -651,6 +802,25 @@ export async function selectInitialBrowserPage<T extends { isClosed?: () => bool
   return blankPage ?? await context.newPage();
 }
 
+// Follow the tab the user actually sees, including sign-in popups and links
+// opening a new tab. Never keep automating a hidden page behind the live view.
+export async function selectVisibleBrowserPage<T extends {
+  isClosed?: () => boolean;
+  evaluate: (fn: () => { visible: boolean; focused: boolean }) => Promise<{ visible: boolean; focused: boolean }>;
+}>(pages: T[], fallback: T): Promise<T> {
+  let visiblePage: T | undefined;
+  // Multiple windows may all report focus; prefer the latest adopted page.
+  for (const candidate of [fallback, ...pages.filter(page => page !== fallback)]) {
+    if (isBrowserPageClosed(candidate)) continue;
+    try {
+      const state = await candidate.evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }));
+      if (state.visible && state.focused) return candidate;
+      if (state.visible) visiblePage ??= candidate;
+    } catch { /* A closing or navigating tab cannot be inspected yet. */ }
+  }
+  return visiblePage ?? fallback;
+}
+
 function isReusableBootstrapPageUrl(url: string | undefined): boolean {
   const normalized = url?.trim().toLowerCase();
   return normalized === "about:blank"
@@ -679,6 +849,14 @@ async function connectOrLaunchBrowser(
     return await chromium.connectOverCDP(liveViewSession.cdpUrl);
   }
 
+  return launchLocalBrowser(chromium, headless);
+}
+
+/** Shared local launch policy for browser surfaces and standalone captures. */
+export async function launchLocalBrowser<T>(
+  chromium: { launch: (options: Record<string, unknown>) => Promise<T> },
+  headless = true,
+): Promise<T> {
   const launchTimeoutMs = parsePositiveIntegerEnv(
     process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
     DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
@@ -770,6 +948,7 @@ async function createInProcessPlaywrightDriver(
   browser.on?.("disconnected", () => { browserAvailable = false; });
   activeContext.on?.("close", () => { browserAvailable = false; });
   let activePage = page;
+  let presentingPage: Promise<void> = Promise.resolve();
   const events: BrowserRuntimeEvent[] = [];
   const consoleGuard = createConsoleFloodGuard({
     windowMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_WINDOW_MS"], CONSOLE_FLOOD_WINDOW_MS),
@@ -816,7 +995,7 @@ async function createInProcessPlaywrightDriver(
       });
     });
     targetPage.on?.("close", () => {
-      if (targetPage !== activePage) return;
+      if (!browserAvailable || targetPage !== activePage) return;
       const openPages = activeContext.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
       if (openPages.length > 0) {
         activePage = openPages[0]!;
@@ -837,12 +1016,28 @@ async function createInProcessPlaywrightDriver(
         });
     });
   };
+  activeContext.on?.("page", (nextPage: PlaywrightPage) => {
+    if (!browserAvailable) return;
+    activePage = nextPage;
+    attachPageEvents(nextPage);
+    presentingPage = Promise.resolve(nextPage.bringToFront?.());
+    void presentingPage.catch(() => {});
+  });
   const ensureActivePage = async (): Promise<PlaywrightPage> => {
+    await presentingPage;
+    const previousPage = activePage;
+    const visiblePage = await selectVisibleBrowserPage(activeContext.pages?.() ?? [], previousPage);
+    // Page events can run while visibility is being queried. Preserve a newer
+    // popup/close selection instead of overwriting it with the older result.
+    if (activePage === previousPage) activePage = visiblePage;
+    else await presentingPage;
     if (!isBrowserPageClosed(activePage)) {
       attachPageEvents(activePage);
+      await activePage.bringToFront?.();
       return activePage;
     }
     activePage = await selectInitialBrowserPage(activeContext);
+    await activePage.bringToFront?.();
     attachPageEvents(activePage);
     return activePage;
   };
@@ -886,13 +1081,17 @@ async function createInProcessPlaywrightDriver(
       const page = await ensureActivePage();
       await withSignal(page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
     },
-    async click(selector: string, signal?: AbortSignal) {
+    async history(direction: "back" | "forward", signal?: AbortSignal) {
       const page = await ensureActivePage();
-      await withSignal(page.click(selector), signal);
+      await withSignal(direction === "back" ? page.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 }) : page.goForward({ waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
     },
-    async typeText(selector: string, text: string, signal?: AbortSignal) {
+    async click(selector: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
       const page = await ensureActivePage();
-      await withSignal(page.fill(selector, text), signal);
+      await withSignal(clickWithVisibleCursor(page, selector, signal, guard), signal);
+    },
+    async typeText(selector: string, text: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
+      const page = await ensureActivePage();
+      await withSignal(guard ? guardedFieldAction(page, selector, text, "fill", signal, guard) : page.fill(selector, text), signal);
     },
     async scroll(x: number, y: number, signal?: AbortSignal) {
       const page = await ensureActivePage();
@@ -904,8 +1103,9 @@ async function createInProcessPlaywrightDriver(
         signal,
       );
     },
-    async select(selector: string, value: string, signal?: AbortSignal) {
+    async select(selector: string, value: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
       const page = await ensureActivePage();
+      if (guard) { await withSignal(guardedFieldAction(page, selector, value, "select", signal, guard), signal); return; }
       const selectPage = page as {
         selectOption?: (s: string, v: string) => Promise<unknown>;
       };
@@ -918,20 +1118,20 @@ async function createInProcessPlaywrightDriver(
       const page = await ensureActivePage();
       await withSignal(page.waitForSelector(selector, { timeout: timeoutMs }), signal);
     },
-    async screenshot(path?: string, signal?: AbortSignal) {
+    async screenshot(path?: string, signal?: AbortSignal, viewportOnly?: boolean) {
       const page = await ensureActivePage();
       const outPath = path
         ? resolve(path)
-        : resolve(process.cwd(), ".jait", "shots", `browser-${Date.now()}.png`);
+        : resolve(_input.projectRoot || process.cwd(), ".jait", "shots", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await withSignal(page.screenshot({ path: outPath, fullPage: true }), signal);
+      await withSignal(page.screenshot({ path: outPath, fullPage: !viewportOnly }), signal);
       return outPath;
     },
-    async snapshot(signal?: AbortSignal) {
+    async snapshot(signal?: AbortSignal, fastTarget?: string) {
       const page = await ensureActivePage();
-      const snapshot = await withSignal(page.evaluate(() => {
+      const snapshot = await withSignal(page.evaluate((requestedTarget?: string) => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
-        const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
+        const bodyText = requestedTarget === undefined ? normalize(document.body?.innerText ?? "").slice(0, 12_000) : "";
         const title = document.title || "(untitled)";
         const esc = (raw: string) => {
           if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
@@ -946,7 +1146,7 @@ async function createInProcessPlaywrightDriver(
         };
         const guessRole = (el: any, tag: string) =>
           el.getAttribute("role")
-          ?? (tag === "a" ? "link" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
+          ?? (tag === "a" ? "link" : tag === "textarea" ? "textbox" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
         const getName = (el: any) => normalize(
           el.getAttribute("aria-label")
             ?? el.getAttribute("aria-labelledby")
@@ -969,7 +1169,7 @@ async function createInProcessPlaywrightDriver(
           const fieldName = el.getAttribute("name");
           if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
           if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
-          if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+          if (placeholder) push("placeholder", placeholder, `${tag}[placeholder=${esc(placeholder)}]`);
           if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
           if (id) push("id", id, `#${esc(id)}`);
           const css = id
@@ -998,7 +1198,7 @@ async function createInProcessPlaywrightDriver(
             role,
             name,
             text,
-            selector: selectors[0]?.selector ?? undefined,
+            selector: (tag === "textarea" ? selectors.find(item => item.kind === "id") ?? selectors.find(item => item.kind === "placeholder") ?? selectors.find(item => item.kind === "name") : undefined)?.selector ?? selectors[0]?.selector ?? undefined,
             selectors,
             tagName: tag,
             placeholder,
@@ -1008,13 +1208,30 @@ async function createInProcessPlaywrightDriver(
             selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
             active: document.activeElement === el,
             value: selectedValue,
+            inputType: tag === "input" ? String(el.type ?? "text").toLowerCase() : undefined,
+            readOnly: el.readOnly === true,
+            options: tag === "select" ? Array.from(el.options ?? []).slice(0, 30).map((option: any) => ({ value: String(option.value).slice(0, 200), label: normalize(option.textContent ?? "").slice(0, 200), disabled: option.disabled === true || option.parentElement?.disabled === true })) : undefined,
           };
         };
 
         const rawElements = Array.from(
           document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
         ) as any[];
-        const elements = rawElements.filter((el: any) => isVisible(el)).slice(0, 60).map((el: any) => serializeElement(el));
+        const normalizeMatch = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+        const intent = requestedTarget === undefined ? "" : normalizeMatch(requestedTarget);
+        const clickRoles = new Set(["button", "link", "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio", "switch", "tab"]);
+        const elements = rawElements.filter((el: any) => {
+          if (!isVisible(el)) return false;
+          if (requestedTarget === undefined) return true;
+          if (el.disabled === true || el.getAttribute("aria-disabled") === "true") return false;
+          const tag = el.tagName.toLowerCase();
+          const role = guessRole(el, tag).toLowerCase();
+          const rawLabel = getName(el) || normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
+          if (rawLabel.length >= 200) return false;
+          const label = normalizeMatch(rawLabel);
+          return Boolean(label && (clickRoles.has(role) || tag === "button" || tag === "a") && (` ${intent} `).includes(` ${label} `));
+        }).slice(0, requestedTarget === undefined ? 60 : 32).map((el: any) => serializeElement(el));
+        if (requestedTarget !== undefined) return { url: window.location.href, documentTimeOrigin: performance.timeOrigin, title, text: "", elements };
         const activeElement = document.activeElement && document.activeElement !== document.body
           ? {
             ...serializeElement(document.activeElement),
@@ -1061,9 +1278,15 @@ async function createInProcessPlaywrightDriver(
 
         return {
           url: window.location.href,
+          documentTimeOrigin: performance.timeOrigin,
+          scrollPosition: { x: window.scrollX, y: window.scrollY, height: window.innerHeight },
           title,
           text: bodyText,
           elements,
+          visualContent: {
+            canvas: Array.from(document.querySelectorAll("canvas")).some(isVisible),
+            iframe: Array.from(document.querySelectorAll("iframe")).some(isVisible),
+          },
           activeElement,
           dialogs,
           obstruction: {
@@ -1079,9 +1302,10 @@ async function createInProcessPlaywrightDriver(
             ],
           },
         };
-      }) as Promise<BrowserPageSnapshot>, signal);
+      }, fastTarget) as Promise<BrowserPageSnapshot>, signal);
       return {
         ...snapshot,
+        documentUrl: snapshot.url,
         url: rewriteContainerBrowserUrlToPublic(snapshot.url, liveViewSession) ?? snapshot.url,
       };
     },
@@ -1285,6 +1509,7 @@ async function createInProcessPlaywrightDriver(
       return [...events];
     },
     async close() {
+      browserAvailable = false;
       await activeContext.close();
       await browser.close();
       if (liveViewSession) {
@@ -1512,6 +1737,8 @@ async function createNodeBridgePlaywrightDriver(
         if (pendingEntry) {
           clearTimeout(pendingEntry.timer);
           pending.delete(id);
+          // Tell the bridge to stop before a pending click is dispatched.
+          if (method === "click") stdin.write(`${JSON.stringify({ id: 0, method: "cancel", params: { id } })}\n`);
         }
         rejectOp(new Error("Cancelled"));
       };
@@ -1572,36 +1799,40 @@ async function createNodeBridgePlaywrightDriver(
     async reload(signal?: AbortSignal) {
       await sendCommand("reload", {}, signal);
     },
-    async click(selector: string, signal?: AbortSignal) {
-      await sendCommand("click", { selector }, signal);
+    async history(direction: "back" | "forward", signal?: AbortSignal) {
+      await sendCommand("history", { direction }, signal);
     },
-    async typeText(selector: string, text: string, signal?: AbortSignal) {
-      await sendCommand("typeText", { selector, text }, signal);
+    async click(selector: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
+      await sendCommand("click", { selector, ...(guard ? { guard } : {}) }, signal);
+    },
+    async typeText(selector: string, text: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
+      await sendCommand("typeText", { selector, text, guard }, signal);
     },
     async scroll(x: number, y: number, signal?: AbortSignal) {
       await sendCommand("scroll", { x, y }, signal);
     },
-    async select(selector: string, value: string, signal?: AbortSignal) {
-      await sendCommand("select", { selector, value }, signal);
+    async select(selector: string, value: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
+      await sendCommand("select", { selector, value, guard }, signal);
     },
     async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal) {
       await sendCommand("waitFor", { selector, timeoutMs }, signal);
     },
-    async screenshot(path?: string, signal?: AbortSignal) {
-      const result = await sendCommand("screenshot", { path }, signal);
+    async screenshot(path?: string, signal?: AbortSignal, viewportOnly?: boolean) {
+      const result = await sendCommand("screenshot", { path, viewportOnly }, signal);
       if (typeof result !== "string") {
         throw new Error("Node bridge returned an invalid screenshot path.");
       }
       return result;
     },
-    async snapshot(signal?: AbortSignal) {
-      const result = await sendCommand("snapshot", {}, signal);
+    async snapshot(signal?: AbortSignal, fastTarget?: string) {
+      const result = await sendCommand("snapshot", fastTarget === undefined ? {} : { fastTarget }, signal);
       if (!result || typeof result !== "object") {
         throw new Error("Node bridge returned an invalid browser snapshot.");
       }
       const snapshot = result as BrowserPageSnapshot;
       return {
         ...snapshot,
+        documentUrl: snapshot.url,
         url: rewriteContainerBrowserUrlToPublic(snapshot.url, liveViewSession) ?? snapshot.url,
       };
     },
@@ -1625,6 +1856,30 @@ async function createNodeBridgePlaywrightDriver(
     },
     getEvents() {
       return [...events];
+    },
+    async evaluate(
+      expression: string,
+      options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+    ) {
+      const result = await sendCommand("evaluate", {
+        expression,
+        timeoutMs: options?.timeoutMs,
+        returnByValue: options?.returnByValue,
+      }, options?.signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned an invalid evaluation result.");
+      }
+      return result as BrowserEvaluateResult;
+    },
+    async networkLog(query?: BrowserNetworkQuery, signal?: AbortSignal) {
+      const result = await sendCommand("networkLog", query ? { ...query } : {}, signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned an invalid network log.");
+      }
+      return result as BrowserNetworkLog;
+    },
+    async sendCdp(method: string, params?: Record<string, unknown>, signal?: AbortSignal) {
+      return await sendCommand("cdp", { method, params: params ?? {} }, signal);
     },
     async close() {
       await closeBridge();
@@ -1713,10 +1968,10 @@ function parseCsvEnv(raw: string | undefined, fallback: string[]): string[] {
   return values.length > 0 ? values : fallback;
 }
 
-async function launchBrowserWithFallback(
-  chromium: PlaywrightChromium,
+async function launchBrowserWithFallback<T>(
+  chromium: { launch: (options: Record<string, unknown>) => Promise<T> },
   strategies: BrowserLaunchStrategy[],
-): Promise<PlaywrightBrowser> {
+): Promise<T> {
   const errors: string[] = [];
 
   for (const strategy of strategies) {

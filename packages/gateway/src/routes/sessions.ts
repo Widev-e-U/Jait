@@ -9,6 +9,7 @@
  *   POST   /api/sessions/:id/archive  — archive
  *   POST   /api/sessions/:id/move     — move into a project (or to personal chats)
  */
+import { isChatTurnActive } from "./chat.js";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { SessionService } from "../services/sessions.js";
@@ -115,11 +116,12 @@ export function registerSessionRoutes(
     const query = request.query as Record<string, unknown>;
     const status =
       typeof query["status"] === "string" ? query["status"] : undefined;
+    const personalOnly = query["personal"] === "true";
     const limit = parseSessionListLimit(query["limit"]);
     if (!limit) {
-      return { sessions: sessionService.list(status, authUser.id), hasMore: false };
+      return { sessions: sessionService.list(status, authUser.id, undefined, personalOnly), hasMore: false };
     }
-    const sessions = sessionService.list(status, authUser.id, limit + 1);
+    const sessions = sessionService.list(status, authUser.id, limit + 1, personalOnly);
     return {
       sessions: sessions.slice(0, limit),
       hasMore: sessions.length > limit,
@@ -157,6 +159,25 @@ export function registerSessionRoutes(
     const session = sessionService.getById(id, authUser.id);
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+    if ("nodeId" in body) {
+      if (isChatTurnActive(id)) {
+        return reply.status(409).send({ error: "CHAT_BUSY", details: "Wait for the current turn to finish before changing devices" });
+      }
+      if (session.projectId) {
+        return reply.status(400).send({ error: "PROJECT_NODE_FIXED", details: "Project chats use the project's location" });
+      }
+      if (typeof body["nodeId"] !== "string" || !body["nodeId"].trim() || body["nodeId"].length > 200) {
+        return reply.status(400).send({ error: "INVALID_NODE" });
+      }
+      const nodeId = body["nodeId"].trim();
+      if (nodeId !== "gateway" && !ws?.getFsNodes().some(node => node.id === nodeId && !node.isGateway)) {
+        return reply.status(400).send({ error: "NODE_UNAVAILABLE", details: "The selected node is not connected" });
+      }
+      if (nodeId !== "gateway" && !ws?.canAccessNode?.(nodeId, authUser.id)) {
+        return reply.status(403).send({ error: "NODE_FORBIDDEN", details: "The selected node does not belong to this user" });
+      }
+      sessionService.updateChatSelection(id, { nodeId }, authUser.id);
     }
     sessionService.update(id, {
       name: typeof body["name"] === "string" ? body["name"] : undefined,
@@ -412,6 +433,16 @@ export function registerSessionRoutes(
         return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Body must be a JSON object of key→value pairs" });
       }
       sessionState.set(id, body);
+      // Clients write the queue over both WS and this route. A mobile WebSocket
+      // that died without closing swallows the WS copy, so the drain must also
+      // run here — otherwise a message queued after the turn already ended
+      // waits until the next turn completes, which never comes.
+      if (Object.prototype.hasOwnProperty.call(body, "queued_messages")) {
+        const appWithQueueDrain = app as typeof app & {
+          drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+        };
+        void appWithQueueDrain.drainQueuedChatMessages?.(id);
+      }
       return { ok: true };
     });
   }

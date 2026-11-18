@@ -1,3 +1,4 @@
+import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useEffect, useRef, useState } from 'react'
 import type { TeamRoom } from '@jait/shared'
 import { Check, MessagesSquare, Plus, Search, X } from 'lucide-react'
@@ -21,8 +22,9 @@ export function TeamChatsPanel({ isMobile = false, onHide }: { isMobile?: boolea
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [memberIds, setMemberIds] = useState<string[]>([])
-  const [search, setSearch] = useState('')
-  const [agentSearch, setAgentSearch] = useState('')
+  const [search, setSearch] = useUrlSearchState('agents', 'teamQ')
+  const [agentSearch, setAgentSearch] = useUrlSearchState('agents', 'agentQ')
+  useEffect(() => { if (agentSearch) setCreating(true) }, [agentSearch])
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const drafts = useRef(new Map<string, string>())
@@ -78,7 +80,7 @@ export function TeamChatsPanel({ isMobile = false, onHide }: { isMobile?: boolea
       </nav>
     </aside>}
     {(!isMobile || !mobileList) && selected && <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <TeamRoomView key={selected.id} roomId={selected.id} onBack={() => setMobileList(true)} backLabel="Back to team chats" showBack={isMobile} initialInput={drafts.current.get(selected.id) ?? ''} onInputChange={text => drafts.current.set(selected.id, text)} onRuntimeChange={setRuntime} />
+      <TeamRoomView key={selected.id} roomId={selected.id} initialIdentity={{ id: selected.id, name: selected.name, members: membersFor(selected) }} onBack={() => setMobileList(true)} backLabel="Back to team chats" showBack={isMobile} initialInput={drafts.current.get(selected.id) ?? ''} onInputChange={text => drafts.current.set(selected.id, text)} onRuntimeChange={setRuntime} />
     </div>}
     <Dialog open={creating} onOpenChange={open => { if (!saving) setCreating(open) }}>
       <DialogContent className="max-w-lg">

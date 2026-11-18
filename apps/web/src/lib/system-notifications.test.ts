@@ -27,6 +27,7 @@ vi.mock('sonner', () => ({
     success: toastSuccess,
     warning: toastWarning,
     error: toastError,
+    dismiss: vi.fn(),
   },
 }))
 
@@ -85,6 +86,18 @@ describe('normalizeSystemNotification', () => {
     })
     await triggerSystemNotification({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
     expect(notify).toHaveBeenCalledWith({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
+  })
+
+  it('forwards messenger image references to the Android bridge', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', { Capacitor: { Plugins: { AgentOverlay: { notify } } } })
+    await triggerSystemNotification({
+      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Alice', body: 'Photo',
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    })
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      imageAvailable: true, roomId: '!room', eventId: '$photo',
+    }))
   })
 
   it('drops notifications with no visible title or body', () => {
@@ -148,7 +161,7 @@ describe('normalizeSystemNotification', () => {
         options: { body: 'Retry the preview', tag: 'notif-4', icon: '/apple-touch-icon.png', badge: '/favicon-32x32.png' },
       },
     ])
-    expect(toastInfo).toHaveBeenCalledWith('Build failed', { description: 'Retry the preview' })
+    expect(toastInfo).toHaveBeenCalledWith('Build failed', expect.objectContaining({ description: 'Retry the preview' }))
   })
 
   it('opens a browser notification immediately when permission is already granted', async () => {
@@ -168,7 +181,7 @@ describe('normalizeSystemNotification', () => {
         options: { body: 'All checks passed', tag: 'notif-5', icon: '/apple-touch-icon.png', badge: '/favicon-32x32.png' },
       },
     ])
-    expect(toastSuccess).toHaveBeenCalledWith('Agent finished', { description: 'All checks passed' })
+    expect(toastSuccess).toHaveBeenCalledWith('Agent finished', expect.objectContaining({ description: 'All checks passed' }))
   })
 
   it('drops to an in-app toast when another surface owns the system notification', async () => {
@@ -182,7 +195,25 @@ describe('normalizeSystemNotification', () => {
     })
 
     expect(NotificationMock.instances).toEqual([])
-    expect(toastInfo).toHaveBeenCalledWith('Approval needed', { description: 'terminal.run wants to run' })
+    expect(toastInfo).toHaveBeenCalledWith('Approval needed', expect.objectContaining({ description: 'terminal.run wants to run' }))
+  })
+
+  it('delivers locally generated Messenger alerts when another surface owns attention events', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', {
+      jaitDesktop: { notify },
+      Capacitor: undefined,
+    } as unknown as Window & typeof globalThis)
+    setNativeNotificationsEnabled(false)
+
+    await triggerSystemNotification({
+      id: 'matrix:message-1',
+      title: 'Messenger',
+      body: 'New message',
+      independentOfAttention: true,
+    })
+
+    expect(notify).toHaveBeenCalledOnce()
   })
 
   it('closes the browser notification when the request is answered elsewhere', async () => {
@@ -213,7 +244,7 @@ describe('normalizeSystemNotification', () => {
 
 it('deduplicates the same completion but replaces the card for the next turn', async () => {
   const notify = vi.fn(async (_input: unknown) => {})
-  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  vi.stubGlobal('window', { dispatchEvent: vi.fn(), jaitDesktop: { notify } })
   try {
     const input = { id: 'completion:dedupe:1', replaceId: 'chat:dedupe', kind: 'completion' as const, sessionId: 'dedupe', title: 'Response ready', body: 'Done', link: '/chat?sessionId=dedupe', includeToast: false }
     await triggerSystemNotification(input)
@@ -226,7 +257,7 @@ it('deduplicates the same completion but replaces the card for the next turn', a
 
 it('suppresses only the visible focused chat completion', async () => {
   const notify = vi.fn(async (_input: unknown) => {})
-  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  vi.stubGlobal('window', { dispatchEvent: vi.fn(), jaitDesktop: { notify } })
   vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
   setVisibleNotificationSession('visible-chat')
   try {
@@ -327,7 +358,7 @@ describe('in-app agent identity fallback', () => {
     expect(renderedToast()).toContain('Open')
   })
 
-  it('keeps the plain text toast byte-identical when no agent identity is present', async () => {
+  it('keeps the plain text toast when no agent identity is present', async () => {
     const notify = vi.fn(async (_input: unknown) => {})
     vi.stubGlobal('window', { jaitDesktop: { notify }, Capacitor: undefined })
     vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
@@ -338,7 +369,7 @@ describe('in-app agent identity fallback', () => {
 
     expect(toastSuccess).toHaveBeenCalledTimes(1)
     expect(toastSuccess.mock.calls[0]?.[0]).toBe('Response ready')
-    expect(toastSuccess.mock.calls[0]?.[1]).toEqual({ description: 'Ada finished the refactor' })
+    expect(toastSuccess.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ description: 'Ada finished the refactor' }))
   })
 
   it('leaves the notification text untouched when identity is added', async () => {

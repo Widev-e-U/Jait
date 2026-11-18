@@ -1,0 +1,461 @@
+{
+  "lane": "typescript-security-internal-reference",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:12:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for parses the standard Linux `arp -a` parenthesized format. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.arp-linux",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for parses macOS single-digit MAC groups and normalizes them. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.arp-macos",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:33:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for parses the unparenthesized format and hyphen-separated MACs. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.arp-hyphen",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:41:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for skips broadcast, zero, and multicast MACs. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.arp-filtered",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:54:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for returns an empty array for output with no matching lines. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.arp-empty",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:61:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for extracts the prefix from a /24 CIDR. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.prefix-cidr",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:65:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for extracts the prefix from a full IP. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.prefix-ip",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:69:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for accepts a bare prefix and trims whitespace. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.prefix-bare",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:73:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rejects out-of-range octets (reliability guard). Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.prefix-range",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:81:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rejects invalid values. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.prefix-invalid",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:90:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for accepts valid IPv4 addresses. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ipv4-valid",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:96:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rejects malformed addresses. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ipv4-invalid",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:108:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for trims, dedupes, and filters invalid IPs. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ips-normalize",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:115:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for returns an empty array for empty or undefined input. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ips-empty",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:122:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for merges entries by IP, keeping the first MAC and OR-ing responsiveness. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.merge-first",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:135:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for fills in a missing MAC from a later entry. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.merge-later",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:148:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for generates host addresses 1..254 for each subnet. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.candidates-one",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/network-scan.test.ts:155:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for handles multiple subnets. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.candidates-two",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/ssrf-guard.test.ts:6:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for blocks localhost and private IPv4 targets. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ssrf-ipv4",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/ssrf-guard.test.ts:15:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for blocks shared, documentation, benchmarking, multicast, and reserved IPv4 targets. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ssrf-reserved",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/ssrf-guard.test.ts:27:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for blocks IPv6 loopback, unique-local, link-local, and mapped private targets. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ssrf-ipv6",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/ssrf-guard.test.ts:40:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for allows explicit private hosts only when configured. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ssrf-allow",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/ssrf-guard.test.ts:47:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for enforces host allowlists after normalization. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.ssrf-allowlist",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:14:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rejects unsupported target %s. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.scope-targets",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:17:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for requires authorization, bounded targets, bounded ports and expiry. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.scope-bounds",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for only dispatches literal included targets and ports; exclusions override targets. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-dispatch",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:37:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for enforces ownership, gateway vantage and one active run. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-ownership",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:48:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rejects an expired scope on repeat execution. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-expired",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:54:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for rechecks expiry between checks and preserves partial evidence. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-partial",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:63:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for cancels an in-flight check and stops further dispatch. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-cancel",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:75:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for keeps budget expiry distinct from cancellation when wall time does not advance. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-frozen-budget",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:83:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for keeps explicit cancellation distinct when the wall clock moves forward. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-forward-cancel",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:90:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for bounds total duration and labels incomplete checks. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-duration",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:98:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for keeps timeout/error observations inconclusive and handles a probe failure. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-probe-errors",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:112:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for retains scope and evidence across service restart. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-restart",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:151:3",
+      "status": "verified",
+      "parity_review": "Reconstructs every original assertion and fixture for marks unfinished runs interrupted after restart. Rust owns inputs and assertions; the bounded Bun driver calls the production TypeScript export. No Rust runtime parity claim.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-interrupted",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:125:3",
+      "status": "verified",
+      "parity_review": "Injects a failure after the initial assessment-run write, as the original fixture does. Rust checks partial status, all four retained observations, the explicit persistence gap and omission of private storage error text.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-persistence-failure",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/security/assessment.test.ts:168:3",
+      "status": "verified",
+      "parity_review": "Uses a real ephemeral loopback TCP listener and the production default AssessmentService probe. Rust checks open before shutdown, refused afterward, identical scope id and vantage, and completed after status. No remote network is contacted.",
+      "rust_cases": [
+        {
+          "id": "internal.security.assessment-tcp-before-after",
+          "source": "tests/contract/src/security_internal_contracts.rs",
+          "report": ".jait/artifacts/contracts/aab942fc-a2f0-4585-b887-94e82eb299aa/report.json"
+        }
+      ]
+    }
+  ]
+}

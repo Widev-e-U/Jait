@@ -10,6 +10,7 @@ import { eq, desc } from "drizzle-orm";
 import type { ThreadService } from "../services/threads.js";
 import { GitService } from "../services/git.js";
 import { prepareDeliveryWorktree } from "../tools/thread-tools.js";
+import { AgentHaltedError, isAgentHaltedError, type AgentControlService } from "../services/agent-control.js";
 import { setTimeout as delay } from "node:timers/promises";
 
 const postSchema = z.object({
@@ -20,11 +21,15 @@ const postSchema = z.object({
   targetSessionId: z.string().optional(),
   kind: z.enum(["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"]).optional(),
 });
-export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, service: TeamChatService, db: JaitDB, users: UserService, threads: ThreadService) {
+export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, service: TeamChatService, db: JaitDB, users: UserService, threads: ThreadService, agentControl?: AgentControlService) {
   service.setDecisionKeys(userId => users.getSettings(userId).apiKeys);
   service.setDispatcher(async (delivery, agent, prompt) => {
     const user = users.findById(service.owner(delivery.roomId));
     if (!user) throw new Error("Room owner unavailable.");
+    // A halt must hold routed team work too: refuse here, before any worktree
+    // preparation, thread start or work-chat fallback can begin a model turn.
+    // The delivery stays queued so resuming delivers it rather than losing it.
+    if (agentControl?.isHalted(user.id)) throw new AgentHaltedError(undefined, "team_delivery");
     const connectHost = config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
     const headers = { authorization: "Bearer " + await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret),
       host: (connectHost.includes(":") ? "[" + connectHost + "]" : connectHost) + ":" + config.port };
@@ -48,6 +53,7 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
         };
         const operation = thread.status === "running" ? "steer" : thread.providerSessionId ? "send" : "start";
         const response = await app.inject({ method: "POST", url: "/api/threads/" + encodeURIComponent(thread.id) + "/" + operation, headers, payload });
+        if (response.statusCode === 409 && response.json().code === "agent_halted") throw new AgentHaltedError(undefined, "team_delivery");
         if (response.statusCode >= 400) throw new Error("Thread delivery failed (" + response.statusCode + "): " + response.body.slice(0, 500));
         if (operation === "steer") return { content: "", delivered: true };
         // /start returns as soon as execution is scheduled. Completion must reflect the real turn.
@@ -71,12 +77,13 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
         }
         return { content: "", delivered: true };
       } catch (error) {
-        if (!service.isClosed() && threads.getById(thread.id)?.status === "idle") {
+        if (!isAgentHaltedError(error) && !service.isClosed() && threads.getById(thread.id)?.status === "idle") {
           threads.markError(thread.id, error instanceof Error ? error.message : String(error));
         }
         throw error;
       }
     }
+    agentControl?.assertCanRun(user.id, "team_delivery");
     // Legacy explicit targets remain chats so already-running work is never duplicated.
     if (message.targetSessionId) {
       const steer = await app.inject({ method: "POST", url: "/api/sessions/" + encodeURIComponent(delivery.sessionId) + "/steer", headers,
@@ -106,10 +113,17 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     try { return { room: "memberIds" in body.data ? service.createRoom(user.id, body.data) : service.ensureRoom(user.id, body.data.agentId, body.data.sourceSessionId) }; }
     catch (error) { return reply.status(400).send({ error: String(error) }); }
   });
-  app.get<{ Params: { id: string } }>("/api/team-rooms/:id", async (request, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { limit?: string; before?: string } }>("/api/team-rooms/:id", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret); if (!user) return;
     try {
       const room = service.get(user.id, request.params.id);
+      const limit = Math.floor(Number(request.query.limit));
+      // Paged mode: callers that pass `limit` get only that window plus its deliveries.
+      if (limit > 0) {
+        const page = service.historyPage(user.id, room.id, Math.min(limit, 100), request.query.before || undefined);
+        return { room, members: service.roomMembers(user.id, room.id), messages: page.messages, hasMore: page.hasMore,
+          deliveries: service.deliveriesFor(user.id, room.id, new Set(page.messages.map(message => message.id))) };
+      }
       return { room, members: service.roomMembers(user.id, room.id), messages: service.history(user.id, room.id), deliveries: service.deliveries(user.id, room.id) };
     } catch { return reply.status(404).send({ error: "Team room not found." }); }
   });

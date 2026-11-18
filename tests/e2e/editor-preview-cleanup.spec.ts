@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
-const PROJECT_ROOT = path.resolve(process.cwd(), '../..')
+const PROJECT_ROOT = path.resolve(__dirname, '../..')
 
 test('closing the preview panel releases its live preview session', async ({ page, request }) => {
   test.setTimeout(90_000)
@@ -51,13 +51,23 @@ test('closing the preview panel releases its live preview session', async ({ pag
     localStorage.setItem('jait-gateway-url', gatewayUrl)
     localStorage.setItem('jait-auth-token', authToken)
   }, [API_URL, token] as const)
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.goto(`/?projectId=${encodeURIComponent(project.id)}&sessionId=${encodeURIComponent(session.id)}`, { waitUntil: 'domcontentloaded' })
 
-  const previewButton = page.getByRole('button', { name: 'Preview', exact: true })
-  await expect(previewButton).toBeVisible({ timeout: 20_000 })
-  await previewButton.click()
-  await expect(previewButton).toHaveAttribute('aria-pressed', 'true')
-  await previewButton.click()
-  await expect(previewButton).toHaveAttribute('aria-pressed', 'false')
+  // The preview toggle only exists while the project workspace is open, so
+  // open the editor from the same developer toolbar first.
+  const editorToggle = page.getByRole('button', { name: 'Editor', exact: true })
+  await expect(editorToggle).toBeVisible({ timeout: 20_000 })
+  await editorToggle.click()
+
+  // The toolbar toggle exposes its state through the accessible name
+  // ("Open preview" / "Close preview"); it never carried aria-pressed.
+  const openButton = page.getByRole('button', { name: 'Open preview', exact: true })
+  await expect(openButton).toBeVisible({ timeout: 20_000 })
+  await openButton.click()
+
+  const closeButton = page.getByRole('button', { name: 'Close preview', exact: true })
+  await expect(closeButton).toBeVisible()
+  await closeButton.click()
+  await expect(openButton).toBeVisible()
   await expect.poll(() => stopCount).toBeGreaterThan(0)
 })

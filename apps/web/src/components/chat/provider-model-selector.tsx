@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download } from 'lucide-react'
+import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download, Zap, Gauge, Sparkles, Rocket } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -13,10 +13,12 @@ import {
   JaitIcon,
   PiIcon,
   providerBrandIcon,
+  providerIcon,
   providerIconUrl,
 } from '@/components/icons/provider-icons'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId } from '@/lib/agents-api'
@@ -28,7 +30,7 @@ import { useAuth, type JaitBackend, type ReasoningEffort } from '@/hooks/useAuth
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
-import { resolveActiveModel, resolveReasoningEffortOptions } from '@/lib/reasoning-effort-options'
+import { resolveActiveModel, resolveReasoningEffortOptions, effortSupportedByModel } from '@/lib/reasoning-effort-options'
 import { GATEWAY_NODE_ID, resolveScopedProviderSelection, scopeProviders } from '@/lib/provider-scope'
 import {
   readProjectReasoningEffortSelection,
@@ -55,6 +57,17 @@ interface ModelDef {
     reasoningEffort: string
     description?: string
   }>
+}
+
+function effortIcon(value: string | null | undefined) {
+  switch (value) {
+    case 'minimal': return Zap
+    case 'low': return Gauge
+    case 'medium': return Brain
+    case 'high': return Sparkles
+    case 'ultra': case 'xhigh': return Rocket
+    default: return Brain
+  }
 }
 
 function isNativeReasoningEffort(value: string): value is ReasoningEffort {
@@ -90,6 +103,9 @@ interface ProviderModelSelectorProps {
   disabled?: boolean
   className?: string
   compact?: boolean
+  triggerLabel?: string
+  /** Saved agent profiles change only through explicit selections. */
+  reconcileSelection?: boolean
   repoRuntime?: RepositoryRuntimeInfo | null
   onMoveToGateway?: () => void
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
@@ -99,6 +115,8 @@ interface ProviderModelSelectorProps {
   onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
   /** Which side the trigger tooltip opens on. Defaults to "top". */
   tooltipSide?: 'top' | 'bottom'
+  /** Show a separate effort control alongside the provider and model trigger. */
+  separateEffortControl?: boolean
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
@@ -174,7 +192,15 @@ export function providerLabelFor(providerType: string | undefined, id: string): 
 // list flat lets @tanstack/react-virtual render thousands of models cheaply
 // and gives keyboard quick-jump a single index space (1-9) across sections.
 type ModelListRow =
-  | { type: 'header'; key: string; label: string; sectionIndex: number }
+  | {
+      type: 'header'
+      key: string
+      label: string
+      sectionIndex: number
+      icon: ComponentType<{ className?: string }>
+      modelCount: number
+      collapsed: boolean
+    }
   | {
       type: 'model'
       key: string
@@ -215,6 +241,31 @@ export const PROVIDER_SELECTOR_POPOVER_STYLE: CSSProperties = {
   maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
 }
 
+export interface InitialModelScroll {
+  target: number
+  align: 'start' | 'center'
+}
+
+// The list needs a measured scroll element (and a row tall enough to scroll
+// through) before `scrollToIndex` can move it. Retrying ~24 frames covers a
+// cold popover mount without risking a visible jump later on.
+const MAX_INITIAL_SCROLL_ATTEMPTS = 24
+
+// Where the open selector scrolls on its first frame: the selected model's
+// Favorites row wins over the copy further down in its provider group. An
+// unfavorited (or not-yet-favorited) selection falls back to that group row.
+export function resolveInitialModelScroll(
+  favoriteIndex: number,
+  groupedIndex: number,
+): InitialModelScroll | null {
+  if (favoriteIndex >= 0) {
+    // One row higher, so the `Favorites` header stays visible above the row.
+    return { target: Math.max(favoriteIndex - 1, 0), align: 'start' }
+  }
+  if (groupedIndex >= 0) return { target: groupedIndex, align: 'center' }
+  return null
+}
+
 // Backend groups surfaced by the Jait provider. The group label is the display
 // name of the backend instance (e.g. "Büro · Ollama"); the backend key is the
 // canonical JaitBackend used to filter and to auto-switch jait_backend.
@@ -222,6 +273,7 @@ const GROUP_TO_BACKEND: Record<string, JaitBackend> = {
   OpenAI: 'openai',
   OpenRouter: 'openrouter',
   Ollama: 'ollama',
+  'Ollama Cloud': 'ollama',
   OmniRoute: 'omniroute',
 }
 
@@ -232,6 +284,17 @@ const GROUP_TO_BACKEND: Record<string, JaitBackend> = {
 // its own chip, so "Ollama Büro" no longer collapses into a generic "Ollama".
 function modelGroupLabel(model: ModelDef): string {
   return model.group || 'Other'
+}
+
+// Group headers carry the icon of the backend provider the group belongs to.
+// Labels are either the bare backend name ("Ollama") or
+// "<instance name> · <backend>" (e.g. "LOCAL OmniRoute · OmniRoute"); try the
+// whole label first (right matchers anchor on word boundaries), then the last
+// "·"-separated segment, and fall back to the generic network glyph.
+function modelGroupIcon(label: string): ComponentType<{ className?: string }> {
+  return providerBrandIcon(label)
+    ?? providerBrandIcon(label.split('·').pop()?.trim() ?? label)
+    ?? providerIcon(null)
 }
 
 function summariseReason(reason: string): string {
@@ -278,6 +341,8 @@ export function ProviderModelSelector({
   disabled,
   className,
   compact = false,
+  triggerLabel,
+  reconcileSelection = true,
   repoRuntime,
   onMoveToGateway,
   sessionInfo,
@@ -286,6 +351,7 @@ export function ProviderModelSelector({
   reasoningEffort: controlledReasoningEffort,
   onReasoningEffortChange,
   tooltipSide = 'top',
+  separateEffortControl = false,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings, settings } = useAuth()
@@ -307,6 +373,18 @@ export function ProviderModelSelector({
   const [models, setModels] = useState<ModelDef[]>([])
   const [loadedModelScopeKey, setLoadedModelScopeKey] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<ModelFavorite[]>([])
+  // Collapsed group sections, by row key (`favorites` / `section:<key>`).
+  // Session-scoped: reopening the picker keeps every group visible, so models
+  // can never be "lost" behind a forgotten collapsed state. Searching always
+  // expands all groups (see modelRows).
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set())
+  const toggleSectionCollapsed = useCallback((key: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  }, [])
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
@@ -555,6 +633,7 @@ export function ProviderModelSelector({
   }, [activeModelScopeKey, provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved, modelReloadVersion])
 
   useEffect(() => {
+    if (!reconcileSelection) return
     const nextModel = resolveProviderModelReconciliation({
       provider,
       activeScopeKey: activeModelScopeKey,
@@ -564,7 +643,7 @@ export function ProviderModelSelector({
       models,
     })
     if (nextModel !== undefined && nextModel !== model) onModelChange(nextModel)
-  }, [activeModelScopeKey, loadedModelScopeKey, provider, loadingModels, model, models, onModelChange])
+  }, [activeModelScopeKey, loadedModelScopeKey, provider, loadingModels, model, models, onModelChange, reconcileSelection])
 
   // Drop a selection the current scope cannot run — e.g. the project moved to a
   // device that does not host the selected provider. Only done once the
@@ -582,6 +661,7 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!providersLoaded) return
     if (repoRuntime?.loading) return
+    if (!reconcileSelection) return
     const entry = providerEntries.find((item) => item.value === provider)
     // Merely signed out is not a reason to switch: on the gateway the entry
     // stays selected so the user can log in from right here. A provider this
@@ -600,12 +680,11 @@ export function ProviderModelSelector({
     if (nextProvider !== provider) {
       onProviderChange(nextProvider)
     }
-  }, [onProviderChange, provider, providerEntries, providersLoaded, refreshProviders, repoRuntime?.loading, scopeNodeId])
+  }, [onProviderChange, provider, providerEntries, providersLoaded, refreshProviders, repoRuntime?.loading, scopeNodeId, reconcileSelection])
 
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
   const currentModel = model ? models.find((entry) => entry.id === model) : null
-  const currentGroupLabel = currentModel ? modelGroupLabel(currentModel) : null
   const displayModelLabel = loadingModels
       ? 'Loading'
       : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
@@ -672,17 +751,26 @@ export function ProviderModelSelector({
   // model rows (after favorites) as on-row Kbd hints.
   const modelRows = useMemo<ModelListRow[]>(() => {
     const rows: ModelListRow[] = []
+    // Searching always shows every match: a collapsed group must never hide
+    // the model the user is actively looking for.
+    const isCollapsed = (key: string) => !searchLower && collapsedSections.has(key)
     if (favoriteModels.length > 0) {
-      rows.push({ type: 'header', key: 'favorites', label: 'Favorites', sectionIndex: 0 })
-      for (const entry of favoriteModels) {
-        rows.push({ type: 'model', key: `fav:${provider}:${entry.id}`, model: entry, instance: currentProvider, providerId: provider, sectionIndex: 0, quickJumpIndex: null })
+      const collapsed = isCollapsed('favorites')
+      rows.push({ type: 'header', key: 'favorites', label: 'Favorites', sectionIndex: 0, icon: Star, modelCount: favoriteModels.length, collapsed })
+      if (!collapsed) {
+        for (const entry of favoriteModels) {
+          rows.push({ type: 'model', key: `fav:${provider}:${entry.id}`, model: entry, instance: currentProvider, providerId: provider, sectionIndex: 0, quickJumpIndex: null })
+        }
       }
     }
     let sectionIndex = favoriteModels.length > 0 ? 1 : 0
     for (const section of instanceSections) {
-      rows.push({ type: 'header', key: `section:${section.key}`, label: section.label, sectionIndex })
-      for (const entry of section.models) {
-        rows.push({ type: 'model', key: `${provider}:${section.key}:${entry.id}`, model: entry, instance: section.instance, providerId: provider, sectionIndex, quickJumpIndex: null })
+      const collapsed = isCollapsed(`section:${section.key}`)
+      rows.push({ type: 'header', key: `section:${section.key}`, label: section.label, sectionIndex, icon: modelGroupIcon(section.label), modelCount: section.models.length, collapsed })
+      if (!collapsed) {
+        for (const entry of section.models) {
+          rows.push({ type: 'model', key: `${provider}:${section.key}:${entry.id}`, model: entry, instance: section.instance, providerId: provider, sectionIndex, quickJumpIndex: null })
+        }
       }
       sectionIndex += 1
     }
@@ -691,7 +779,7 @@ export function ProviderModelSelector({
       if (row.type === 'model') row.quickJumpIndex = quickJump.get(row.key) ?? null
     }
     return rows
-  }, [favoriteModels, instanceSections, provider, currentProvider])
+  }, [favoriteModels, instanceSections, provider, currentProvider, collapsedSections, searchLower])
 
   // Rail sections (desktop only): one entry per top-level section so you can
   // click straight to a provider group without scrolling a long catalog.
@@ -713,28 +801,142 @@ export function ProviderModelSelector({
   }, [favoriteModels, instanceSections, modelRows])
 
   const modelListRef = useRef<HTMLDivElement | null>(null)
+  // The popover mounts its portal after opening; notify the virtualizer when
+  // the scroll element appears instead of waiting for another state update.
+  const [modelListElement, setModelListElement] = useState<HTMLDivElement | null>(null)
+  const attachModelList = useCallback((element: HTMLDivElement | null) => {
+    modelListRef.current = element
+    setModelListElement(element)
+  }, [])
+  // Stable per-row keys: a row's measurement must follow the row when the list
+  // changes shape (favorite toggled, group collapsed, search filtered). With
+  // index keys the size of e.g. the Favorites header sticks to slot 0 and every
+  // later row inherits the wrong size — rows overlap and section headers paint
+  // through their neighbours.
+  const modelRowKey = useCallback((index: number) => modelRows[index]?.key ?? index, [modelRows])
   const modelVirtualizer = useVirtualizer({
     count: modelRows.length,
-    getScrollElement: () => modelListRef.current,
-    estimateSize: (index) => (modelRows[index]?.type === 'header' ? 30 : 44),
+    getScrollElement: () => modelListElement,
+    // Header rows have a 24px icon and equal vertical padding (44px tall). Keeping the
+    // estimate at/above the real height means rows never get positioned on top of
+    // a group header while measurements settle.
+    estimateSize: (index) => (modelRows[index]?.type === 'header' ? 44 : 46),
     overscan: 12,
     enabled: open,
+    getItemKey: modelRowKey,
   })
 
-  // Re-measure once the popover is laid out so the virtualizer knows the real
-  // scrollport height (it is 0 while closed), and scroll the currently selected
-  // model into view so you always know where you are when the list opens.
+  // Scroll the currently selected model into view when the list opens. Never
+  // call `measure()` here: it clears the whole item-size cache and rows only
+  // re-measure on size *changes*, so the list would be positioned by estimates
+  // (and overlap) until every row happened to resize again. Rows measure
+  // themselves when they mount and when they actually change size.
+  // Only scroll once per open. Later `modelRows` changes (toggling a favorite
+  // with the star or the `f` key, collapsing a group, loading the catalog) must
+  // not yank the list back to the selection while the user is browsing.
+  //
+  // The ref records *which* target the open-scroll already reached rather than a
+  // plain "done" flag: the catalog and the derived Favorites block can arrive a
+  // beat after the popover mounts, so the first pass may only find the provider
+  // row. Remembering "grouped" allows exactly one upgrade to the Favorites row
+  // once that row exists — and nothing after that.
+  const initialScrollRef = useRef<'favorite' | 'grouped' | null>(null)
+  // Favorites win: when the active model is pinned, the selector opens on its
+  // Favorites row even though the very same model also lives further down in
+  // its provider group. Only an unfavorited model scrolls to its group row.
   useEffect(() => {
-    if (!open) return
-    const raf = requestAnimationFrame(() => {
-      modelVirtualizer.measure()
-      if (model) {
-        const index = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model && row.sectionIndex > 0)
-        if (index >= 0) modelVirtualizer.scrollToIndex(index, { align: 'center' })
+    if (!open) {
+      initialScrollRef.current = null
+      return
+    }
+    if (initialScrollRef.current === 'favorite' || !model) return
+    const favoriteIndex = modelRows.findIndex((row) => row.type === 'model' && row.key.startsWith('fav:') && row.model.id === model)
+    // A collapsed Favorites block hides its rows; expand it so the selection is
+    // actually reachable, and let the re-render below run this effect again.
+    if (favoriteIndex < 0 && !searchLower && collapsedSections.has('favorites') && favoriteModels.some((entry) => entry.id === model)) {
+      setCollapsedSections((current) => {
+        if (!current.has('favorites')) return current
+        const next = new Set(current)
+        next.delete('favorites')
+        return next
+      })
+      return
+    }
+    // The popover mounts this list in the same commit that flips `open`, so the
+    // scroll element can still be zero-height (or the rows not yet measured)
+    // when the first frame runs — `scrollToIndex` then silently does nothing.
+    // Retry for a few frames instead of burning the one-shot guard on a scroll
+    // that never landed, otherwise the selector opens on row 0 with a favorite
+    // selected far down the list.
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    // The virtualizer only measures rows from the top of the list down to the
+    // viewport, so `scrollToIndex` bails out for a target below that window
+    // (`getOffsetForIndex` finds no measurement and returns undefined). Land a
+    // coarse estimated jump first, which brings the target row into the
+    // measured window, then align precisely on the next pass.
+    let coarseJumped = false
+    const isSelectionVisible = (list: HTMLElement) => {
+      const box = list.getBoundingClientRect()
+      for (const row of list.querySelectorAll('[role="option"][aria-selected="true"]')) {
+        const rect = row.getBoundingClientRect()
+        if (rect.height > 0 && rect.bottom > box.top + 1 && rect.top < box.bottom - 1) return true
       }
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [open, modelVirtualizer, model, modelRows])
+      return false
+    }
+    const attemptScroll = () => {
+      if (cancelled) return
+      const favoriteRow = modelRows.findIndex((row) => row.type === 'model' && row.key.startsWith('fav:') && row.model.id === model)
+      const groupedIndex = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model)
+      const scroll = resolveInitialModelScroll(favoriteRow, groupedIndex)
+      if (!scroll) return
+      const target = favoriteRow >= 0 ? 'favorite' : 'grouped'
+      // Already on the best target this open can offer (or the user is browsing).
+      if (initialScrollRef.current === 'favorite' || (initialScrollRef.current === 'grouped' && target === 'grouped')) return
+      const list = modelListRef.current
+      const scrollable = list !== null && list.scrollHeight > list.clientHeight + 1
+      if (!scrollable && attempts < MAX_INITIAL_SCROLL_ATTEMPTS) {
+        attempts += 1
+        retryTimer = setTimeout(attemptScroll, 40)
+        return
+      }
+      if (list && !coarseJumped && scroll.target > 0 && modelRows.length > 0) {
+        // Average rendered row height: the total size covers every row, so this
+        // estimate is good enough to bring the target into the measured window.
+        const totalSize = modelVirtualizer.getTotalSize()
+        const average = totalSize > 0 ? totalSize / modelRows.length : 0
+        const estimated = scroll.align === 'center'
+          ? (scroll.target + 0.5) * average - list.clientHeight / 2
+          : scroll.target * average
+        if (average > 0 && Math.abs(list.scrollTop - estimated) > Math.max(list.clientHeight, average)) {
+          coarseJumped = true
+          list.scrollTop = Math.max(estimated, 0)
+          if (attempts < MAX_INITIAL_SCROLL_ATTEMPTS) {
+            attempts += 1
+            retryTimer = setTimeout(attemptScroll, 60)
+            return
+          }
+        }
+      }
+      modelVirtualizer.scrollToIndex(scroll.target, { align: scroll.align })
+      // `scrollToIndex` bails out silently while the target row is still
+      // unmeasured, so trust the DOM over the call: only keep the one-shot
+      // guard once the selected row is actually inside the list viewport.
+      if (list && attempts < MAX_INITIAL_SCROLL_ATTEMPTS && !isSelectionVisible(list)) {
+        attempts += 1
+        coarseJumped = false
+        retryTimer = setTimeout(attemptScroll, 80)
+        return
+      }
+      initialScrollRef.current = target
+    }
+    attemptScroll()
+    return () => {
+      cancelled = true
+      if (retryTimer !== undefined) clearTimeout(retryTimer)
+    }
+  }, [open, modelVirtualizer, model, modelRows, favoriteModels, collapsedSections, searchLower])
 
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
 
@@ -890,7 +1092,7 @@ export function ProviderModelSelector({
     onReasoningEffortChange?.(next)
     if (provider === 'jait') {
       const nativeEffort = next === null || isNativeReasoningEffort(next) ? next : null
-      updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
+      updateSettings({ reasoning_effort: nativeEffort }).catch(() => toast.error('Could not save reasoning effort'))
     }
     setOpen(false)
   }
@@ -907,21 +1109,24 @@ export function ProviderModelSelector({
         }).catch(() => {})
       }
     }
+    const clearEffort = !effortSupportedByModel(selectedModel ?? null, reasoningEffort ?? null)
+    if (clearEffort) {
+      saveProjectReasoningEffortSelection(projectId, provider, null)
+      onReasoningEffortChange?.(null)
+    }
     // Persist the picked model so background channels (e.g. WhatsApp) reply
     // with the same model instead of falling back to the server default.
     if (provider === 'jait') {
       // Clear a leftover reasoning-effort preference when moving to a model
       // that doesn't accept it, so it isn't silently forwarded to the API.
-      if (reasoningEffort && !selectedModel?.reasoningEffortSupported) {
-        saveProjectReasoningEffortSelection(projectId, provider, null)
-        onReasoningEffortChange?.(null)
-        updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => {})
+      if (clearEffort) {
+        updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => toast.error('Could not save model selection'))
       } else {
-        updateSettings({ selected_model: modelId }).catch(() => {})
+        updateSettings({ selected_model: modelId }).catch(() => toast.error('Could not save model selection'))
       }
     }
     onModelChange(modelId)
-    if (!resolveReasoningEffortOptions(selectedModel ?? null)) setOpen(false)
+    setOpen(false)
   }
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -944,7 +1149,7 @@ export function ProviderModelSelector({
   }, [provider])
 
   const triggerButton = (
-    <TooltipHint side={tooltipSide} content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}${reasoningLabel ? ` · Reasoning: ${reasoningLabel}` : ''}`}>
+    <TooltipHint side={tooltipSide} contentClassName="provider-model-tooltip" content={<div className="space-y-1 py-0.5"><p className="font-medium">{currentProvider.label}</p><p className="break-words text-muted-foreground">{displayModelLabel}</p>{reasoningLabel && <p className="text-muted-foreground">Reasoning: {reasoningLabel}</p>}<p className="border-t pt-1 text-[10px] text-muted-foreground">Choose provider and model</p></div>}>
     <button
       type="button"
       disabled={disabled}
@@ -956,7 +1161,7 @@ export function ProviderModelSelector({
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
-      aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}${reasoningLabel ? `, reasoning ${reasoningLabel}` : ''}`}
+      aria-label={triggerLabel ?? `Provider ${currentProvider.label}, model ${displayModelLabel}${reasoningLabel && !separateEffortControl ? `, reasoning ${reasoningLabel}` : ''}`}
     >
       {currentProvider.iconUrl
         ? <RemoteProviderLogo url={currentProvider.iconUrl} className="h-4 w-4" />
@@ -968,7 +1173,7 @@ export function ProviderModelSelector({
           <span className="max-w-36 truncate font-mono text-[11px] font-normal opacity-75">{displayModelLabel}</span>
         </span>
       )}
-      {!compact && reasoningLabel && (
+      {!compact && reasoningLabel && !separateEffortControl && (
         <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-blue-500">
           <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span className="truncate">{reasoningLabel}</span>
@@ -995,9 +1200,20 @@ export function ProviderModelSelector({
   ) : trigger
 
   const selectorContent = (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(9.5rem,0.8fr)_minmax(13rem,1.45fr)] overflow-hidden">
-      <section className="flex min-h-0 min-w-0 flex-col border-r" aria-labelledby="provider-selector-heading">
-      <div className={cn('flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2', isMobile && 'min-h-10')}>
+    // Split layout: on phones both panes share the width 50/50 (provider names
+    // stay readable and the model list keeps a full column). From tablet up the
+    // provider pane is only as wide as its own content — it never truncates a
+    // provider name — and the model pane absorbs every extra pixel, so widening
+    // the window only ever gives more room to the models.
+    <div className={cn('flex min-h-0 flex-1 overflow-hidden')}>
+      <section
+        className={cn(
+          'flex min-h-0 min-w-0 flex-col overflow-hidden border-r',
+          isMobile ? 'w-1/2 shrink-0 grow-0 basis-1/2' : 'max-w-[46%] shrink',
+        )}
+        aria-labelledby="provider-selector-heading"
+      >
+      <div className={cn('flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2', isMobile && 'min-h-10 pr-12')}>
         <div id="provider-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
         {locationLabel && (
           <TooltipHint side="left" content={locationLabel}>
@@ -1044,8 +1260,8 @@ export function ProviderModelSelector({
               onRefresh={() => { void runProviderAction(entry, 'refresh') }}
               onLogout={() => { void runProviderAction(entry, 'logout') }}
             >
-              <div className="flex min-w-0 items-start gap-1.5">
-                <TooltipHint side="left" content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
+              <div className="flex min-w-0 items-center">
+                <TooltipHint side="left" content={[entry.label, !entry.isAvailable && entry.reason ? entry.reason : entry.description].filter(Boolean).join(" — ")}>
                 <button
                   type="button"
                   role="option"
@@ -1054,6 +1270,7 @@ export function ProviderModelSelector({
                   aria-disabled={!entry.isAvailable}
                   className={cn(
                     'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
+                    isMobile && 'gap-1.5 px-1.5 py-1.5',
                     'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     !entry.isAvailable && 'cursor-not-allowed opacity-60',
                   )}
@@ -1062,8 +1279,8 @@ export function ProviderModelSelector({
                     ? <RemoteProviderLogo url={entry.iconUrl} className="mt-0.5 h-4 w-4" />
                     : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
-                      <span className="min-w-0 truncate">{entry.label}</span>
+                    <div className={cn('flex min-w-0 items-center gap-1.5 font-medium', isMobile ? 'flex-wrap text-xs' : 'text-sm')}>
+                      <span className="min-w-0 max-w-full truncate">{entry.label}</span>
                       {!entry.isAvailable && (
                         <span className="flex min-w-0 items-center gap-0.5 truncate text-2xs text-destructive/80">
                           <AlertTriangle className="h-3 w-3" />
@@ -1076,6 +1293,7 @@ export function ProviderModelSelector({
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
                 </TooltipHint>
+                {(showUpdateAction || showLoginAction) && <div className="mr-1 flex shrink-0 items-center gap-0.5">
                 {showUpdateAction && (
                   <TooltipHint side="left" content={updating
                     ? `Updating ${entry.label} to ${entry.update?.latestVersion}…`
@@ -1091,13 +1309,14 @@ export function ProviderModelSelector({
                     }}
                     disabled={Boolean(authBusyProvider || providerActionBusy)}
                     className={cn(
-                      'relative mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20',
+                      'relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20',
+                      isMobile && 'h-6 w-6',
                       !updating && 'disabled:opacity-50',
                     )}
                   >
                     {updating
-                      ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-                      : <Download className="h-3.5 w-3.5" />}
+                      ? <Loader2 aria-hidden="true" className={cn('animate-spin motion-reduce:animate-none', isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+                      : <Download className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />}
                   </button>
                   </TooltipHint>
                 )}
@@ -1112,12 +1331,16 @@ export function ProviderModelSelector({
                       void startLogin(entry.value, entry.label)
                     }}
                     disabled={Boolean(authBusyProvider || providerActionBusy)}
-                    className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    className={cn(
+                      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                      isMobile && 'h-6 w-6',
+                    )}
                   >
-                    {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                    {loginBusy ? <Loader2 className={cn('animate-spin', isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5')} /> : <LogIn className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />}
                   </button>
                   </TooltipHint>
                 )}
+                </div>}
               </div>
             </ProviderActionsMenu>
           )
@@ -1145,25 +1368,17 @@ export function ProviderModelSelector({
 
       </section>
 
-      <section className="flex min-h-0 min-w-0 flex-col" aria-labelledby="model-selector-heading">
-      <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
-        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
-      </div>
-      {currentGroupLabel && (
-        <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          </span>
-          <span className="truncate text-2xs font-medium text-foreground">Current: {currentGroupLabel}</span>
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-labelledby="model-selector-heading">
+        <div className={cn('flex min-w-0 shrink-0 items-center gap-2 border-b px-3 py-2', isMobile && 'min-h-10 pr-12')}>
+          <div id="model-selector-heading" className="shrink-0 text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
         </div>
-      )}
       <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
             role="combobox"
+            aria-label="Search models"
             aria-expanded="true"
             aria-controls="model-selector-listbox"
             aria-autocomplete="list"
@@ -1184,7 +1399,7 @@ export function ProviderModelSelector({
       </div>
       <div className="flex min-h-0 flex-1">
         <div
-          ref={modelListRef}
+          ref={attachModelList}
           id="model-selector-listbox"
           role="listbox"
           aria-labelledby="model-selector-heading"
@@ -1199,11 +1414,11 @@ export function ProviderModelSelector({
           {!loadingModels && modelErrorMessage && (
             <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{modelErrorMessage}</span>
+              <span role="alert">{modelErrorMessage}</span>
             </div>
           )}
           {loadingModels && (
-            <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+            <div role="status" className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Loading models…
             </div>
@@ -1213,15 +1428,38 @@ export function ProviderModelSelector({
               {modelVirtualizer.getVirtualItems().map((virtualRow) => {
                 const row = modelRows[virtualRow.index]
                 if (row.type === 'header') {
+                  const HeaderIcon = row.icon
                   return (
                     <div
-                      key={`header-${virtualRow.key}`}
+                      key={virtualRow.key}
                       data-index={virtualRow.index}
                       ref={modelVirtualizer.measureElement}
-                      className="px-3 py-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground/70"
+                      className="px-1 py-1.5"
                       style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                     >
-                      {row.label}
+                      <TooltipHint content={row.collapsed ? `Expand ${row.label}` : `Collapse ${row.label}`}>
+                        <button
+                          type="button"
+                          aria-expanded={!row.collapsed}
+                          onClick={() => toggleSectionCollapsed(row.key)}
+                          className={cn(
+                            'flex w-full items-center gap-2 bg-transparent px-1.5 py-1 text-left transition-colors',
+                            'hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          )}
+                        >
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', row.collapsed && '-rotate-90')}
+                          />
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
+                            <HeaderIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{row.label}</span>
+                          <span className="shrink-0 px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground">
+                            {row.modelCount}
+                          </span>
+                        </button>
+                      </TooltipHint>
                     </div>
                   )
                 }
@@ -1235,9 +1473,6 @@ export function ProviderModelSelector({
                   >
                     <ModelRow
                       model={row.model}
-                      instanceLabel={row.instance.label}
-                      instanceIcon={row.instance.icon}
-                      instanceIconUrl={row.instance.iconUrl}
                       selected={model === row.model.id && provider === row.providerId}
                       onSelect={handleModelSelect}
                       onToggleFavorite={toggleFavoriteModel}
@@ -1245,6 +1480,7 @@ export function ProviderModelSelector({
                       stopPropagation
                       quickJumpIndex={row.quickJumpIndex}
                       highlighted={highlightedIndex === virtualRow.index}
+                      mobile={isMobile}
                     />
                   </div>
                 )
@@ -1257,57 +1493,51 @@ export function ProviderModelSelector({
             </div>
           )}
         </div>
-        <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />
+        {!isMobile && <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />}
       </div>
 
-      {modelSupportsReasoning && !loadingModels && (
+      {modelSupportsReasoning && !loadingModels && !separateEffortControl && (
         <div className="shrink-0 border-t px-3 py-2">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <Brain className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              Reasoning effort
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={() => handleReasoningEffortChange(null)}
-              className={cn(
-                'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
-                'hover:bg-accent hover:text-accent-foreground',
-                reasoningEffort === null && 'bg-accent/50',
-              )}
+          <label className="flex items-center justify-between gap-3 text-xs">
+            <span>Reasoning effort</span>
+            <select
+              aria-label="Reasoning effort"
+              disabled={disabled}
+              value={reasoningLabel ? (reasoningEffort ?? '') : ''}
+              onChange={(event) => handleReasoningEffortChange(event.target.value || null)}
+              className="rounded-md border bg-background px-2 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
-              <span className="text-muted-foreground">Default</span>
-              {reasoningEffort === null && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-            </button>
-            {reasoningEfforts!.map((effort) => {
-              const active = reasoningEffort === effort.value
-              return (
-                <TooltipHint key={effort.value} side="left" content={effort.hint}>
-                <button
-                  type="button"
-                  onClick={() => handleReasoningEffortChange(effort.value)}
-                  className={cn(
-                    'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    active && 'bg-accent/50',
-                  )}
-                >
-                  <span>{effort.label}</span>
-                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
-                </button>
-                </TooltipHint>
-              )
-            })}
-          </div>
-          <p className="mt-1.5 text-2xs leading-snug text-muted-foreground">
-            Controls how much the model reasons before answering. Only applies to this reasoning model.
-          </p>
+              <option value="">Default</option>
+              {reasoningEfforts!.map((effort) => <option key={effort.value} value={effort.value}>{effort.label}</option>)}
+            </select>
+          </label>
         </div>
       )}
       </section>
     </div>
+  )
+
+  const selectedEffortValue = reasoningLabel ? (reasoningEffort ?? 'default') : 'default'
+  const SelectedEffortIcon = selectedEffortValue === 'default' ? Brain : effortIcon(selectedEffortValue)
+  const effortControl = separateEffortControl && modelSupportsReasoning && !loadingModels && (
+    <Select value={selectedEffortValue} onValueChange={(value) => handleReasoningEffortChange(value === 'default' ? null : value)} disabled={disabled}>
+      <SelectTrigger aria-label="Reasoning effort" className="h-10 w-auto gap-1 border-transparent bg-transparent px-2 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted/60 hover:text-foreground data-[state=open]:text-foreground focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60 sm:h-8 sm:px-1.5">
+        {/* Explicit children: Radix's ItemText portal duplicated the label into the trigger. */}
+        <SelectValue>
+          <span className="flex items-center gap-1.5">
+            <SelectedEffortIcon aria-hidden="true" className="h-3.5 w-3.5" />
+            {reasoningLabel ?? 'Default'}
+          </span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="default"><span className="flex items-center gap-2"><Brain aria-hidden="true" className="h-4 w-4" />Default</span></SelectItem>
+        {reasoningEfforts!.map((effort) => {
+          const Icon = effortIcon(effort.value)
+          return <SelectItem key={effort.value} value={effort.value}><span className="flex items-center gap-2"><Icon aria-hidden="true" className="h-4 w-4" />{effort.label}</span></SelectItem>
+        })}
+      </SelectContent>
+    </Select>
   )
 
   return (
@@ -1315,6 +1545,7 @@ export function ProviderModelSelector({
       {isMobile ? (
         <>
           {triggerWithProviderActions(triggerButton)}
+          {effortControl}
           <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
               showCloseButton={false}
@@ -1346,22 +1577,30 @@ export function ProviderModelSelector({
           </Dialog>
         </>
       ) : (
-        <Popover open={open} onOpenChange={handleOpenChange}>
-          {triggerWithProviderActions(
-            <PopoverTrigger asChild disabled={disabled}>
-              {triggerButton}
-            </PopoverTrigger>,
-          )}
-          <PopoverContent
-            align="start"
-            side="top"
-            collisionPadding={8}
-            className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
-            style={PROVIDER_SELECTOR_POPOVER_STYLE}
-          >
-            {selectorContent}
-          </PopoverContent>
-        </Popover>
+        <>
+          <Popover open={open} onOpenChange={handleOpenChange}>
+            {triggerWithProviderActions(
+              <PopoverTrigger asChild disabled={disabled}>
+                {triggerButton}
+              </PopoverTrigger>,
+            )}
+            {/* One slim width at every breakpoint. Scaling the popover with the
+                viewport (it used to reach 72rem on 2xl screens) stretched the
+                provider rail into empty space and left the model list mostly
+                blank, so the selector keeps the compact width the layout was
+                designed for and only ever shrinks to fit narrow windows. */}
+            <PopoverContent
+              align="start"
+              side="top"
+              collisionPadding={8}
+              className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0 provider-model-popover"
+              style={PROVIDER_SELECTOR_POPOVER_STYLE}
+            >
+              {selectorContent}
+            </PopoverContent>
+          </Popover>
+          {effortControl}
+        </>
       )}
       <Dialog open={Boolean(loginDialog)} onOpenChange={(next) => { if (!next) setLoginDialog(null) }}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
@@ -1452,9 +1691,6 @@ export function ProviderModelSelector({
 
 interface ModelRowProps {
   model: ModelDef
-  instanceLabel: string
-  instanceIcon: ComponentType<{ className?: string }>
-  instanceIconUrl?: string
   selected: boolean
   onSelect: (id: string) => void
   onToggleFavorite: ((model: ModelDef) => void) | null
@@ -1462,13 +1698,11 @@ interface ModelRowProps {
   stopPropagation: boolean
   quickJumpIndex: number | null
   highlighted: boolean
+  mobile: boolean
 }
 
 function ModelRow({
   model,
-  instanceLabel,
-  instanceIcon: InstanceIcon,
-  instanceIconUrl,
   selected,
   onSelect,
   onToggleFavorite,
@@ -1476,6 +1710,7 @@ function ModelRow({
   stopPropagation,
   quickJumpIndex,
   highlighted,
+  mobile,
 }: ModelRowProps) {
   return (
     <div
@@ -1496,48 +1731,52 @@ function ModelRow({
         }
       } : undefined}
       className={cn(
-        'group flex w-full cursor-pointer items-start gap-2 px-3 py-1.5 text-left transition-colors',
+        'group flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors',
+        mobile && 'gap-1 px-2',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         highlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
         selected && !highlighted && 'bg-accent/50',
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
-          <span className="truncate">{formatModelDisplayLabel(model.name)}</span>
+        <div className={cn('flex min-w-0 items-center gap-x-1.5 text-xs font-medium', mobile && 'flex-wrap')}>
+          <span className={mobile ? 'min-w-0 [overflow-wrap:anywhere]' : 'truncate'}>{formatModelDisplayLabel(model.name)}</span>
           {model.isDefault && <span className="shrink-0 text-2xs font-normal text-muted-foreground">(default)</span>}
         </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.6875rem] leading-snug text-muted-foreground/70">
-          {instanceIconUrl ? <RemoteProviderLogo url={instanceIconUrl} className="h-3 w-3" /> : <InstanceIcon className="h-3 w-3" />}
-          <span className="truncate">{instanceLabel}</span>
-          {model.description && <span className="hidden truncate opacity-80 sm:inline">· {model.description}</span>}
-        </div>
+        {model.description && (
+          <div className="mt-0.5 flex min-w-0 items-center text-[0.6875rem] leading-snug text-muted-foreground/70">
+            <span className="min-w-0 truncate">{model.description}</span>
+          </div>
+        )}
       </div>
       <span className="flex shrink-0 items-center gap-0.5">
         {selected && <Check className="h-3.5 w-3.5 text-primary" />}
-        <Kbd keys={quickJumpIndex !== null ? [String(quickJumpIndex)] : []} emptyLabel="" />
+        {!mobile && <Kbd keys={quickJumpIndex !== null ? [String(quickJumpIndex)] : []} emptyLabel="" />}
         {onToggleFavorite && (
-          <button
-            type="button"
-            data-favorite-toggle="true"
-            aria-label={isFavorite ? `Remove ${formatModelDisplayLabel(model.name)} from favorites` : `Add ${formatModelDisplayLabel(model.name)} to favorites`}
-            aria-pressed={isFavorite}
-            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            onClick={stopPropagation ? (event) => {
-              event.stopPropagation()
-              event.preventDefault()
-              onToggleFavorite(model)
-            } : () => onToggleFavorite(model)}
-            className={cn(
-              'inline-flex h-6 w-6 items-center justify-center rounded-sm transition-colors',
-              'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-              isFavorite
-                ? 'opacity-100 text-amber-500 hover:text-amber-400'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-          </button>
+          <TooltipHint content={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+            <button
+              type="button"
+              data-favorite-toggle="true"
+              aria-label={isFavorite ? `Remove ${formatModelDisplayLabel(model.name)} from favorites` : `Add ${formatModelDisplayLabel(model.name)} to favorites`}
+              aria-pressed={isFavorite}
+              onClick={stopPropagation ? (event) => {
+                event.stopPropagation()
+                event.preventDefault()
+                onToggleFavorite(model)
+              } : () => onToggleFavorite(model)}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-sm transition-colors',
+                // Hover-reveal is a pointer luxury: on touch the star must always
+                // be visible or favorites cannot be managed at all.
+                mobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                isFavorite
+                  ? 'opacity-100 text-amber-500 hover:text-amber-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+            </button>
+          </TooltipHint>
         )}
       </span>
     </div>

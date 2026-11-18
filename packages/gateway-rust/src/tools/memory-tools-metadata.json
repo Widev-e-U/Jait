@@ -1,0 +1,216 @@
+{
+  "save": {
+    "name": "memory.save",
+    "description": "Save a memory entry for later retrieval. Set kind=reminder to save an explicit agent reminder.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": [
+            "project",
+            "contact"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "sourceType": {
+          "type": "string"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "sourceSurface": {
+          "type": "string"
+        },
+        "ttlSeconds": {
+          "type": "number"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "memory",
+            "reminder"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "scope",
+        "content",
+        "sourceType",
+        "sourceId",
+        "sourceSurface"
+      ]
+    }
+  },
+  "search": {
+    "name": "memory.search",
+    "description": "Search saved memories and optionally include explicit agent reminders.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "project",
+            "contact"
+          ]
+        },
+        "includeReminders": {
+          "type": "boolean"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "forget": {
+    "name": "memory.forget",
+    "description": "Forget a memory or reminder by ID.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "memory",
+            "reminder"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  "hygiene": {
+    "name": "memory.hygiene",
+    "description": "Archive stale low-value Memory page entries and flag likely conflicting memories for review.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "review": {
+    "name": "memory.review_chats",
+    "description": "Background memory job that scans old chat messages for durable facts or preferences worth saving.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "list": {
+    "name": "memory.list",
+    "description": "List Memory page entries. These are explicit agent-readable memory records that can be edited, archived, or deleted.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived",
+            "all"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "update": {
+    "name": "memory.update",
+    "description": "Update a Memory page entry by ID, including content, tags, project/session links, or archive/restore status.",
+    "tier": "standard",
+    "category": "memory",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+}

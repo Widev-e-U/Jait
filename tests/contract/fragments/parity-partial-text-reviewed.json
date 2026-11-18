@@ -1,0 +1,89 @@
+{
+  "review_scope": "parity-partial-text bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/services/email/connection.test.ts:38:3",
+      "status": "verified",
+      "parity_review": "Reviewed sends only the domain to a fixed registry and accepts encrypted settings. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_connection_test_ts_38_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/jait-llm.test.ts:276:3",
+      "status": "verified",
+      "parity_review": "Reviewed throws when only reasoning_content is present with no answer. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_276_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-connection-error.test.ts:56:3",
+      "status": "verified",
+      "parity_review": "Reviewed reports a timeout as a timeout. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_connection_error_test_ts_56_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-connection-error.test.ts:63:3",
+      "status": "verified",
+      "parity_review": "Reviewed recognizes an undici HeadersTimeoutError as a timeout, not a bare fetch failure. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_connection_error_test_ts_63_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/registry.test.ts:56:3",
+      "status": "verified",
+      "parity_review": "Reviewed normalizes builtin tools with builtin source metadata. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_registry_test_ts_56_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/registry.test.ts:76:3",
+      "status": "verified",
+      "parity_review": "Reviewed registers plugin tools with explicit plugin source metadata. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_registry_test_ts_76_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/skill-tools.test.ts:128:3",
+      "status": "verified",
+      "parity_review": "Reviewed insists on the fields that make a skill findable later. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. Twenty-two raw guard controls admit ignored functions and built-in cancellation signals only in fields excluded by partial-object patterns. Compared fields remain checked; accessors, inherited compared fields, marker collisions and unsupported prototypes are rejected. Regex inputs are bounded to ASCII plus the exact BMP punctuation used by the reference messages; case-mapping letters, astral text, lone surrogates and NEL are excluded. Pattern bindings and both verdict directions match real Vitest. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-partial-text/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_skill_tools_test_ts_128_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    }
+  ]
+}

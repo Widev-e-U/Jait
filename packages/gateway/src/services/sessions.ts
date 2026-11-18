@@ -1,7 +1,7 @@
 /**
  * Session service — CRUD for sessions in SQLite.
  */
-import { and, eq, desc, not, sql } from "drizzle-orm";
+import { and, eq, desc, not, sql, isNull } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { messageContextMetadata, messages, sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -66,6 +66,7 @@ export class SessionService {
         metadata = {};
       }
     }
+    delete metadata["loop"];
     metadata["branch"] = {
       kind: "question",
       parentSessionId: source.id,
@@ -176,40 +177,20 @@ export class SessionService {
     return row?.n ?? 0;
   }
 
-  /** List all sessions, newest first. Optionally filter by status. */
-  list(status?: string, userId?: string, limit?: number) {
+  /** List sessions, newest first. Apply scope before the optional limit. */
+  list(status?: string, userId?: string, limit?: number, personalOnly = false) {
     const normalizedLimit =
       typeof limit === "number" && Number.isFinite(limit) && limit > 0
         ? Math.floor(limit)
         : undefined;
-
-    if (status) {
-      if (userId) {
-        const query = this.db
-          .select()
-          .from(sessions)
-          .where(and(eq(sessions.status, status), eq(sessions.userId, userId)))
-          .orderBy(desc(sessions.lastActiveAt));
-        return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
-      }
-      const query = this.db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.status, status))
-        .orderBy(desc(sessions.lastActiveAt));
-      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
-    }
-    if (userId) {
-      const query = this.db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.lastActiveAt));
-      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
-    }
+    const conditions = [];
+    if (status) conditions.push(eq(sessions.status, status));
+    if (userId) conditions.push(eq(sessions.userId, userId));
+    if (personalOnly) conditions.push(isNull(sessions.projectId));
     const query = this.db
       .select()
       .from(sessions)
+      .where(and(...conditions))
       .orderBy(desc(sessions.lastActiveAt));
     return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
@@ -380,7 +361,7 @@ export class SessionService {
    */
   updateChatSelection(
     id: string,
-    selection: { provider?: string | null; model?: string | null; reasoningEffort?: string | null },
+    selection: { provider?: string | null; model?: string | null; reasoningEffort?: string | null; nodeId?: string },
     userId?: string,
   ) {
     const existing = this.getById(id, userId);
@@ -397,6 +378,7 @@ export class SessionService {
     if (selection.provider !== undefined) chat["provider"] = selection.provider;
     if (selection.model !== undefined) chat["model"] = selection.model;
     if (selection.reasoningEffort !== undefined) chat["reasoningEffort"] = selection.reasoningEffort;
+    if (selection.nodeId !== undefined) chat["nodeId"] = selection.nodeId;
     metadata["chat"] = chat;
     this.update(id, { metadata }, userId);
   }

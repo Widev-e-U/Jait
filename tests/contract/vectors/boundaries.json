@@ -1,0 +1,1673 @@
+[
+  {
+    "id": "internal.boundaries.utf8-empty-and-budget-floor",
+    "calls": [
+      {
+        "op": "boundaries.utf8",
+        "input": "",
+        "max": 0
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abc",
+        "max": 0
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abc",
+        "max": -1
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abc",
+        "max": 2.9
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": ""
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": ""
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": ""
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": "ab"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.utf8-exact-and-multibyte",
+    "calls": [
+      {
+        "op": "boundaries.utf8",
+        "input": "café",
+        "max": 5
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "éé",
+        "max": 3,
+        "suffix": ""
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abcde",
+        "max": 4,
+        "suffix": "~"
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abcde",
+        "max": 2,
+        "suffix": "…"
+      },
+      {
+        "op": "boundaries.utf8",
+        "input": "abcde",
+        "max": 3,
+        "suffix": "…"
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": "café"
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": "é"
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": "abc~"
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": "ab"
+      },
+      {
+        "path": "/4",
+        "kind": "eq",
+        "value": "…"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.utf8-default-suffix",
+    "calls": [
+      {
+        "op": "boundaries.utf8",
+        "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "max": 25
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": "xx… [truncated by Jait]"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-floor-keeps-small",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "name": "boundary"
+        },
+        "max": -1
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "name": "boundary"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-primitive-types",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": [
+          null,
+          true,
+          42,
+          "é"
+        ],
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": [
+          null,
+          true,
+          42,
+          "é"
+        ],
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-bigint-and-omitted-types",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "n": {
+            "$bigint": "9007199254740993"
+          },
+          "u": {
+            "$undefined": true
+          },
+          "f": {
+            "$function": true
+          },
+          "s": {
+            "$symbol": true
+          }
+        },
+        "max": 1024
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "n": "9007199254740993"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-array-unsupported-types",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": [
+          {
+            "$bigint": "12"
+          },
+          {
+            "$undefined": true
+          },
+          {
+            "$function": true
+          },
+          {
+            "$symbol": true
+          }
+        ],
+        "max": 1024
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": [
+          "12",
+          null,
+          null,
+          null
+        ],
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-top-level-undefined",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$undefined": true
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": null,
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-circular",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$cycle": true
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "name": "cycle",
+          "self": "[circular reference]"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-throwing-tojson",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$throwToJSON": "kept"
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "value": "kept"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-throwing-getter",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$throwGetter": true
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/error",
+        "kind": "eq",
+        "value": "fixture getter"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-array-first-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$array": {
+            "count": 200,
+            "value": 0
+          }
+        },
+        "max": 400
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          "[100 more item(s) truncated]"
+        ],
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-array-second-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$array": {
+            "count": 200,
+            "value": 0
+          }
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          "[175 more item(s) truncated]"
+        ],
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-array-third-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$array": {
+            "count": 200,
+            "value": "abcdefghij"
+          }
+        },
+        "max": 200
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": [
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "abcdefghij",
+          "[190 more item(s) truncated]"
+        ],
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-object-first-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$entries": {
+            "count": 200,
+            "value": 0
+          }
+        },
+        "max": 1100
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "k000": 0,
+          "k001": 0,
+          "k002": 0,
+          "k003": 0,
+          "k004": 0,
+          "k005": 0,
+          "k006": 0,
+          "k007": 0,
+          "k008": 0,
+          "k009": 0,
+          "k010": 0,
+          "k011": 0,
+          "k012": 0,
+          "k013": 0,
+          "k014": 0,
+          "k015": 0,
+          "k016": 0,
+          "k017": 0,
+          "k018": 0,
+          "k019": 0,
+          "k020": 0,
+          "k021": 0,
+          "k022": 0,
+          "k023": 0,
+          "k024": 0,
+          "k025": 0,
+          "k026": 0,
+          "k027": 0,
+          "k028": 0,
+          "k029": 0,
+          "k030": 0,
+          "k031": 0,
+          "k032": 0,
+          "k033": 0,
+          "k034": 0,
+          "k035": 0,
+          "k036": 0,
+          "k037": 0,
+          "k038": 0,
+          "k039": 0,
+          "k040": 0,
+          "k041": 0,
+          "k042": 0,
+          "k043": 0,
+          "k044": 0,
+          "k045": 0,
+          "k046": 0,
+          "k047": 0,
+          "k048": 0,
+          "k049": 0,
+          "k050": 0,
+          "k051": 0,
+          "k052": 0,
+          "k053": 0,
+          "k054": 0,
+          "k055": 0,
+          "k056": 0,
+          "k057": 0,
+          "k058": 0,
+          "k059": 0,
+          "k060": 0,
+          "k061": 0,
+          "k062": 0,
+          "k063": 0,
+          "k064": 0,
+          "k065": 0,
+          "k066": 0,
+          "k067": 0,
+          "k068": 0,
+          "k069": 0,
+          "k070": 0,
+          "k071": 0,
+          "k072": 0,
+          "k073": 0,
+          "k074": 0,
+          "k075": 0,
+          "k076": 0,
+          "k077": 0,
+          "k078": 0,
+          "k079": 0,
+          "k080": 0,
+          "k081": 0,
+          "k082": 0,
+          "k083": 0,
+          "k084": 0,
+          "k085": 0,
+          "k086": 0,
+          "k087": 0,
+          "k088": 0,
+          "k089": 0,
+          "k090": 0,
+          "k091": 0,
+          "k092": 0,
+          "k093": 0,
+          "k094": 0,
+          "k095": 0,
+          "k096": 0,
+          "k097": 0,
+          "k098": 0,
+          "k099": 0,
+          "__jait_truncated_entries__": 100
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-object-second-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$entries": {
+            "count": 200,
+            "value": 0
+          }
+        },
+        "max": 600
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "k000": 0,
+          "k001": 0,
+          "k002": 0,
+          "k003": 0,
+          "k004": 0,
+          "k005": 0,
+          "k006": 0,
+          "k007": 0,
+          "k008": 0,
+          "k009": 0,
+          "k010": 0,
+          "k011": 0,
+          "k012": 0,
+          "k013": 0,
+          "k014": 0,
+          "k015": 0,
+          "k016": 0,
+          "k017": 0,
+          "k018": 0,
+          "k019": 0,
+          "k020": 0,
+          "k021": 0,
+          "k022": 0,
+          "k023": 0,
+          "k024": 0,
+          "k025": 0,
+          "k026": 0,
+          "k027": 0,
+          "k028": 0,
+          "k029": 0,
+          "k030": 0,
+          "k031": 0,
+          "k032": 0,
+          "k033": 0,
+          "k034": 0,
+          "k035": 0,
+          "k036": 0,
+          "k037": 0,
+          "k038": 0,
+          "k039": 0,
+          "k040": 0,
+          "k041": 0,
+          "k042": 0,
+          "k043": 0,
+          "k044": 0,
+          "k045": 0,
+          "k046": 0,
+          "k047": 0,
+          "k048": 0,
+          "k049": 0,
+          "__jait_truncated_entries__": 150
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-object-third-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$entries": {
+            "count": 200,
+            "value": 0
+          }
+        },
+        "max": 300
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "k000": 0,
+          "k001": 0,
+          "k002": 0,
+          "k003": 0,
+          "k004": 0,
+          "k005": 0,
+          "k006": 0,
+          "k007": 0,
+          "k008": 0,
+          "k009": 0,
+          "k010": 0,
+          "k011": 0,
+          "k012": 0,
+          "k013": 0,
+          "k014": 0,
+          "k015": 0,
+          "k016": 0,
+          "k017": 0,
+          "k018": 0,
+          "k019": 0,
+          "__jait_truncated_entries__": 180
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-depth-limit",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$nest": {
+            "depth": 10,
+            "value": {
+              "$bigint": "1"
+            }
+          }
+        },
+        "max": 1024
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "child": {
+            "child": {
+              "child": {
+                "child": {
+                  "child": {
+                    "child": {
+                      "child": {
+                        "child": "[nested value truncated]"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-fallback-known-size",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$array": {
+            "count": 30,
+            "value": {
+              "$repeat": [
+                "x",
+                1000
+              ]
+            }
+          }
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "__jait_truncated__": true,
+          "originalBytes": 30091
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-fallback-unserializable",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "$bigint": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "__jait_truncated__": true,
+          "reason": "unserializable"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.limit-json-below-boundary",
+    "calls": [
+      {
+        "op": "boundaries.limit-json",
+        "input": "{ \"x\": 1 }",
+        "max": 128
+      },
+      {
+        "op": "boundaries.limit-json",
+        "input": "not-json",
+        "max": 128
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": "{ \"x\": 1 }"
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": "not-json"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.limit-json-oversized-valid",
+    "calls": [
+      {
+        "op": "boundaries.limit-json",
+        "input": "{\"output\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+        "max": 512
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "bytes-le",
+        "value": 512
+      },
+      {
+        "path": "/0",
+        "kind": "contains",
+        "value": "truncated by Jait"
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.limit-json-oversized-invalid",
+    "calls": [
+      {
+        "op": "boundaries.limit-json",
+        "input": "invalidxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "max": 512
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": "invalid JSON",
+        "parse": "/reason"
+      },
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": true,
+        "parse": "/__jait_truncated__"
+      },
+      {
+        "path": "/0",
+        "kind": "bytes-le",
+        "value": 512
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-fractional-and-numeric-string",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": 0.1
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 0.999
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 1.01
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": "42.7"
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": " 50 "
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 1,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 1,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": {
+          "resolved": 2,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": {
+          "resolved": 43,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/4",
+        "kind": "eq",
+        "value": {
+          "resolved": 50,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-exact-cap",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": 86400000
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 86400000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-over-cap-warning",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": 86400001
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 86400000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": [
+            "[terminals] requested timeout 86400001ms exceeds the 86400000ms cap — clamping to the cap"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-empty-env",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": ""
+        }
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": "",
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": ""
+        }
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 0,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": ""
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-env-infinite",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "Infinity",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "Infinity"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-env-nan",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "NaN",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "NaN"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-env-zero",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "0",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "0"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-env-negative",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "-20",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "-20"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-env-whitespace",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": " ",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": " "
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-positive-env",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "120000",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "240000"
+        }
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 5000,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "120000",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "240000"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 120000,
+          "default": 120000,
+          "max": 240000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 5000,
+          "default": 120000,
+          "max": 240000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-cap-lifted-to-default",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "120000",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "60000"
+        }
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 120000,
+        "env": {
+          "JAIT_TERMINAL_TIMEOUT_MS": "120000",
+          "JAIT_TERMINAL_TIMEOUT_MAX_MS": "60000"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 120000,
+          "default": 120000,
+          "max": 120000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 120000,
+          "default": 120000,
+          "max": 120000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-string-first-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "text": {
+            "$repeat": [
+              "x",
+              100000
+            ]
+          }
+        },
+        "max": 20000
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… [truncated by Jait]"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-string-second-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "text": {
+            "$repeat": [
+              "x",
+              100000
+            ]
+          }
+        },
+        "max": 3000
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… [truncated by Jait]"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.json-string-third-pass",
+    "calls": [
+      {
+        "op": "boundaries.bounded",
+        "input": {
+          "text": {
+            "$repeat": [
+              "x",
+              100000
+            ]
+          }
+        },
+        "max": 512
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/value",
+        "kind": "eq",
+        "value": {
+          "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… [truncated by Jait]"
+        },
+        "parse": ""
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-invalid-inputs",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": null
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": 0
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": -1
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": ""
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": "not-a-number"
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/4",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-nonfinite-inputs",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "special": "NaN"
+      },
+      {
+        "op": "boundaries.timeout",
+        "special": "Infinity"
+      },
+      {
+        "op": "boundaries.timeout",
+        "special": "-Infinity"
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-coercion-inputs",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": true
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": false
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": []
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": [
+          42
+        ]
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": {}
+      },
+      {
+        "op": "boundaries.timeout",
+        "input": {
+          "$function": true
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "resolved": 1,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/1",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/2",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/3",
+        "kind": "eq",
+        "value": {
+          "resolved": 42,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/4",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      },
+      {
+        "path": "/5",
+        "kind": "eq",
+        "value": {
+          "resolved": 3600000,
+          "default": 3600000,
+          "max": 86400000,
+          "warnings": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.boundaries.timeout-symbol-error",
+    "calls": [
+      {
+        "op": "boundaries.timeout",
+        "input": {
+          "$symbol": true
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0",
+        "kind": "eq",
+        "value": {
+          "error": "TypeError"
+        }
+      }
+    ]
+  }
+]

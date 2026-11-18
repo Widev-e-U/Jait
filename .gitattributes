@@ -1,0 +1,5 @@
+# Generated files. `tests/contract/tooling/translate-tail-tests.mjs` rewrites
+# these from the TypeScript test sources; review the source test, not these.
+tests/contract/drivers/tailstatic/fixture-*.ts linguist-generated=true
+tests/contract/drivers/tailstatic.ts linguist-generated=true
+tests/contract/tests/tail_static.rs linguist-generated=true

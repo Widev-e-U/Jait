@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   VOICE_LEVEL_BAR_COUNT,
   VOICE_LEVEL_FLOOR,
+  appendVoiceLevel,
   createSilentVoiceLevels,
+  measureVoiceLevel,
   summarizeForVoice,
 } from './voice-levels'
 
@@ -14,6 +16,18 @@ describe('createSilentVoiceLevels', () => {
   it('starts every bar at the silent floor', () => {
     const levels = createSilentVoiceLevels()
     expect(levels.every((level) => level === VOICE_LEVEL_FLOOR)).toBe(true)
+  })
+})
+
+describe('voice level history', () => {
+  it('moves loud intervals left and returns to silence after sound stops', () => {
+    const loud = appendVoiceLevel(createSilentVoiceLevels(), 1)
+    const quiet = appendVoiceLevel(loud, VOICE_LEVEL_FLOOR)
+    expect(quiet).toHaveLength(VOICE_LEVEL_BAR_COUNT)
+    expect(quiet.slice(-2)).toEqual([1, VOICE_LEVEL_FLOOR])
+    let history = quiet
+    for (let i = 0; i < VOICE_LEVEL_BAR_COUNT; i++) history = appendVoiceLevel(history, VOICE_LEVEL_FLOOR)
+    expect(history.every((level) => level === VOICE_LEVEL_FLOOR)).toBe(true)
   })
 })
 
@@ -65,5 +79,19 @@ describe('summarizeForVoice', () => {
 
   it('respects a custom maxLength when the sentence fits', () => {
     expect(summarizeForVoice('Short. Longer sentence here.', 10)).toBe('Short.')
+  })
+})
+
+
+describe('measureVoiceLevel', () => {
+  it('tracks changing microphone amplitude and returns to silence', () => {
+    const silence = new Uint8Array(256).fill(128)
+    const quiet = new Uint8Array(256).fill(132)
+    const loud = new Uint8Array(256).fill(144)
+    expect(measureVoiceLevel(silence)).toBe(VOICE_LEVEL_FLOOR)
+    expect(measureVoiceLevel(quiet)).toBeGreaterThan(measureVoiceLevel(silence))
+    expect(measureVoiceLevel(loud)).toBeGreaterThan(measureVoiceLevel(quiet))
+    expect(measureVoiceLevel(silence)).toBeLessThan(measureVoiceLevel(loud))
+    expect(measureVoiceLevel(new Uint8Array())).toBe(VOICE_LEVEL_FLOOR)
   })
 })

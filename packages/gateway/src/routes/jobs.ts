@@ -1,3 +1,4 @@
+import { isValidCronExpression } from "../scheduler/cron.js";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { SchedulerService, ScheduledJobRecord } from "../scheduler/service.js";
@@ -195,6 +196,7 @@ export function registerJobRoutes(
               config,
               apiKeys: settings.apiKeys ?? {},
               fallbackModels: models,
+              includeCloud: true,
             });
           }
           providers[provider.id] = { name: provider.info.name, models: models.map((m) => m.id) };
@@ -250,6 +252,10 @@ export function registerJobRoutes(
     const cron = typeof body["cron_expression"] === "string" ? body["cron_expression"].trim() : "";
     if (!name || !cron) {
       return reply.status(400).send({ detail: "name and cron_expression are required" });
+    }
+
+    if (!isValidCronExpression(cron)) {
+      return reply.status(400).send({ detail: "Invalid cron_expression: use five fields with numbers, wildcards, steps, lists or ranges" });
     }
 
     const jobType = body["job_type"] === "agent_task" || body["job_type"] === "system_job"
@@ -324,6 +330,10 @@ export function registerJobRoutes(
     const existing = scheduler.get(id, authUser.id);
     if (!existing) {
       return reply.status(404).send({ detail: "Job not found" });
+    }
+
+    if (body["cron_expression"] !== undefined && (typeof body["cron_expression"] !== "string" || !isValidCronExpression(body["cron_expression"]))) {
+      return reply.status(400).send({ detail: "Invalid cron_expression" });
     }
 
     const existingInput = asRecord(existing.input) ?? {};

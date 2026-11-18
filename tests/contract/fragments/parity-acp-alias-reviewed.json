@@ -1,0 +1,17 @@
+{
+  "lane": "acp-alias-regression-current-source-review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/providers/acp-registry.test.ts:157:3",
+      "status": "verified",
+      "parity_review": "Reviewed every current ACP registry declaration and generated fixture. All four existing Rust matcher rules remain identical, verified by merge-acp-selected.py and acp-drift-id-map.json. The new constructor regression preserves the exact provider count and textual id/providerType/registry-id assertions. Fresh complete source-bound TypeScript reference evidence passes; source-runtime and native implementation evidence remain separate.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_acp_registry_test_ts_157_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/5c26c17a-fea6-413a-acd8-9672cf5ab86b/report.json"
+        }
+      ]
+    }
+  ]
+}

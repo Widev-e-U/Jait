@@ -1,0 +1,55 @@
+[
+  {
+    "name": "skills.search",
+    "description": "Find installed enabled skills by task or exact skill ID/name. Returns short matches; load selected instructions with skills.read. Does not search the marketplace.",
+    "category": "meta",
+    "tier": "standard",
+    "source": "builtin",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "discovery": {
+      "aliases": [
+        "installed skills",
+        "skill instructions",
+        "SKILL.md"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Task description, or exact skill ID/name (slash commands accepted)."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum results, default 3, maximum 10."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "skills.read",
+    "description": "Load one installed enabled skill by ID, including its base directory for relative references. Search with skills.search first.",
+    "category": "meta",
+    "tier": "standard",
+    "source": "builtin",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Installed skill ID."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  }
+]

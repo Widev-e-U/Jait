@@ -6,6 +6,7 @@ import {
   providerBrandIconOrNull,
   providerIconFor,
   providerRemoteIconUrl,
+  resolveInitialModelScroll,
   resolveProviderModelReconciliation,
 } from './provider-model-selector'
 import { CodexIcon } from '@/components/icons/provider-icons'
@@ -39,6 +40,24 @@ describe('provider selector geometry', () => {
     expect(PROVIDER_SELECTOR_POPOVER_STYLE.height).toBe(
       PROVIDER_SELECTOR_POPOVER_STYLE.maxHeight,
     )
+  })
+})
+
+describe('initial model scroll', () => {
+  it('jumps to the favorites row first, one row above it', () => {
+    expect(resolveInitialModelScroll(6, 24)).toEqual({ target: 5, align: 'start' })
+  })
+
+  it('falls back to the provider-group row when the model is not favorited', () => {
+    expect(resolveInitialModelScroll(-1, 24)).toEqual({ target: 24, align: 'center' })
+  })
+
+  it('stays at the top for a favorites row at the very start', () => {
+    expect(resolveInitialModelScroll(0, 24)).toEqual({ target: 0, align: 'start' })
+  })
+
+  it('does not scroll while no row matches the selected model', () => {
+    expect(resolveInitialModelScroll(-1, -1)).toBeNull()
   })
 })
 

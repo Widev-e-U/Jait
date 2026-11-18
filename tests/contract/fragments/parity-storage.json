@@ -1,0 +1,153 @@
+{
+  "lane": "storage",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/jobs.test.ts:426:3",
+      "status": "verified",
+      "parity_review": "Rust rejects the same four malformed create schedules with HTTP 400 and cron detail, checks no stored jobs were added, then rejects string/empty/number/null schedule edits while proving every field of the existing disabled job is unchanged.",
+      "rust_cases": [
+        {
+          "id": "jobs reject invalid schedules without partial writes",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/jobs.test.ts:85:3",
+      "status": "verified",
+      "parity_review": "Rust creates agent_task without a prompt, requires HTTP 400 with detail 'prompt is required for agent_task', and proves the jobs list is unchanged. Whitespace prompts are also rejected.",
+      "rust_cases": [
+        {
+          "id": "jobs reject invalid schedules without partial writes",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/jobs.test.ts:265:3",
+      "status": "verified",
+      "parity_review": "job_isolation lets a second user list jobs (own job absent), then GET/PATCH/DELETE and POST /trigger on the foreign job all expecting 404, and finally proves the owner's job is unchanged and its runs total is 0 \u2014 the same foreign-trigger denial and no-run-persistence semantics the TS asserts.",
+      "rust_cases": [
+        {
+          "id": "jobs hide foreign records and forbid foreign triggering",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/scheduler/cron.test.ts:20:3",
+      "status": "verified",
+      "parity_review": "job_validation drives the same create/update entry points over HTTP: invalid creates (including not-a-cron and 60 * * * *) get 400 and leave the stored job list identical, and invalid update schedules get 400 with a follow-up GET showing the row unchanged \u2014 the same pre-mutation rejection the TS asserts before stored jobs change.",
+      "rust_cases": [
+        {
+          "id": "jobs reject invalid schedules without partial writes",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/reminders.test.ts:46:3",
+      "status": "verified",
+      "parity_review": "reminder_lifecycle archives, restores and deletes reminders asserting ok-acks and post-delete 404 ('deleted reminder remains'), while reminder_isolation proves a foreign user cannot PATCH or DELETE an owned reminder (404, content and status unchanged) \u2014 the same archive/delete flow with ownership checks.",
+      "rust_cases": [
+        {
+          "id": "reminders archive restore and preserve valid state after rejected edits",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        },
+        {
+          "id": "reminders are isolated across users and denied edits have no effect",
+          "source": "tests/contract/src/data_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    "packages/gateway/src/channels/reminders.integration.test.ts:102:3 \u2014 requires the scheduler ticking to the scheduled minute plus delivery and one-shot deletion after firing; the Rust acceptance suite has no ticking clock or delivery pipeline",
+    "packages/gateway/src/channels/reminders.integration.test.ts:130:3 \u2014 asserts prompt rendering at fire time through a mocked LLM/tool execution, which the Rust suite never exercises",
+    "packages/gateway/src/channels/reminders.integration.test.ts:145:3 \u2014 recurrence rescheduling after each fire depends on scheduler tick internals absent from the Rust suite",
+    "packages/gateway/src/channels/reminders.integration.test.ts:160:3 \u2014 failed-delivery retention semantics are scheduler runstate behavior the Rust suite cannot express",
+    "packages/gateway/src/channels/reminders.integration.test.ts:178:3 \u2014 delivery routing to the originating chat thread goes through the notification/delivery pipeline the Rust suite does not exercise",
+    "packages/gateway/src/db/project-folders-migration.test.ts:51:3 \u2014 asserts the SQL migration transformation that hoists existing projects to top-level folders; the Rust suite only runs against the already-migrated schema",
+    "packages/gateway/src/db/project-folders-migration.test.ts:82:3 \u2014 legacy-project-to-folder labeling is a migration SQL transformation with no Rust equivalent",
+    "packages/gateway/src/db/project-folders-migration.test.ts:95:3 \u2014 migration idempotency is a SQL-level property the Rust suite never exercises",
+    "packages/gateway/src/db/repository-dedupe-migration.test.ts:45:3 \u2014 dedupe SQL keeping the oldest row per path is a migration transformation not exercised in Rust",
+    "packages/gateway/src/db/repository-dedupe-migration.test.ts:59:3 \u2014 repointing plans, proposals and projects at the surviving row is migration FK rewriting with no Rust equivalent",
+    "packages/gateway/src/db/repository-dedupe-migration.test.ts:88:3 \u2014 collapsing duplicates without a user id is a migration SQL transformation not exercised in Rust",
+    "packages/gateway/src/db/repository-dedupe-migration.test.ts:97:3 \u2014 racing-create dedupe behavior depends on the migration/constraint interaction the Rust suite never exercises",
+    "packages/gateway/src/routes/consent-notification.test.ts:47:3 \u2014 asserts the notification action affordance shape (three actions) surfaced to clients; the Rust suite pins the consent API only",
+    "packages/gateway/src/routes/consent-notification.test.ts:52:3 \u2014 batch approval over populated notification requests with per-request audit records; Rust's approve-all only runs over an empty queue (approvedCount 0) and never asserts audit rows",
+    "packages/gateway/src/routes/jobs.test.ts:15:3 \u2014 triggering an agent_task must spawn an isolated delivery thread via the tool executor (mocked in TS); the Rust suite never executes a successful trigger",
+    "packages/gateway/src/routes/jobs.test.ts:116:3 \u2014 successful trigger plus run-history rows depend on the tool-execution path the Rust suite never exercises (runs are only ever asserted empty)",
+    "packages/gateway/src/routes/jobs.test.ts:170:3 \u2014 runs persisted by scheduled ticks require scheduler ticking internals the Rust suite cannot express",
+    "packages/gateway/src/routes/jobs.test.ts:362:3 \u2014 the __jaitJobMeta incomplete-blob fallback deriving prompt/provider/model for agent.spawn jobs is a read-path derivation the Rust suite never exercises",
+    "packages/gateway/src/routes/jobs.test.ts:416:3 \u2014 timezone-aware next-fire matching of daily jobs is a pure scheduler-matcher property with no Rust equivalent",
+    "packages/gateway/src/routes/plans-provider.test.ts:88:3 \u2014 plan generation routed to an explicitly selected CLI provider/model uses a mocked LLM provider, which the Rust suite never exercises",
+    "packages/gateway/src/routes/reminders.test.ts:22:3 \u2014 MemoryEngine semantic entries served through the Memory page API are a different store than the reminder rows the Rust reminders cases pin",
+    "packages/gateway/src/routes/repo-proposals-generate.test.ts:90:3 \u2014 LLM-driven todo suggestion generation with a mocked CLI provider is tool-execution territory the Rust suite never exercises",
+    "packages/gateway/src/routes/repo-proposals-generate.test.ts:176:3 \u2014 provider/model/runtime-mode selection for generation runs through a mocked CLI provider absent from the Rust suite",
+    "packages/gateway/src/routes/thread-consent.test.ts:39:3 \u2014 the successful owner approve of a pending request (200 plus resolution of the in-process consent decision) is never exercised in Rust; only the 401/404 edges are",
+    "packages/gateway/src/routes/thread-consent.test.ts:56:3 \u2014 the /api/mobile/consent proxy route family is a separate HTTP surface the Rust suite never calls",
+    "packages/gateway/src/scheduler/cron.test.ts:7:3 \u2014 acceptance matrix of the pure cron matcher is unit-tested only; Rust observes schedules solely through the jobs API validation",
+    "packages/gateway/src/scheduler/cron.test.ts:11:3 \u2014 rejection matrix of the pure cron matcher is unit-tested only; the Rust job_validation case covers a handful of rejections through HTTP but not this matcher matrix",
+    "packages/gateway/src/scheduler/cron.test.ts:15:3 \u2014 legacy-schedule non-match behavior of the matcher is a pure parsing property with no Rust equivalent",
+    "packages/gateway/src/scheduler/disk-space.test.ts:6:3 \u2014 preflight pause-persistence gating before launching a job is scheduler tick logic the Rust suite cannot express",
+    "packages/gateway/src/scheduler/disk-space.test.ts:20:3 \u2014 pausing an agent within the same tick before launch is scheduler tick logic with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:22:3 \u2014 flag recognition for spendable reminders is scheduler dispatch logic never exercised in Rust",
+    "packages/gateway/src/scheduler/service.test.ts:29:3 \u2014 one-shot reminder deletion after delivery requires the delivery pipeline the Rust suite never exercises",
+    "packages/gateway/src/scheduler/service.test.ts:41:3 \u2014 disarming after a failed delivery is scheduler runstate behavior with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:51:3 \u2014 manual runs not cancelling reminders is scheduler runstate behavior never exercised in Rust",
+    "packages/gateway/src/scheduler/service.test.ts:60:3 \u2014 recurring jobs staying armed across runs requires scheduler ticking the Rust suite cannot express",
+    "packages/gateway/src/scheduler/service.test.ts:74:3 \u2014 single-fire semantics when the clock crosses a due time twice is tick-internals behavior with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:88:3 \u2014 same-minute parallel job starts are scheduler concurrency behavior never exercised in Rust",
+    "packages/gateway/src/scheduler/service.test.ts:109:3 \u2014 later ticks running other jobs while one is still running is scheduler concurrency behavior with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:132:3 \u2014 non-overlapping runs of the same job is scheduler concurrency behavior never exercised in Rust",
+    "packages/gateway/src/scheduler/service.test.ts:162:3 \u2014 failure-record readability is a run-lifecycle property of scheduled executions the Rust suite never exercises",
+    "packages/gateway/src/scheduler/service.test.ts:169:3 \u2014 retention-window collection of failure records is scheduler sweep logic with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:177:3 \u2014 one-off job retention before firing is scheduler sweep logic never exercised in Rust",
+    "packages/gateway/src/scheduler/service.test.ts:187:3 \u2014 recurring job immunity to the sweep is scheduler sweep logic with no Rust equivalent",
+    "packages/gateway/src/scheduler/service.test.ts:202:3 \u2014 sweep-on-cadence (not every tick) is scheduler sweep timing behavior never exercised in Rust",
+    "packages/gateway/src/security/consent-executor.test.ts:88:3 \u2014 consent gating before executing sensitive tools runs through a mocked tool executor; the Rust suite never executes tools",
+    "packages/gateway/src/security/consent-executor.test.ts:121:3 \u2014 rejection preventing tool execution is tool-executor gating with mocks the Rust suite cannot express",
+    "packages/gateway/src/security/consent-executor.test.ts:142:3 \u2014 destructive git working-tree command blocking is tool-executor argument inspection never exercised in Rust",
+    "packages/gateway/src/security/consent-executor.test.ts:174:3 \u2014 full-access auto-execution bypass is tool-executor runtime-mode behavior with no Rust equivalent",
+    "packages/gateway/src/security/consent-executor.test.ts:204:3 \u2014 irreversible command auto-execution in full-access mode is tool-executor behavior never exercised in Rust",
+    "packages/gateway/src/security/consent-executor.test.ts:240:3 \u2014 delegate-versus-registry execution routing is tool-executor plumbing with no Rust equivalent",
+    "packages/gateway/src/security/consent-executor.test.ts:278:3 \u2014 tool-registry fallback when no delegate is configured is tool-executor plumbing never exercised in Rust",
+    "packages/gateway/src/security/security-results-consent.test.ts:10:1 \u2014 display gating of owned saved evidence per consent profile is a read-surface/profile rule the Rust suite never exercises",
+    "packages/gateway/src/security/security-results-consent.test.ts:35:1 \u2014 explicit approval restrictions on displaying saved evidence are consent-profile display rules with no Rust equivalent",
+    "packages/gateway/src/security/tool-discovery-consent.test.ts:9:3 \u2014 dry-run execution plans for discoverability tools per profile assert requiresConsent=false plan shapes the Rust suite never produces",
+    "packages/gateway/src/security/tool-discovery-consent.test.ts:34:3 \u2014 the dry-run plan shape for unknown tools (requiresConsent, risk, policy.consentLevel, knownTool) is tool-executor behavior only backed by Rust's unknownToolsRequireConsent policy flag, not the plan assertions",
+    "packages/gateway/src/services/database-retention.test.ts:63:3 \u2014 dry-run candidate reporting without mutation is retention-service logic never exercised in Rust",
+    "packages/gateway/src/services/database-retention.test.ts:85:3 \u2014 session archival boundaries keeping recent, viewed and running-thread sessions are retention SQL semantics with no Rust equivalent",
+    "packages/gateway/src/services/database-retention.test.ts:114:3 \u2014 bounded-work scan avoidance is retention implementation behavior never exercised in Rust",
+    "packages/gateway/src/services/database-retention.test.ts:126:3 \u2014 context-snapshot compaction without full JSON parsing is retention compaction logic with no Rust equivalent",
+    "packages/gateway/src/services/database-retention.test.ts:152:3 \u2014 blob compaction and transient-row deletion boundaries preserving core records are retention SQL semantics never exercised in Rust",
+    "packages/gateway/src/services/database-retention.test.ts:333:3 \u2014 overlapping-run prevention and retention of unknown future activity kinds are retention scheduling semantics with no Rust equivalent",
+    "packages/gateway/src/services/database-retention.test.ts:370:3 \u2014 legacy FTS cleanup preserving exact trace rows is retention SQL semantics never exercised in Rust",
+    "packages/gateway/src/services/database-retention.test.ts:407:3 \u2014 bounded metadata retention defaults are service configuration behavior with no Rust equivalent",
+    "packages/gateway/src/services/database-retention.test.ts:428:3 \u2014 single scheduling and stop-before-close lifecycle is retention scheduling behavior never exercised in Rust",
+    "packages/gateway/src/services/disk-space-watchdog.test.ts:23:3 \u2014 80% warn-once threshold behavior is watchdog disk-stat logic (mocked stats in TS) never exercised in Rust",
+    "packages/gateway/src/services/disk-space-watchdog.test.ts:33:3 \u2014 90% agent-only pausing with persisted reason and no auto-resume is watchdog plus pause-persistence behavior with no Rust equivalent",
+    "packages/gateway/src/services/disk-space-watchdog.test.ts:47:3 \u2014 inode-exhaustion protection is watchdog disk-stat logic never exercised in Rust",
+    "packages/gateway/src/services/disk-space-watchdog.test.ts:54:3 \u2014 per-mount failure tolerance and repeated-error suppression is watchdog disk-stat logic with no Rust equivalent",
+    "packages/gateway/src/services/disk-space-watchdog.test.ts:67:3 \u2014 per-project-mount pause scoping when gateway storage is healthy is watchdog disk-stat logic never exercised in Rust",
+    "packages/gateway/src/services/project-repositories.test.ts:31:3 \u2014 auto-assignment of repositories for git projects is a gateway git-integration flow the Rust repos cases (metadata-only records) never exercise",
+    "packages/gateway/src/services/project-repositories.test.ts:75:3 \u2014 stale-claim repair of gateway repositories involves node-claim bookkeeping never exercised in Rust",
+    "packages/gateway/src/services/project-repositories.test.ts:112:3 \u2014 remote-node claim rejection for existing gateway repositories is node-claim bookkeeping with no Rust equivalent",
+    "packages/gateway/src/services/project-repositories.test.ts:119:3 \u2014 auto-assignment rejection for a project without .git metadata is a git-probing flow never exercised in Rust",
+    "packages/gateway/src/services/reminders.test.ts:23:3 \u2014 user-and-project scoped reminder listing includes a project dimension the Rust reminders cases never set or filter on",
+    "packages/gateway/src/services/reminders.test.ts:60:3 \u2014 retrieval-usage tracking counters asserted alongside the markdown export have no Rust equivalent",
+    "packages/gateway/src/services/reminders.test.ts:87:3 \u2014 LLM scanning of old chats for durable memory candidates is tool-execution territory the Rust suite never exercises",
+    "packages/gateway/src/services/reminders.test.ts:116:3 \u2014 stale generated-memory archival and conflict flagging is memory-engine behavior with no Rust equivalent",
+    "packages/gateway/src/services/repo-proposals.test.ts:33:3 \u2014 repo proposal persistence and newest-first listing is a proposals store the Rust suite never exercises (repos cases cover repository metadata only)",
+    "packages/gateway/src/services/repo-proposals.test.ts:62:3 \u2014 proposal updates, completion history and deletion are proposals-store semantics with no Rust equivalent",
+    "packages/gateway/src/services/repo-proposals.test.ts:102:3 \u2014 completion metadata on done proposals is proposals-store semantics never exercised in Rust",
+    "packages/gateway/src/tools/cron-tools.test.ts:16:3 \u2014 asserts scheduler.create call arguments (owner, projectRoot, normalized tool name) against a mocked SchedulerService; Rust pins the underlying jobs API but cannot observe the tool's argument threading"
+  ]
+}

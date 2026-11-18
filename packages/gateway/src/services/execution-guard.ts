@@ -97,6 +97,8 @@ export class ExecutionGuard {
 }
 
 function failureFamily(message: string): string | undefined {
+  if (/preview is not shared with the agent/i.test(message)) return "Browser sharing required — use Share with agent in the chat browser card or preview tab";
+  if (/Executable doesn't exist|Playwright unavailable|chromium not found in playwright/i.test(message)) return "Browser executable unavailable — configure an installed BROWSER_CHANNEL or install the Playwright browser";
   if (/not a git repository|invalid gitfile|\.git.*(?:not found|no such file)|unable to read.*git/i.test(message)) return "Git metadata unavailable";
   if (/source chat not found/i.test(message)) return "Thread sender identity unavailable";
   if (/ENOENT|no such file or directory/i.test(message)) return "Project path unavailable";

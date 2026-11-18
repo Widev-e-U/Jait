@@ -1,0 +1,101 @@
+{
+  "review_scope": "parity-patterns bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/server.test.ts:78:3",
+      "status": "verified",
+      "parity_review": "Reviewed GET /health returns healthy status. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_server_test_ts_78_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint13.test.ts:98:3",
+      "status": "verified",
+      "parity_review": "Reviewed starts sandbox browser with CDP and host gateway when requested. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint13_test_ts_98_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/sprint13.test.ts:289:3",
+      "status": "verified",
+      "parity_review": "Reviewed starts Linux desktop sandbox with CDP and host gateway when requested. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_sprint13_test_ts_289_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/terminal-tools.test.ts:156:3",
+      "status": "verified",
+      "parity_review": "Reviewed executes sandbox commands inside a thread sandbox container when provided. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_terminal_tools_test_ts_156_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/terminal-tools.test.ts:317:3",
+      "status": "verified",
+      "parity_review": "Reviewed background mode appends a completion sentinel after the requested command. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_terminal_tools_test_ts_317_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/elevated-tools.test.ts:169:3",
+      "status": "verified",
+      "parity_review": "Reviewed runs powershell under the provided administrator account without exposing the password in inputs. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_169_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/ssh-tools.test.ts:109:3",
+      "status": "verified",
+      "parity_review": "Reviewed executes ssh.run for a Codex-like provider without putting the password in tool inputs or audit output. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_ssh_tools_test_ts_109_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/ssh-tools.test.ts:242:3",
+      "status": "verified",
+      "parity_review": "Reviewed collects the sudo password via the secure prompt, feeds it to the PTY, and strips the marker from output. Original body, setup, imports, lifecycle, function bindings and every assertion operand match the bounded completion audit. Regex comparison preserves grouping of alternatives, ASCII digit classes and literal control/slash escapes, with matching flags. Only supported syntax normalizations are admitted. Inverse partial-object assertions preserve the inverse and nested matcher. Five structural controls reject changed digit classes, missing anchors and removed inverse matchers. Thirty-one original-regex and inverse-object cases agree with real Vitest and Rust, including trailing line terminators and absent/null/undefined/password properties. All observed operands pass the guarded transport domain. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-patterns/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_ssh_tools_test_ts_242_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

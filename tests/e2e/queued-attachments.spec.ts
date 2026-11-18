@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 for (const width of [390, 1280]) {
   test(`attachment chips fit composer, queue and transcript at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto('/src/e2e-fixtures/index.html', { waitUntil: 'domcontentloaded' })
     await page.evaluate(() => import('/src/e2e-fixtures/queued-attachments.tsx'))
     for (const surface of ['composer', 'queue', 'sent']) {
       const scope = page.getByTestId(surface)
@@ -15,9 +15,20 @@ for (const width of [390, 1280]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     const queue = page.getByTestId('queue')
     await queue.getByRole('button', { name: 'Edit message', exact: true }).click()
-    await queue.locator('textarea').fill('Edited queue text')
-    await expect(queue.locator('[data-attachment-list]')).toBeVisible()
-    await queue.getByRole('button', { name: 'Save', exact: true }).click()
+    const editing = page.locator('[data-queue-editor]')
+    const editor = editing.locator('[contenteditable="true"]')
+    await editor.evaluate(element => {
+      const text = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE)!
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      const selection = window.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      ;(element as HTMLElement).focus()
+    })
+    await page.keyboard.type('Edited queue text')
+    await expect(editing.locator('[data-attachment-list]')).toBeVisible()
+    await editing.getByRole('button', { name: 'Save changes', exact: true }).click()
     await expect(queue.getByText('Edited queue text', { exact: true })).toBeVisible()
     await queue.getByRole('button', { name: 'Expand image photo.png' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()

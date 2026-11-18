@@ -180,7 +180,7 @@ export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(
 
   useEffect(() => stop, [stop])
 
-  const anchorToggle = useCallback(() => {
+  const anchorToggle = useCallback((edgeOverride?: ToolCardAnchorEdge) => {
     const card = cardRef.current
     if (!card || typeof requestAnimationFrame !== 'function') return
     const container = findScrollableAncestor(card)
@@ -189,7 +189,7 @@ export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(
 
     const before = measureToolCardBox(card, container)
     const viewportHeight = container.clientHeight
-    const edge = anchorEdge ?? pickToolCardAnchorEdge(before, viewportHeight)
+    const edge = edgeOverride ?? anchorEdge ?? pickToolCardAnchorEdge(before, viewportHeight)
     const headerWasVisible = before.top >= 0 && before.top <= viewportHeight
 
     // The conversation follows the end of the stream and re-pins its own scroll

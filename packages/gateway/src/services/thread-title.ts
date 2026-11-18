@@ -31,39 +31,56 @@ export async function generateTitleViaTurn(
 
   return new Promise<string>((resolve, reject) => {
     let text = "";
-    const timer = setTimeout(() => {
+    let unsub = () => {};
+    let settled = false;
+    const cleanup = () => {
+      settled = true;
+      clearTimeout(timer);
       unsub();
+      unsub = () => {};
+    };
+    const timer = setTimeout(() => {
+      cleanup();
       reject(new Error("Title turn timed out"));
     }, TITLE_TURN_TIMEOUT_MS);
 
-    const unsub = provider.onEvent((event: ProviderEvent) => {
-      if (!("sessionId" in event) || event.sessionId !== sessionId) return;
-      if (event.type === "token") {
-        text += event.content;
-      } else if (event.type === "message" && event.role === "assistant") {
-        // Full message replaces streamed tokens
-        text = event.content;
-      } else if (event.type === "turn.completed") {
-        clearTimeout(timer);
-        unsub();
-        resolve(text.trim());
-      } else if (event.type === "session.error") {
-        clearTimeout(timer);
-        unsub();
-        reject(new Error(event.error));
-      } else if (event.type === "session.completed") {
-        clearTimeout(timer);
-        unsub();
-        resolve(text.trim());
-      }
-    });
+    try {
+      const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+        if (!("sessionId" in event) || event.sessionId !== sessionId) return;
+        if (event.type === "token") {
+          text += event.content;
+        } else if (event.type === "message" && event.role === "assistant") {
+          // Full message replaces streamed tokens
+          text = event.content;
+        } else if (event.type === "turn.completed") {
+          cleanup();
+          resolve(text.trim());
+        } else if (event.type === "session.error") {
+          cleanup();
+          reject(new Error(event.error));
+        } else if (event.type === "session.completed") {
+          cleanup();
+          resolve(text.trim());
+        }
+      });
+      if (settled) unsubscribe();
+      else unsub = unsubscribe;
+    } catch (err) {
+      cleanup();
+      reject(err);
+      return;
+    }
 
     // Fire the turn — the prompt asks for only a title
-    provider.sendTurn(sessionId, prompt).catch((err) => {
-      clearTimeout(timer);
-      unsub();
+    try {
+      provider.sendTurn(sessionId, prompt).catch((err) => {
+        cleanup();
+        reject(err);
+      });
+    } catch (err) {
+      cleanup();
       reject(err);
-    });
+    }
   });
 }
 
@@ -75,7 +92,7 @@ export async function generateTitleViaTurn(
 export async function generateTitleViaApi(options: GenerateThreadTitleOptions): Promise<string> {
   const raw = await callLlm(options);
   const title = normalizeGeneratedThreadTitle(raw, "");
-  if (!title) throw new Error("Title generation returned empty result");
+  if (!title) throw new Error("Title generation returned no usable title");
   return title;
 }
 
@@ -95,7 +112,10 @@ export function normalizeGeneratedThreadTitle(raw: string, fallback: string): st
 
   title = title.replace(/[.:;\-–\s]+$/g, "").trim();
 
-  if (!title) return fallback;
+  // Some models emit tool protocol instead of a title. Reject the whole
+  // response rather than using a later payload line as a chat name.
+  const isToolProtocol = /^(?:<(?:\/|\|)?(?:tool_calls?|function_calls?|tool_use)(?=[\s/>|]|$)|\[TOOL_CALLS?\])/i.test(title);
+  if (!title || isToolProtocol) return fallback;
   if (title.length <= TITLE_MAX_LENGTH) return title;
 
   const truncated = title.slice(0, TITLE_MAX_LENGTH + 1);

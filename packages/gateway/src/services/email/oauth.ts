@@ -9,7 +9,7 @@
 //   Outlook: OUTLOOK_OAUTH_CLIENT_ID  / OUTLOOK_OAUTH_CLIENT_SECRET
 
 import { createHash, randomBytes } from "node:crypto";
-import type { EmailProvider, EmailTokens } from "./types.js";
+import type { OAuthEmailProvider as EmailProvider, EmailTokens } from "./types.js";
 
 interface ProviderOAuthConfig {
   authorizeUrl: string;
@@ -28,7 +28,7 @@ const PROVIDERS: Record<EmailProvider, ProviderOAuthConfig> = {
       "https://www.googleapis.com/auth/gmail.send",
     ],
     // offline + consent are required to reliably receive a refresh token.
-    authorizeParams: { access_type: "offline", prompt: "consent" },
+    authorizeParams: { access_type: "offline", prompt: "consent select_account" },
   },
   outlook: {
     authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
@@ -39,7 +39,7 @@ const PROVIDERS: Record<EmailProvider, ProviderOAuthConfig> = {
       "https://graph.microsoft.com/Mail.Send",
       "https://graph.microsoft.com/User.Read",
     ],
-    authorizeParams: { response_mode: "query" },
+    authorizeParams: { response_mode: "query", prompt: "select_account" },
   },
 };
 

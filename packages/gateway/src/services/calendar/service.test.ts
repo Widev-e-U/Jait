@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase, type JaitDB } from "../../db/connection.js";
 import type { SqliteDatabase } from "../../db/sqlite-shim.js";
 import { UserSecretService } from "../user-secrets.js";
@@ -130,4 +130,45 @@ describe("CalendarService", () => {
     expect(service.disconnect("u1", account.id)).toBe(true);
     expect(service.listAccounts("u1")).toHaveLength(0);
   });
+});
+
+it("rejects expired OAuth state before exchanging tokens and consumes it", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const started = new Date("2026-10-20T12:00:00.000Z");
+  const fetchMock = vi.fn(async () => Response.json({ error: "synthetic_expired_fixture" }, { status: 400 }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    vi.setSystemTime(started);
+    service.saveAppCredentials("u1", { clientId: "synthetic-client", clientSecret: "synthetic-secret" });
+    const { authUrl } = service.startConnect({ userId: "u1", redirectUri: "http://fixture.invalid/callback" });
+    const state = new URL(authUrl).searchParams.get("state")!;
+    vi.setSystemTime(new Date(started.getTime() + 10 * 60_000 + 1));
+    await expect(service.completeConnect({ code: "synthetic-code", state })).rejects.toThrow(/invalid or expired/i);
+    vi.setSystemTime(started);
+    await expect(service.completeConnect({ code: "synthetic-code", state })).rejects.toThrow(/invalid or expired/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
+it("preserves the OAuth expiry boundary and rejects a repeated callback", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const started = new Date("2026-10-20T12:00:00.000Z");
+  const fetchMock = vi.fn(async () => Response.json({ error: "synthetic_boundary_fixture" }, { status: 400 }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    vi.setSystemTime(started);
+    service.saveAppCredentials("u1", { clientId: "synthetic-client", clientSecret: "synthetic-secret" });
+    const { authUrl } = service.startConnect({ userId: "u1", redirectUri: "http://fixture.invalid/callback" });
+    const state = new URL(authUrl).searchParams.get("state")!;
+    vi.setSystemTime(new Date(started.getTime() + 10 * 60_000));
+    await expect(service.completeConnect({ code: "synthetic-code", state })).rejects.toThrow("Calendar OAuth token request failed: synthetic_boundary_fixture");
+    await expect(service.completeConnect({ code: "synthetic-code", state })).rejects.toThrow(/invalid or expired/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
 });

@@ -2335,8 +2335,8 @@ export default class RFB extends EventTargetMixin {
 
     _writeClipboard(text) {
         if (this._viewOnly) return;
-        if (this._asyncClipboard.writeClipboard(text)) return;
-        // Fallback clipboard
+        this._asyncClipboard.writeClipboard(text);
+        // Also notify the embedding viewer, including when browser permission fails.
         this.dispatchEvent(
             new CustomEvent("clipboard", {detail: {text: text}})
         );

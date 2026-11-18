@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { createUserMessageEditSubmission } from './message-edit'
 import {
+  CHAT_COMPOSER_COLUMN_PADDING_CLASS,
+  CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS,
+  getChatColumnClassName,
   getChatComposerBoundaryClassName,
   getChatTranscriptBoundaryClassName,
+  getChatTranscriptColumnClassName,
   getMobileUserMessageEditTop,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
@@ -112,7 +116,7 @@ describe('message edit submission', () => {
 describe('chat transcript and composer layout', () => {
   it('clips streamed transcript content below an isolated opaque composer layer', () => {
     const transcriptClasses = getChatTranscriptBoundaryClassName()
-    const composerClasses = getChatComposerBoundaryClassName(false, false)
+    const composerClasses = getChatComposerBoundaryClassName(false)
 
     expect(transcriptClasses).toContain('overflow-hidden')
     expect(transcriptClasses).toContain('isolate')
@@ -120,6 +124,25 @@ describe('chat transcript and composer layout', () => {
     expect(composerClasses).toContain('z-30')
     expect(composerClasses).toContain('isolate')
     expect(composerClasses).toContain('bg-background')
+  })
+
+  it('aligns transcript and composer edges in one centered column', () => {
+    const transcriptColumn = getChatTranscriptColumnClassName()
+    const composerColumn = getChatColumnClassName()
+    const composerBoundary = getChatComposerBoundaryClassName(false)
+
+    expect(transcriptColumn).toContain('mx-auto w-full')
+    expect(transcriptColumn).toContain('max-w-4xl')
+    expect(transcriptColumn).toContain(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS)
+    expect(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS).toBe('px-2 md:px-0')
+    expect(composerColumn).toContain('mx-auto w-full')
+    expect(composerColumn).toContain('max-w-4xl')
+    // The composer boundary must not add its own gutter: PromptInput already
+    // supplies one, and doubling it pushed the typed text off the message edge.
+    expect(composerBoundary).not.toContain('px-4')
+    expect(composerBoundary).not.toContain('px-3')
+    expect(CHAT_COMPOSER_COLUMN_PADDING_CLASS).toBe('px-0')
+    expect(getChatComposerBoundaryClassName(true)).toContain('px-2')
   })
 })
 
@@ -145,6 +168,8 @@ describe('message edit mobile layout', () => {
     expect(shouldShowNormalChatComposer(true, 'message-1')).toBe(false)
     expect(shouldShowNormalChatComposer(true, null)).toBe(true)
     expect(shouldShowNormalChatComposer(false, 'message-1')).toBe(true)
+    expect(shouldShowNormalChatComposer(true, null, true)).toBe(false)
+    expect(shouldShowNormalChatComposer(false, null, true)).toBe(true)
   })
 
   it('hides the context indicator while trajectory mode is open', () => {

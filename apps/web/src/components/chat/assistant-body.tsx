@@ -1,6 +1,8 @@
+import { coalesceQuestionCalls } from './user-question-calls'
 import { Fragment, type ReactNode } from 'react'
-import { AlertTriangle, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Loader2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { MessageContent as AIMessageContent } from '@/components/ai-elements/message'
 import { Reasoning } from '@/components/chat/reasoning'
@@ -64,7 +66,15 @@ export interface AssistantBodyProps {
    * like a user message. Off by default so nested/sub-agent rendering is
    * unaffected.
    */
-  capNonSteeringWidth?: boolean
+  /**
+   * Enables a retry action on the final error segment of a failed turn.
+   */
+  onTryContinue?: () => void
+  /**
+   * True while a continuation request is in flight. Disables the
+   * retry button so a second request cannot be started.
+   */
+  isContinuing?: boolean
   className?: string
 }
 
@@ -90,10 +100,13 @@ export function AssistantBody({
   compact,
   preferLlmUi,
   onOpenPath,
-  capNonSteeringWidth,
+  onTryContinue,
+  isContinuing = false,
   className,
 }: AssistantBodyProps) {
   const hasText = segments.some((s) => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
+
+  const visibleToolCalls = coalesceQuestionCalls(toolCalls ?? [])
 
   return (
     <div className={cn('relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]', className)}>
@@ -102,7 +115,7 @@ export function AssistantBody({
 
         if (seg.type === 'toolGroup') {
           const callIds = Array.isArray(seg.callIds) ? seg.callIds : []
-          const calls = (toolCalls ?? []).filter((tc) => callIds.includes(tc.callId))
+          const calls = visibleToolCalls.filter((tc) => callIds.includes(tc.callId))
           // Collapse completed tool groups that are followed by text
           const followedByText = segments.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
           node = calls.length > 0 ? (
@@ -145,7 +158,22 @@ export function AssistantBody({
           node = (
             <div key={`err-${i}`} className="flex items-start gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span className="min-w-0 break-words">{seg.content}</span>
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+                <span className="min-w-0 break-words">{seg.content}</span>
+                {onTryContinue && i === segments.length - 1 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isContinuing || isStreaming}
+                    onClick={onTryContinue}
+                    className="h-7 gap-1.5 border-red-500/50 bg-background/70 px-2.5 text-xs font-medium text-red-600 hover:bg-red-500/15 hover:text-red-700 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    {isContinuing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                    Retry
+                  </Button>
+                )}
+              </div>
             </div>
           )
         } else if (seg.type === 'steering') {
@@ -156,7 +184,19 @@ export function AssistantBody({
                 Steered into running turn
               </span>
               <div className="min-w-0 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
-                {seg.displayContent ?? seg.content}
+                {(seg.displayContent ?? seg.content) || null}
+                {seg.attachments?.length ? (
+                  <div className="mt-2 flex flex-wrap justify-end gap-2 first:mt-0">
+                    {seg.attachments.filter(item => item.mimeType.startsWith('image/')).map((item, index) => (
+                      <img
+                        key={`${item.name}-${index}`}
+                        src={item.data.startsWith('data:') ? item.data : `data:${item.mimeType};base64,${item.data}`}
+                        alt={item.name}
+                        className="max-h-48 max-w-full rounded-md border border-border/60 object-contain"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           )
@@ -180,20 +220,15 @@ export function AssistantBody({
 
         if (node === null) return null
 
-        // Cap only the assistant side so steered bubbles can sit flush right.
-        const content = capNonSteeringWidth && seg.type !== 'steering'
-          ? <div className="max-w-[85%]">{node}</div>
-          : node
-
         // Thinking and tool groups own their reveal because their collapsible
         // content must animate as a single measured unit.
         if (seg.type === 'thinking' || seg.type === 'toolGroup') {
-          return <Fragment key={`part-${i}`}>{content}</Fragment>
+          return <Fragment key={`part-${i}`}>{node}</Fragment>
         }
 
         return (
           <div key={`part-${i}`} className="chat-message-part-reveal">
-            <div className="chat-message-part-reveal-inner">{content}</div>
+            <div className="chat-message-part-reveal-inner">{node}</div>
           </div>
         )
       })}

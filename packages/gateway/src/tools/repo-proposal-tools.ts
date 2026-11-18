@@ -60,7 +60,7 @@ export function createJaitTodosTool(deps: {
   return {
     name: "jait.todos",
     description:
-      "Manage global Jait todo items for future agent threads. Use this to save worthwhile follow-up work in the Todo page.",
+      "Manage persistent repository follow-ups on the Todo page. Use todo for the current chat’s temporary plan.",
     tier: "core",
     category: "gateway",
     source: "builtin",

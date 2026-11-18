@@ -167,7 +167,10 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       "and returns a single result. Use this for research, code search, multi-file " +
       "analysis, or any task that requires several tool calls to complete. " +
       "Several calls in the SAME reply run concurrently — one visible sub-agent " +
-      "each — so delegate independent work as parallel calls rather than one at a time.",
+      "each. Parallelize only independent, bounded work. Specify file ownership and shared resource constraints; " +
+      "prefer isolated workspaces for concurrent edits. Assign one integration owner for shared files and contracts, " +
+      "review interrupted workers’ changes, and validate the integrated result against a stable snapshot. " +
+      "Separate conversations do not guarantee workspace or build isolation.",
     tier: "standard",
     category: "agent",
     source: "builtin",

@@ -24,10 +24,10 @@ export const CHAT_TRANSCRIPT_COLUMN_MAX_WIDTH_PX = 896
 /**
  * Left edge (px) of the transcript text column relative to the chat panel,
  * mirroring the Conversation layout: a centered `max-w-4xl` column with
- * `px-4` (mobile) / `sm:px-5` (desktop) horizontal padding.
+ * `px-2` (mobile) / `md:px-0` (desktop) horizontal padding.
  */
 export function getChatTranscriptColumnLeft(panelWidth: number, isMobile: boolean): number {
   if (!Number.isFinite(panelWidth) || panelWidth <= 0) return 0
-  const horizontalPadding = isMobile ? 16 : 20
+  const horizontalPadding = isMobile ? 8 : 0
   return (panelWidth - Math.min(CHAT_TRANSCRIPT_COLUMN_MAX_WIDTH_PX, panelWidth)) / 2 + horizontalPadding
 }

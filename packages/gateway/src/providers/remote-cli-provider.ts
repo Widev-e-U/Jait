@@ -20,6 +20,7 @@ import type {
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
+  ProviderTurnAttachment,
   StartSessionOptions,
 } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
@@ -263,7 +264,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
     }
   }
 
-  async sendTurn(sessionId: string, message: string): Promise<void> {
+  async sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void> {
     const session = this.sessions.get(sessionId) as (ProviderSession & { providerThreadId?: string }) | undefined;
     if (!session) throw new Error(`Session ${sessionId} not found`);
 
@@ -298,6 +299,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       const result = await this.ws.proxyProviderOp<{ completed?: boolean }>(this.nodeId, "send-turn", {
         sessionId,
         message,
+        ...(attachments?.length ? { attachments } : {}),
         providerThreadId: session.providerThreadId ?? sessionId,
       }, 30 * 60 * 1000 + 30_000);
       if (result?.completed && !completedFromEvent) {

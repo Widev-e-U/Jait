@@ -1,0 +1,413 @@
+{
+  "review_scope": "34 individually reviewed declarations; independent AST and execution-trace checks",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/lib/bounded-json.test.ts:5:3",
+      "status": "verified",
+      "parity_review": "One exact primitive-string equality: serialize the same nested file.read object with the 1024-byte limit and compare with JSON.stringify of that object. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_5_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/bounded-json.test.ts:10:3",
+      "status": "verified",
+      "parity_review": "Both assertions remain: 100000 x characters serialize within 4096 UTF-8 bytes and retain the exact truncation marker. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_10_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/bounded-json.test.ts:16:3",
+      "status": "verified",
+      "parity_review": "Both assertions remain: 1000 emoji with a 257-byte limit produce at most 257 UTF-8 bytes and include the exact truncation marker. The byte count and text are captured separately. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_16_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/bounded-json.test.ts:22:3",
+      "status": "verified",
+      "parity_review": "Retains the actual self-referencing object and 1024-byte limit; checks the UTF-8 byte ceiling and circular-reference marker. No serializer stub replaces production code. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_22_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/bounded-json.test.ts:31:3",
+      "status": "verified",
+      "parity_review": "Retains the 50000-character invalid JSON input and 2048-byte ceiling; also parses the result and requires JavaScript truthiness. Type-only transport preserves primitive falsiness and object truthiness. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_31_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:16:3",
+      "status": "verified",
+      "parity_review": "Retains all five inputs (undefined, zero, negative, NaN, and invalid string) and compares each result to the same imported default constant. Dynamic constants are captured, with comparisons performed in Rust. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_16_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:24:3",
+      "status": "verified",
+      "parity_review": "Retains exact two-hour arithmetic, 500-ms input, and 42.7-ms input. Expected results are two hours, 500, and 43; arithmetic expectations are captured without asking the implementation for expected values. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_24_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:30:3",
+      "status": "verified",
+      "parity_review": "Retains both cap-plus-one and MAX_SAFE_INTEGER inputs, each compared to the same local cap initialized from the imported maximum constant. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_30_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:36:3",
+      "status": "verified",
+      "parity_review": "Retains the eight-value runtime loop (0, -1, both infinities, NaN, empty string, zero string, and null) and both finite-true and strictly-positive assertions for every iteration. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_36_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:44:3",
+      "status": "verified",
+      "parity_review": "Retains both environment writes and all four exact 120000 expectations, including max lifting above the configured 60000 maximum. The afterEach hook still deletes both environment variables. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_44_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/command-timeout.test.ts:54:3",
+      "status": "verified",
+      "parity_review": "Retains invalid negative/default and nonnumeric/maximum environment values, comparing both exported getters with the original imported constants; both environment variables are deleted afterward. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_command_timeout_test_ts_54_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:5:3",
+      "status": "verified",
+      "parity_review": "Retains separate null assertions for undefined and empty string inputs; null is distinguished from undefined by the transported primitive type/value. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_5_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:10:3",
+      "status": "verified",
+      "parity_review": "Retains invalid JSON input and exact primitive-string result [] including its brackets. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_10_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:14:3",
+      "status": "verified",
+      "parity_review": "Retains the non-array JSON object input and exact primitive-string result []. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_14_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:18:3",
+      "status": "verified",
+      "parity_review": "Retains the same JSON.stringify payload and exact primitive-string equality with that payload. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_18_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Retains the 200000-character output, 4096-byte option, byte ceiling, and exact c1/file.read identity checks after parsing. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_25_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:42:3",
+      "status": "verified",
+      "parity_review": "Retains forceCompact:true on the small payload, negated equality against the original serialized string, and the complete parsed object including callId, tool, args, ok:true and empty message. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_42_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:53:3",
+      "status": "verified",
+      "parity_review": "Retains forceCompact:true and markCompacted:true, with exact boolean true for storageCompacted. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_53_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:65:3",
+      "status": "verified",
+      "parity_review": "Retains five oversized entries with both million-character data and output fields, 1024-byte limit, nonempty result assertion, and the loop requiring every item to retain c1 while removing both data and output. Repeated assertion sites remain inside that loop. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_65_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:87:3",
+      "status": "verified",
+      "parity_review": "Retains both inline and path-only image scenarios and the large filler. Checks inline data URI inequality, shorter string length, the path-result 4096-byte ceiling and the complete path/mime/size/inline:false object. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_87_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/persisted-tool-calls.test.ts:131:3",
+      "status": "verified",
+      "parity_review": "Retains forced compaction and all four exact metadata checks: startedAt 1700000000000, completedAt 1700000000100, retryCount 2 and status completed. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_131_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:15:3",
+      "status": "verified",
+      "parity_review": "Retains all four undefined/null/empty/malformed input variants, each requiring an empty array from extraction. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_15_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:22:3",
+      "status": "verified",
+      "parity_review": "Retains both the non-agent entry and the full shared agent data. Checks one extracted payload and the full object including content, performative, rounds, duration, segments and toolCalls. Dynamic expected members reference the original fixture, not the implementation result. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_22_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:41:3",
+      "status": "verified",
+      "parity_review": "Retains the absent-content fixture with partialContent and the exact partial body fallback string. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_41_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:50:3",
+      "status": "verified",
+      "parity_review": "Retains a single non-array tool-call object, requiring one payload and exact sub-1 identity. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_50_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:58:3",
+      "status": "verified",
+      "parity_review": "Retains a non-agent entry lacking subAgentId and a valid sub-agent entry; requires one result with exact sub-1 identity. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_58_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:69:3",
+      "status": "verified",
+      "parity_review": "Retains the plain string, non-object data, and valid object inputs, requiring only one result with exact sub-1 identity. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_69_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:83:3",
+      "status": "verified",
+      "parity_review": "Retains undefined/null/empty/malformed inputs, each requiring undefined from stripping. These checks do not accept null. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_83_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:90:3",
+      "status": "verified",
+      "parity_review": "Retains full shared agent data and the non-agent object. Checks two entries, exact unchanged non-agent data, and the complete lightweight stub with only the original identity/performative/rounds/duration fields. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_90_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:110:3",
+      "status": "verified",
+      "parity_review": "Retains a payload with subAgentId and content but no optional metadata; requires exactly the subAgentId-only stub. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_110_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:119:3",
+      "status": "verified",
+      "parity_review": "Retains single-object stripping and exact subAgentId/performative/rounds/duration stub fields. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_119_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/lib/sub-agent-persistence.test.ts:131:3",
+      "status": "verified",
+      "parity_review": "Retains a non-agent file.read call without subAgentId and requires exact primitive-string equality with the original serialized calls. Reviewed the original source, generated fixture captures and Rust matcher/negation/expected rules. The fixture calls the real TypeScript export; Rust owns every verdict. All original assertion sites remain mandatory. This review establishes reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_lib_sub_agent_persistence_test_ts_131_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/chat-notifications.test.ts:8:3",
+      "status": "verified",
+      "parity_review": "Preserves the real in-memory database and migrations, session/service recreation and finally sqlite.close. All six assertions remain: exact first notification for owner after recreation, empty other-user list, exact true read state, exact replacement notification, null for the unrelated replacement key and an empty owner list afterward. Dynamic expected first/next objects come from the source fixture, not the implementation result. Reviewed original source, generated fixture body and Rust matcher/expected rules. This is reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_chat_notifications_test_ts_8_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/messenger-regression.test.ts:7:3",
+      "status": "verified",
+      "parity_review": "Preserves the archived authenticated GET /api/messenger request, real createServer/loadConfig/signAuthToken setup and finally app.close. Rust enforces exact HTTP 200 and exact disconnected snapshot status; no Matrix browser, route response or authorization result is stubbed. Both saved source assertions are retained. Reviewed original source, generated fixture body and Rust matcher/expected rules. This is reference-test equivalence only, not Rust gateway runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_routes_messenger_regression_test_ts_7_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/contracts/e2d4ec13-61fd-4774-852e-2b04ae57621a/report.json"
+        }
+      ]
+    }
+  ]
+}

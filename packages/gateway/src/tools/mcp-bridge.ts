@@ -44,6 +44,8 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   /** Working directory for stdio servers */
   cwd?: string;
+  /** HTTP headers sent with every request (sse/streamable-http). May hold secrets. */
+  headers?: Record<string, string>;
   /** Whether the server is enabled (default true) */
   enabled?: boolean;
 }
@@ -73,6 +75,8 @@ export interface McpConnection {
  * execution to the correct connected server.
  */
 const clients = new Map<string, Client>();
+// Identity tokens prevent late handshakes from restoring a removed connection.
+const pendingConnections = new Map<string, symbol>();
 
 /** Build an SDK transport from a server config. */
 function buildTransport(config: McpServerConfig) {
@@ -92,13 +96,28 @@ function buildTransport(config: McpServerConfig) {
       if (!config.url) {
         throw new Error(`MCP server '${config.id}' (sse) requires a 'url'`);
       }
-      return new SSEClientTransport(new URL(config.url));
+      const headers = config.headers;
+      return new SSEClientTransport(
+        new URL(config.url),
+        headers
+          ? {
+              requestInit: { headers },
+              eventSourceInit: {
+                fetch: (input: string | URL | Request, init?: RequestInit) =>
+                  fetch(input, { ...init, headers: { ...(init?.headers as Record<string, string> | undefined), ...headers } }),
+              },
+            }
+          : undefined,
+      );
     }
     case "streamable-http": {
       if (!config.url) {
         throw new Error(`MCP server '${config.id}' (streamable-http) requires a 'url'`);
       }
-      return new StreamableHTTPClientTransport(new URL(config.url));
+      return new StreamableHTTPClientTransport(
+        new URL(config.url),
+        config.headers ? { requestInit: { headers: config.headers } } : undefined,
+      );
     }
     default: {
       const exhaustive: never = config.transport;
@@ -129,9 +148,12 @@ export async function connectMcpServer(
     tools: [],
   };
 
+  const attempt = Symbol(config.id);
+  pendingConnections.set(config.id, attempt);
+  let client: Client | undefined;
   try {
     const transport = buildTransport(config);
-    const client = new Client(
+    client = new Client(
       { name: "jait-gateway", version: "1.0.0" },
       { capabilities: {} },
     );
@@ -141,19 +163,30 @@ export async function connectMcpServer(
     const { tools } = await client.listTools();
     const descriptors = (tools ?? []).map(toMcpToolDescriptor);
 
-    // Close any previous client for this server before storing the new one.
+    if (pendingConnections.get(config.id) !== attempt) {
+      await client.close();
+      return base;
+    }
+    // Remove the previous owner before awaiting close: a disconnect or newer
+    // connect can run during that await and must retain ownership of its state.
     const previous = clients.get(config.id);
     if (previous) {
-      try {
-        await previous.close();
-      } catch {
-        // ignore close errors on stale clients
-      }
+      clients.delete(config.id);
+      try { await previous.close(); } catch { /* stale transport */ }
+    }
+    if (pendingConnections.get(config.id) !== attempt) {
+      await client.close();
+      return base;
     }
     clients.set(config.id, client);
+    pendingConnections.delete(config.id);
 
     return { ...base, status: "connected", tools: descriptors };
   } catch (err) {
+    if (pendingConnections.get(config.id) === attempt) pendingConnections.delete(config.id);
+    // A failed handshake/list still owns its transport and possibly a child.
+    // It is not in clients yet, so ordinary disconnect cannot clean it up.
+    try { await client?.close(); } catch { /* retain the original failure */ }
     const message = err instanceof Error ? err.message : String(err);
     return { ...base, status: "error", error: message };
   }
@@ -234,14 +267,15 @@ export async function callMcpTool(
 
 /** Disconnect and close a server's client, removing it from the map. */
 export async function disconnectMcpServer(serverId: string): Promise<void> {
+  pendingConnections.delete(serverId);
   const client = clients.get(serverId);
+  clients.delete(serverId);
   if (client) {
     try {
       await client.close();
     } catch {
       // ignore close errors
     }
-    clients.delete(serverId);
   }
 }
 
@@ -317,6 +351,7 @@ export function unregisterMcpTools(
 export class McpManager {
   private connections = new Map<string, McpConnection>();
   private configs = new Map<string, McpServerConfig>();
+  private pending = new Map<string, symbol>();
 
   constructor(private readonly registry: ToolRegistry) {}
 
@@ -344,10 +379,15 @@ export class McpManager {
       };
     }
 
+    const attempt = Symbol(serverId);
+    this.pending.set(serverId, attempt);
     const connection = await connectMcpServer(config);
+    if (this.pending.get(serverId) !== attempt || this.configs.get(serverId) !== config) return connection;
+    this.pending.delete(serverId);
     this.connections.set(serverId, connection);
 
     if (connection.status === "connected") {
+      unregisterMcpTools(this.registry, serverId);
       registerMcpTools(this.registry, connection);
     }
 
@@ -356,6 +396,7 @@ export class McpManager {
 
   /** Disconnect from a specific server */
   disconnect(serverId: string): void {
+    this.pending.delete(serverId);
     unregisterMcpTools(this.registry, serverId);
     this.connections.delete(serverId);
     void disconnectMcpServer(serverId);

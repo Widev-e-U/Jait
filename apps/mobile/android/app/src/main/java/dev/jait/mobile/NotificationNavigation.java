@@ -36,6 +36,7 @@ final class NotificationNavigation {
             String link = activation.optString("link");
             if (!link.startsWith("/") || link.startsWith("//") || link.contains("\\")) return null;
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("pending", raw).apply();
+            ChatNotifications.updateSummary(context);
             return activation;
         } catch (Exception ignored) { return null; }
     }

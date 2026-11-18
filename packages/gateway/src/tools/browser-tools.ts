@@ -1,10 +1,16 @@
+import { z } from "zod";
+import { StagehandBrowserIntelligence, extractionFieldsSchema, type BrowserIntelligence } from "../services/browser-intelligence.js";
+import { chooseFastClickTarget } from "../services/browser-fast-click.js";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve, win32 } from "node:path";
+import { mkdir, readFile, writeFile, realpath, mkdtemp, rm, stat, chmod, open as openFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { relative, sep } from "node:path";
+import { resolve, win32 } from "node:path";
 import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
+import { BrowserSurface, type BrowserNetworkQuery, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 // PreviewService provides the sharing boundary for managed browser sessions.
@@ -12,7 +18,9 @@ type BrowserCollaborationService = {
   getSessionByPreviewSessionId(id: string): BrowserSessionRecord | null;
   getSessionByBrowserId(id: string): BrowserSessionRecord | null;
   assertAgentControl(id?: string): void;
+  restart?(sessionId: string): Promise<unknown>;
   attachAgentBrowser?(sessionId: string, browser: BrowserSurface, projectRoot?: string): void;
+  onBrowserControlLost?(callback: (browserId: string) => void): () => void;
 };
 type BrowserSessionRecord = {
   id: string;
@@ -37,6 +45,31 @@ interface BrowserNavigateInput {
 
 interface BrowserSnapshotInput {
   browserId?: string;
+  maxElements?: number;
+}
+
+interface BrowserEvalInput {
+  expression: string;
+  timeoutMs?: number;
+  browserId?: string;
+}
+
+interface BrowserNetworkInput {
+  limit?: number;
+  bodyLimit?: number;
+  sinceSeq?: number;
+  urlIncludes?: string;
+  urlRegex?: string;
+  method?: string;
+  statusAtLeast?: number;
+  includeHeaders?: boolean;
+  includeBodies?: boolean;
+  clear?: boolean;
+  browserId?: string;
+}
+
+interface BrowserOpenInput extends BrowserInspectInput {
+  url?: string;
 }
 
 interface BrowserInspectInput {
@@ -45,11 +78,14 @@ interface BrowserInspectInput {
 }
 
 interface BrowserClickInput {
-  selector: string;
+  selector?: string;
+  target?: string;
+  expected?: string;
   browserId?: string;
 }
 
 interface BrowserTypeInput {
+  expected?: string;
   selector: string;
   text: string;
   browserId?: string;
@@ -62,13 +98,15 @@ interface BrowserScrollInput {
 }
 
 interface BrowserSelectInput {
+  expected?: string;
   selector: string;
   value: string;
   browserId?: string;
 }
 
 interface BrowserWaitInput {
-  selector: string;
+  selector?: string;
+  durationMs?: number;
   timeoutMs?: number;
   browserId?: string;
 }
@@ -151,13 +189,22 @@ async function ensureBrowserSurface(
   context: ToolContext,
   browserId?: string,
   collaboration?: BrowserCollaborationService,
+  allowStart = false,
+  requireLiveView = false,
 ): Promise<BrowserSurface> {
   const previewSession = resolveActivePreviewSession(collaboration, context);
   assertPreviewBrowserSelection(previewSession, browserId);
 
   if (previewSession?.browserId) {
-    const preview = registry.getSurface(previewSession.browserId);
+    let preview = registry.getSurface(previewSession.browserId);
+    if (allowStart && previewSession.origin === "agent" && context.sessionId &&
+        (preview?.type !== "browser" || preview.state !== "running") && collaboration?.restart) {
+      collaboration.assertAgentControl(previewSession.browserId);
+      await collaboration.restart(context.sessionId);
+      preview = registry.getSurface(previewSession.browserId);
+    }
     if (preview?.type === "browser" && preview.state === "running") {
+      if (requireLiveView && !(preview as BrowserSurface).getLiveViewInfo()) throw new Error("The browser did not expose a live view.");
       return preview as BrowserSurface;
     }
     throw new Error(
@@ -171,12 +218,14 @@ async function ensureBrowserSurface(
     throw new Error("This browser belongs to another chat. Open a browser in the current chat.");
   }
   if (surface?.type !== "browser" || surface.state !== "running") {
+    if (!allowStart) throw new Error("No browser is open for this chat. Use browser.open with a URL first.");
     let pending = browserStarts.get(registry);
     if (!pending) { pending = new Map(); browserStarts.set(registry, pending); }
     let starting = pending.get(id);
     if (!starting) {
       starting = registry.startSurface("browser", id, {
         sessionId: context.sessionId, projectRoot: context.projectRoot, userId: context.userId,
+        ...(requireLiveView ? { requireLiveView: true } : {}),
       });
       pending.set(id, starting);
     }
@@ -184,6 +233,7 @@ async function ensureBrowserSurface(
     finally { if (pending.get(id) === starting) pending.delete(id); }
   }
   if (surface.type !== "browser") throw new Error(`Surface '${id}' is not a browser surface`);
+  if (requireLiveView && !(surface as BrowserSurface).getLiveViewInfo()) throw new Error("The browser did not expose a live view.");
   if (context.sessionId) collaboration?.attachAgentBrowser?.(context.sessionId, surface as BrowserSurface, context.projectRoot);
   collaboration?.assertAgentControl(surface.id);
   return surface as BrowserSurface;
@@ -209,7 +259,11 @@ function redactBrowserCapturePayload(
   return {
     ...payload,
     textPreview: "",
+    documentUrl: undefined,
+    documentTimeOrigin: undefined,
+    scrollPosition: undefined,
     interactiveElements: [],
+    visualContent: undefined,
     activeElement: null,
     dialogs: [],
     obstruction: null,
@@ -224,13 +278,18 @@ function buildSnapshotPayload(
   snapshot: BrowserPageSnapshot,
   session: BrowserSessionRecord | null,
   target?: BrowserTargetDiagnostics,
+  maxElements = 10,
 ): Record<string, unknown> {
   return redactBrowserCapturePayload({
     browserId,
     url: snapshot.url,
     title: snapshot.title,
+    documentUrl: snapshot.documentUrl,
+    documentTimeOrigin: snapshot.documentTimeOrigin,
+    scrollPosition: snapshot.scrollPosition,
     textPreview: snapshot.text.slice(0, 500),
-    interactiveElements: snapshot.elements.slice(0, 10),
+    interactiveElements: snapshot.elements.slice(0, maxElements),
+    visualContent: snapshot.visualContent,
     activeElement: snapshot.activeElement ?? null,
     dialogs: snapshot.dialogs ?? [],
     obstruction: snapshot.obstruction ?? null,
@@ -244,6 +303,7 @@ function buildSnapshotPayload(
 export function createBrowserNavigateTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
+  requireLiveView = false,
 ): ToolDefinition<BrowserNavigateInput> {
   return {
     name: "browser.navigate",
@@ -261,17 +321,58 @@ export function createBrowserNavigateTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      const url = typeof input.url === "string" ? input.url.trim() : "";
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error();
+      } catch {
+        return { ok: false, message: "A valid HTTP or HTTPS URL is required to open the browser." };
+      }
       const previewSession = resolveActivePreviewSession(collaboration, context);
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
-      const snapshot = await surface.navigate(input.url, context.signal);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration, true, requireLiveView || Boolean(context.sessionId && collaboration));
+      const snapshot = await surface.navigate(url, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
         message: `Navigated to ${snapshot.url}`,
         data: buildSnapshotPayload(surface.id, snapshot, session),
       };
+    },
+  };
+}
+
+export function createBrowserOpenTool(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition<BrowserOpenInput> {
+  const navigate = createBrowserNavigateTool(registry, collaboration, true);
+  const inspect = createBrowserInspectTool(registry, collaboration, true);
+  return {
+    ...inspect,
+    name: "browser.open",
+    description: "Open or inspect the live browser for this chat. With a URL, navigate to that HTTP/HTTPS page and return its summary. Without a URL, inspect the current page without navigating; automatically starts a live browser if none exists. Optionally diagnose a CSS selector. Reuses the chat's visible browser. For project previews, start the project server before opening its URL.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Optional HTTP/HTTPS URL to open. Omit to inspect the current page without navigating." },
+        selector: { type: "string", description: "Optional CSS selector to diagnose on the current or newly opened page" },
+        browserId: { type: "string", description: "Optional browser surface ID" },
+      },
+    },
+    discovery: {
+      aliases: ["browser", "preview", "browser inspect", "inspect page", "browser startup", "start browser session", "initial browser URL"],
+      capabilities: ["open URL", "inspect page", "diagnose selector", "initialize browser session", "live browser", "web browsing", "project preview"],
+      priority: 12,
+    },
+    async execute(input, context) {
+      if (!context.sessionId?.trim()) return { ok: false, message: "A valid chat session is required to open a browser." };
+      if (input.url !== undefined) {
+        const result = await navigate.execute({ url: input.url, browserId: input.browserId }, context);
+        if (!result.ok || !input.selector) return result;
+      }
+      return inspect.execute(input, context);
     },
   };
 }
@@ -290,6 +391,7 @@ export function createBrowserSnapshotTool(
       type: "object",
       properties: {
         browserId: { type: "string", description: "Optional browser surface ID" },
+        maxElements: { type: "number", description: "Maximum listed controls, 1–30 (default 10)." },
       },
     },
     async execute(input, context): Promise<ToolResult> {
@@ -298,6 +400,7 @@ export function createBrowserSnapshotTool(
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
+      const maxElements = z.number().int().min(1).max(30).default(10).parse(input.maxElements);
       const description = await surface.describe(context.signal);
       const inspection = await surface.inspect(undefined, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
@@ -310,7 +413,7 @@ export function createBrowserSnapshotTool(
           snapshot: isSecretSafeSession(session)
             ? "Browser capture is suppressed while the session is marked secret-safe."
             : description,
-          ...buildSnapshotPayload(surface.id, inspection.snapshot, session),
+          ...buildSnapshotPayload(surface.id, inspection.snapshot, session, undefined, maxElements),
         },
       };
     },
@@ -320,6 +423,7 @@ export function createBrowserSnapshotTool(
 export function createBrowserInspectTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
+  allowStart = false,
 ): ToolDefinition<BrowserInspectInput> {
   return {
     name: "browser.inspect",
@@ -339,7 +443,7 @@ export function createBrowserInspectTool(
       const previewSession = resolveActivePreviewSession(collaboration, context);
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration, allowStart, allowStart);
       const inspection = await surface.inspect(input.selector, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
@@ -362,7 +466,7 @@ function makeActionTool<TInput>(
   description: string,
   properties: Record<string, { type: string; description: string }>,
   required: string[],
-  action: (surface: BrowserSurface, input: TInput, signal?: AbortSignal) => Promise<unknown>,
+  action: (surface: BrowserSurface, input: TInput, signal: AbortSignal | undefined, context: ToolContext) => Promise<unknown>,
 ): ToolDefinition<TInput> {
   return {
     name,
@@ -380,19 +484,159 @@ function makeActionTool<TInput>(
       assertPreviewBrowserSelection(previewSession, browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
       const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
-      const result = await action(surface, input, context.signal);
+      let result: unknown;
+      try {
+        result = await action(surface, input, context.signal, context);
+      } catch (error) {
+        if ((name === "browser.click" || name === "browser.type") && context.browserTaskRecoverStale === true && error instanceof Error && "code" in error && error.code === "BROWSER_STALE_TARGET") {
+          return { ok: false, message: error.message, data: { code: "BROWSER_STALE_TARGET", actionDispatched: false } };
+        }
+        throw error;
+      }
       // Return a page snapshot after every action so agents can verify the
       // result without a separate browser.snapshot / browser.inspect call.
-      const inspection = await surface.inspect(undefined, context.signal).catch(() => null);
+      let inspection: Awaited<ReturnType<BrowserSurface["inspect"]>> | null = null;
+      try {
+        collaboration?.assertAgentControl(surface.id);
+        if (!isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+          inspection = await surface.inspect(undefined, context.signal);
+          collaboration?.assertAgentControl(surface.id);
+        }
+      } catch { inspection = null; }
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       const payload = inspection
         ? buildSnapshotPayload(surface.id, inspection.snapshot, session)
-        : { browserId: surface.id };
+        : redactBrowserCapturePayload({ browserId: surface.id }, session);
       return {
         ok: true,
         message: `${name} executed`,
-        data: { ...payload, actionResult: result },
+        data: { ...payload, actionResult: isSecretSafeSession(session) ? { captureSuppressed: true } : result },
       };
+    },
+  };
+}
+
+
+interface BrowserRecording {
+  sessionId: string;
+  userId: string | undefined;
+  projectRoot: string;
+  browserId: string;
+  directory: string;
+  output: string;
+  stopped: boolean;
+  revoked: boolean;
+  frames: number;
+  unsubscribe: () => void;
+  done: Promise<void>;
+  error?: string;
+}
+
+const browserRecordings = new WeakMap<SurfaceRegistry, Map<string, BrowserRecording>>();
+const runEncoder = promisify(execFile);
+const browserRecordingStarts = new WeakMap<SurfaceRegistry, Set<string>>();
+
+/** Record only the current chat's shared browser, with a bounded lifetime and frame rate. */
+export function createBrowserRecordTool(registry: SurfaceRegistry, collaboration?: BrowserCollaborationService): ToolDefinition<{ action: string }> {
+  let recordings = browserRecordings.get(registry);
+  if (!recordings) { recordings = new Map(); browserRecordings.set(registry, recordings); }
+  const active = recordings;
+  let starts = browserRecordingStarts.get(registry);
+  if (!starts) { starts = new Set(); browserRecordingStarts.set(registry, starts); }
+  const starting = starts;
+  return {
+    name: "browser.record",
+    description: "Start, stop, or check a bounded video recording of this chat's shared browser. Requires ffmpeg. Capture ends and is discarded if browser control is taken away.",
+    tier: "standard", category: "browser", source: "builtin",
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["start", "stop", "status"] } }, required: ["action"] },
+    async execute(input, context) {
+      if (!context.sessionId || !context.projectRoot) return { ok: false, message: "A chat session and project are required." };
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      if (context.executionNodeId) return { ok: false, message: "Browser recording currently requires a project on the gateway machine." };
+      const key = context.sessionId;
+      const existing = active.get(key);
+      if (existing && (existing.userId !== context.userId || existing.projectRoot !== resolve(context.projectRoot))) return { ok: false, message: "Recording belongs to another user or project." };
+      if (input.action === "status") return { ok: true, message: existing ? (existing.stopped ? "Recording is finishing or ready." : "Recording is active.") : "No recording for this chat." };
+      if (input.action === "stop") {
+        if (!existing) return { ok: false, message: "No recording for this chat." };
+        existing.stopped = true;
+        await existing.done;
+        active.delete(key);
+        if (existing.error) return { ok: false, message: existing.error };
+        return { ok: true, message: `Recording saved to ${existing.output}`, data: { path: existing.output, frames: existing.frames } };
+      }
+      if (input.action !== "start") return { ok: false, message: "Action must be start, stop, or status." };
+      if (existing || starting.has(key)) return { ok: false, message: "Stop the existing recording first." };
+      if (!collaboration?.onBrowserControlLost) return { ok: false, message: "Browser recording requires control-change monitoring." };
+      starting.add(key);
+      try {
+      const surface = await ensureBrowserSurface(registry, context, undefined, collaboration);
+      const check = () => {
+        collaboration.assertAgentControl(surface.id);
+        const session = collaboration.getSessionByBrowserId(surface.id);
+        if (!session || session.sessionId !== context.sessionId || session.secretSafe || (session.status && session.status !== "ready") || surface.state !== "running") throw new Error("Browser capture permission was lost.");
+      };
+      check();
+      const root = await realpath(context.projectRoot);
+      const jaitDir = resolve(root, ".jait");
+      await mkdir(jaitDir, { mode: 0o700 }).catch(error => { if (error.code !== "EEXIST") throw error; });
+      const realJait = await realpath(jaitDir);
+      const jaitRel = relative(root, realJait);
+      if (jaitRel === ".." || jaitRel.startsWith(`..${sep}`) || jaitRel.startsWith(sep)) throw new Error("Artifact directory escapes the project.");
+      const artifactDir = resolve(realJait, "artifacts");
+      await mkdir(artifactDir, { mode: 0o700 }).catch(error => { if (error.code !== "EEXIST") throw error; });
+      const actualDir = await realpath(artifactDir);
+      const rel = relative(root, actualDir);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || rel.startsWith(sep)) throw new Error("Artifact directory escapes the project.");
+      check();
+      const directory = await mkdtemp(resolve(actualDir, "browser-recording-"));
+      const output = resolve(actualDir, `browser-${randomUUID()}.mp4`);
+      const recording: BrowserRecording = { sessionId: key, userId: context.userId, projectRoot: resolve(context.projectRoot), browserId: surface.id, directory, output, stopped: false, revoked: false, frames: 0, unsubscribe: () => {}, done: Promise.resolve() };
+      recording.unsubscribe = collaboration.onBrowserControlLost((id) => { if (id === surface.id) { recording.revoked = true; recording.stopped = true; } });
+      try { check(); } catch (error) { recording.unsubscribe(); await rm(directory, { recursive: true, force: true }); throw error; }
+      active.set(key, recording);
+      recording.done = (async () => {
+        let outputCreated = false;
+        try {
+          const deadline = Date.now() + 60_000;
+          let totalBytes = 0;
+          while (!recording.stopped && Date.now() < deadline) {
+            const started = Date.now();
+            check();
+            const frame = resolve(directory, `frame-${String(recording.frames).padStart(5, "0")}.png`);
+            await surface.screenshot(frame, undefined, true);
+            check();
+            if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+            const size = (await stat(frame)).size;
+            totalBytes += size;
+            if (size > 8 * 1024 * 1024 || totalBytes > 100 * 1024 * 1024) throw new Error("Recording exceeded its frame storage limit.");
+            recording.frames++;
+            await new Promise<void>(r => setTimeout(r, Math.max(0, 200 - (Date.now() - started))));
+          }
+          recording.stopped = true;
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+          check();
+          if (!recording.frames) throw new Error("No frames were captured.");
+          const outputFile = await openFile(output, "wx", 0o600);
+          outputCreated = true;
+          await outputFile.close();
+          await runEncoder("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-framerate", "5", "-i", resolve(directory, "frame-%05d.png"), "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2", "-c:v", "libx264", "-pix_fmt", "yuv420p", output], { timeout: 120_000, maxBuffer: 64 * 1024 });
+          check();
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+          await chmod(output, 0o600);
+          check();
+          if (recording.revoked) throw new Error("Browser control changed; recording discarded.");
+        } catch (error) {
+          recording.error = recording.revoked ? "Browser control changed; recording discarded." : `Recording failed: ${error instanceof Error ? error.message : "unknown error"}`;
+          if (outputCreated) await rm(output, { force: true }).catch(() => {});
+        } finally {
+          recording.stopped = true;
+          recording.unsubscribe();
+          await rm(directory, { recursive: true, force: true }).catch(() => {});
+        }
+      })();
+      return { ok: true, message: "Browser recording started; use browser.record stop to save it. It stops automatically after 60 seconds." };
+      } finally { starting.delete(key); }
     },
   };
 }
@@ -402,20 +646,66 @@ export function createBrowserInteractionTools(
   collaboration?: BrowserCollaborationService,
   ws?: Pick<WsControlPlane, "proxyFsOp">,
 ): ToolDefinition[] {
+  const parseGuard = (expected: string) => z.object({ documentUrl: z.string().min(1).max(4096), documentTimeOrigin: z.number().finite(), tagName: z.string().min(1).max(100), name: z.string().max(200), text: z.string().max(200), inputType: z.string().max(50).optional(), option: z.object({ value: z.string().max(200), label: z.string().max(200) }).strict().optional() }).strict().parse(JSON.parse(expected));
   return [
+    createBrowserRecordTool(registry, collaboration),
     makeActionTool<BrowserClickInput>(
       registry,
       collaboration,
       "browser.click",
-      "Click an element in the browser and return the updated page snapshot. When a preview is active, automatically targets the preview browser. Supports CSS selectors and Playwright text selectors (e.g. 'button:has-text(\"Save\")' or 'text=Submit').",
+      "Click one browser control and return the updated page snapshot. Give a CSS/Playwright selector, or use target with the control's full visible label to let configured System One confirm a unique matching control in one call. Target mode sends control labels and the target description to System One, is disabled in secret-safe sessions, and stops on ambiguity or page changes. Do not include credentials in target.",
       {
-        selector: { type: "string", description: "CSS or Playwright selector for the target element (e.g. '#my-btn', 'button:has-text(\"OK\")')." },
-        browserId: { type: "string", description: "Browser surface ID (from preview.inspect or preview.status). Auto-resolves to the preview browser when omitted." },
+        selector: { type: "string", description: "CSS or Playwright selector. Supply either selector or target." },
+        target: { type: "string", description: "One requested control, including its complete visible label, e.g. 'Open Settings'. Requires configured System One; do not include credentials." },
+        expected: { type: "string", description: "Optional JSON identity from a fresh browser snapshot; reject changed or ambiguous targets." },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
-      ["selector"],
-      async (surface, input, signal) => {
-        await surface.click(input.selector, signal);
-        return { selector: input.selector };
+      [],
+      async (surface, input, signal, context) => {
+        const selector = typeof input.selector === "string" ? input.selector.trim() : "";
+        const target = typeof input.target === "string" ? input.target.trim() : "";
+        if (Boolean(selector) === Boolean(target) || target.length > 500) throw new Error("Provide exactly one selector or target (at most 500 characters).");
+        if (input.expected && !selector) throw new Error("Expected identity requires a selector.");
+        if (selector) {
+          const guard = input.expected ? parseGuard(input.expected) : undefined;
+          if (guard) {
+            const controlLost = new AbortController();
+            const unsubscribe = collaboration?.onBrowserControlLost?.(browserId => {
+              if (browserId === surface.id) controlLost.abort();
+            });
+            const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+            try {
+              collaboration?.assertAgentControl(surface.id);
+              if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+              await surface.click(selector, actionSignal, guard);
+            } finally { unsubscribe?.(); }
+          } else await surface.click(selector, signal);
+          return { selector };
+        }
+        const controlLost = new AbortController();
+        const unsubscribe = collaboration?.onBrowserControlLost?.(browserId => {
+          if (browserId === surface.id) controlLost.abort();
+        });
+        const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+        const assertCapture = () => {
+          actionSignal.throwIfAborted();
+          collaboration?.assertAgentControl(surface.id);
+          if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+            throw new Error("Browser inference is suppressed while this session is secret-safe. Return control after login first.");
+          }
+        };
+        try {
+          assertCapture();
+          const snapshot = await surface.fastClickSnapshot(target, actionSignal);
+          assertCapture();
+          const selected = await chooseFastClickTarget(snapshot, target, context.apiKeys, actionSignal);
+          assertCapture();
+          await surface.click(selected.selector, actionSignal, selected.guard);
+          // Once the click completed, report it even if the user takes control.
+          return { selector: selected.selector, resolvedBy: "system-one" };
+        } finally {
+          unsubscribe?.();
+        }
       },
     ),
     makeActionTool<BrowserTypeInput>(
@@ -426,11 +716,22 @@ export function createBrowserInteractionTools(
       {
         selector: { type: "string", description: "CSS or Playwright selector for the target input" },
         text: { type: "string", description: "Text to type" },
+        expected: { type: "string", description: "Optional observed target identity; reject changed or ambiguous targets." },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "text"],
       async (surface, input, signal) => {
-        await surface.typeText(input.selector, input.text, signal);
+        if (input.expected) {
+          const guard = parseGuard(input.expected);
+          const controlLost = new AbortController();
+          const unsubscribe = collaboration?.onBrowserControlLost?.(id => { if (id === surface.id) controlLost.abort(); });
+          const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+          try {
+            collaboration?.assertAgentControl(surface.id);
+            if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+            await surface.typeText(input.selector, input.text, actionSignal, guard);
+          } finally { unsubscribe?.(); }
+        } else await surface.typeText(input.selector, input.text, signal);
         return { selector: input.selector };
       },
     ),
@@ -458,11 +759,22 @@ export function createBrowserInteractionTools(
       {
         selector: { type: "string", description: "CSS or Playwright selector for the select element" },
         value: { type: "string", description: "Option value to choose" },
+        expected: { type: "string", description: "Optional observed target identity; reject changed or ambiguous targets." },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "value"],
       async (surface, input, signal) => {
-        await surface.select(input.selector, input.value, signal);
+        if (input.expected) {
+          const guard = parseGuard(input.expected);
+          const controlLost = new AbortController();
+          const unsubscribe = collaboration?.onBrowserControlLost?.(id => { if (id === surface.id) controlLost.abort(); });
+          const actionSignal = signal ? AbortSignal.any([signal, controlLost.signal]) : controlLost.signal;
+          try {
+            collaboration?.assertAgentControl(surface.id);
+            if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) throw new Error("Browser inference is suppressed in a secret-safe session.");
+            await surface.select(input.selector, input.value, actionSignal, guard);
+          } finally { unsubscribe?.(); }
+        } else await surface.select(input.selector, input.value, signal);
         return { selector: input.selector, value: input.value };
       },
     ),
@@ -473,18 +785,111 @@ export function createBrowserInteractionTools(
       "Wait for an element to appear and return the page snapshot once found. When a preview is active, automatically targets the preview browser.",
       {
         selector: { type: "string", description: "CSS or Playwright selector to wait for" },
+        durationMs: { type: "number", description: "Bounded delay in milliseconds, 1–5000, instead of a selector" },
         timeoutMs: { type: "number", description: "Timeout in milliseconds (default 10000)" },
         browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
-      ["selector"],
+      [],
       async (surface, input, signal) => {
+        if (input.durationMs !== undefined) {
+          const duration = z.number().int().min(1).max(5000).parse(input.durationMs);
+          if (input.selector) throw new Error("Choose a selector or a duration.");
+          const { setTimeout: delay } = await import("node:timers/promises");
+          await delay(duration, undefined, { signal });
+          return { durationMs: duration };
+        }
+        if (!input.selector) throw new Error("A selector or duration is required.");
         await surface.waitFor(input.selector, input.timeoutMs ?? 10000, signal);
         return { selector: input.selector, timeoutMs: input.timeoutMs ?? 10000 };
       },
     ),
     {
+      name: "browser.eval",
+      description: "Evaluate a JavaScript expression in the current page and return its value. Full DevTools-level access: reads globals, localStorage/sessionStorage, fetch() results, DOM state. Runs with userGesture and awaitPromise, so async expressions are awaited.",
+      tier: "standard",
+      category: "browser",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          expression: { type: "string", description: "JavaScript expression or IIFE body to evaluate in the page" },
+          timeoutMs: { type: "number", description: "Evaluation timeout in milliseconds (default 30000, max 300000)" },
+          browserId: { type: "string", description: "Optional browser surface ID. Auto-resolves to the preview browser when omitted." },
+        },
+        required: ["expression"],
+      },
+      async execute(input: BrowserEvalInput, context: ToolContext): Promise<ToolResult> {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+        const browserId = input.browserId?.trim() || undefined;
+        const previewSession = resolveActivePreviewSession(collaboration, context);
+        assertPreviewBrowserSelection(previewSession, browserId);
+        collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
+        const result = await surface.evaluate(input.expression, {
+          timeoutMs: input.timeoutMs,
+          signal: context.signal,
+        });
+        return {
+          ok: result.ok,
+          message: result.ok
+            ? "browser.eval executed"
+            : `browser.eval failed: ${result.error ?? "unknown error"}`,
+          data: { browserId: surface.id, result },
+        };
+      },
+    },
+    {
+      name: "browser.network",
+      description: "Read the page's live network log captured over Chrome DevTools Protocol (Network domain): every request/response with method, URL, status, headers, request POST payload and response body. Filter by URL/method/status, page through with sinceSeq, clear when done. Full DevTools access, including OAuth token requests.",
+      tier: "standard",
+      category: "browser",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max entries to return (default 50, max 1000)" },
+          bodyLimit: { type: "number", description: "Max characters per captured body (default 20000, max 200000)" },
+          sinceSeq: { type: "number", description: "Only return entries with seq greater than this value" },
+          urlIncludes: { type: "string", description: "Case-insensitive substring filter on the request URL" },
+          urlRegex: { type: "string", description: "Regular expression filter on the request URL" },
+          method: { type: "string", description: "HTTP method filter, e.g. POST" },
+          statusAtLeast: { type: "number", description: "Only entries with status >= this value" },
+          includeHeaders: { type: "boolean", description: "Include request/response headers (default false)" },
+          includeBodies: { type: "boolean", description: "Include request/response bodies (default true)" },
+          clear: { type: "boolean", description: "Clear the captured buffer before returning" },
+          browserId: { type: "string", description: "Optional browser surface ID. Auto-resolves to the preview browser when omitted." },
+        },
+      },
+      async execute(input: BrowserNetworkInput, context: ToolContext): Promise<ToolResult> {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+        const browserId = input.browserId?.trim() || undefined;
+        const previewSession = resolveActivePreviewSession(collaboration, context);
+        assertPreviewBrowserSelection(previewSession, browserId);
+        collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
+        const query: BrowserNetworkQuery = {
+          limit: input.limit,
+          bodyLimit: input.bodyLimit,
+          sinceSeq: input.sinceSeq,
+          urlIncludes: input.urlIncludes,
+          urlRegex: input.urlRegex,
+          method: input.method,
+          statusAtLeast: input.statusAtLeast,
+          includeHeaders: input.includeHeaders,
+          includeBodies: input.includeBodies,
+          clear: input.clear,
+        };
+        const log = await surface.networkLog(query, context.signal);
+        return {
+          ok: true,
+          message: `${log.entries.length} network request(s) captured (nextSeq=${log.nextSeq})`,
+          data: { browserId: surface.id, ...log },
+        };
+      },
+    },
+    {
       name: "browser.screenshot",
-      description: "Capture a browser screenshot",
+      description: "Capture a browser screenshot and display it inline in chat. Do not call image.view afterward or display the same image again.",
       tier: "standard",
       category: "browser",
       source: "builtin",
@@ -521,8 +926,10 @@ export function createBrowserInteractionTools(
           input.path?.trim() || `.jait/shots/browser-${randomUUID()}.png`);
         const screenshotPath = await surface.screenshot(outputPath, context.signal);
         const extension = /\.(png|jpe?g|webp|gif)$/i.exec(screenshotPath)?.[0].toLowerCase() ?? ".png";
-        const displayDir = resolve(process.cwd(), ".jait", "shots");
-        const displayPath = join(displayDir, `browser-${randomUUID()}${extension}`);
+        // The image route only serves paths inside the chat's project root, so
+        // the display cache must be project-scoped rather than cwd-scoped.
+        const displayDir = projectPath.resolve(context.projectRoot, ".jait", "shots");
+        const displayPath = projectPath.resolve(displayDir, `browser-${randomUUID()}${extension}`);
         let bytes: Buffer;
         try {
           bytes = await readFile(screenshotPath);
@@ -537,7 +944,7 @@ export function createBrowserInteractionTools(
         await writeFile(displayPath, bytes);
         return {
           ok: true,
-          message: `Screenshot saved to ${screenshotPath}`,
+          message: `Screenshot saved to ${screenshotPath} and displayed in chat. Do not call image.view or display this screenshot again.`,
           data: { browserId: surface.id, result: { path: displayPath, capturePath: screenshotPath } },
         };
       },
@@ -665,6 +1072,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing BRAVE_API_KEY, falling back to openai web_search",
+            "brave",
           );
         }
         return searchBrave(guard, input.query, limit, apiKey);
@@ -680,6 +1088,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing PERPLEXITY_API_KEY/OPENROUTER_API_KEY, falling back to openai web_search",
+            "perplexity",
           );
         }
         return searchPerplexity(guard, input.query, limit, { perplexityKey, openRouterKey });
@@ -694,6 +1103,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing XAI_API_KEY, falling back to openai web_search",
+            "grok",
           );
         }
         return searchGrok(guard, input.query, limit, apiKey);
@@ -708,6 +1118,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing GEMINI_API_KEY, falling back to openai web_search",
+            "gemini",
           );
         }
         return searchGemini(guard, input.query, limit, apiKey);
@@ -722,6 +1133,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing MOONSHOT_API_KEY, falling back to openai web_search",
+            "kimi",
           );
         }
         return searchKimi(guard, input.query, limit, apiKey);
@@ -801,13 +1213,15 @@ async function searchOpenAI(
     model?: string;
   },
   prefixMessage?: string,
+  requestedProvider?: string,
 ): Promise<ToolResult> {
+  const fallback = requestedProvider ? { requestedProvider, fallbackReason: "missing_provider_key" } : {};
   const apiKey = normalizeApiKey(options.apiKey);
   if (!apiKey) {
     return {
       ok: false,
       message: `${prefixMessage ? `${prefixMessage}. ` : ""}Missing OPENAI_API_KEY`,
-      data: { provider: "openai", query, results: [] },
+      data: { provider: "openai", ...fallback, code: "missing_api_key", query, results: [] },
     };
   }
   const baseUrl = options.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL;
@@ -828,16 +1242,15 @@ async function searchOpenAI(
         input: `Provide up to ${limit} web search results for: ${query}`,
       }),
     });
-    const data = await response.json() as OpenAIWebSearchResponse;
     if (!response.ok) {
-      const detail = data.error?.message || `HTTP ${response.status}`;
       return {
         ok: false,
-        message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed (${response.status}): ${detail}`,
-        data: { provider: "openai", query, results: [] },
+        message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed (HTTP ${response.status}). Check provider credentials, model and endpoint settings.`,
+        data: { provider: "openai", ...fallback, code: "upstream_http", status: response.status, query, results: [] },
       };
     }
 
+    const data = await response.json() as OpenAIWebSearchResponse;
     const { results, summary } = extractOpenAIWebSearchResults(data, query, limit);
     return {
       ok: true,
@@ -846,17 +1259,18 @@ async function searchOpenAI(
         : "Search results (openai)",
       data: {
         provider: "openai",
+        ...fallback,
         model,
         query,
         results,
         summary,
       },
     };
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed: ${extractErrorMessage(err)}`,
-      data: { provider: "openai", query, results: [] },
+      message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed. Check the endpoint, network connection and provider response.`,
+      data: { provider: "openai", ...fallback, code: "unavailable", query, results: [] },
     };
   }
 }
@@ -1279,4 +1693,69 @@ export function createBrowserSandboxStartTool(sandboxManager = new SandboxManage
       };
     },
   };
+}
+
+/** Shares the same visible-session and human-control boundary as other browser tools. */
+export function createBrowserIntelligenceTools(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+  intelligence: BrowserIntelligence = new StagehandBrowserIntelligence(),
+): ToolDefinition[] {
+  const instruction = z.string().trim().min(1).max(4000);
+  const observe = z.object({ instruction }).strict();
+  const extract = z.object({ instruction, fields: z.unknown() }).strict()
+    .transform(body => ({ ...body, fields: extractionFieldsSchema.parse(body.fields) }));
+  const check = z.object({ selector: z.string().min(1).max(1000), text: z.string().max(4000).optional() }).strict();
+  const fields = { type: "array", items: { type: "object", properties: {
+    name: { type: "string" }, description: { type: "string" }, type: { type: "string", enum: ["string", "number", "boolean", "strings"] },
+  }, required: ["name", "description", "type"] } };
+  return ["observe", "extract", "check"].map((operation): ToolDefinition => ({
+    name: `browser.${operation}`, tier: "standard", category: "browser", source: "builtin",
+    description: operation === "observe"
+      ? "Use Stagehand to discover controls in this chat's visible browser. Returns candidate workflow steps without executing them. Review then use normal browser tools; save successful steps with browser.workflow.save. Page content goes to the configured model; suppressed in secret-safe sessions. Requires a provider API key and Docker live browser."
+      : operation === "extract"
+        ? "Extract typed fields from the visible page using Stagehand. Return values are observations, not proof that a workflow completed. Page content goes to the configured model; suppressed in secret-safe sessions. Requires a provider API key and Docker live browser."
+        : "Check that an element exists and optionally contains the expected text, without model inference. Fails the workflow when its expected result is absent.",
+    parameters: operation === "check"
+      ? { type: "object", properties: { selector: { type: "string" }, text: { type: "string" } }, required: ["selector"] }
+      : { type: "object", properties: { instruction: { type: "string" }, ...(operation === "extract" ? { fields } : {}) }, required: operation === "extract" ? ["instruction", "fields"] : ["instruction"] },
+    async execute(input, context) {
+      const body = operation === "observe" ? observe.parse(input) : operation === "extract" ? extract.parse(input) : check.parse(input);
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      const preview = resolveActivePreviewSession(collaboration, context);
+      collaboration?.assertAgentControl(preview?.browserId);
+      const surface = await ensureBrowserSurface(registry, context, undefined, collaboration);
+      const assertCapture = () => {
+        collaboration?.assertAgentControl(surface.id);
+        if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+          throw new Error("Browser inference and checks are suppressed while this session is secret-safe. Return control after login first.");
+        }
+      };
+      assertCapture();
+      let data: unknown;
+      if (operation === "check") {
+        const expected = check.parse(body);
+        const inspection = await surface.inspect(expected.selector, context.signal);
+        assertCapture();
+        const target = inspection.target;
+        const ok = Boolean(target?.found && (expected.text === undefined || (target.text ?? "").includes(expected.text)));
+        return { ok, message: ok ? "Expected browser result verified" : "Expected browser result missing; workflow stopped", data: { matched: ok } };
+      }
+      try {
+        data = operation === "observe"
+          ? await intelligence.observe(surface, observe.parse(body).instruction, context)
+          : await intelligence.extract(surface, extract.parse(body).instruction, extract.parse(body).fields, context);
+      } catch (error) {
+        // SDK errors may echo page content or credentials; retain only safe configuration guidance.
+        const raw = error instanceof Error ? error.message : "";
+        const message = /incorrect api key|invalid api key|authentication|unauthorized|\b401\b/i.test(raw)
+          ? "Stagehand's model provider rejected the API key. Update that provider key in Settings before retrying."
+          : /^(Stagehand needs |Stagehand requires |The visible browser tab changed)/.test(raw)
+            ? raw : context.signal?.aborted ? "Cancelled" : "Stagehand could not read this page. Inspect the browser, configuration and extension compatibility before retrying.";
+        return { ok: false, message };
+      }
+      assertCapture();
+      return { ok: true, message: operation === "observe" ? "Discovered browser actions; review before executing" : "Structured browser extraction", data };
+    },
+  }));
 }

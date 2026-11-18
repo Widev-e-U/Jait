@@ -10,6 +10,7 @@
 //! - MAX_DIFF_FILE_BYTES = 10 MB (git-file-read working tree side)
 
 use crate::types::*;
+use std::io::Read;
 
 pub const MAX_FS_OP_READ_BYTES: u64 = 20 * 1024 * 1024;
 pub const MAX_FS_OP_READ_BINARY_BYTES: u64 = 30 * 1024 * 1024;
@@ -37,12 +38,34 @@ pub fn read(path: &std::path::Path) -> Result<FileText, String> {
 
 pub fn read_binary(path: &std::path::Path) -> Result<ReadBinaryOut, String> {
     assert_readable_size(path, MAX_FS_OP_READ_BINARY_BYTES)?;
-    let bytes = std::fs::read(path).map_err(|e| format!("readBinary failed: {e}"))?;
+    // Bound the actual read as well as the metadata check: the file can grow
+    // or be replaced between stat and read.
+    let file = std::fs::File::open(path).map_err(|e| format!("readBinary failed: {e}"))?;
+    if !file
+        .metadata()
+        .map_err(|e| format!("readBinary failed: {e}"))?
+        .is_file()
+    {
+        return Err("readBinary requires a regular file".into());
+    }
+    let bytes = read_bounded_binary(file, MAX_FS_OP_READ_BINARY_BYTES)?;
     use base64::Engine;
     Ok(ReadBinaryOut {
         base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
         bytes: bytes.len() as u64,
     })
+}
+
+fn read_bounded_binary(reader: impl Read, max: u64) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::new();
+    reader
+        .take(max + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("readBinary failed: {e}"))?;
+    if bytes.len() as u64 > max {
+        return Err("File too large to open remotely".into());
+    }
+    Ok(bytes)
 }
 
 fn assert_readable_size(path: &std::path::Path, max: u64) -> Result<(), String> {
@@ -300,6 +323,28 @@ mod tests {
         let err = read(&f).unwrap_err();
         assert!(err.contains("too large"), "got: {err}");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn bounded_binary_read_detects_growth_during_read() {
+        assert_eq!(read_bounded_binary(&b"abc"[..], 3).unwrap(), b"abc");
+        assert!(read_bounded_binary(&b"abcd"[..], 3)
+            .unwrap_err()
+            .contains("too large"));
+    }
+
+    #[test]
+    fn binary_read_rejects_non_files_and_oversized_files() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../.jait/artifacts")
+            .join(format!("fs-binary-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(read_binary(&dir).is_err());
+        let file = dir.join("large.bin");
+        let handle = std::fs::File::create(&file).unwrap();
+        handle.set_len(MAX_FS_OP_READ_BINARY_BYTES + 1).unwrap();
+        assert!(read_binary(&file).unwrap_err().contains("too large"));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

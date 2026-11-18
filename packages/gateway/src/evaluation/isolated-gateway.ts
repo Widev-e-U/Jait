@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export async function startIsolatedEvaluationGateway(source: { gateway: string; token: string; signal?: AbortSignal }) {
+export async function startIsolatedEvaluationGateway(
+  source: { gateway: string; token: string; signal?: AbortSignal },
+  runtime: { spawn: typeof spawn } = { spawn },
+) {
   source.signal?.throwIfAborted();
   const response = await fetch(new URL("/api/auth/settings", source.gateway), {
     headers: { Authorization: "Bearer " + source.token }, redirect: "error",
@@ -15,7 +18,7 @@ export async function startIsolatedEvaluationGateway(source: { gateway: string; 
   const settings = await response.json() as { jait_backend?: string };
   const state = await mkdtemp(path.join(tmpdir(), "jait-eval-state-"));
   await chmod(state, 0o700);
-  const child = spawn("bun", [fileURLToPath(new URL("./isolated-gateway-child.ts", import.meta.url))], {
+  const child = runtime.spawn("bun", [fileURLToPath(new URL("./isolated-gateway-child.ts", import.meta.url))], {
     env: { ...process.env, __JAIT_CLI: "1", JAIT_STATE_DIR: state, JAIT_DB_PATH: path.join(state, "data/jait.db"),
       PORT: "0", WS_PORT: "0", HOST: "127.0.0.1", JWT_SECRET: randomUUID(), LOG_LEVEL: "warn",
       LLM_PROVIDER: settings.jait_backend ?? "openai",

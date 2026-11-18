@@ -7,6 +7,8 @@ import { AuditWriter } from "./services/audit.js";
 import { uuidv7 } from "./db/uuidv7.js";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
+import { UserService } from "./services/users.js";
+import { signAuthToken } from "./security/http-auth.js";
 
 const isBunRuntime = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 const describeDb = isBunRuntime ? describe : describe.skip;
@@ -273,15 +275,20 @@ describeDb("AuditWriter", () => {
 describeDb("Session REST routes (with DB)", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let svc: SessionService;
+  let headers: { authorization: string };
   let audit: AuditWriter;
   let sqlite: { close: () => void } | undefined;
 
   beforeEach(async () => {
     const testDb = makeTestDb();
     sqlite = testDb.sqlite;
+    const userService = new UserService(testDb.db);
+    const user = userService.createUser("session-route-owner", "test-password");
+    headers = { authorization: "Bearer " + await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret) };
     svc = new SessionService(testDb.db);
     audit = new AuditWriter(testDb.db);
     app = await createServer(testConfig, {
+      db: testDb.db, sqlite: testDb.sqlite, userService,
       sessionService: svc,
       audit,
     });
@@ -294,6 +301,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("POST /api/sessions creates a new session", async () => {
     const res = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "My Project" },
@@ -307,17 +315,20 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/sessions lists sessions", async () => {
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Session 1" },
     });
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Session 2" },
     });
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/sessions",
     });
@@ -328,6 +339,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/sessions?status=active filters", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Active" },
@@ -336,11 +348,13 @@ describeDb("Session REST routes (with DB)", () => {
 
     // Archive it
     await app.inject({
+      headers,
       method: "POST",
       url: `/api/sessions/${session.id}/archive`,
     });
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/sessions?status=active",
     });
@@ -350,22 +364,26 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/sessions?limit=N returns a bounded page and hasMore", async () => {
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Session 1" },
     });
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Session 2" },
     });
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Session 3" },
     });
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/sessions?limit=2",
     });
@@ -379,6 +397,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/sessions/:id returns session", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Find me" },
@@ -386,6 +405,7 @@ describeDb("Session REST routes (with DB)", () => {
     const session = JSON.parse(createRes.body);
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: `/api/sessions/${session.id}`,
     });
@@ -395,6 +415,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/sessions/:id returns 404 for unknown", async () => {
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/sessions/nonexistent-id",
     });
@@ -403,6 +424,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("PATCH /api/sessions/:id updates name", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Old name" },
@@ -410,6 +432,7 @@ describeDb("Session REST routes (with DB)", () => {
     const session = JSON.parse(createRes.body);
 
     const res = await app.inject({
+      headers,
       method: "PATCH",
       url: `/api/sessions/${session.id}`,
       payload: { name: "New name" },
@@ -420,6 +443,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("DELETE /api/sessions/:id soft-deletes", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Delete me" },
@@ -427,6 +451,7 @@ describeDb("Session REST routes (with DB)", () => {
     const session = JSON.parse(createRes.body);
 
     const res = await app.inject({
+      headers,
       method: "DELETE",
       url: `/api/sessions/${session.id}`,
     });
@@ -435,6 +460,7 @@ describeDb("Session REST routes (with DB)", () => {
 
     // Session should be deleted status
     const getRes = await app.inject({
+      headers,
       method: "GET",
       url: `/api/sessions/${session.id}`,
     });
@@ -443,6 +469,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("session creation is audited", async () => {
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Audited" },
@@ -455,6 +482,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("session deletion is audited", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "To delete" },
@@ -462,6 +490,7 @@ describeDb("Session REST routes (with DB)", () => {
     const session = JSON.parse(createRes.body);
 
     await app.inject({
+      headers,
       method: "DELETE",
       url: `/api/sessions/${session.id}`,
     });
@@ -473,12 +502,14 @@ describeDb("Session REST routes (with DB)", () => {
   // Self-control tools
   it("GET /api/tools/sessions.list returns active sessions", async () => {
     await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Active" },
     });
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/tools/sessions.list",
     });
@@ -490,6 +521,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/tools/sessions.status returns session info", async () => {
     const createRes = await app.inject({
+      headers,
       method: "POST",
       url: "/api/sessions",
       payload: { name: "Check status" },
@@ -497,6 +529,7 @@ describeDb("Session REST routes (with DB)", () => {
     const session = JSON.parse(createRes.body);
 
     const res = await app.inject({
+      headers,
       method: "GET",
       url: `/api/tools/sessions.status?sessionId=${session.id}`,
     });
@@ -506,6 +539,7 @@ describeDb("Session REST routes (with DB)", () => {
 
   it("GET /api/tools/sessions.status requires sessionId param", async () => {
     const res = await app.inject({
+      headers,
       method: "GET",
       url: "/api/tools/sessions.status",
     });

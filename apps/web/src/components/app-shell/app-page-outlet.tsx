@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { EmailPage } from '@/components/email'
 import { CalendarPage } from '@/components/calendar'
@@ -12,6 +13,8 @@ import type { ChatStreamingAction, JaitBackend, SttProvider } from '@/hooks/useA
 import type { AppView } from '@/lib/app-view'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { AutomationRepository } from '@/lib/automation-repositories'
+
+const MessengerPage = lazy(() => import('@/components/messenger/messenger-page'))
 
 interface AppPageOutletProps {
   activeSessionId: string | null
@@ -96,6 +99,15 @@ export function AppPageOutlet({
   voiceRecording,
   voiceTranscribing,
 }: AppPageOutletProps) {
+  if (currentView === 'messenger') {
+    return <div className={'flex min-h-0 flex-1 overflow-hidden ' + (isMobile ? 'pt-12' : '')}>
+      <ErrorBoundary name="Messenger" variant="section" className="h-full w-full" resetKeys={[currentView, token]}>
+        <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading messenger…</div>}>
+          <MessengerPage token={token} sttProvider={sttProvider} />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  }
   if (currentView === 'pulls') {
     return (
       <PageFrame isMobile={isMobile}>

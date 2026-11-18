@@ -1,0 +1,690 @@
+[
+  {
+    "id": "internal.provider.reset.no-evidence-future-reset",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.42, "anchorIso": "2026-03-11T09:37:00.000Z", "now": "2026-03-11T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T05:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T10:00:00.000Z" },
+      { "path": "/0/source", "kind": "eq", "value": "window-grid" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.week-aligned-anchor-stable",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.4, "anchorIso": "2026-03-09T00:00:00.000Z", "now": "2026-03-11T09:37:00.000Z" } },
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.4, "anchorIso": "2026-03-16T00:00:00.000Z", "now": "2026-03-18T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T10:00:00.000Z" },
+      { "path": "/1/resetsAt", "kind": "eq", "value": "2026-03-18T10:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.no-evidence-reset-after-now",
+    "calls": [
+      { "op": "provider.reset-millis", "input": { "windowDurationMins": 300, "utilization": 0.42, "anchorIso": "2026-03-11T09:37:00.000Z", "now": "2026-03-11T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/resetsAtMs", "kind": "gt-path", "other": "/0/nowMs", "factor": 1 },
+      { "path": "/0/resetsAtMs", "kind": "eq", "value": 1773223200000 },
+      { "path": "/0/resetsAtHourUtc", "kind": "eq", "value": 10 },
+      { "path": "/0/windowStartMs", "kind": "eq", "value": 1773205200000 },
+      { "path": "/0/source", "kind": "eq", "value": "window-grid" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.session-grid-hour-stable",
+    "calls": [
+      { "op": "provider.reset-millis", "input": { "windowDurationMins": 300, "utilization": 0.4, "anchorIso": "2026-03-09T00:00:00.000Z", "now": "2026-03-11T09:37:00.000Z" } },
+      { "op": "provider.reset-millis", "input": { "windowDurationMins": 300, "utilization": 0.4, "anchorIso": "2026-03-16T00:00:00.000Z", "now": "2026-03-18T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/resetsAtHourUtc", "kind": "eq", "value": 10 },
+      { "path": "/1/resetsAtHourUtc", "kind": "eq", "value": 10 },
+      { "path": "/0/resetsAtMs", "kind": "eq", "value": 1773223200000 },
+      { "path": "/1/resetsAtMs", "kind": "eq", "value": 1773828000000 }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.weekly-window-anchor",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 10080, "utilization": 0.2, "anchorIso": "2026-03-09T00:00:00.000Z", "now": "2026-03-11T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-09T00:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-16T00:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.monthly-calendar",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 43200, "utilization": 0.2, "anchorIso": "2026-01-31T00:00:00.000Z", "now": "2026-03-11T09:37:00.000Z" } }
+    ],
+    "assertions": [
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-01T00:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-04-01T00:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.observed-rollover-snapped",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.03, "now": "2026-03-11T10:20:00.000Z", "previous": { "utilization": 0.81, "resetsAt": "2026-03-11T10:00:00.000Z", "source": "observed", "observedAt": "2026-03-11T09:37:00.000Z" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "observed" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T10:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T15:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.observed-rollover-bounded-by-observation",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.05, "now": "2026-03-11T09:50:00.000Z", "previous": { "utilization": 0.6, "resetsAt": "2026-03-11T10:00:00.000Z", "source": "window-grid", "observedAt": "2026-03-11T09:40:00.000Z" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "observed" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T09:50:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T14:50:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.evidence-backed-carry-forward",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.55, "now": "2026-03-11T16:20:00.000Z", "previous": { "utilization": 0.5, "resetsAt": "2026-03-11T20:00:00.000Z", "source": "observed" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "observed" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T20:00:00.000Z" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T15:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.advance-after-predicted-reset",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.6, "now": "2026-03-11T21:30:00.000Z", "previous": { "utilization": 0.6, "resetsAt": "2026-03-11T20:00:00.000Z", "source": "observed" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "window-boundary" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T20:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-12T01:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.guess-phase-without-confidence",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.4, "now": "2026-03-11T21:30:00.000Z", "previous": { "utilization": 0.4, "resetsAt": "2026-03-11T20:00:00.000Z", "source": "window-grid" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "window-grid" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-11T20:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-12T01:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.small-decrease-not-rollover",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 300, "utilization": 0.799, "now": "2026-03-11T12:00:00.000Z", "previous": { "utilization": 0.8, "resetsAt": "2026-03-11T15:00:00.000Z", "source": "window-grid" } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "window-grid" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-11T15:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.missing-utilization-and-anchor",
+    "calls": [
+      { "op": "provider.reset", "input": { "windowDurationMins": 10080, "utilization": null, "anchorIso": null, "now": "2026-03-11T09:37:00.000Z", "previous": { "utilization": null, "resetsAt": null, "source": null } } }
+    ],
+    "assertions": [
+      { "path": "/0/source", "kind": "eq", "value": "window-grid" },
+      { "path": "/0/windowStartAt", "kind": "eq", "value": "2026-03-09T00:00:00.000Z" },
+      { "path": "/0/resetsAt", "kind": "eq", "value": "2026-03-16T00:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.parse-source-observed",
+    "calls": [
+      { "op": "provider.reset-parse", "value": "observed" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "observed" }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.parse-source-bogus",
+    "calls": [
+      { "op": "provider.reset-parse", "value": "bogus" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.parse-source-undefined",
+    "calls": [
+      { "op": "provider.reset-parse" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.provider.reset.describe-sources-distinct",
+    "calls": [
+      { "op": "provider.reset-describe", "value": "observed" },
+      { "op": "provider.reset-describe", "value": "window-boundary" },
+      { "op": "provider.reset-describe", "value": "window-grid" },
+      { "op": "provider.reset-describe", "value": null }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "Confirmed by an observed usage reset" },
+      { "path": "/1", "kind": "eq", "value": "Continued from the previous reset deadline" },
+      { "path": "/2", "kind": "eq", "value": "Estimated from Ollama's usage window boundaries" },
+      { "path": "/3", "kind": "eq", "value": "Derived from Ollama's usage window boundaries" }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.empty-defaults",
+    "calls": [
+      { "op": "provider.thread" }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": {} },
+      { "path": "/0/reads", "kind": "eq", "value": [] }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.whitespace-userid",
+    "calls": [
+      { "op": "provider.thread", "userId": "   ", "chatProvider": "codex" }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": {} }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.user-settings-provider",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "chatProvider": "claude-code" }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code" } }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.no-session-state",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex" }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } },
+      { "path": "/0/reads", "kind": "eq", "value": [] }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.runtime-mode-supported",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.providerRuntimeMode": "supervised" } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex", "runtimeMode": "supervised" } },
+      { "path": "/0/reads", "kind": "eq", "value": ["session-1"] }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.runtime-mode-unrecognized",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.providerRuntimeMode": "yolo" } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.climodels-match",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.providerRuntimeMode": "full-access", "chat.cliModels": { "claude-code": "  claude-sonnet-4-6  ", "codex": "gpt-5-codex" } } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code", "model": "claude-sonnet-4-6", "runtimeMode": "full-access" } }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.climodels-empty",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.cliModels": { "codex": "   " } } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.climodels-non-object",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.cliModels": ["codex", "gpt-5-codex"] } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.no-provider-resolved",
+    "calls": [
+      { "op": "provider.thread", "sessionId": "session-1", "state": { "chat.cliModels": { "codex": "gpt-5-codex" } } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": {} },
+      { "path": "/0/reads", "kind": "eq", "value": ["session-1"] }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.session-id-trimmed",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "  session-7  ", "chatProvider": "codex", "state": {} }
+    ],
+    "assertions": [
+      { "path": "/0/reads", "kind": "eq", "value": ["session-7"] }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.reasoning-effort-inherited",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.reasoningEffort": "xhigh" } }
+    ],
+    "assertions": [
+      { "path": "/0/result/reasoningEffort", "kind": "eq", "value": "xhigh" }
+    ]
+  },
+  {
+    "id": "internal.provider.thread.reasoning-effort-malformed",
+    "calls": [
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.reasoningEffort": "high; rm -rf /" } }
+    ],
+    "assertions": [
+      { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code" } }
+    ]
+  },
+  {
+    "id": "internal.provider.effort.accept-high",
+    "calls": [ { "op": "provider.effort", "value": "high" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": "high" } ]
+  },
+  {
+    "id": "internal.provider.effort.accept-xhigh-trimmed",
+    "calls": [ { "op": "provider.effort", "value": "  xhigh  " } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": "xhigh" } ]
+  },
+  {
+    "id": "internal.provider.effort.accept-max",
+    "calls": [ { "op": "provider.effort", "value": "max" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": "max" } ]
+  },
+  {
+    "id": "internal.provider.effort.accept-dotted",
+    "calls": [ { "op": "provider.effort", "value": "thought-level.2" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": "thought-level.2" } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-empty",
+    "calls": [ { "op": "provider.effort", "value": "" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-spaces",
+    "calls": [ { "op": "provider.effort", "value": "   " } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-leading-dash",
+    "calls": [ { "op": "provider.effort", "value": "-leading-dash" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-space",
+    "calls": [ { "op": "provider.effort", "value": "has space" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-too-long",
+    "calls": [ { "op": "provider.effort", "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-null",
+    "calls": [ { "op": "provider.effort", "value": null } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.effort.reject-number",
+    "calls": [ { "op": "provider.effort", "value": 7 } ],
+    "assertions": [ { "path": "/0", "kind": "eq", "value": null } ]
+  },
+  {
+    "id": "internal.provider.usage.go-and-ollama-windows",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "go", "account": "go", "value": { "usage": { "rolling": { "status": "ok", "percent": 20, "resetsAt": "2026-10-09T12:00:00Z" }, "weekly": { "status": "ok", "percent": 90, "resetsAt": "2026-10-09T12:00:00Z" }, "monthly": { "status": "rate-limited", "percent": 100, "resetsAt": "2026-10-09T12:00:00Z" } } } },
+          { "op": "list", "ids": ["go"] },
+          { "op": "ollama", "account": "ollama", "value": { "source": "settings", "limits": { "session": { "usage": 0.4, "models": [], "resetsAt": "2026-10-09T12:00:00Z" }, "weekly": { "usage": 0.8, "models": [], "resetsAt": null } } } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0/0/providerType", "kind": "eq", "value": "opencode-go" },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.2 },
+      { "path": "/0/0/0/resetsAt", "kind": "eq", "value": "2026-10-09T12:00:00Z" },
+      { "path": "/0/0/1/rateLimitType", "kind": "eq", "value": "seven_day" },
+      { "path": "/0/0/1/utilization", "kind": "eq", "value": 0.9 },
+      { "path": "/0/0/1/status", "kind": "eq", "value": "allowed_warning" },
+      { "path": "/0/0/2/rateLimitType", "kind": "eq", "value": "monthly" },
+      { "path": "/0/0/2/utilization", "kind": "eq", "value": 1 },
+      { "path": "/0/0/2/status", "kind": "eq", "value": "rejected" },
+      { "path": "/0/1/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/1/0/resetsAt", "kind": "eq", "value": "2026-10-09T12:00:00Z" },
+      { "path": "/0/1/0/resetSource", "kind": "eq", "value": "provider-reported" },
+      { "path": "/0/1/1/rateLimitType", "kind": "eq", "value": "seven_day" },
+      { "path": "/0/1/1/resetsAt", "kind": "eq", "value": null },
+      { "path": "/0/1/1/resetSource", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.preserve-session-across-activity",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "clock", "value": "2026-10-07T10:00:00Z" },
+          { "op": "ollama", "account": "ollama", "value": { "limits": { "session": { "usage": 0.42, "models": [] } } } },
+          { "op": "clock", "value": "2026-10-07T10:01:00Z" },
+          { "op": "ollama", "account": "ollama", "value": { "range": "7d", "scope": "self", "granularity": "day", "from": "2026-09-30T00:00:00Z", "until": "2026-10-07T10:01:00Z", "totals": { "request_count": 50 }, "buckets": [] } },
+          { "op": "list", "ids": ["ollama"] },
+          { "op": "ollama", "account": "ollama", "value": { "limits": { "session": { "usage": 0.5, "models": [] } } } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 2 },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.42 },
+      { "path": "/0/0/0/updatedAt", "kind": "eq", "value": "2026-10-07T10:00:00.000Z" },
+      { "path": "/0/0/0/quotaRefreshMissing", "kind": "eq", "value": true },
+      { "path": "/0/0/1/rateLimitType", "kind": "eq", "value": "request_activity" },
+      { "path": "/0/1", "kind": "length", "value": 1 },
+      { "path": "/0/1/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/1/0/utilization", "kind": "eq", "value": 0.5 },
+      { "path": "/0/1/0/quotaRefreshMissing", "kind": "eq", "value": false }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.quota-priority-over-totals",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "ollama", "account": "ollama", "value": { "limits": { "session": { "usage": 0.42, "models": [] } }, "totals": { "request_count": 50 } } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.42 }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.request-activity-separate",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "ollama", "account": "ollama-1", "value": { "limits": { "weekly": { "usage": 0.8, "models": [] } } } },
+          { "op": "ollama", "account": "ollama-1", "value": { "range": "7d", "scope": "self", "granularity": "day", "from": "2026-09-30T00:00:00Z", "until": "2026-10-07T11:29:42Z", "totals": { "request_count": 10388 }, "buckets": [] }, "plan": "pro", "label": "test@example.com" },
+          { "op": "ollama", "account": "ollama-1", "value": { "range": "7d", "scope": "self", "granularity": "day", "from": "2026-09-30T00:00:00Z", "until": "2026-10-07T11:29:42Z", "totals": { "request_count": 10388 }, "buckets": [] }, "plan": "pro", "label": "test@example.com" },
+          { "op": "list", "ids": ["ollama-1"] },
+          { "op": "ollama", "account": "ollama-1", "value": { "limits": { "weekly": { "usage": 0.2, "models": [] } } } },
+          { "op": "list", "ids": ["ollama-1"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 2 },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "seven_day" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.8 },
+      { "path": "/0/0/0/quotaRefreshMissing", "kind": "eq", "value": true },
+      { "path": "/0/0/1/rateLimitType", "kind": "eq", "value": "request_activity" },
+      { "path": "/0/0/1/utilization", "kind": "eq", "value": null },
+      { "path": "/0/0/1/resetsAt", "kind": "eq", "value": null },
+      { "path": "/0/0/1/status", "kind": "eq", "value": null },
+      { "path": "/0/0/1/requestCount", "kind": "eq", "value": 10388 },
+      { "path": "/0/0/1/planType", "kind": "eq", "value": "pro" },
+      { "path": "/0/0/1/accountLabel", "kind": "eq", "value": "test@example.com" },
+      { "path": "/0/0/1/usagePeriod", "kind": "eq", "value": { "from": "2026-09-30T00:00:00Z", "until": "2026-10-07T11:29:42Z", "range": "7d" } },
+      { "path": "/0/1", "kind": "length", "value": 1 },
+      { "path": "/0/1/0/rateLimitType", "kind": "eq", "value": "seven_day" },
+      { "path": "/0/1/0/utilization", "kind": "eq", "value": 0.2 },
+      { "path": "/0/1/0/requestCount", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.claude-insert-and-list",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.4, "resetsAt": 1700000000 } },
+          { "op": "list", "ids": ["account-1"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/0/0/accountId", "kind": "eq", "value": "account-1" },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/providerType", "kind": "eq", "value": "claude" },
+      { "path": "/0/0/0/status", "kind": "eq", "value": "allowed" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.4 },
+      { "path": "/0/0/0/isUsingOverage", "kind": "eq", "value": false },
+      { "path": "/0/0/0/resetsAt", "kind": "eq", "value": "2023-11-14T22:13:20.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.claude-upsert",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "seven_day", "utilization": 0.2 } },
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed_warning", "rateLimitType": "seven_day", "utilization": 0.95 } },
+          { "op": "list", "ids": ["account-1"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/0/0/status", "kind": "eq", "value": "allowed_warning" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.95 }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.filter-by-account-ids",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour" } },
+          { "op": "claude", "account": "account-2", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour" } },
+          { "op": "list", "ids": ["account-1"] },
+          { "op": "list", "ids": ["account-1", "account-2"] },
+          { "op": "list", "ids": [] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/1", "kind": "length", "value": 2 },
+      { "path": "/0/2", "kind": "length", "value": 0 }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.warn-once-crossing-threshold",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "notifications": true,
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.95 } },
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.97 } },
+          { "op": "warnings" }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/0/0", "kind": "eq", "value": ["Approaching usage limit", "Claude Code's session limit is at 95%.", "/settings?tab=usage"] }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.warn-allowed-warning-without-utilization",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "notifications": true,
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed_warning", "rateLimitType": "seven_day" } },
+          { "op": "warnings" }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 1 },
+      { "path": "/0/0/0", "kind": "eq", "value": ["Approaching usage limit", "Claude Code's weekly limit is near its limit.", "/settings?tab=usage"] }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.clear-warned-after-drop",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "notifications": true,
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.95 } },
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.3 } },
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.96 } },
+          { "op": "warnings" }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 2 },
+      { "path": "/0/0/0", "kind": "eq", "value": ["Approaching usage limit", "Claude Code's session limit is at 95%.", "/settings?tab=usage"] },
+      { "path": "/0/0/1", "kind": "eq", "value": ["Approaching usage limit", "Claude Code's session limit is at 96%.", "/settings?tab=usage"] }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.no-warn-below-threshold",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "notifications": true,
+        "actions": [
+          { "op": "claude", "account": "account-1", "provider": "claude", "value": { "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.5 } },
+          { "op": "warnings" }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 0 }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.codex-windows",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "codex", "account": "codex-account", "value": { "rateLimits": { "primary": { "usedPercent": 12, "windowDurationMins": 300, "resetsAt": 1700000000 }, "secondary": { "usedPercent": 34, "windowDurationMins": 10080, "resetsAt": 1700100000 }, "planType": "plus", "credits": { "hasCredits": true, "balance": "7.50" } } } },
+          { "op": "list", "ids": ["codex-account"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 2 },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.12 },
+      { "path": "/0/0/0/planType", "kind": "eq", "value": "plus" },
+      { "path": "/0/0/1/rateLimitType", "kind": "eq", "value": "seven_day" },
+      { "path": "/0/0/1/utilization", "kind": "eq", "value": 0.34 },
+      { "path": "/0/0/1/credits", "kind": "eq", "value": { "hasCredits": true, "balance": "7.50" } }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.ollama-metadata",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "clock", "value": "2026-03-11T09:37:00.000Z" },
+          { "op": "ollama", "account": "ollama", "plan": "pro", "value": { "limits": { "session": { "usage": 0.25, "models": [{ "name": "gpt-oss", "request_count": 4 }] }, "weekly": { "usage": 0.4, "models": [] }, "monthly": { "usage": 0.6, "models": [] } }, "activity": { "cost": "3.20", "period": { "ending_at": "2026-10-01T00:00:00.000Z" } } } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0", "kind": "length", "value": 3 },
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/providerType", "kind": "eq", "value": "ollama" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.25 },
+      { "path": "/0/0/0/planType", "kind": "eq", "value": "pro" },
+      { "path": "/0/0/0/models", "kind": "eq", "value": [{ "name": "gpt-oss", "requestCount": 4 }] },
+      { "path": "/0/0/0/resetsAt", "kind": "eq", "value": "2026-03-11T10:00:00.000Z" },
+      { "path": "/0/0/1/resetsAt", "kind": "eq", "value": "2026-03-16T00:00:00.000Z" },
+      { "path": "/0/0/2/resetsAt", "kind": "eq", "value": "2026-04-01T00:00:00.000Z" },
+      { "path": "/0/0/2/rateLimitType", "kind": "eq", "value": "monthly" },
+      { "path": "/0/0/2/utilization", "kind": "eq", "value": 0.6 },
+      { "path": "/0/0/2/activityCost", "kind": "eq", "value": "3.20" }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.observed-rollover-kept",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "clock", "value": "2026-03-11T10:20:00.000Z" },
+          { "op": "seed", "value": { "accountId": "ollama", "rateLimitType": "five_hour", "providerType": "ollama", "utilization": 0.82, "resetsAt": "2026-03-11T10:00:00.000Z", "updatedAt": "2026-03-11T09:37:00.000Z", "rawJson": "{\"resetSource\":\"observed\",\"windowStartAt\":\"2026-03-11T05:00:00.000Z\"}" } },
+          { "op": "ollama", "account": "ollama", "plan": "pro", "value": { "limits": { "session": { "usage": 0.03, "models": [] }, "weekly": { "usage": 0.4, "models": [] }, "monthly": { "usage": 0.6, "models": [] } }, "activity": { "cost": "0", "period": { "starting_at": "2026-03-09T00:00:00.000Z" } } } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0/0/rateLimitType", "kind": "eq", "value": "five_hour" },
+      { "path": "/0/0/0/resetsAt", "kind": "eq", "value": "2026-03-11T15:00:00.000Z" }
+    ]
+  },
+  {
+    "id": "internal.provider.usage.cached-reset-date",
+    "calls": [
+      {
+        "op": "provider.usage",
+        "actions": [
+          { "op": "seed", "value": { "accountId": "ollama", "rateLimitType": "five_hour", "providerType": "ollama", "utilization": 0.25, "resetsAt": "2026-09-20T13:45:00.000Z", "updatedAt": "2026-09-20T13:45:00.000Z", "rawJson": "{}" } },
+          { "op": "list", "ids": ["ollama"] }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/0/0/resetsAt", "kind": "eq", "value": "2026-09-20T13:45:00.000Z" },
+      { "path": "/0/0/0/updatedAt", "kind": "eq", "value": "2026-09-20T13:45:00.000Z" },
+      { "path": "/0/0/0/utilization", "kind": "eq", "value": 0.25 }
+    ]
+  }
+]

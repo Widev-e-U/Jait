@@ -1,0 +1,96 @@
+[
+  {
+    "name": "surfaces.list",
+    "description": "List all active surfaces and their current state",
+    "tier": "standard",
+    "category": "surfaces",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "surfaces.start",
+    "description": "Start a surface. For a browser, provide an HTTP/HTTPS URL to load immediately.",
+    "tier": "standard",
+    "category": "surfaces",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Surface type to start",
+          "enum": [
+            "terminal",
+            "filesystem",
+            "browser"
+          ]
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session to attach the surface to"
+        },
+        "projectRoot": {
+          "type": "string",
+          "description": "Working directory for the surface"
+        },
+        "url": {
+          "type": "string",
+          "description": "Required HTTP/HTTPS URL for a browser surface",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "browser"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "url"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "surfaces.stop",
+    "description": "Stop a running surface by its ID",
+    "tier": "standard",
+    "category": "surfaces",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "surfaceId": {
+          "type": "string",
+          "description": "ID of the surface to stop"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for stopping"
+        }
+      },
+      "required": [
+        "surfaceId"
+      ]
+    }
+  }
+]

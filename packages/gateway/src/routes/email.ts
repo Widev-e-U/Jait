@@ -1,7 +1,11 @@
+import { loadMailImage } from "../services/email/remote-images.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
-import type { EmailService, EmailProvider } from "../services/email/index.js";
+import type { EmailService } from "../services/email/index.js";
+
+import type { OAuthEmailProvider as EmailProvider } from "@jait/shared";
+import { connectMailboxSchema, emailAccountSettingsSchema, discoverMailSettings } from "../services/email/connection.js";
 
 const PROVIDERS = new Set<EmailProvider>(["gmail", "outlook"]);
 
@@ -53,7 +57,7 @@ export function registerEmailRoutes(
     const { provider } = request.params as { provider: string };
     if (!isProvider(provider)) return reply.status(400).send({ error: "Unknown provider" });
     const body = (request.body ?? {}) as { clientId?: string; clientSecret?: string };
-    if (!body.clientId || !body.clientSecret) {
+    if (typeof body.clientId !== "string" || typeof body.clientSecret !== "string" || Boolean(body.clientId.trim()) !== Boolean(body.clientSecret.trim())) {
       return reply.status(400).send({ error: "clientId and clientSecret are required" });
     }
     email.saveAppCredentials(user.id, provider, { clientId: body.clientId.trim(), clientSecret: body.clientSecret.trim() });
@@ -65,6 +69,34 @@ export function registerEmailRoutes(
     const user = await auth(request, reply);
     if (!user) return;
     return { accounts: email.listAccounts(user.id) };
+  });
+
+  app.get("/api/email/discover", async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const { email: address } = request.query as { email?: string };
+    if (typeof address !== "string") return reply.status(400).send({ error: "Email is required" });
+    try { return await discoverMailSettings(address); }
+    catch { return reply.status(400).send({ error: "Automatic settings unavailable. Enter your provider's IMAP and SMTP settings." }); }
+  });
+
+  app.post("/api/email/accounts", async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const parsed = connectMailboxSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "Valid email, IMAP and SMTP credentials are required (TLS or STARTTLS)." });
+    try { return { account: await email.connectMailbox(user.id, parsed.data) }; }
+    catch { return reply.status(400).send({ error: "Connection failed. Check server names, TLS, username and app password." }); }
+  });
+
+  app.patch("/api/email/accounts/:id", async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const { id } = request.params as { id: string };
+    if (!email.getAccount(user.id, id)) return reply.status(404).send({ error: "Account not found" });
+    const parsed = emailAccountSettingsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "Invalid account settings" });
+    return { account: email.updateAccount(user.id, id, parsed.data) };
   });
 
   // Disconnect an account.
@@ -109,8 +141,9 @@ export function registerEmailRoutes(
   app.get("/api/email/messages", async (request, reply) => {
     const user = await auth(request, reply);
     if (!user) return;
-    const q = request.query as { accountId?: string; folder?: string; q?: string; limit?: string };
+    const q = request.query as { accountId?: string; folder?: string; q?: string; limit?: string; cached?: string };
     try {
+      if (q.cached === "true") return { messages: email.cachedInbox(user.id, q.accountId) };
       const result = await email.listMessages(user.id, q.accountId, {
         folder: q.folder,
         query: q.q,
@@ -120,6 +153,18 @@ export function registerEmailRoutes(
     } catch (err) {
       return reply.status(400).send({ error: err instanceof Error ? err.message : "Failed to list messages" });
     }
+  });
+
+  // Browser-requested images: never give senders direct access to the LAN or cookies.
+  app.post("/api/email/images", async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const body = request.body as { accountId?: unknown; urls?: unknown };
+    if (typeof body?.accountId !== "string" || !Array.isArray(body.urls) || body.urls.length > 12 || !body.urls.every(url => typeof url === "string" && url.length <= 4096)) return reply.status(400).send({ error: "Invalid image request" });
+    if (!email.getAccount(user.id, body.accountId)) return reply.status(404).send({ error: "Account not found" });
+    const urls = Array.from(new Set(body.urls as string[]));
+    const results = await Promise.allSettled(urls.map(async url => [url, await loadMailImage(url)] as const));
+    return { images: Object.fromEntries(results.flatMap(result => result.status === "fulfilled" ? [result.value] : [])) };
   });
 
   // Read a single message.
@@ -148,6 +193,7 @@ export function registerEmailRoutes(
       bcc?: string;
       replyToMessageId?: string;
       html?: boolean;
+      includeSignature?: boolean;
     };
     if (!body.to && !body.replyToMessageId) return reply.status(400).send({ error: "A recipient is required" });
     try {
@@ -159,6 +205,7 @@ export function registerEmailRoutes(
         bcc: body.bcc,
         replyToMessageId: body.replyToMessageId,
         html: body.html,
+        includeSignature: body.includeSignature,
       });
       return { ok: true, id: sent.id };
     } catch (err) {

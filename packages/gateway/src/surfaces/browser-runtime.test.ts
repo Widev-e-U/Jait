@@ -7,6 +7,7 @@ import {
   type BrowserRuntimeEvent,
   resolveBrowserRuntimeMode,
   selectInitialBrowserPage,
+  selectVisibleBrowserPage,
 } from "./browser.js";
 
 const originalPlatform = process.platform;
@@ -129,6 +130,22 @@ describe("BrowserSurface idle tracking", () => {
 });
 
 describe("closed browser readiness", () => {
+  it("uses the driver for history and reports unsupported drivers", async () => {
+    const history = vi.fn().mockResolvedValue(undefined);
+    const driver = {
+      history, snapshot: vi.fn().mockResolvedValue({ url: "https://example.test/previous", title: "Previous", text: "", elements: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as BrowserDriver;
+    const surface = new BrowserSurface("history-browser", { driverFactory: async () => driver });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
+    expect((await surface.history("back")).url).toBe("https://example.test/previous");
+    await surface.history("forward");
+    expect(history.mock.calls.map(call => call[0])).toEqual(["back", "forward"]);
+    delete driver.history;
+    await expect(surface.history("back")).rejects.toThrow("does not support history");
+    await surface.stop();
+  });
+
   it("reports an ended driver as unavailable in state and snapshots", async () => {
     let connected = true;
     const driver = { isConnected: () => connected, close: async () => {} } as BrowserDriver;
@@ -146,6 +163,19 @@ describe("console flood guard", () => {
   function pushConsole(events: BrowserRuntimeEvent[], guard: ReturnType<typeof createConsoleFloodGuard>, text: string, level = "log"): void {
     pushBrowserRuntimeEvent(events, { type: "console", level, text }, guard);
   }
+
+  it("falls back to the default window, threshold and clock when no options are given", () => {
+    const guard = createConsoleFloodGuard();
+    const events: BrowserRuntimeEvent[] = [];
+
+    // Defaults: 60s window, 200 events, 30s cooldown, real clock.
+    pushConsole(events, guard, "first");
+
+    expect(events).toHaveLength(1);
+    expect(events[0].text).toBe("first");
+    expect(guard.isPaused()).toBe(false);
+    expect(guard.state()).toMatchObject({ paused: false, resumesAt: null, dropped: 0 });
+  });
 
   it("passes a normal volume of console events through untouched", () => {
     let now = 0;
@@ -281,5 +311,23 @@ describe("selectInitialBrowserPage", () => {
     })).resolves.toBe(openBlankPage);
 
     expect(newPage).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("visible browser tab selection", () => {
+  it("follows the visible popup instead of automating a hidden original tab", async () => {
+    const original = { isClosed: () => false, evaluate: vi.fn().mockResolvedValue({ visible: false, focused: false }) };
+    const popup = { isClosed: () => false, evaluate: vi.fn().mockResolvedValue({ visible: true, focused: true }) };
+    expect(await selectVisibleBrowserPage([original, popup], original)).toBe(popup);
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(import.meta.url)("./playwright-node-bridge.cjs");
+    expect(await bridge.selectVisiblePage([original, popup], original)).toBe(popup);
+    original.evaluate.mockResolvedValue({ visible: true, focused: true });
+    expect(await selectVisibleBrowserPage([original, popup], popup)).toBe(popup);
+    expect(await bridge.selectVisiblePage([original, popup], popup)).toBe(popup);
+    popup.evaluate.mockRejectedValue(new Error("Tab closed"));
+    expect(await selectVisibleBrowserPage([original, popup], original)).toBe(original);
+    expect(await bridge.selectVisiblePage([original, popup], original)).toBe(original);
   });
 });

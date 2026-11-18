@@ -1,0 +1,1429 @@
+//! Explicit development turn log on the existing bounded SQLite worker.
+//! Ownership is checked in every transaction, including after transfer/deletion.
+//! This log is separate from the production UI message/tool projection.
+use super::chat_events::EventBus;
+use super::chat_turn::{TurnEvent, TurnPersistence};
+use crate::routes::auth::AuthState;
+use futures_util::future::BoxFuture;
+use rusqlite::{OptionalExtension, params};
+use serde_json::{Value, json};
+use std::sync::Arc;
+
+const EVENT_TYPE: &str = "rust.chat.message";
+const MAX_EVENT_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_EVENTS: usize = 512;
+const STREAM_EVENT_TYPE: &str = "rust.chat.stream";
+const MAX_STREAM_EVENTS: i64 = 8192;
+const MAX_STREAM_BYTES: i64 = 16 * 1024 * 1024;
+const MAX_STREAM_EVENT_BYTES: usize = 64 * 1024;
+const MAX_HISTORY_BYTES: usize = 8 * 1024 * 1024;
+
+// Serialize directly so fields that already implement lossless JSON encoding do
+// not first pass through serde_json::Value. Replay still uses the v1 reader.
+fn encode_event_envelope<T: serde::Serialize>(event: &T) -> Result<String, serde_json::Error> {
+    #[derive(serde::Serialize)]
+    struct Envelope<'a, T> {
+        version: u8,
+        event: &'a T,
+    }
+    serde_json::to_string(&Envelope { version: 1, event })
+}
+
+// Isolated decoder for a future versioned transport. The active reader remains
+// v1-only until projection and client delivery can carry the same raw JSON.
+#[allow(dead_code)]
+enum DecodedEventEnvelope {
+    V1(TurnEvent),
+    V2(LosslessToolEvent),
+}
+
+// This experimental schema covers tool results only. It is not a complete
+// replacement for TurnEvent and cannot be mounted as a history reader yet.
+#[allow(dead_code)]
+struct LosslessToolEvent {
+    tool_call_id: String,
+    name: String,
+    ok: crate::contracts::bounded_json::LosslessJsonValue,
+    message: crate::contracts::bounded_json::Utf16Text,
+    // None means absent; Some("null") is an explicitly present JSON null.
+    data: Option<crate::contracts::bounded_json::LosslessJsonValue>,
+}
+
+#[allow(dead_code)]
+fn decode_event_envelope(payload: &str) -> Result<DecodedEventEnvelope, &'static str> {
+    use crate::contracts::bounded_json::{LosslessJsonValue, Utf16Text};
+    if payload.len() > MAX_EVENT_BYTES {
+        return Err("Stored turn event exceeds migration runtime limits");
+    }
+    // Preserve the active v1 reader's parser and nesting behavior. A separate
+    // depth limit applies only to the experimental v2 representation.
+    if let Ok(value) = serde_json::from_str::<Value>(payload)
+        && value["version"] == 1
+    {
+        let event = serde_json::from_value(value["event"].clone())
+            .map_err(|_| "Invalid stored turn event")?;
+        return Ok(DecodedEventEnvelope::V1(event));
+    }
+    let bounded = LosslessJsonValue::parse(payload, MAX_EVENT_BYTES, 64)?;
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawEnvelope<'a> {
+        version: u8,
+        #[serde(borrow)]
+        event: &'a serde_json::value::RawValue,
+    }
+    let envelope: RawEnvelope<'_> =
+        serde_json::from_str(bounded.as_json()).map_err(|_| "Invalid stored turn envelope")?;
+    if envelope.version != 2 {
+        return Err("Unsupported stored turn history version");
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawToolEvent {
+        #[serde(rename = "type")]
+        kind: String,
+        tool_call_id: String,
+        name: String,
+        result: RawToolResult,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawToolResult {
+        ok: Box<serde_json::value::RawValue>,
+        message: Box<serde_json::value::RawValue>,
+        #[serde(default, deserialize_with = "present_raw")]
+        data: Option<Box<serde_json::value::RawValue>>,
+    }
+    fn present_raw<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Box<serde_json::value::RawValue>>, D::Error> {
+        <Box<serde_json::value::RawValue> as serde::Deserialize>::deserialize(deserializer)
+            .map(Some)
+    }
+    let event: RawToolEvent =
+        serde_json::from_str(envelope.event.get()).map_err(|_| "Invalid stored turn event")?;
+    if event.kind != "tool" {
+        return Err("Unsupported stored turn event");
+    }
+    Ok(DecodedEventEnvelope::V2(LosslessToolEvent {
+        tool_call_id: event.tool_call_id,
+        name: event.name,
+        ok: LosslessJsonValue::parse(event.result.ok.get(), MAX_EVENT_BYTES, 60)?,
+        message: Utf16Text::from_json_literal(event.result.message.get(), MAX_EVENT_BYTES)?,
+        data: event
+            .result
+            .data
+            .map(|data| LosslessJsonValue::parse(data.get(), MAX_EVENT_BYTES, 60))
+            .transpose()?,
+    }))
+}
+
+/// Construct only after HTTP authentication. Neither identity comes from model arguments.
+#[derive(Clone)]
+pub struct SqliteTurnStore {
+    auth: AuthState,
+    owner: String,
+    session: String,
+    events: Arc<EventBus>,
+    turn_id: Option<String>,
+    database_owner: Option<Arc<std::fs::File>>,
+    client_message_id: Option<String>,
+}
+impl SqliteTurnStore {
+    pub fn new(auth: AuthState, owner: String, session: String) -> Result<Self, String> {
+        if owner.is_empty() || session.is_empty() {
+            return Err("Authenticated owner and session are required".into());
+        }
+        Ok(Self {
+            auth,
+            owner,
+            session,
+            events: EventBus::new(),
+            turn_id: None,
+            database_owner: None,
+            client_message_id: None,
+        })
+    }
+
+    /// Persist this ID as the user message ID of the turn's request. Callers validate the format.
+    pub(crate) fn with_client_message_id(mut self, id: Option<String>) -> Self {
+        self.client_message_id = id;
+        self
+    }
+
+    /// Fan committed events out to a shared bus (the HTTP subscription layer).
+    /// Defaults to a private bus so store construction in tests stays unchanged.
+    pub(crate) fn with_events(mut self, events: Arc<EventBus>) -> Self {
+        self.events = events;
+        self
+    }
+
+    pub(crate) fn with_database_owner(mut self, owner: Option<Arc<std::fs::File>>) -> Self {
+        self.database_owner = owner;
+        self
+    }
+
+    // A cancelled caller may leave a started SQLite job running. Keep ownership
+    // inside that job until its transaction has completed or rolled back.
+    async fn with_database<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce(&rusqlite::Connection) -> Result<T, crate::routes::auth::Error>
+        + Send
+        + 'static,
+    ) -> Result<T, crate::routes::auth::Error> {
+        let owner = self.database_owner.clone();
+        self.auth
+            .with_database(move |db| {
+                let _owner = owner;
+                operation(db)
+            })
+            .await
+    }
+
+    pub(crate) fn with_turn(mut self) -> Self {
+        self.turn_id = Some(uuid::Uuid::new_v4().to_string());
+        self
+    }
+
+    pub(crate) fn identity(&self) -> (&str, &str) {
+        (&self.owner, &self.session)
+    }
+
+    /// Returns all candidate turn events or fails: never silently drops old tool context.
+    pub async fn load(&self) -> Result<Vec<TurnEvent>, String> {
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        self.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            super::chat_projection::require_native_history(&tx,&session)?;
+            let mut events = Vec::new();
+            let mut bytes = 0;
+            {
+                let mut statement = tx.prepare("SELECT payload,length(CAST(payload AS BLOB)) FROM session_events WHERE session_id=? AND type=? ORDER BY log_id LIMIT ?")?;
+                let mut rows = statement.query(params![session, EVENT_TYPE, (MAX_HISTORY_EVENTS + 1) as i64])?;
+                while let Some(row) = rows.next()? {
+                    let length: i64 = row.get(1)?;
+                    if length < 0 || length as usize > MAX_EVENT_BYTES {
+                        return Err("Stored turn event exceeds migration runtime limits".into());
+                    }
+                    let payload: String = row.get(0)?;
+                    bytes += payload.len();
+                    if bytes > MAX_HISTORY_BYTES || events.len() == MAX_HISTORY_EVENTS {
+                        return Err("Stored turn history exceeds migration runtime limits".into());
+                    }
+                    let value: Value = serde_json::from_str(&payload)?;
+                    if value["version"] != 1 {
+                        return Err("Unsupported stored turn history version".into());
+                    }
+                    events.push(serde_json::from_value(value["event"].clone())?);
+                }
+            }
+            tx.commit()?;
+            Ok(events)
+        }).await.map_err(|_| "Turn history could not be loaded".into())
+    }
+
+    /// Check space for one maximum-size ordinary frame and a terminal frame.
+    /// Call under the session lease before starting provider effects. This is not
+    /// a cross-process reservation and does not reserve an entire turn's output.
+    pub(crate) async fn check_stream_capacity(&self) -> Result<(), String> {
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        self.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            ensure_lifecycle_schema(&tx)?;
+            let unresolved: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE session_id=? AND state='started')", [&session], |row| row.get(0))?;
+            if unresolved { return Err("A previous turn requires recovery".into()); }
+            let (count, bytes): (i64, i64) = tx.query_row(
+                "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            if count > MAX_STREAM_EVENTS - 2 || bytes > MAX_STREAM_BYTES - 2 * MAX_STREAM_EVENT_BYTES as i64 {
+                return Err("Stored stream has insufficient capacity".into());
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.map_err(|_| "Stream capacity could not be admitted".into())
+    }
+
+    /// Append an ordinary client frame while retaining one terminal frame slot.
+    pub(crate) async fn append_stream_event(&self, event: Value) -> Result<(), String> {
+        self.append_stream_frame(event, false).await
+    }
+
+    /// Append a final done/error frame, which may use the reserved slot.
+    pub(crate) async fn append_stream_terminal(&self, event: Value) -> Result<(), String> {
+        self.append_stream_frame(event, true).await
+    }
+
+    async fn append_stream_frame(&self, event: Value, terminal: bool) -> Result<(), String> {
+        let kind = event.get("type").and_then(Value::as_str);
+        if !event.is_object()
+            || kind.is_none()
+            || matches!(kind, Some("done" | "error")) != terminal
+        {
+            return Err("Invalid stream event".into());
+        }
+        let data =
+            serde_json::to_string(&event).map_err(|_| "Stream event could not be encoded")?;
+        if data.len() > MAX_STREAM_EVENT_BYTES {
+            return Err("Stream event exceeds persistence limit".into());
+        }
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        let events = self.events.clone();
+        let turn_id = self.turn_id.clone();
+        self.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            if let Some(ref turn_id) = turn_id {
+                ensure_lifecycle_schema(&tx)?;
+                let recorded: Option<(String, String, String)> = tx.query_row(
+                    "SELECT session_id,owner_id,state FROM rust_chat_turns WHERE turn_id=?",
+                    [turn_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                ).optional()?;
+                // An early failure may occur before a turn record is created.
+                // Once recorded, closed or mismatched turns must never emit frames.
+                match recorded {
+                    Some((recorded_session, recorded_owner, state))
+                        if recorded_session != session || recorded_owner != owner || state != "started" =>
+                    {
+                        return Err("Chat turn is no longer active".into());
+                    }
+                    None if !terminal => return Err("Chat turn has not started".into()),
+                    _ => {}
+                }
+            }
+            let (count, bytes): (i64, i64) = tx.query_row(
+                "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            let reserve_count = if terminal { 0 } else { 1 };
+            let reserve_bytes = if terminal { 0 } else { MAX_STREAM_EVENT_BYTES as i64 };
+            if count >= MAX_STREAM_EVENTS - reserve_count || bytes + data.len() as i64 > MAX_STREAM_BYTES - reserve_bytes {
+                return Err("Stored stream exceeds persistence limits".into());
+            }
+            let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [&session], |row| row.get(0))?;
+            tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session, next, STREAM_EVENT_TYPE, data, chrono::Utc::now().timestamp_millis()])?;
+            if terminal && let Some(turn_id) = turn_id {
+                // A terminal before request persistence still closes this turn. The
+                // terminal's log ID is used as its lifecycle anchor; no request exists.
+                tx.execute("INSERT INTO rust_chat_turns(turn_id,session_id,owner_id,state,request_log_id,terminal_log_id) VALUES(?,?,?,'finished',?,?) ON CONFLICT(turn_id) DO UPDATE SET state='finished', terminal_log_id=excluded.terminal_log_id WHERE session_id=excluded.session_id AND owner_id=excluded.owner_id AND state='started'", params![turn_id, session, owner, next, next])?;
+            }
+            tx.commit()?;
+            let _ = events.publish_serialized(&session, next, data);
+            Ok(())
+        }).await.map_err(|_| "Stream event could not be persisted".into())
+    }
+
+    async fn append_event(&self, event: TurnEvent) -> Result<(), String> {
+        let start = match &event {
+            TurnEvent::User { content } => Some(
+                serde_json::to_string(&json!({"type":"request","content":content}))
+                    .map_err(|_| "Stream event could not be encoded")?,
+            ),
+            _ => None,
+        };
+        if start
+            .as_ref()
+            .is_some_and(|data| data.len() > MAX_STREAM_EVENT_BYTES)
+        {
+            return Err("Stream event exceeds persistence limit".into());
+        }
+        let payload =
+            encode_event_envelope(&event).map_err(|_| "Turn event could not be encoded")?;
+        if payload.len() > MAX_EVENT_BYTES {
+            return Err("Turn event exceeds persistence limit".into());
+        }
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        let events = self.events.clone();
+        let turn_id = self.turn_id.clone();
+        let client_id = if start.is_some() {
+            self.client_message_id.clone()
+        } else {
+            None
+        };
+        self.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            super::chat_projection::require_native_history(&tx,&session)?;
+            if start.is_none() && let Some(ref turn_id) = turn_id {
+                ensure_lifecycle_schema(&tx)?;
+                let active: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE turn_id=? AND session_id=? AND owner_id=? AND state='started')",
+                    params![turn_id, session, owner], |row| row.get(0),
+                )?;
+                if !active { return Err("Chat turn is no longer active".into()); }
+            }
+            let (count, bytes): (i64, i64) = tx.query_row("SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?", params![session,EVENT_TYPE], |row| Ok((row.get(0)?,row.get(1)?)))?;
+            if count >= MAX_HISTORY_EVENTS as i64 || bytes + payload.len() as i64 > MAX_HISTORY_BYTES as i64 {
+                return Err("Stored turn history exceeds migration runtime limits".into());
+            }
+            // Allocate against every event type to preserve the shared append-only sequence.
+            let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [&session], |row| row.get(0))?;
+            let now = chrono::Utc::now();
+            tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next,EVENT_TYPE,payload,now.timestamp_millis()])?;
+            if let Some(data) = &start {
+                if let Some(turn_id) = &turn_id {
+                    ensure_lifecycle_schema(&tx)?;
+                    tx.execute("INSERT INTO rust_chat_turns(turn_id,session_id,owner_id,state,request_log_id) VALUES(?,?,?,'started',?)", params![turn_id,session,owner,next+1])?;
+                }
+                let (count, bytes): (i64, i64) = tx.query_row(
+                    "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                    params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                if count >= MAX_STREAM_EVENTS - 1 || bytes + data.len() as i64 > MAX_STREAM_BYTES - MAX_STREAM_EVENT_BYTES as i64 {
+                    return Err("Stored stream exceeds persistence limits".into());
+                }
+                tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next+1,STREAM_EVENT_TYPE,data,now.timestamp_millis()])?;
+            }
+            if let Some(client_id) = &client_id {
+                tx.execute_batch(super::chat_projection::CLIENT_IDS_SCHEMA)?;
+                let taken: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1) OR EXISTS(SELECT 1 FROM rust_chat_client_ids WHERE client_id=?1)", [client_id], |row| row.get(0))?;
+                if taken { return Err("Client message ID already exists".into()); }
+                tx.execute("INSERT INTO rust_chat_client_ids(client_id,session_id,log_id) VALUES(?,?,?)", params![client_id,session,next])?;
+            }
+            tx.execute("UPDATE sessions SET last_active_at=? WHERE id=? AND user_id=?", params![now.to_rfc3339_opts(chrono::SecondsFormat::Millis,true),session,owner])?;
+            super::chat_projection::project_log(&tx,&session)?;
+            tx.commit()?;
+            if let Some(data) = start { let _ = events.publish_serialized(&session, next + 1, data); }
+            Ok(())
+        }).await.map_err(|_| "Turn event could not be persisted".into())
+    }
+}
+impl TurnPersistence for SqliteTurnStore {
+    /// The application session lease spans this preflight and all subsequent appends.
+    /// This is admission under that exclusive lease, not a cross-process reservation.
+    fn check_capacity(
+        &self,
+        events: usize,
+        bytes: usize,
+        max_event_bytes: usize,
+    ) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(async move {
+            if events > MAX_HISTORY_EVENTS
+                || bytes > MAX_HISTORY_BYTES
+                || max_event_bytes > MAX_EVENT_BYTES
+            {
+                return Err("Turn batch exceeds persistence limits".into());
+            }
+            let owner = self.owner.clone();
+            let session = self.session.clone();
+            self.with_database(move |db| {
+                require_owner(db,&owner,&session)?;
+                let (count,stored_bytes):(i64,i64)=db.query_row("SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",params![session,EVENT_TYPE],|row|Ok((row.get(0)?,row.get(1)?)))?;
+                if count as usize + events > MAX_HISTORY_EVENTS || stored_bytes as usize + bytes > MAX_HISTORY_BYTES {
+                    return Err("Stored turn history has insufficient capacity".into());
+                }
+                Ok(())
+            }).await.map_err(|_| "Turn batch could not be admitted".into())
+        })
+    }
+    fn append(&self, event: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(self.append_event(event))
+    }
+}
+// Runtime-private metadata: no production schema version is claimed by this opt-in runtime.
+fn ensure_lifecycle_schema(db: &rusqlite::Connection) -> Result<(), crate::routes::auth::Error> {
+    db.execute_batch("CREATE TABLE IF NOT EXISTS rust_chat_turns (turn_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, owner_id TEXT NOT NULL, state TEXT NOT NULL, request_log_id INTEGER NOT NULL, terminal_log_id INTEGER); CREATE UNIQUE INDEX IF NOT EXISTS rust_chat_turns_active ON rust_chat_turns(session_id) WHERE state='started';")?;
+    Ok(())
+}
+
+/// Resolve abandoned turns before accepting requests. Each bounded transaction commits
+/// an interruption frame and state together; no provider or tool is invoked.
+#[cfg(test)]
+async fn reconcile_startup(auth: &AuthState) -> Result<(), crate::routes::auth::Error> {
+    reconcile_startup_inner(auth, None).await
+}
+pub(crate) async fn reconcile_startup_owned(
+    auth: &AuthState,
+    owner: Arc<std::fs::File>,
+) -> Result<(), crate::routes::auth::Error> {
+    reconcile_startup_inner(auth, Some(owner)).await
+}
+async fn reconcile_startup_inner(
+    auth: &AuthState,
+    owner: Option<Arc<std::fs::File>>,
+) -> Result<(), crate::routes::auth::Error> {
+    const BATCH: usize = 128;
+    const MAX_BATCHES: usize = 32;
+    for _ in 0..MAX_BATCHES {
+        let job_owner = owner.clone();
+        let count = auth.with_database(move |db| {
+            let _owner = job_owner;
+            let tx = db.unchecked_transaction()?;
+            ensure_lifecycle_schema(&tx)?;
+            let turns = {
+                let mut statement = tx.prepare("SELECT turn_id,session_id,owner_id FROM rust_chat_turns WHERE state='started' ORDER BY rowid LIMIT ?")?;
+                let rows = statement.query_map([BATCH as i64], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            for (turn, session, owner) in &turns {
+                // A transferred, archived or deleted session must not receive the old owner's frame.
+                let owned: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=? AND status='active')", params![session,owner], |row| row.get(0))?;
+                let terminal = if owned {
+                    let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [session], |row| row.get(0))?;
+                    let data = json!({"type":"error","message":"Chat turn interrupted by gateway restart"}).to_string();
+                    tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next,STREAM_EVENT_TYPE,data,chrono::Utc::now().timestamp_millis()])?;
+                    Some(next)
+                } else { None };
+                tx.execute("UPDATE rust_chat_turns SET state='interrupted',terminal_log_id=? WHERE turn_id=? AND state='started'", params![terminal,turn])?;
+            }
+            tx.commit()?;
+            Ok(turns.len())
+        }).await?;
+        if count < BATCH {
+            return Ok(());
+        }
+    }
+    // Fail closed if the bounded startup budget was exhausted. Already committed
+    // batches remain idempotent and the next startup can continue reconciliation.
+    let remaining: bool = auth
+        .with_database(move |db| {
+            let _owner = owner;
+            Ok(db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE state='started')",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .await?;
+    if remaining {
+        Err("Chat recovery exceeds startup budget; restart to continue".into())
+    } else {
+        Ok(())
+    }
+}
+
+fn require_owner(
+    db: &rusqlite::Connection,
+    owner: &str,
+    session: &str,
+) -> Result<(), crate::routes::auth::Error> {
+    let found = db
+        .query_row(
+            "SELECT 1 FROM sessions WHERE id=? AND user_id=? AND status='active'",
+            params![session, owner],
+            |_| Ok(()),
+        )
+        .optional()?;
+    found.ok_or_else(|| "Active session is unavailable".into())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn direct_envelope_preserves_raw_utf16_and_v1_shape() {
+        use super::encode_event_envelope;
+        use crate::contracts::bounded_json::Utf16Text;
+        #[derive(serde::Serialize)]
+        struct Fixture {
+            message: Utf16Text,
+        }
+        let encoded = encode_event_envelope(&Fixture {
+            message: Utf16Text(vec![0xd800]),
+        })
+        .unwrap();
+        assert_eq!(encoded, r#"{"version":1,"event":{"message":"\ud800"}}"#);
+        let ordinary = super::TurnEvent::User {
+            content: "hello 😀".into(),
+        };
+        let actual = encode_event_envelope(&ordinary).unwrap();
+        let previous =
+            serde_json::to_string(&serde_json::json!({"version": 1, "event": ordinary})).unwrap();
+        assert_eq!(actual, previous);
+    }
+    use super::*;
+    use crate::runtime::chat_events::{Frame, Message};
+    use crate::{
+        db,
+        providers::openai_stream::{OpenAiFunction, OpenAiToolCall},
+        security::consent_executor::ToolResult,
+    };
+    use std::path::{Path, PathBuf};
+    fn artifact_database() -> PathBuf {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/chat-store")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&directory).unwrap();
+        directory.join("turns.sqlite")
+    }
+    fn open(path: &Path) -> AuthState {
+        let db = db::open_database(path).unwrap();
+        db::migrate_database(&db).unwrap();
+        db.execute("INSERT OR IGNORE INTO sessions(id,user_id,created_at,last_active_at,status) VALUES('session','owner','2026-10-21T00:00:00Z','2026-10-21T00:00:00Z','active')", []).unwrap();
+        AuthState::new(db, "fixture-secret".into()).unwrap()
+    }
+    fn store(auth: &AuthState) -> SqliteTurnStore {
+        SqliteTurnStore::new(auth.clone(), "owner".into(), "session".into()).unwrap()
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn cancelled_caller_keeps_database_lock_until_started_job_finishes() {
+        let path = artifact_database();
+        let owner = Arc::new(
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&path)
+                .unwrap(),
+        );
+        owner.try_lock().unwrap();
+        let auth = open(&path);
+        let adapter = store(&auth).with_database_owner(Some(owner.clone()));
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            adapter
+                .with_database(move |_| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .await
+        });
+        tokio::task::spawn_blocking(move || {
+            started_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+        })
+        .await
+        .unwrap();
+        drop(owner);
+        task.abort();
+        let _ = task.await;
+        let contender = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert!(contender.try_lock().is_err());
+        release_tx.send(()).unwrap();
+        // Drain the worker after the in-flight job before checking release.
+        auth.with_database(|_| Ok(())).await.unwrap();
+        contender.try_lock().unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_request_transaction_leaves_no_lifecycle_or_history() {
+        let auth = open(Path::new(":memory:"));
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_request BEFORE INSERT ON session_events WHEN NEW.type='rust.chat.stream' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            store(&auth)
+                .with_turn()
+                .append(TurnEvent::User {
+                    content: "one".into()
+                })
+                .await
+                .is_err()
+        );
+        let history: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row("SELECT count(*) FROM session_events", [], |r| r.get(0))?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(history, 0);
+        reconcile_startup(&auth).await.unwrap();
+        let turns: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row("SELECT count(*) FROM rust_chat_turns", [], |r| r.get(0))?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(turns, 0);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_recovery_is_atomic_idempotent_and_does_not_repeat_work() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let first = store(&auth).with_turn();
+        first
+            .append(TurnEvent::User {
+                content: "hello".into(),
+            })
+            .await
+            .unwrap();
+        first
+            .append_stream_event(json!({"type":"token","content":"partial"}))
+            .await
+            .unwrap();
+        // A second admission cannot overwrite an unresolved turn.
+        assert!(
+            store(&auth)
+                .with_turn()
+                .append(TurnEvent::User {
+                    content: "duplicate".into()
+                })
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+        let restarted = open(&path);
+        reconcile_startup(&restarted).await.unwrap();
+        reconcile_startup(&restarted).await.unwrap();
+        let (states, frames): (Vec<(String, Option<i64>)>, Vec<String>) = restarted.with_database(|db| {
+            let mut state = db.prepare("SELECT state,terminal_log_id FROM rust_chat_turns")?;
+            let states = state.query_map([], |r| Ok((r.get(0)?,r.get(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let mut stream = db.prepare("SELECT payload FROM session_events WHERE type='rust.chat.stream' ORDER BY log_id")?;
+            let frames = stream.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok((states,frames))
+        }).await.unwrap();
+        assert_eq!(states, vec![("interrupted".into(), Some(4))]);
+        assert_eq!(frames.len(), 3);
+        assert_eq!(
+            serde_json::from_str::<Value>(&frames[2]).unwrap()["type"],
+            "error"
+        );
+        assert_eq!(store(&restarted).load().await.unwrap().len(), 1);
+        restarted.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn closed_turn_rejects_late_and_duplicate_frames() {
+        let auth = open(Path::new(":memory:"));
+        let turn = store(&auth).with_turn();
+        turn.append(TurnEvent::User {
+            content: "hello".into(),
+        })
+        .await
+        .unwrap();
+        turn.append(TurnEvent::Assistant {
+            content: "on time".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+        })
+        .await
+        .unwrap();
+        turn.append_stream_terminal(json!({"type":"done"}))
+            .await
+            .unwrap();
+        assert!(
+            turn.append_stream_event(json!({"type":"token","content":"late"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            turn.append_stream_terminal(json!({"type":"error"}))
+                .await
+                .is_err()
+        );
+        let late = TurnEvent::Assistant {
+            content: "late".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+        };
+        assert!(turn.append(late.clone()).await.is_err());
+        let (count, state): (i64, String) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!((count, state.as_str()), (2, "finished"));
+        // Startup interruption also closes the recorded turn to stale writers.
+        let interrupted = store(&auth).with_turn();
+        interrupted
+            .append(TurnEvent::User {
+                content: "restart".into(),
+            })
+            .await
+            .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        assert!(
+            interrupted
+                .append_stream_event(json!({"type":"token","content":"late"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            interrupted
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(interrupted.append(late.clone()).await.is_err());
+        // A failure before request persistence still has a deliverable terminal.
+        let early = store(&auth).with_turn();
+        assert!(
+            early
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        assert!(early.append(late).await.is_err());
+        early
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
+        assert!(
+            early
+                .append_stream_terminal(json!({"type":"error"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            early
+                .append(TurnEvent::User {
+                    content: "delayed".into()
+                })
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn terminal_and_state_commit_together_and_transfer_is_not_exposed() {
+        let auth = open(Path::new(":memory:"));
+        let first = store(&auth).with_turn();
+        first
+            .append(TurnEvent::User {
+                content: "one".into(),
+            })
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_finish BEFORE UPDATE ON rust_chat_turns WHEN NEW.state='finished' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            first
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        let count: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+        auth.with_database(|db| { db.execute_batch("DROP TRIGGER reject_finish; UPDATE sessions SET user_id='other' WHERE id='session';")?; Ok(()) }).await.unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, terminal): (String, Option<i64>) = auth
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT state,terminal_log_id FROM rust_chat_turns",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "interrupted");
+        assert_eq!(terminal, None);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recovery_failure_rolls_back_terminal_and_state() {
+        let auth = open(Path::new(":memory:"));
+        store(&auth)
+            .with_turn()
+            .append(TurnEvent::User {
+                content: "one".into(),
+            })
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_recovery BEFORE UPDATE ON rust_chat_turns WHEN NEW.state='interrupted' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(reconcile_startup(&auth).await.is_err());
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "started");
+        assert_eq!(count, 1);
+        auth.with_database(|db| {
+            db.execute_batch("DROP TRIGGER reject_recovery")?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "interrupted");
+        assert_eq!(count, 2);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn completed_turn_is_not_reconciled() {
+        let auth = open(Path::new(":memory:"));
+        let turn = store(&auth).with_turn();
+        turn.append(TurnEvent::User {
+            content: "one".into(),
+        })
+        .await
+        .unwrap();
+        turn.append_stream_terminal(json!({"type":"done"}))
+            .await
+            .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "finished");
+        assert_eq!(count, 2);
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn failed_terminal_write_and_restart_do_not_imply_live_stream() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let adapter = store(&auth);
+        adapter
+            .append(TurnEvent::User {
+                content: "hello".into(),
+            })
+            .await
+            .unwrap();
+        adapter
+            .append_stream_event(json!({"type":"token","content":"partial"}))
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_terminal BEFORE INSERT ON session_events WHEN NEW.type='rust.chat.stream' BEGIN SELECT RAISE(ABORT, 'injected failure'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+
+        let restarted = open(&path);
+        let snapshot = super::super::chat_projection::project_messages(
+            restarted.clone(),
+            "owner".into(),
+            "session".into(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(snapshot["streaming"], false);
+        assert_eq!(snapshot["messages"][1]["content"], "partial");
+        assert_eq!(snapshot["seq"], 3);
+        assert!(
+            super::super::chat_projection::project_messages(
+                restarted.clone(),
+                "other".into(),
+                "session".into(),
+                None,
+                None,
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(store(&restarted).load().await.unwrap().len(), 1);
+        restarted.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn stream_events_are_owner_checked_durable_and_separate_from_history() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus.clone());
+        let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into())
+            .unwrap()
+            .with_events(bus);
+        assert!(
+            other
+                .append_stream_event(json!({"type":"token","content":"no"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_event(json!({"content":"missing type"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_event(
+                    json!({"type":"token","content":"x".repeat(MAX_STREAM_EVENT_BYTES)})
+                )
+                .await
+                .is_err()
+        );
+        adapter
+            .append_stream_event(json!({"type":"token","content":"yes"}))
+            .await
+            .unwrap();
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
+        assert_eq!(frame.log_id, 1);
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame.data).unwrap()["content"],
+            "yes"
+        );
+        assert!(adapter.load().await.unwrap().is_empty());
+        auth.shutdown().await.unwrap();
+        let restarted = open(&path);
+        let payload: String = restarted
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT payload FROM session_events WHERE session_id='session' AND type=?",
+                    [STREAM_EVENT_TYPE],
+                    |row| row.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&payload).unwrap()["content"],
+            "yes"
+        );
+        restarted.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_history_and_request_frame_commit_together() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        adapter
+            .append(TurnEvent::User {
+                content: "history".into(),
+            })
+            .await
+            .unwrap();
+        let Message::Durable(start) = receiver.try_recv().unwrap() else {
+            panic!("expected request")
+        };
+        assert_eq!(start.log_id, 2);
+        assert_eq!(
+            serde_json::from_str::<Value>(&start.data).unwrap()["content"],
+            "history"
+        );
+        adapter
+            .append_stream_event(json!({"type":"token","content":"visible"}))
+            .await
+            .unwrap();
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
+        assert_eq!(frame.log_id, 3);
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame.data).unwrap()["content"],
+            "visible"
+        );
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn full_stream_rejects_without_deleting_or_publishing() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        auth.with_database(|db| {
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..=MAX_STREAM_EVENTS {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, r#"{"type":"token"}"#])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        let (count, first, last): (i64, i64, i64) = auth.with_database(|db| {
+            Ok(db.query_row("SELECT count(*),min(log_id),max(log_id) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?)
+        }).await.unwrap();
+        assert_eq!(
+            (count, first, last),
+            (MAX_STREAM_EVENTS, 1, MAX_STREAM_EVENTS)
+        );
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stream_reserves_terminal_slot_and_preflight_checks_ownership() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        assert!(adapter.check_stream_capacity().await.is_ok());
+        let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into()).unwrap();
+        assert!(other.check_stream_capacity().await.is_err());
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        auth.with_database(|db| {
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..MAX_STREAM_EVENTS {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, r#"{"type":"token"}"#])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.check_stream_capacity().await.is_err());
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        adapter
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
+        let Message::Durable(Frame { log_id, .. }) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
+        assert_eq!(log_id, MAX_STREAM_EVENTS);
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stream_byte_limit_preserves_terminal_reserve() {
+        let auth = open(Path::new(":memory:"));
+        let adapter = store(&auth);
+        auth.with_database(|db| {
+            let empty = serde_json::to_string(&json!({"type":"token","content":""}))?;
+            let payload = serde_json::to_string(&json!({"type":"token","content":"x".repeat(MAX_STREAM_EVENT_BYTES - empty.len())}))?;
+            assert_eq!(payload.len(), MAX_STREAM_EVENT_BYTES);
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..=(MAX_STREAM_BYTES / MAX_STREAM_EVENT_BYTES as i64 - 1) {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, payload])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.check_stream_capacity().await.is_err());
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        adapter
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
+        let bytes: i64 = auth.with_database(|db| {
+            Ok(db.query_row("SELECT sum(length(CAST(payload AS BLOB))) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| row.get(0))?)
+        }).await.unwrap();
+        assert!(bytes <= MAX_STREAM_BYTES);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn complete_tool_history_survives_restart_and_shared_log_sequence() {
+        let path = artifact_database();
+        let auth = open(&path);
+        auth.with_database(|db| { db.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',40,'token','{}',0)",[])?; Ok(()) }).await.unwrap();
+        let events = vec![
+            TurnEvent::User {
+                content: "inspect".into(),
+            },
+            TurnEvent::Assistant {
+                content: String::new(),
+                thinking: "private".into(),
+                tool_calls: vec![OpenAiToolCall {
+                    id: "call-1".into(),
+                    kind: "function".into(),
+                    function: OpenAiFunction {
+                        name: "terminal".into(),
+                        arguments: "{}".into(),
+                    },
+                }],
+            },
+            TurnEvent::Tool {
+                tool_call_id: "call-1".into(),
+                name: "terminal".into(),
+                result: ToolResult::message(true, "verified"),
+            },
+            TurnEvent::Assistant {
+                content: "done".into(),
+                thinking: String::new(),
+                tool_calls: vec![],
+            },
+        ];
+        for event in &events {
+            store(&auth).append(event.clone()).await.unwrap();
+        }
+        let ids = auth
+            .with_database(|db| {
+                let mut stmt = db.prepare("SELECT log_id FROM session_events ORDER BY log_id")?;
+                Ok(stmt
+                    .query_map([], |row| row.get::<_, i64>(0))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(ids, vec![40, 41, 42, 43, 44, 45]);
+        auth.shutdown().await.unwrap();
+        let restarted = open(&path);
+        assert_eq!(store(&restarted).load().await.unwrap(), events);
+        restarted.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn ownership_and_active_status_checked_on_every_read_and_write() {
+        let auth = open(Path::new(":memory:"));
+        let adapter = store(&auth);
+        let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into()).unwrap();
+        assert!(other.load().await.is_err());
+        assert!(
+            other
+                .append(TurnEvent::User {
+                    content: "spoof".into()
+                })
+                .await
+                .is_err()
+        );
+        adapter
+            .append(TurnEvent::User {
+                content: "allowed".into(),
+            })
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute("UPDATE sessions SET user_id='other' WHERE id='session'", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(adapter.load().await.is_err());
+        assert!(
+            adapter
+                .append(TurnEvent::User {
+                    content: "revoked".into()
+                })
+                .await
+                .is_err()
+        );
+        auth.with_database(|db| {
+            db.execute(
+                "UPDATE sessions SET status='archived' WHERE id='session'",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert!(other.load().await.is_err());
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn oversize_and_corrupt_history_fail_without_exposing_sql() {
+        let auth = open(Path::new(":memory:"));
+        let adapter = store(&auth);
+        assert!(
+            adapter
+                .append(TurnEvent::User {
+                    content: "x".repeat(MAX_EVENT_BYTES)
+                })
+                .await
+                .is_err()
+        );
+        assert!(adapter.load().await.unwrap().is_empty());
+        auth.with_database(|db| { db.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',1,'rust.chat.message','{broken',0)",[])?; Ok(()) }).await.unwrap();
+        assert_eq!(
+            adapter.load().await.unwrap_err(),
+            "Turn history could not be loaded"
+        );
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn full_history_rejects_append_without_silent_truncation() {
+        let auth = open(Path::new(":memory:"));
+        let adapter = store(&auth);
+        auth.with_database(|db| {
+            for id in 1..=MAX_HISTORY_EVENTS as i64 {
+                db.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,'rust.chat.message',?,0)",params![id,r#"{"version":1,"event":{"type":"user","content":"fixture"}}"#])?;
+            }
+            Ok(())
+        }).await.unwrap();
+        assert_eq!(adapter.load().await.unwrap().len(), MAX_HISTORY_EVENTS);
+        assert!(adapter.check_capacity(1, 128, 128).await.is_err());
+        assert!(
+            adapter
+                .append(TurnEvent::User {
+                    content: "overflow".into()
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(adapter.load().await.unwrap().len(), MAX_HISTORY_EVENTS);
+        auth.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod lossless_envelope_tests {
+    use super::{DecodedEventEnvelope, MAX_EVENT_BYTES, decode_event_envelope};
+    use crate::runtime::chat_turn::TurnEvent;
+
+    #[test]
+    fn v1_compatibility_and_v2_raw_event_roundtrip() {
+        let v1 = r#"{"version":1,"event":{"type":"user","content":"hello"}}"#;
+        assert!(
+            matches!(decode_event_envelope(v1), Ok(DecodedEventEnvelope::V1(TurnEvent::User { content })) if content == "hello")
+        );
+        let raw = r#"{"type":"tool","tool_call_id":"id","name":"read","result":{"ok":"\ud800","message":"\udc00","data":null}}"#;
+        let v2 = format!(r#"{{"version":2,"event":{raw}}}"#);
+        match decode_event_envelope(&v2).unwrap() {
+            DecodedEventEnvelope::V2(event) => {
+                assert_eq!(event.tool_call_id, "id");
+                assert_eq!(event.name, "read");
+                assert_eq!(event.ok.as_json(), r#""\ud800""#);
+                assert_eq!(event.message.0, vec![0xdc00]);
+                assert_eq!(event.data.unwrap().as_json(), "null");
+            }
+            _ => panic!("wrong envelope version"),
+        }
+        let absent = r#"{"version":2,"event":{"type":"tool","tool_call_id":"id","name":"read","result":{"ok":false,"message":"ok"}}}"#;
+        assert!(
+            matches!(decode_event_envelope(absent), Ok(DecodedEventEnvelope::V2(event)) if event.data.is_none())
+        );
+    }
+
+    #[test]
+    fn deep_v1_uses_the_active_reader_nesting_rules() {
+        let payload = format!(
+            r#"{{"version":1,"event":{{"type":"tool","tool_call_id":"a","name":"read","result":{{"ok":true,"message":"ok","data":{}0{}}}}}}}"#,
+            "[".repeat(70),
+            "]".repeat(70)
+        );
+        let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["version"], 1);
+        let expected: TurnEvent = serde_json::from_value(value["event"].clone()).unwrap();
+        match decode_event_envelope(&payload).unwrap() {
+            DecodedEventEnvelope::V1(actual) => assert_eq!(actual, expected),
+            _ => panic!("wrong envelope version"),
+        }
+    }
+
+    #[test]
+    fn envelope_rejects_unsupported_invalid_and_oversized_data() {
+        for payload in [
+            r#"{"version":3,"event":{}}"#,
+            r#"{"version":2,"event":null}"#,
+            r#"{"version":2,"event":{"x":"\uD80G"}}"#,
+            r#"{"version":2,"version":2,"event":{}}"#,
+        ] {
+            assert!(decode_event_envelope(payload).is_err(), "{payload}");
+        }
+        for event in [
+            r#"{"type":"user","tool_call_id":"i","name":"n","result":{"ok":true,"message":"m"}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"message":null}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"message":"m","unexpected":1}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"ok":false,"message":"m"}}"#,
+        ] {
+            assert!(decode_event_envelope(&format!(r#"{{"version":2,"event":{event}}}"#)).is_err());
+        }
+        let large = format!(
+            r#"{{"version":2,"event":{{"x":"{}"}}}}"#,
+            "x".repeat(MAX_EVENT_BYTES)
+        );
+        assert!(decode_event_envelope(&large).is_err());
+        let deep = format!(
+            r#"{{"version":2,"event":{{"x":{}0{}}}}}"#,
+            "[".repeat(63),
+            "]".repeat(63)
+        );
+        assert!(decode_event_envelope(&deep).is_err());
+    }
+}

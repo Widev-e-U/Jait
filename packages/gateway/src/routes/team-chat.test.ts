@@ -10,6 +10,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { UserService } from "../services/users.js";
 import { SessionService } from "../services/sessions.js";
 import { ThreadService } from "../services/threads.js";
+import { TeamChatService } from "../services/team-chat.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -79,6 +80,28 @@ describe("team room routes and work chat integration", () => {
   });
   afterEach(async () => { await app.close(); opened.sqlite.close(); });
   const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
+
+  it("paginates messages in insertion order and limits historical deliveries", async () => {
+    const insertMessage = opened.sqlite.prepare("INSERT INTO team_room_messages (id, room_id, client_key, data) VALUES (?, ?, ?, ?)");
+    const insertDelivery = opened.sqlite.prepare("INSERT INTO team_room_deliveries (id, room_id, message_id, agent_id, session_id, status) VALUES (?, ?, ?, ?, ?, ?)");
+    for (let i = 0; i < 23; i++) {
+      const id = `message-${i}`;
+      insertMessage.run(id, roomId, id, JSON.stringify({ id, roomId, content: id }));
+      insertDelivery.run(`delivery-${i}`, roomId, id, "Developer", `session-${i}`, i === 0 ? "running" : "completed");
+    }
+    const getPage = async (query: string) => (await app.inject({ method: "GET", url: `/api/team-rooms/${roomId}?${query}`, headers })).json();
+    const latest = await getPage("limit=10");
+    expect(latest.messages.map((m: { id: string }) => m.id)).toEqual(Array.from({ length: 10 }, (_, i) => `message-${i + 13}`));
+    expect(latest.hasMore).toBe(true);
+    expect(latest.deliveries).toHaveLength(11);
+    const middle = await getPage("limit=10&before=message-13");
+    expect(middle.messages.map((m: { id: string }) => m.id)).toEqual(Array.from({ length: 10 }, (_, i) => `message-${i + 3}`));
+    expect(middle.hasMore).toBe(true);
+    const oldest = await getPage("limit=10&before=message-3");
+    expect(oldest.messages.map((m: { id: string }) => m.id)).toEqual(["message-0", "message-1", "message-2"]);
+    expect(oldest.hasMore).toBe(false);
+    expect((await snapshot()).messages).toHaveLength(23);
+  });
 
   it("creates named chats, validates owned members, and returns only selected agents", async () => {
     const create = (name: string, memberIds: string[]) => app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { name, memberIds } });
@@ -234,10 +257,18 @@ describe("team room routes and work chat integration", () => {
       item.agentId === "Developer" && item.sessionId !== active.sessionId && item.status === "running");
     expect(independent).toBeDefined();
     expect(provider.sendTurn).toHaveBeenCalledTimes(4);
+    // A hung running delivery must not prevent queued cancellation. Suppress
+    // the pump to prove the stop route itself finalizes the queued row.
+    const pump = vi.spyOn(TeamChatService.prototype, "pump").mockResolvedValue(undefined);
     const result = await app.inject({ method: "POST", url: `/api/threads/${active.sessionId}/interrupt`, headers });
     expect(result.statusCode).toBe(200);
     await vi.waitFor(async () => expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === queued.id)?.status).toBe("cancelled"));
-    expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === independent.id)?.status).toBe("running");
+    const stopped = await snapshot();
+    expect(stopped.deliveries.find((item: { id: string }) => item.id === independent.id)?.status).toBe("running");
+    expect(stopped.deliveries).toHaveLength(initial.deliveries.length);
+    expect(stopped.messages.some((message: { id: string }) => message.id === queued.messageId)).toBe(true);
+    expect(stopped.messages.some((message: { kind: string; parentMessageId?: string }) => message.kind === "result" && message.parentMessageId === queued.messageId)).toBe(false);
+    pump.mockRestore();
   });
 
   it("reports the latest answer after opening progress and fails empty completions", async () => {

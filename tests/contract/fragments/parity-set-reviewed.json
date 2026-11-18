@@ -1,0 +1,17 @@
+{
+  "review_scope": "parity-set bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/channels/assistant.test.ts:12:3",
+      "status": "verified",
+      "parity_review": "Reviewed names tools that actually exist. Original body, setup, imports, hooks and all assertion operands match the bounded completion audit, whose six structural controls pass. Set containment is limited to an uncustomized built-in Set of finite primitive values; object entries, custom subclasses, own properties, JSON overrides and unsupported entries are rejected. Eleven domain controls pass. Real Vitest replay revives the serialized Set and the Rust comparator uses the observed membership data. Every observation and an opposing counterexample agree between real Vitest and the Rust comparator. Detailed per-site bindings, inputs, observation counts, skipped-helper proofs and hashes: .jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/parity-set/combined-selected.json. The passing full translated report and internal/managed profiles are bound to the unchanged frozen source checkpoint. Live candidate sources, fixtures, Rust rules and transport hashes match that checkpoint. This is preservation of the reference tests for the exercised domains, not native-runtime or complete security assurance.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_channels_assistant_test_ts_12_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-variants/source-checkpoint/.jait/artifacts/contracts/0468b300-2b11-480b-a02e-766e71672da9/report.json"
+        }
+      ]
+    }
+  ]
+}

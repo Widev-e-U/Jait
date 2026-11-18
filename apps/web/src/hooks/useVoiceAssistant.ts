@@ -1,25 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { VoiceAssistantState, VoiceServerMessage } from '@jait/shared'
 import { VOICE_ASSISTANT_INITIAL_STATE } from '@jait/shared'
+import { getApiUrl } from '@/lib/gateway-url'
 
 /** PCM16 sample rate for OpenAI Realtime API (both input and output). */
 const SAMPLE_RATE = 24000
-
-const API_URL = (() => {
-  const envUrl = import.meta.env.VITE_API_URL as string | undefined
-  if (envUrl) return envUrl.replace(/\/+$/, '')
-  return `${window.location.protocol}//${window.location.hostname}:${window.location.port}`
-})()
-
-function wsUrl(): string {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const envUrl = import.meta.env.VITE_API_URL as string | undefined
-  if (envUrl) {
-    const u = new URL(envUrl)
-    return `${u.protocol === 'https:' ? 'wss:' : 'ws:'}//${u.host}`
-  }
-  return `${proto}//${window.location.host}`
-}
 
 // ── Audio helpers ───────────────────────────────────────────────
 
@@ -120,7 +105,8 @@ export interface UseVoiceAssistantOptions {
 }
 
 export interface UseVoiceAssistantReturn extends VoiceAssistantState {
-  connect: () => Promise<void>
+  micReady: boolean
+  connect: (initialText?: string) => Promise<void>
   disconnect: () => void
   toggleMic: () => void
   announce: (text: string) => void
@@ -130,9 +116,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
   const { authToken, onStatusChange, onError, onConnected, onDisconnected } = options
 
   const [state, setState] = useState<VoiceAssistantState>(VOICE_ASSISTANT_INITIAL_STATE)
+  const [micReady, setMicReady] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
   const connectingRef = useRef(false)
+  const connectionGenerationRef = useRef(0)
 
   // Audio capture
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -148,8 +136,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // Client-side speech detection for instant interruption
   const analyserRef = useRef<AnalyserNode | null>(null)
-  const rawMicStreamRef = useRef<MediaStream | null>(null) // separate non-echo-cancelled stream
-  const rawMicCtxRef = useRef<AudioContext | null>(null)
   const speechDetectRafRef = useRef(0)
 
   // Transcript batching — accumulate tokens and flush once per frame
@@ -207,15 +193,10 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // ── Stop audio capture ──────────────────────────────────────
   const stopCapture = useCallback(() => {
+    setMicReady(false)
     cancelAnimationFrame(speechDetectRafRef.current)
     speechDetectRafRef.current = 0
     analyserRef.current = null
-    // Clean up raw mic stream used for speech detection
-    rawMicStreamRef.current?.getTracks().forEach(t => t.stop())
-    rawMicStreamRef.current = null
-    const rawCtx = rawMicCtxRef.current
-    rawMicCtxRef.current = null
-    if (rawCtx && rawCtx.state !== 'closed') void rawCtx.close().catch(() => {})
     processorRef.current?.disconnect()
     processorRef.current = null
     workletNodeRef.current?.disconnect()
@@ -242,6 +223,8 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // ── Disconnect ──────────────────────────────────────────────
   const disconnect = useCallback(() => {
+    connectionGenerationRef.current++
+    connectingRef.current = false
     const ws = wsRef.current
     if (ws) {
       try { ws.send(JSON.stringify({ type: 'stop' })) } catch {}
@@ -283,32 +266,26 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
   }, [])
 
   // ── Connect ─────────────────────────────────────────────────
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (initialText?: string) => {
     if (!authToken || connectingRef.current) return
     if (wsRef.current) disconnect()
+    const generation = ++connectionGenerationRef.current
+    const initialCommand = initialText?.trim() ?? ''
+    let initialCommandSent = false
 
     connectingRef.current = true
     updateStatus('connecting')
 
     try {
-      // 1. Check availability
-      let statusData: { available?: boolean } = { available: false }
-      try {
-        const statusRes = await fetch(`${API_URL}/api/voice-assistant/status`)
-        if (!statusRes.ok) throw new Error(`Server returned ${statusRes.status}`)
-        statusData = await statusRes.json() as { available?: boolean }
-      } catch (fetchErr) {
-        throw new Error('Cannot reach Jait gateway — is the server running?')
-      }
-      if (!statusData.available) {
-        throw new Error('Voice assistant not available — check your OPENAI_API_KEY in the gateway .env')
-      }
+      if (initialCommand.length > 4000) throw new Error('That request was too long. Please try again.')
 
-      // 2. Open WebSocket
-      const ws = new WebSocket(`${wsUrl()}/ws/voice-assistant?token=${encodeURIComponent(authToken)}`)
+      // The gateway checks both the user's key and server configuration on connect.
+      const ws = new WebSocket(`${getApiUrl().replace(/^http/i, 'ws')}/ws/voice-assistant?token=${encodeURIComponent(authToken)}`)
+      let connectionFailed = false
       wsRef.current = ws
 
       ws.onmessage = (event) => {
+        if (connectionGenerationRef.current !== generation) return
         let msg: VoiceServerMessage
         try {
           msg = JSON.parse(event.data)
@@ -319,6 +296,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
         switch (msg.type) {
           case 'session.started':
             updateStatus('connected')
+            if (initialCommand && !initialCommandSent) {
+              initialCommandSent = true
+              ws.send(JSON.stringify({ type: 'initial_text', text: initialCommand }))
+              setState(prev => ({ ...prev, userTranscript: initialCommand }))
+            }
             onConnectedRef.current?.()
             break
 
@@ -368,6 +350,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
             break
 
           case 'error':
+            connectionFailed = true
             setState(prev => ({ ...prev, status: 'error', error: msg.message }))
             onErrorRef.current?.(msg.message)
             break
@@ -379,16 +362,20 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
       }
 
       ws.onerror = () => {
-        onErrorRef.current?.('WebSocket connection failed')
+        connectionFailed = true
+        setState(prev => ({ ...prev, status: 'error', error: 'Voice connection failed' }))
+        onErrorRef.current?.('Voice connection failed')
       }
 
       ws.onclose = () => {
+        if (connectionGenerationRef.current !== generation) return
+        connectionGenerationRef.current++
+        connectingRef.current = false
         stopCapture()
         stopPlayback()
-        // Don't overwrite error state — only reset if we weren't already in error
-        setState(prev => prev.status === 'error' ? prev : VOICE_ASSISTANT_INITIAL_STATE)
+        setState(prev => connectionFailed ? prev : VOICE_ASSISTANT_INITIAL_STATE)
         wsRef.current = null
-        onDisconnectedRef.current?.()
+        if (!connectionFailed) onDisconnectedRef.current?.()
       }
 
       // Wait for WS to open (with timeout)
@@ -405,10 +392,15 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
         }
       })
 
+      if (connectionGenerationRef.current !== generation) return
       // 3. Start mic capture
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: SAMPLE_RATE },
       })
+      if (connectionGenerationRef.current !== generation) {
+        stream.getTracks().forEach(t => t.stop())
+        return
+      }
       mediaStreamRef.current = stream
 
       const audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE })
@@ -416,35 +408,19 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
       const source = audioCtx.createMediaStreamSource(stream)
 
-      // Set up a SEPARATE raw mic stream (no echo cancellation) for speech detection.
-      // The echo-cancelled stream can't detect the user's voice while the assistant
-      // is playing through speakers — the canceller suppresses it.
-      try {
-        const rawStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
-        })
-        rawMicStreamRef.current = rawStream
-        const rawCtx = new AudioContext()
-        rawMicCtxRef.current = rawCtx
-        const rawSource = rawCtx.createMediaStreamSource(rawStream)
-        const analyser = rawCtx.createAnalyser()
-        analyser.fftSize = 256
-        analyser.smoothingTimeConstant = 0.2
-        rawSource.connect(analyser)
-        analyserRef.current = analyser
-      } catch {
-        // If we can't get a second stream, fall back to the echo-cancelled one
-        const analyser = audioCtx.createAnalyser()
-        analyser.fftSize = 256
-        analyser.smoothingTimeConstant = 0.2
-        source.connect(analyser)
-        analyserRef.current = analyser
-      }
+      // Use the echo-cancelled stream for local interruption detection so the
+      // assistant's own speaker output does not immediately interrupt itself.
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.2
+      source.connect(analyser)
+      analyserRef.current = analyser
 
       // Prefer AudioWorklet (processes audio off the main thread)
       // Fall back to ScriptProcessor if AudioWorklet isn't available
       try {
         await audioCtx.audioWorklet.addModule(getWorkletUrl())
+        if (connectionGenerationRef.current !== generation) return
         const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture')
         workletNodeRef.current = workletNode
         workletNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
@@ -453,7 +429,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
           wsRef.current.send(JSON.stringify({ type: 'audio', data: base64 }))
         }
         source.connect(workletNode)
+        workletNode.connect(audioCtx.destination)
       } catch {
+        if (connectionGenerationRef.current !== generation) return
         // Fallback: ScriptProcessor (runs on main thread, deprecated but universal)
         const processor = audioCtx.createScriptProcessor(4096, 1, 1)
         processorRef.current = processor
@@ -468,18 +446,20 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
         processor.connect(audioCtx.destination)
       }
 
-      setState(prev => ({ ...prev, status: 'listening', micActive: true }))
+      setMicReady(true)
+      setState(prev => ({ ...prev, micActive: true }))
     } catch (err) {
+      if (connectionGenerationRef.current !== generation) return
       const message = err instanceof Error ? err.message : String(err)
       // Clean up any partial resources without triggering onDisconnected
       stopCapture()
       stopPlayback()
       const ws = wsRef.current
-      if (ws) { try { ws.close() } catch {} wsRef.current = null }
+      if (ws) { ws.onclose = null; try { ws.close() } catch {} wsRef.current = null }
       setState({ ...VOICE_ASSISTANT_INITIAL_STATE, status: 'error', error: message })
       onErrorRef.current?.(message)
     } finally {
-      connectingRef.current = false
+      if (connectionGenerationRef.current === generation) connectingRef.current = false
     }
   }, [authToken, disconnect, playAudioChunk, stopCapture, stopPlayback, updateStatus])
 
@@ -505,7 +485,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
     const buf = new Uint8Array(analyser.frequencyBinCount)
     let consecutiveFrames = 0
     const THRESHOLD = 14   // React sooner to actual speech while still filtering light noise
-    const FRAMES_NEEDED = 1 // Trigger on the first clear speech frame
+    const FRAMES_NEEDED = 4 // Require sustained speech rather than a single noisy frame
 
     const detect = () => {
       analyser.getByteTimeDomainData(buf)
@@ -541,6 +521,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      connectionGenerationRef.current++
       wsRef.current?.close()
       wsRef.current = null
       stopCapture()
@@ -550,6 +531,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   return {
     ...state,
+    micReady,
     connect,
     disconnect,
     toggleMic,

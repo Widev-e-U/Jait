@@ -1,9 +1,14 @@
 import { ThreadApprovalNotice } from './thread-approval-notice'
 import { AlertTriangle, RefreshCw, Loader2 as SpinnerIcon } from 'lucide-react'
-import { useRef, type ReactNode, type RefObject } from 'react'
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, TodoList, MessageQueue } from '@/components/chat'
 import type { PromptInputHandle, ToolCallInfo } from '@/components/chat'
+import {
+  getChatColumnClassName,
+  getChatComposerBoundaryClassName,
+  getChatTranscriptBoundaryClassName,
+} from '@/components/chat/message-edit-layout'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { useManagerSidebarSection } from '@/components/manager/manager-mode'
 import { haveRenderInputsChanged } from '@/lib/message-element-cache'
@@ -17,8 +22,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { inferThreadRepositoryName } from '@/lib/automation-repositories'
-import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import { agentsApi, type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
+import type { ChatAttachment } from '@/hooks/useChat'
+import type { UserMessageSegment } from '@/lib/user-message-segments'
 import type { ResponseStyle } from '@jait/shared'
 
 interface ThreadsPageProps {
@@ -76,7 +83,7 @@ interface ThreadsPageProps {
   onStopRecording: () => void
   onStopThread: (threadId: string) => void
   onSubmit: () => void
-  onUpdateManagerQueueItem: (threadId: string, itemId: string, content: string) => void
+  onUpdateManagerQueueItem: (threadId: string, itemId: string, content: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => void | Promise<void>
   onVoiceInput: () => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => React.ReactNode
   inlinePrompts?: ReactNode
@@ -150,10 +157,16 @@ export function ThreadsPage({
   // their own render-relevant inputs means only the streaming message gets a
   // new element, so React skips reconciling the rest.
   const activeThreadId = automation.selectedThread?.id ?? null
+  const handleApprovalResponse = useCallback(async (requestId: string, approved: boolean) => {
+    if (!activeThreadId) throw new Error('No thread selected')
+    await agentsApi.approveToolCall(activeThreadId, requestId, approved)
+    await automation.refreshSelectedThread()
+  }, [activeThreadId, automation.refreshSelectedThread])
   const threadRunning = automation.selectedThread?.status === 'running'
   const threadProvider = automation.selectedThread?.providerId as ProviderId | undefined
   const sharedRenderInputs = [
     threadProvider,
+    handleApprovalResponse,
     managerThreads,
     renderInlineSecretPrompt,
     onOpenMessagePath,
@@ -212,11 +225,11 @@ export function ThreadsPage({
           toolCalls={msg.toolCalls}
           segments={msg.segments}
           isStreaming={isStreaming}
-          compact
           preferLlmUi={false}
           provider={threadProvider}
           threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={handleApprovalResponse}
           onOpenPath={onOpenMessagePath}
           onOpenDiff={onChangedFileClick}
           onOpenMemorySource={onMemorySourceOpen}
@@ -254,10 +267,13 @@ export function ThreadsPage({
       {automation.selectedThread ? (
         <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
           <div className="flex min-w-0 flex-1 flex-col min-h-0">
-            <ErrorBoundary name="Thread activity" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[automation.selectedThread?.id, automationMessages.length]}>
+            <ErrorBoundary name="Thread activity" variant="section" className={getChatTranscriptBoundaryClassName()} resetKeys={[automation.selectedThread?.id, automationMessages.length]}>
               <Conversation
                 key={automation.selectedThread?.id ?? 'manager-empty'}
-                className="min-h-0 flex-1 border-b"
+                className={getChatTranscriptBoundaryClassName()}
+                mobile={isMobile}
+                showMinimap={!isMobile}
+                isStreaming={threadRunning}
                 loading={automation.loadingActivities}
                 loadingLabel="Loading activity"
                 messageContents={automationMessages.map((msg) => msg.content)}
@@ -269,8 +285,8 @@ export function ThreadsPage({
                 {messageElements}
               </Conversation>
             </ErrorBoundary>
-            <div className="shrink-0 py-3 px-4">
-              <div className="mx-auto max-w-4xl">
+            <div className={getChatComposerBoundaryClassName(isMobile)}>
+              <div className={getChatColumnClassName('space-y-1.5')}>
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -281,7 +297,7 @@ export function ThreadsPage({
                   <MessageQueue
                     items={selectedManagerQueue}
                     onRemove={(id) => onDequeueManagerMessage(automation.selectedThread.id, id)}
-                    onEdit={(id, content) => onUpdateManagerQueueItem(automation.selectedThread.id, id, content)}
+                    onEdit={(id, content, attachments, displaySegments) => onUpdateManagerQueueItem(automation.selectedThread.id, id, content, attachments, displaySegments)}
                     onReorder={(sourceId, targetId, placement) => onReorderManagerQueueItem(automation.selectedThread.id, sourceId, targetId, placement)}
                     onSteer={automation.selectedThread.status === 'running' ? onSteerManagerQueueItem : undefined}
                     onSendToParallelThread={onSendManagerQueueItemToParallelThread}
@@ -290,7 +306,7 @@ export function ThreadsPage({
                   />
                 )}
                 <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
-                <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
+                <div className="max-h-[40vh] overflow-y-auto divide-y divide-border [&:not(:empty)]:border-b [&:not(:empty)]:border-border">
                   {automation.selectedThreadTodos.length > 0 && (
                     <TodoList items={automation.selectedThreadTodos} merged />
                   )}
@@ -335,6 +351,7 @@ export function ThreadsPage({
                     onSearchFiles={onSearchFiles}
                     projectOpen={showProject}
                     chatId={automation.selectedThread?.id ?? undefined}
+                    allowPersonalChatNode={false}
                     merged
                   />
                 </ErrorBoundary>

@@ -17,3 +17,12 @@ it('reads OpenCode model config without requiring a reasoning-effort selector', 
  try {expect(await provider.listModels()).toEqual([{id:'opencode-go/glm-5.2',name:'OpenCode Go/GLM-5.2',isDefault:true}]);}
  finally {await provider.dispose();}
 });
+
+
+it('ignores blank model IDs and uses the ID when the display name is blank', async () => {
+ const invalidAndUnnamed = agent.replace("{value:'opencode-go/glm-5.2',name:'OpenCode Go/GLM-5.2'}",
+   "{value:'   ',name:'Invalid'}, {value:'opencode-go/glm-5.2',name:'   '}");
+ const provider = new AcpProvider({id:'opencode',name:'OpenCode',description:'test',command:process.execPath,args:['-e',invalidAndUnnamed]});
+ try {expect(await provider.listModels()).toEqual([{id:'opencode-go/glm-5.2',name:'opencode-go/glm-5.2',isDefault:true}]);}
+ finally {await provider.dispose();}
+});

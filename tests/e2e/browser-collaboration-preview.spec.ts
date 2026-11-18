@@ -31,6 +31,9 @@ test.describe('browser and preview integration', () => {
   test('browser tools automatically target the visible preview browser', async ({ request, page, context }) => {
     test.setTimeout(90000)
     page.setDefaultTimeout(15000)
+    // Chromium's Network table virtualizes its rows; give the embedded tools
+    // enough height for the toolbar, overview, and request table.
+    await page.setViewportSize({ width: 1280, height: 1080 })
     const { id: sessionId, token } = await createSession(request)
 
     const approveAll = await request.post(`${API_URL}/api/consent/pending/${sessionId}/approve-all`, {
@@ -70,6 +73,14 @@ test.describe('browser and preview integration', () => {
       }
       expect(preview.ok).toBe(true)
       expect(preview.data?.browserId).toBe(`preview-browser-${sessionId}`)
+
+      // Agent-initiated previews start shared; exercise the user's takeover
+      // before asserting that browser tools cannot access an unshared preview.
+      const takeoverResponse = await request.post(`${API_URL}/api/preview/share`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { sessionId, sharedWithAgent: false },
+      })
+      expect(takeoverResponse.ok()).toBeTruthy()
 
       const blockedResponse = await request.post(`${API_URL}/api/tools/execute`, {
         data: { tool: 'browser.inspect', input: {}, sessionId, projectRoot: PROJECT_ROOT },
@@ -131,19 +142,23 @@ test.describe('browser and preview integration', () => {
       await expect(page.getByRole('textbox', { name: 'Browser URL' })).toHaveAttribute('readonly', '')
       await expect(page.getByRole('button', { name: 'Refresh page', exact: true })).toBeDisabled()
       await expect(viewer).toHaveAttribute('src', /view_only=1/)
+      // Control changes are sent to the existing viewer; keep its connection alive.
+      await viewer.evaluate(element => { (element as HTMLElement).dataset.e2eConnection = 'original' })
       await page.getByRole('button', { name: 'Take control', exact: true }).click()
       await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
-      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
+      await expect(viewer).toHaveAttribute('data-e2e-connection', 'original')
       await expect(canvas).toBeVisible()
-      await page.getByRole('button', { name: '🔍 Navigate', exact: true }).click()
-      // The local fixture focuses this field; key input travels through VNC.
+      // Taking control enables page input immediately. The local fixture
+      // focuses this field; key input travels through VNC.
       await expect(page.frameLocator('iframe[title="Agent browser"]').locator('#status')).toHaveText(/Connected to/)
       await canvas.focus()
       await page.keyboard.type('live-browser-takeover')
       await page.reload()
       await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
-      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
       await expect.poll(hasDesktopPixels).toBe(true)
+      await expect(page.frameLocator('iframe[title="Agent browser"]').locator('#status')).toHaveText(/Connected to/)
+      await canvas.focus()
+      await page.keyboard.type('-after-reload')
       await mkdir(SHOTS_DIR, { recursive: true })
       await page.screenshot({ path: resolve(SHOTS_DIR, 'compact-browser-takeover.png') })
       await page.getByRole('button', { name: 'Share with agent', exact: true }).click()
@@ -151,7 +166,7 @@ test.describe('browser and preview integration', () => {
       const typedResponse = await request.post(`${API_URL}/api/tools/execute`, {
         data: { tool: 'browser.inspect', input: {}, sessionId, projectRoot: PROJECT_ROOT },
       })
-      expect(JSON.stringify(await typedResponse.json())).toContain('live-browser-takeover')
+      expect(JSON.stringify(await typedResponse.json())).toContain('live-browser-takeover-after-reload')
 
       const unshareResponse = await request.post(`${API_URL}/api/preview/share`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -186,8 +201,14 @@ test.describe('browser and preview integration', () => {
       await expect(devtools.locator('body')).toContainText('Browser tools ready')
       await devtools.getByRole('navigation', { name: 'Main toolbar' }).getByRole('button', { name: 'More tabs' }).click()
       await devtools.getByRole('menuitem', { name: 'Network', exact: true }).click()
+      await devtools.getByRole('button', { name: 'Network settings', exact: true }).click()
+      await devtools.locator('input[type="checkbox"][name="Overview"]').uncheck()
+      await devtools.getByRole('button', { name: 'Network settings', exact: true }).click()
       await page.getByRole('button', { name: 'Refresh page', exact: true }).click()
-      await expect(devtools.locator('body')).toContainText('200')
+      await expect(addressBar).toHaveAttribute('aria-busy', 'false')
+      await expect(devtools.locator('body')).toContainText(/requests/)
+      const networkRow = devtools.locator('tr.data-grid-data-grid-node').filter({ hasText: '?navigated=1' })
+      await expect(networkRow.locator('td.status-column')).toContainText('200')
       const viewerBox = await viewer.boundingBox()
       const toolsBox = await tools.boundingBox()
       expect(viewerBox).not.toBeNull()

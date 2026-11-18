@@ -1,0 +1,10880 @@
+[
+  {
+    "name": "root-null",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": null
+  },
+  {
+    "name": "root-false",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": false
+  },
+  {
+    "name": "root-0",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": 0
+  },
+  {
+    "name": "root-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": ""
+  },
+  {
+    "name": "root-[]",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": []
+  },
+  {
+    "name": "root-{}",
+    "schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "input": {}
+  },
+  {
+    "name": "coerce-number-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-number-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-number-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-number-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-number-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-number-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-number-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-number-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-number-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-number-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-number-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-number-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-number-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-number-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-number-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-number-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-number-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-number-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-number-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-number-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-number-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-number-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-integer-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-integer-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-integer-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-integer-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-integer-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-integer-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-integer-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-integer-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-integer-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-integer-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-integer-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-integer-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-integer-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-integer-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-integer-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-integer-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-integer-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-integer-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-integer-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-integer-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-integer-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-integer-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-boolean-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-boolean-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-boolean-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-boolean-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-boolean-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-boolean-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-boolean-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-boolean-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-boolean-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-boolean-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-boolean-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-boolean-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-string-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-string-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-string-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-string-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-string-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-string-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-string-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-string-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-string-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-string-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-string-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-string-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-string-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-string-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-string-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-string-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-string-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-string-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-string-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-string-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-string-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-string-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-object-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-object-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-object-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-object-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-object-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-object-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-object-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-object-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-object-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-object-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-object-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-object-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-object-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-object-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-object-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-object-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-object-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-object-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-object-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-object-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-object-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-object-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-array-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-array-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-array-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-array-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-array-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-array-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-array-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-array-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-array-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-array-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-array-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-array-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-array-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-array-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-array-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-array-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-array-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-array-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-array-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-array-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-array-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-array-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-null-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-null-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-null-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-null-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-null-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-null-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-null-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-null-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-null-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-null-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-null-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-null-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-null-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-null-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-null-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-null-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-null-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-null-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-null-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-null-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-null-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-null-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-unknown-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-unknown-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-unknown-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-unknown-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-unknown-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-unknown-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-unknown-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-unknown-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-unknown-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-unknown-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-unknown-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-unknown-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "unknown"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-constructor-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-constructor-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-constructor-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-constructor-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-constructor-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-constructor-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-constructor-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-constructor-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-constructor-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-constructor-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-constructor-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-constructor-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "constructor"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-toString-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-toString-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-toString-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-toString-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-toString-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-toString-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-toString-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-toString-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-toString-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-toString-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-toString-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-toString-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-toString-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-toString-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-toString-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-toString-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-toString-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-toString-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-toString-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-toString-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-toString-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-toString-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "toString"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-hasOwnProperty-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "hasOwnProperty"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "coerce-__proto__-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "coerce-__proto__-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "coerce-__proto__-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "coerce-__proto__-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "coerce-__proto__-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "coerce-__proto__-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "coerce-__proto__-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "coerce-__proto__-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "coerce-__proto__-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "coerce-__proto__-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "__proto__"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[\"null\",\"string\"]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[\"string\",\"number\"]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[\"number\",\"string\"]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[\"array\",\"object\"]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "array",
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[\"null\"]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[\"null\"]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[\"null\"]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[\"null\"]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[\"null\"]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[\"null\"]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[\"null\"]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[\"null\"]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "union-[]-\"\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "union-[]-\" \"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " "
+    }
+  },
+  {
+    "name": "union-[]-\"0x10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0x10"
+    }
+  },
+  {
+    "name": "union-[]-\"0o10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0o10"
+    }
+  },
+  {
+    "name": "union-[]-\"0b10\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0b10"
+    }
+  },
+  {
+    "name": "union-[]-\"+1e2\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "+1e2"
+    }
+  },
+  {
+    "name": "union-[]-\"12.5\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "12.5"
+    }
+  },
+  {
+    "name": "union-[]-\"Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "Infinity"
+    }
+  },
+  {
+    "name": "union-[]-\"-Infinity\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "-Infinity"
+    }
+  },
+  {
+    "name": "union-[]-\"NaN\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "NaN"
+    }
+  },
+  {
+    "name": "union-[]-\"1_000\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1_000"
+    }
+  },
+  {
+    "name": "union-[]-\"−1\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "−1"
+    }
+  },
+  {
+    "name": "union-[]-\"﻿42\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "﻿42"
+    }
+  },
+  {
+    "name": "union-[]-\"0xG\"",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0xG"
+    }
+  },
+  {
+    "name": "union-[]-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": true
+    }
+  },
+  {
+    "name": "union-[]-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": false
+    }
+  },
+  {
+    "name": "union-[]-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "union-[]-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": {}
+    }
+  },
+  {
+    "name": "union-[]-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "union-[]-42",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 42
+    }
+  },
+  {
+    "name": "union-[]-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 0
+    }
+  },
+  {
+    "name": "union-[]-1.5",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": []
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": 1.5
+    }
+  },
+  {
+    "name": "absent-string",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-string",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "absent-number",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-number",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "absent-integer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-integer",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "absent-boolean",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-boolean",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "absent-object",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-object",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "absent-array",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "optional-null-array",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      }
+    },
+    "input": {
+      "value": null
+    }
+  },
+  {
+    "name": "pattern-^.$-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-^.$-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-^.$-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-^.$-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-^.$-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-^.$-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-^.$-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^.$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-^\\d+$-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-(?<=a)b-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(?<=a)b",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-(a)\\1-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-\\uD83D\\uDE00-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D\\uDE00",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-[-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-[-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-[-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-[-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-[-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-[-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-[-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-ab",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "ab"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-A\nB",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "A\nB"
+    }
+  },
+  {
+    "name": "pattern-\\p{L}-",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}",
+          "minLength": 1,
+          "maxLength": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": ""
+    }
+  },
+  {
+    "name": "parse-boolean-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "true"
+    }
+  },
+  {
+    "name": "parse-array-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "true"
+    }
+  },
+  {
+    "name": "parse-object-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "true"
+    }
+  },
+  {
+    "name": "parse-boolean-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "false"
+    }
+  },
+  {
+    "name": "parse-array-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "false"
+    }
+  },
+  {
+    "name": "parse-object-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "false"
+    }
+  },
+  {
+    "name": "parse-boolean-True",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "True"
+    }
+  },
+  {
+    "name": "parse-array-True",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "True"
+    }
+  },
+  {
+    "name": "parse-object-True",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "True"
+    }
+  },
+  {
+    "name": "parse-boolean- true ",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " true "
+    }
+  },
+  {
+    "name": "parse-array- true ",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " true "
+    }
+  },
+  {
+    "name": "parse-object- true ",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": " true "
+    }
+  },
+  {
+    "name": "parse-boolean-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0"
+    }
+  },
+  {
+    "name": "parse-array-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0"
+    }
+  },
+  {
+    "name": "parse-object-0",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "0"
+    }
+  },
+  {
+    "name": "parse-boolean-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "parse-array-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "parse-object-1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "1"
+    }
+  },
+  {
+    "name": "parse-boolean-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{}"
+    }
+  },
+  {
+    "name": "parse-array-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{}"
+    }
+  },
+  {
+    "name": "parse-object-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{}"
+    }
+  },
+  {
+    "name": "parse-boolean-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[]"
+    }
+  },
+  {
+    "name": "parse-array-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[]"
+    }
+  },
+  {
+    "name": "parse-object-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[]"
+    }
+  },
+  {
+    "name": "parse-boolean-[null,\\\"2\\\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[null,\\\"2\\\"]"
+    }
+  },
+  {
+    "name": "parse-array-[null,\\\"2\\\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[null,\\\"2\\\"]"
+    }
+  },
+  {
+    "name": "parse-object-[null,\\\"2\\\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "[null,\\\"2\\\"]"
+    }
+  },
+  {
+    "name": "parse-boolean-{\\\"x\\\":\\\"2\\\"}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{\\\"x\\\":\\\"2\\\"}"
+    }
+  },
+  {
+    "name": "parse-array-{\\\"x\\\":\\\"2\\\"}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{\\\"x\\\":\\\"2\\\"}"
+    }
+  },
+  {
+    "name": "parse-object-{\\\"x\\\":\\\"2\\\"}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": "{\\\"x\\\":\\\"2\\\"}"
+    }
+  },
+  {
+    "name": "items-integer-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "items-string-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "items-boolean-[]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": []
+    }
+  },
+  {
+    "name": "items-integer-[null,\"2\",3.5]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        null,
+        "2",
+        3.5
+      ]
+    }
+  },
+  {
+    "name": "items-string-[null,\"2\",3.5]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        null,
+        "2",
+        3.5
+      ]
+    }
+  },
+  {
+    "name": "items-boolean-[null,\"2\",3.5]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        null,
+        "2",
+        3.5
+      ]
+    }
+  },
+  {
+    "name": "items-integer-[\"true\",\"false\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "true",
+        "false"
+      ]
+    }
+  },
+  {
+    "name": "items-string-[\"true\",\"false\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "true",
+        "false"
+      ]
+    }
+  },
+  {
+    "name": "items-boolean-[\"true\",\"false\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "true",
+        "false"
+      ]
+    }
+  },
+  {
+    "name": "items-integer-[\"😀\",\"é\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "😀",
+        "é"
+      ]
+    }
+  },
+  {
+    "name": "items-string-[\"😀\",\"é\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "😀",
+        "é"
+      ]
+    }
+  },
+  {
+    "name": "items-boolean-[\"😀\",\"é\"]",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "boolean"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        "😀",
+        "é"
+      ]
+    }
+  },
+  {
+    "name": "nested-required-null",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": {
+        "x": null
+      }
+    }
+  },
+  {
+    "name": "inherited-constructor",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "constructor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "constructor"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "inherited-toString",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "toString": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "toString"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "inherited-__proto__",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "__proto__": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "__proto__"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "inherited-hasOwnProperty",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "hasOwnProperty": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hasOwnProperty"
+      ]
+    },
+    "input": {}
+  },
+  {
+    "name": "conditional-shared-nested-true",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "nested": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "set"
+                ]
+              },
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "missing"
+            ]
+          }
+        }
+      ]
+    },
+    "input": {
+      "action": "set",
+      "nested": {
+        "count": "7"
+      }
+    }
+  },
+  {
+    "name": "conditional-shared-nested-false",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "nested": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "other"
+                ]
+              },
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "missing"
+            ]
+          }
+        }
+      ]
+    },
+    "input": {
+      "action": "set",
+      "nested": {
+        "count": "7"
+      }
+    }
+  },
+  {
+    "name": "conditional-copy-scalar",
+    "schema": {
+      "type": "object",
+      "properties": {},
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "value": {
+                "type": "integer"
+              }
+            }
+          },
+          "then": {}
+        }
+      ]
+    },
+    "input": {
+      "value": "7"
+    }
+  },
+  {
+    "name": "enum-coercion",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ],
+          "enum": [
+            "false",
+            "2",
+            "[object Object]",
+            "1,,3"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "input": {
+      "value": [
+        1,
+        null,
+        3
+      ]
+    }
+  },
+  {
+    "name": "nonfinite-NaN",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "type": "number"
+        },
+        "retryCount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeoutMs",
+        "retryCount"
+      ]
+    },
+    "input": {
+      "timeoutMs": 1,
+      "retryCount": 1
+    },
+    "nonfinite": [
+      {
+        "key": "timeoutMs",
+        "value": "NaN"
+      },
+      {
+        "key": "retryCount",
+        "value": "NaN"
+      }
+    ]
+  },
+  {
+    "name": "nonfinite-Infinity",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "type": "number"
+        },
+        "retryCount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeoutMs",
+        "retryCount"
+      ]
+    },
+    "input": {
+      "timeoutMs": 1,
+      "retryCount": 1
+    },
+    "nonfinite": [
+      {
+        "key": "timeoutMs",
+        "value": "Infinity"
+      },
+      {
+        "key": "retryCount",
+        "value": "Infinity"
+      }
+    ]
+  },
+  {
+    "name": "nonfinite--Infinity",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "type": "number"
+        },
+        "retryCount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeoutMs",
+        "retryCount"
+      ]
+    },
+    "input": {
+      "timeoutMs": 1,
+      "retryCount": 1
+    },
+    "nonfinite": [
+      {
+        "key": "timeoutMs",
+        "value": "-Infinity"
+      },
+      {
+        "key": "retryCount",
+        "value": "-Infinity"
+      }
+    ]
+  },
+  {
+    "name": "nested-required-True-None",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": null
+    }
+  },
+  {
+    "name": "nested-required-True-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": {}
+    }
+  },
+  {
+    "name": "nested-required-True-{'x': None}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": {
+        "x": null
+      }
+    }
+  },
+  {
+    "name": "nested-required-True-{'x': '2'}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": {
+        "x": "2"
+      }
+    }
+  },
+  {
+    "name": "nested-required-True-{'x': 'no'}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "nested": {
+        "x": "no"
+      }
+    }
+  },
+  {
+    "name": "nested-required-False-None",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x"
+            ]
+          }
+        }
+      }
+    },
+    "input": {
+      "nested": [
+        null
+      ]
+    }
+  },
+  {
+    "name": "nested-required-False-{}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x"
+            ]
+          }
+        }
+      }
+    },
+    "input": {
+      "nested": [
+        {}
+      ]
+    }
+  },
+  {
+    "name": "nested-required-False-{'x': None}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x"
+            ]
+          }
+        }
+      }
+    },
+    "input": {
+      "nested": [
+        {
+          "x": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested-required-False-{'x': '2'}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x"
+            ]
+          }
+        }
+      }
+    },
+    "input": {
+      "nested": [
+        {
+          "x": "2"
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested-required-False-{'x': 'no'}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nested": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x"
+            ]
+          }
+        }
+      }
+    },
+    "input": {
+      "nested": [
+        {
+          "x": "no"
+        }
+      ]
+    }
+  },
+  {
+    "name": "integer-key-enumeration",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "20": {
+          "type": "number"
+        },
+        "2": {
+          "type": "boolean"
+        },
+        "1": {
+          "type": "string"
+        },
+        "a": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "20": "bad",
+      "2": "bad",
+      "1": 1,
+      "a": 1
+    }
+  },
+  {
+    "name": "extra-regex-😀-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-😀-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-😀-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-😀-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-😀-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-😀-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "😀"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-[😀]-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[😀]"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-\\uD83D-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\uD83D"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-[\\uD83D\\uDE00]-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[\\uD83D\\uDE00]"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-^..$-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^..$"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-^(?=..$).+$-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(?=..$).+$"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-(a)\\1-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "(a)\\1"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-\\p{L}-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "\\p{L}"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-😀",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-aa",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "aa"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-p{L}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "p{L}"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-é",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "é"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-\n",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "\n"
+    }
+  },
+  {
+    "name": "extra-regex-[a-z]-a",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "[a-z]"
+        }
+      }
+    },
+    "input": {
+      "value": "a"
+    }
+  },
+  {
+    "name": "array-error-side-effects",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "n": {
+                "type": "integer"
+              },
+              "p": {
+                "type": "string",
+                "pattern": "["
+              }
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": [
+        {
+          "n": "4",
+          "p": "x"
+        }
+      ]
+    }
+  },
+  {
+    "name": "surrogate-length-{'minLength': 2}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 2
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "surrogate-length-{'maxLength': 1}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "maxLength": 1
+        }
+      }
+    },
+    "input": {
+      "value": "😀"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":1e400}{'type': 'object', 'properties': {'x': {'type': 'number'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":1e400}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":1e400}{'type': 'object', 'properties': {'x': {'type': 'string', 'minLength': 2, 'pattern': '^.$'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "minLength": 2,
+              "pattern": "^.$"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":1e400}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":1e400}{'type': 'object', 'properties': {'x': {'type': 'string', 'enum': ['�', 'a']}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "enum": [
+                "�",
+                "a"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":1e400}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":\"\\ud800\"}{'type': 'object', 'properties': {'x': {'type': 'number'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":\"\\ud800\"}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":\"\\ud800\"}{'type': 'object', 'properties': {'x': {'type': 'string', 'minLength': 2, 'pattern': '^.$'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "minLength": 2,
+              "pattern": "^.$"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":\"\\ud800\"}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":\"\\ud800\"}{'type': 'object', 'properties': {'x': {'type': 'string', 'enum': ['�', 'a']}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "enum": [
+                "�",
+                "a"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":\"\\ud800\"}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":[\"\\ud800\",null,\"a\"]}{'type': 'object', 'properties': {'x': {'type': 'number'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":[\"\\ud800\",null,\"a\"]}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":[\"\\ud800\",null,\"a\"]}{'type': 'object', 'properties': {'x': {'type': 'string', 'minLength': 2, 'pattern': '^.$'}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "minLength": 2,
+              "pattern": "^.$"
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":[\"\\ud800\",null,\"a\"]}"
+    }
+  },
+  {
+    "name": "parsed-raw-{\"x\":[\"\\ud800\",null,\"a\"]}{'type': 'object', 'properties': {'x': {'type': 'string', 'enum': ['�', 'a']}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "string",
+              "enum": [
+                "�",
+                "a"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "value": "{\"x\":[\"\\ud800\",null,\"a\"]}"
+    }
+  },
+  {
+    "name": "raw-{\"value\":\"\\ud800\"}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "�",
+            "x"
+          ]
+        }
+      }
+    },
+    "inputJson": "{\"value\":\"\\ud800\"}"
+  },
+  {
+    "name": "raw-{\"value\":[\"\\ud800\",null,\"a\"]}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "�",
+            "x"
+          ]
+        }
+      }
+    },
+    "inputJson": "{\"value\":[\"\\ud800\",null,\"a\"]}"
+  },
+  {
+    "name": "raw-{\"\\ud800\":1,\"value\":\"x\"}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "�",
+            "x"
+          ]
+        }
+      }
+    },
+    "inputJson": "{\"\\ud800\":1,\"value\":\"x\"}"
+  },
+  {
+    "name": "raw-{\"20\":1,\"2\":2,\"1\":3}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "�",
+            "x"
+          ]
+        }
+      }
+    },
+    "inputJson": "{\"20\":1,\"2\":2,\"1\":3}"
+  },
+  {
+    "name": "shadow-{\"value\":{\"toString\":\"x\"}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "object",
+            "array"
+          ],
+          "enum": [
+            "[object Object]",
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "value": {
+        "toString": "x"
+      }
+    }
+  },
+  {
+    "name": "shadow-{\"value\":{\"valueOf\":\"x\"}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "object",
+            "array"
+          ],
+          "enum": [
+            "[object Object]",
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "value": {
+        "valueOf": "x"
+      }
+    }
+  },
+  {
+    "name": "shadow-{\"value\":[{\"toString\":null}]}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "object",
+            "array"
+          ],
+          "enum": [
+            "[object Object]",
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "value": [
+        {
+          "toString": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "shadow-{\"value\":{\"toString\":{}}}",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "object",
+            "array"
+          ],
+          "enum": [
+            "[object Object]",
+            "x"
+          ]
+        }
+      }
+    },
+    "input": {
+      "value": {
+        "toString": {}
+      }
+    }
+  }
+]

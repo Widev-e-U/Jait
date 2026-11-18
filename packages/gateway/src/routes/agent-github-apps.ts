@@ -21,6 +21,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { validateGithubIntakeRules, type GithubIntakeService } from "../services/github-intake.js";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { AgentGithubAppConnection, AgentGithubAppService } from "../services/agent-github-apps.js";
@@ -38,6 +39,7 @@ export interface AgentGithubAppRouteDeps {
   /** Optional existence check so routes only target real agent profiles. */
   agentExists?: (userId: string, agentId: string) => boolean;
   /** Optional sink for accepted webhook deliveries. */
+  intake?: GithubIntakeService;
   onWebhook?: (event: AgentGithubWebhookEvent) => void | Promise<void>;
 }
 
@@ -94,6 +96,28 @@ export function registerAgentGithubAppRoutes(
     if (agentMissing(authUser.id, agentId)) return reply.status(404).send({ detail: "agent_not_found" });
     const connection = service.get(authUser.id, agentId);
     return { connection, webhookSecretAvailable: Boolean(service.webhookSecret(authUser.id, agentId)) };
+  });
+
+  app.get("/api/agents/:agentId/github-app/intake", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { agentId } = request.params as { agentId: string };
+    if (agentMissing(user.id, agentId)) return reply.status(404).send({ detail: "agent_not_found" });
+    if (!deps.intake) return reply.status(503).send({ detail: "intake_unavailable" });
+    return { mode: "observe", rules: deps.intake.rules(user.id, agentId), decisions: deps.intake.list(user.id, agentId) };
+  });
+
+  app.put("/api/agents/:agentId/github-app/intake", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { agentId } = request.params as { agentId: string };
+    if (agentMissing(user.id, agentId)) return reply.status(404).send({ detail: "agent_not_found" });
+    if (!deps.intake) return reply.status(503).send({ detail: "intake_unavailable" });
+    try {
+      const rules = validateGithubIntakeRules((request.body as { rules?: unknown } | null)?.rules);
+      deps.intake.save(user.id, agentId, rules);
+      return { mode: "observe", rules };
+    } catch (error) { return fail(reply, error); }
   });
 
   app.post("/api/agents/:agentId/github-app/setup", async (request, reply) => {
@@ -280,9 +304,11 @@ export function registerAgentGithubAppRoutes(
         payload,
       };
       try {
+        deps.intake?.receive(event);
         await deps.onWebhook?.(event);
       } catch (error) {
         request.log?.warn?.({ err: error, event: event.event }, "agent github webhook handler failed");
+        return reply.status(503).send({ accepted: false, reason: "intake_failed" });
       }
       return { accepted: true, agentId: owner.agentId, event: event.event };
     });

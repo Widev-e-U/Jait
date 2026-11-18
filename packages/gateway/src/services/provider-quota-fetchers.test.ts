@@ -4,7 +4,10 @@ import {
   isOllamaUsageResponse,
   probeOllamaAccount,
   describeOllamaUsageGap,
+  isCodexRateLimitsResponse,
+  normalizeCodexRateLimits,
 } from "./provider-quota-fetchers.js";
+import type { CodexRateLimitsResponse, CodexRateLimitSnapshot } from "./provider-quota-fetchers.js";
 
 describe("provider quota fetchers", () => {
   afterEach(() => {
@@ -181,5 +184,109 @@ describe("describeOllamaUsageGap", () => {
     });
     expect(hint).toContain("Signed in to Ollama Cloud as Jakob,");
     expect(hint).not.toContain("(null)");
+  });
+});
+
+describe("Codex rate-limit response validation", () => {
+  const window = { usedPercent: 42.5, windowDurationMins: 300, resetsAt: 1_770_000_000 };
+
+  it("accepts a minimal response with root-level windows", () => {
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: window, secondary: null } })).toBe(true);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: null, secondary: window } })).toBe(true);
+  });
+
+  it("rejects malformed windows and non-object responses", () => {
+    expect(isCodexRateLimitsResponse(null)).toBe(false);
+    expect(isCodexRateLimitsResponse("rateLimits")).toBe(false);
+    expect(isCodexRateLimitsResponse({})).toBe(false);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: { usedPercent: "50" } } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: { usedPercent: 50, resetsAt: "soon" } } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: { usedPercent: 50, windowDurationMins: "300" } } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ rateLimits: { secondary: {} } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ rateLimits: "none" })).toBe(false);
+  });
+
+  it("accepts responses carrying rate-limit reset credits", () => {
+    const response = {
+      rateLimits: { primary: window, secondary: null },
+      rateLimitResetCredits: {
+        availableCount: 2,
+        credits: [
+          { id: "c1", resetType: "codexRateLimits", status: "available", grantedAt: 1_770_000_000, expiresAt: 1_772_000_000, title: "Full reset (Weekly + 5 hr)", description: "…" },
+          { id: "c2", grantedAt: null, expiresAt: null },
+        ],
+      },
+    };
+    expect(isCodexRateLimitsResponse(response)).toBe(true);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: {} })).toBe(true);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: { availableCount: 0, credits: [] } })).toBe(true);
+    expect(isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: null })).toBe(true);
+  });
+
+  it("rejects malformed reset credits without rejecting newer fields wholesale", () => {
+    const base = { rateLimits: { primary: window, secondary: null } };
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { availableCount: "2" } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { credits: "many" } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { credits: [{ grantedAt: "yesterday" }] } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { credits: [null] } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: 7 })).toBe(false);
+  });
+
+  it("accepts account flags and per-limit snapshots, and rejects their malformed forms", () => {
+    const base = { rateLimits: { primary: window, secondary: null } };
+    expect(isCodexRateLimitsResponse({ ...base, ordinaryUsageAllowed: false })).toBe(true);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: { codex: { primary: window }, extra: { secondary: window } } })).toBe(true);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: {} })).toBe(true);
+    expect(isCodexRateLimitsResponse({ ...base, ordinaryUsageAllowed: "false" })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: { codex: { primary: { usedPercent: "?" } } } })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: 3 })).toBe(false);
+    expect(isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: { codex: null } })).toBe(false);
+  });
+});
+
+describe("normalizeCodexRateLimits", () => {
+  const window = { usedPercent: 42.5, windowDurationMins: 300, resetsAt: 1_770_000_000 };
+
+  it("leaves responses with root-level windows untouched", () => {
+    const response: CodexRateLimitsResponse = {
+      rateLimits: { primary: window, secondary: null, planType: "plus" },
+      rateLimitsByLimitId: { codex: { primary: { usedPercent: 1, windowDurationMins: null, resetsAt: null } } },
+    };
+    expect(normalizeCodexRateLimits(response)).toBe(response);
+  });
+
+  it("promotes the codex snapshot when only rateLimitsByLimitId carries windows", () => {
+    const response: CodexRateLimitsResponse = {
+      rateLimits: { primary: null, secondary: null, planType: "team" },
+      rateLimitsByLimitId: {
+        other: { primary: null, secondary: { usedPercent: 1, windowDurationMins: null, resetsAt: null }, planType: "other" },
+        codex: { primary: window, secondary: null, planType: "codex-plan", credits: { balance: "5" }, rateLimitReachedType: "primary", spendControlReached: true },
+      },
+    };
+    const normalized = normalizeCodexRateLimits(response);
+    expect(normalized).not.toBe(response);
+    expect(normalized.rateLimits.primary).toEqual(window);
+    // Root-level account flags win over the promoted snapshot's.
+    expect(normalized.rateLimits.planType).toBe("team");
+    expect(normalized.rateLimits.credits).toEqual({ balance: "5" });
+    expect(normalized.rateLimits.rateLimitReachedType).toBe("primary");
+    expect(normalized.rateLimits.spendControlReached).toBe(true);
+  });
+
+  it("falls back to any snapshot with windows and keeps responses without one", () => {
+    const only: CodexRateLimitSnapshot = { secondary: window };
+    const normalized = normalizeCodexRateLimits({
+      rateLimits: { primary: null, secondary: null },
+      rateLimitsByLimitId: { first: only },
+    });
+    expect(normalized.rateLimits.secondary).toEqual(window);
+
+    const empty: CodexRateLimitsResponse = {
+      rateLimits: { primary: null, secondary: null },
+      rateLimitsByLimitId: { first: { primary: null, secondary: null } },
+    };
+    expect(normalizeCodexRateLimits(empty)).toBe(empty);
+    const bare: CodexRateLimitsResponse = { rateLimits: { primary: null, secondary: null } };
+    expect(normalizeCodexRateLimits(bare)).toBe(bare);
   });
 });

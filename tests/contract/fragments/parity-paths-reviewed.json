@@ -1,0 +1,29 @@
+{
+  "review_scope": "parity-paths bounded source and semantics review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/evaluation/basic-suite.test.ts:59:1",
+      "status": "verified",
+      "parity_review": "Reviewed accepts synchronous RangeError validation for the async-map contract. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. The two basic evaluation tests retain all ten task checks, broken-baseline failures, correct-artifact successes and synchronous RangeError acceptance. Temporary path substitutions require an unshadowed node:path import and a join/resolve call. Six controls cover both baseline declarations and reject changed temp functions, captured roots, verdicts and shadowed path namespaces. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-paths/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_basic_suite_test_ts_59_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/evaluation/basic-suite.test.ts:71:1",
+      "status": "verified",
+      "parity_review": "Reviewed defines ten verifiable tasks whose broken baseline fails and correct artifacts pass. Original body, setup, imports, lifecycle and every assertion operand match the bounded AST audit. The two basic evaluation tests retain all ten task checks, broken-baseline failures, correct-artifact successes and synchronous RangeError acceptance. Temporary path substitutions require an unshadowed node:path import and a join/resolve call. Six controls cover both baseline declarations and reject changed temp functions, captured roots, verdicts and shadowed path namespaces. Every observation and an opposing counterexample agree between real Vitest and Rust. Bindings, per-site counts and source hashes: .jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/parity-paths/combined-selected.json. Full translated, internal, managed, formatting and Clippy validation passed on the unchanged exception checkpoint. Candidate originals, peers, comparator and transport hashes also match the live checkout. The initial full report exposed a queue timing failure (expected 409, actual 200); that report and three isolated passing unmodified Vitest runs are retained in .jait/artifacts/parity-exceptions/queue-timing-observation.json. No queue assertion or application behavior was changed, and the subsequent complete full run passed. This establishes preservation of the exercised reference-test domains, not native runtime parity or absence of reference-test flakes.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_basic_suite_test_ts_71_1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-exceptions/source-checkpoint/.jait/artifacts/contracts/adc987e8-f0a9-4e1a-8fef-d84aed5f0189/report.json"
+        }
+      ]
+    }
+  ]
+}

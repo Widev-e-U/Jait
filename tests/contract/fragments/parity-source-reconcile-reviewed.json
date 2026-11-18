@@ -1,0 +1,308 @@
+{
+  "review_scope": "Current compaction, evaluation and complete parameter-variant review",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/evaluation/agent-eval.test.ts:123:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects duplicate ids, fixture traversal and absolute paths. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_evaluation_agent_eval_test_ts_123_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:28:3",
+      "status": "verified",
+      "parity_review": "Reviewed preserves attachment text in the structured fallback without exposing image bytes. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_28_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:37:3",
+      "status": "verified",
+      "parity_review": "Reviewed sends readable attachment text to the model summarizer. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_37_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:47:3",
+      "status": "verified",
+      "parity_review": "Reviewed uses the same attachment-safe fallback when the model summary fails. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_47_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:56:3",
+      "status": "verified",
+      "parity_review": "Reviewed prunes attachment history and restores its task after a bare continuation. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_56_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:73:3",
+      "status": "verified",
+      "parity_review": "Reviewed carries prior summaries through repeated real pruning. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_73_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:91:3",
+      "status": "verified",
+      "parity_review": "Reviewed summarizes outcomes without replaying private thinking and preserves tool-result tails. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_91_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:105:3",
+      "status": "verified",
+      "parity_review": "Reviewed does not modify history when summarization is cancelled. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_105_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:143:3",
+      "status": "verified",
+      "parity_review": "Reviewed leaves the active turn intact when generation fails. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_143_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:149:3",
+      "status": "verified",
+      "parity_review": "Reviewed preserves the old checkpoint when the model is unavailable. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_149_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:156:3",
+      "status": "verified",
+      "parity_review": "Reviewed salvages a checkpoint that hit the output cap instead of discarding it. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_156_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:172:3",
+      "status": "verified",
+      "parity_review": "Reviewed falls back when the cap was hit before any content was emitted. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_172_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:179:3",
+      "status": "verified",
+      "parity_review": "Reviewed retries at the conservative budget when the provider rejects the raised cap. The thirteen ordinary declarations preserve attachment text and image-byte redaction, provider-output budgets and fallback, cancellation, complete repeated compaction observations, and duplicate-id/path validation. The two compaction loops execute every original iteration (counts [2,2,2,1] and [2,2,2,2]); unused gateway helper assertions are excluded only through the conservative lexical proof. Every reachable assertion executes and passes. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-live-single/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_agent_loop_compaction_test_ts_179_3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/providers/acp-provider-errors.test.ts:45:3",
+      "status": "verified",
+      "parity_review": "Reviewed routes %s failure to error instead of assistant text/completion. All twenty variants from five declarations execute. IMAP table encoding is pure JSON/base64 allocation; OpenSSH fixture generation only exports the disposable module key and allocates buffers; account.name is a literal string; Array.fill and string.repeat construct dense invalid-criteria inputs. These manually reviewed tables are admitted only for exact SHA256-pinned test sources, with unchanged helper/setup comparisons. Dynamic ACP error strings preserve the exact expected operand. Seven controls reject changed messages, changed captured operands, changed fixture/table inputs and missing variants. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-100-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/email/imap.test.ts:66:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects malformed or injected message ids. All twenty variants from five declarations execute. IMAP table encoding is pure JSON/base64 allocation; OpenSSH fixture generation only exports the disposable module key and allocates buffers; account.name is a literal string; Array.fill and string.repeat construct dense invalid-criteria inputs. These manually reviewed tables are admitted only for exact SHA256-pinned test sources, with unchanged helper/setup comparisons. Dynamic ACP error strings preserve the exact expected operand. Seven controls reject changed messages, changed captured operands, changed fixture/table inputs and missing variants. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-100-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_imap_test_ts_66_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_imap_test_ts_66_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_imap_test_ts_66_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_email_imap_test_ts_66_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/ollama-device-auth.test.ts:43:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects malformed or encrypted keys. All twenty variants from five declarations execute. IMAP table encoding is pure JSON/base64 allocation; OpenSSH fixture generation only exports the disposable module key and allocates buffers; account.name is a literal string; Array.fill and string.repeat construct dense invalid-criteria inputs. These manually reviewed tables are admitted only for exact SHA256-pinned test sources, with unchanged helper/setup comparisons. Dynamic ACP error strings preserve the exact expected operand. Seven controls reject changed messages, changed captured operands, changed fixture/table inputs and missing variants. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-100-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_43_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_43_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_43_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/ollama-device-auth.test.ts:94:3",
+      "status": "verified",
+      "parity_review": "Reviewed rejects an unverified account before fetching usage. All twenty variants from five declarations execute. IMAP table encoding is pure JSON/base64 allocation; OpenSSH fixture generation only exports the disposable module key and allocates buffers; account.name is a literal string; Array.fill and string.repeat construct dense invalid-criteria inputs. These manually reviewed tables are admitted only for exact SHA256-pinned test sources, with unchanged helper/setup comparisons. Dynamic ACP error strings preserve the exact expected operand. Seven controls reject changed messages, changed captured operands, changed fixture/table inputs and missing variants. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-100-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/tool-recovery.test.ts:115:3",
+      "status": "verified",
+      "parity_review": "Reviewed validates goal criteria before touching room state: %j. All twenty variants from five declarations execute. IMAP table encoding is pure JSON/base64 allocation; OpenSSH fixture generation only exports the disposable module key and allocates buffers; account.name is a literal string; Array.fill and string.repeat construct dense invalid-criteria inputs. These manually reviewed tables are admitted only for exact SHA256-pinned test sources, with unchanged helper/setup comparisons. Dynamic ACP error strings preserve the exact expected operand. Seven controls reject changed messages, changed captured operands, changed fixture/table inputs and missing variants. The AST audit binds original imports, setup, lifecycle, actual operands, expected operands and assertion polarity to generated peers. The raw domain guard rejects unsupported serialization. Every observed comparison and an opposing counterexample agree in actual Vitest and the Rust matcher. See .jait/artifacts/parity-100-variants/combined-selected.json, wire-summary.json and structural-negative-controls.json. The original compaction/evaluation files pass 33 tests and the original variant files pass 56 tests. Full translated and internal runs pass with unchanged checkpoint fingerprints. Candidate source and peer hashes equal that checkpoint; current original bytes still match. Subsequent live fixture renumbering and native gateway edits do not establish live global freshness or native runtime parity.",
+      "rust_cases": [
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each0",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each1",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each2",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each3",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each4",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each5",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        },
+        {
+          "id": "tailstatic_packages_gateway_src_tools_tool_recovery_test_ts_115_3_each6",
+          "source": "tests/contract/tests/tail_static.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/89a28a37-a8f9-4af6-a43b-6bf999039ffb/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/tools/agent-loop-compaction.test.ts:127:3",
+      "status": "verified",
+      "parity_review": "Manual comparison of the full original declaration and active-turn history helper against internal_contracts.rs and compaction.ts preserves all eight predicates, including the nested callback-time history equality. Rust constructs the same system/user/checkpoint messages and 38 assistant/tool pairs, exact file_read tool calls and 400-character result suffixes. The bounded driver invokes the production compactActiveTurnHistory with tools [], limit 1000 and the exact original injected summary. It records a deep snapshot during every summary callback before returning, and returns the removed prefix and final history. Rust requires callback snapshots to equal the original, changed true, removed source to include the old checkpoint and result-0 prefix, exactly 30 removed tool messages, the unchanged user message, the active-turn-summary marker and exact last 16 original messages. The callback observer is required to execute; no expected output is derived from observed output. Inputs are plain dense JSON, so original Vitest deep equality and Rust JSON equality preserve this domain. Fetch is restored in finally, and the injected summary avoids model/network calls. A mutation check independently rejects each failed source predicate, including a callback-only mutation while final history remains valid. All six original Vitest compaction tests pass; the full source-bound 396-scenario internal report passes with unchanged sources. This establishes this reference declaration, not native Rust gateway implementation parity. Re-reviewed against the current declaration at line 127 and the unchanged history helper: all eight predicates and every exact input remain identical, including the callback-time equality, 38 pairs, limit 1000, 30 removed tool messages and retained last 16 messages. Fresh original Vitest and unchanged-checkpoint full internal validation pass; the updated report replaces the historical six-test execution evidence.",
+      "rust_cases": [
+        {
+          "id": "internal.compaction.active-turn-prefix-and-callback",
+          "source": "tests/contract/src/internal_contracts.rs",
+          "report": ".jait/artifacts/parity-100/source-checkpoint/.jait/artifacts/contracts/c7c72130-07d5-4215-9f69-59effcd333c6/report.json"
+        }
+      ]
+    }
+  ]
+}

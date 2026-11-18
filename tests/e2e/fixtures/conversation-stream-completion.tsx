@@ -10,6 +10,7 @@ const history: OptimisticUserMessageLike[] = Array.from({ length: 30 }, (_, i) =
 const prompt: OptimisticUserMessageLike = { id: 'local-prompt', role: 'user', content: 'Current prompt', optimistic: true }
 const answer: OptimisticUserMessageLike = { id: 'local-answer', role: 'assistant', content: 'Long streamed answer' }
 function Harness() {
+  const params = new URLSearchParams(location.search)
   const [messages, setMessages] = useState(history)
   const [answerHeight, setAnswerHeight] = useState(80)
   const [isStreaming, setIsStreaming] = useState(false)
@@ -27,8 +28,8 @@ function Harness() {
     }}>Finish reply</button>
     <button onClick={() => { setIsStreaming(true); setMessages(current => [...current, { ...prompt, id: 'next-prompt' }]) }}>Send again</button>
     <div style={{ height: 400, display: 'flex' }}>
-      <Conversation mobile={new URLSearchParams(location.search).has('mobile')} isStreaming={isStreaming} className="h-full w-full" messageContents={messages.map(message => message.content)}
-        messageEstimateInputs={messages} scrollToMessageId={latestUser && renderKey(latestUser)}>
+      <Conversation mobile={params.has('mobile')} showMinimap={params.has('minimap')} sessionId="viewport-fixture" isStreaming={isStreaming} className="h-full w-full" messageContents={messages.map(message => message.content)}
+        messageEstimateInputs={params.has('browser') ? messages.map((message, index) => index === messages.length - 1 ? { ...message, toolCalls: [{ tool: 'browser.navigate' }] } : message) : messages} scrollToMessageId={latestUser && renderKey(latestUser)}>
         {messages.map(message => <div key={renderKey(message)} style={{ height: message.content === answer.content ? answerHeight : 160 }}>
           {message.content}
         </div>)}

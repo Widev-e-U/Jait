@@ -6,6 +6,7 @@
  * status, configuration, and activity log in SQLite via Drizzle.
  */
 
+import { AgentControlService } from "./agent-control.js";
 import { and, eq, desc, gt, sql } from "drizzle-orm";
 import type { ExecutionCheckpoint } from "./execution-guard.js";
 import type { JaitDB } from "../db/connection.js";
@@ -89,9 +90,13 @@ function hydrateThreadRow(row: ThreadRowRecord | undefined): ThreadRow | undefin
 // ── Service ──────────────────────────────────────────────────────────
 
 export class ThreadService {
+  /** Shares the durable owner halt with HTTP, MCP and scheduler execution. */
+  readonly agentControl: AgentControlService;
   private pendingContextFlows = new Map<string, { summary: string; payload?: unknown }>();
 
-  constructor(private db: JaitDB) {}
+  constructor(private db: JaitDB) {
+    this.agentControl = new AgentControlService(db);
+  }
 
   listPersonaAgents(userId: string): Record<string, unknown>[] {
     return this.db.select().from(personaAgents).where(eq(personaAgents.userId, userId)).all()

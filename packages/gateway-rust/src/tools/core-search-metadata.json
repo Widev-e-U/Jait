@@ -1,0 +1,47 @@
+{
+  "name": "search",
+  "description": "Search for files or text in the project. mode=\"content\" (default): grep through file contents and rank definitions/source files first. mode=\"files\": rank filename and path matches. Use isRegexp for regex patterns (e.g. 'word1|word2' for alternation).",
+  "tier": "core",
+  "category": "filesystem",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "Text or regex pattern to search for."
+      },
+      "isRegexp": {
+        "type": "boolean",
+        "description": "True if pattern is a regex."
+      },
+      "path": {
+        "type": "string",
+        "description": "Directory to search in (defaults to project root)."
+      },
+      "mode": {
+        "type": "string",
+        "description": "\"content\" (grep, default) or \"files\" (find by name).",
+        "enum": [
+          "content",
+          "files"
+        ]
+      },
+      "include": {
+        "type": "string",
+        "description": "File glob filter (e.g. \"*.ts\", \"src/**\")."
+      },
+      "limit": {
+        "type": "number",
+        "description": "Max results (default: 20, max: 200)."
+      },
+      "includeIgnoredFiles": {
+        "type": "boolean",
+        "description": "Include gitignored files (may be slower)."
+      }
+    },
+    "required": [
+      "pattern"
+    ]
+  }
+}

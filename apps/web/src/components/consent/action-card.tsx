@@ -56,6 +56,38 @@ function consentFetch(url: string, init: RequestInit = {}): Promise<Response> {
   return fetch(url, { ...init, headers })
 }
 
+// Keep the request visible when the gateway rejects a decision.
+export async function submitConsentDecision(
+  requestId: string,
+  decision: 'approve' | 'reject',
+  setQueue: (update: (previous: ConsentRequestInfo[]) => ConsentRequestInfo[]) => void,
+  reason?: string,
+): Promise<boolean> {
+  const init: RequestInit = decision === 'reject'
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) }
+    : { method: 'POST' }
+  const res = await consentFetch(`${GATEWAY}/api/consent/${requestId}/${decision}`, init)
+  if (!res.ok) return false
+  setQueue((previous) => previous.filter((request) => request.id !== requestId))
+  return true
+}
+
+// Reconcile only IDs the server confirms; an empty response does not prove that
+// all pending requests were resolved. HTTP errors must not enable the UI mode.
+export async function reconcileBulkApproval(
+  res: Response,
+  setQueue: (update: (previous: ConsentRequestInfo[]) => ConsentRequestInfo[]) => void,
+): Promise<boolean> {
+  if (!res.ok) return false
+  const data: unknown = await res.json()
+  const ids = data && typeof data === 'object' && 'requestIds' in data ? data.requestIds : undefined
+  if (Array.isArray(ids)) {
+    const approvedIds = new Set(ids.filter((id): id is string => typeof id === 'string'))
+    setQueue((previous) => previous.filter((request) => !approvedIds.has(request.id)))
+  }
+  return true
+}
+
 // ── useConsentQueue hook ─────────────────────────────────────────────
 
 export function useConsentQueue(sessionId?: string | null) {
@@ -156,8 +188,7 @@ export function useConsentQueue(sessionId?: string | null) {
 
   const approve = useCallback(async (requestId: string) => {
     try {
-      await consentFetch(`${GATEWAY}/api/consent/${requestId}/approve`, { method: 'POST' })
-      setQueue((prev) => prev.filter((r) => r.id !== requestId))
+      await submitConsentDecision(requestId, 'approve', setQueue)
     } catch {
       // retry or show error
     }
@@ -165,12 +196,7 @@ export function useConsentQueue(sessionId?: string | null) {
 
   const reject = useCallback(async (requestId: string, reason?: string) => {
     try {
-      await consentFetch(`${GATEWAY}/api/consent/${requestId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      })
-      setQueue((prev) => prev.filter((r) => r.id !== requestId))
+      await submitConsentDecision(requestId, 'reject', setQueue, reason)
     } catch {
       // retry or show error
     }
@@ -183,14 +209,7 @@ export function useConsentQueue(sessionId?: string | null) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       })
-      const data = (await res.json()) as { requestIds?: string[] }
-      const approvedIds = new Set(data.requestIds ?? [])
-      if (approvedIds.size > 0) {
-        setQueue((prev) => prev.filter((r) => !approvedIds.has(r.id)))
-      } else {
-        setQueue((prev) => prev.filter((r) => r.sessionId !== targetSessionId))
-      }
-      return true
+      return await reconcileBulkApproval(res, setQueue)
     } catch {
       // retry or show error
       return false

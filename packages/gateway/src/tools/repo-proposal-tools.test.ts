@@ -53,6 +53,8 @@ describe("createJaitTodosTool", () => {
     });
 
     expect(tool.name).toBe("jait.todos");
+    expect(tool.description).toContain("persistent repository follow-ups");
+    expect(tool.description).toContain("current chat’s temporary plan");
     expect(tool.tier).toBe("core");
     expect(tool.parameters.properties.action.enum).toContain("update");
     expect(tool.parameters.properties.todoId).toBeDefined();

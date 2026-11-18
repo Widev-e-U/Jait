@@ -1,24 +1,27 @@
 import { getStateDirectory } from "./state-directory.js";
 // Must be the very first import — patches globalThis.crypto before jose loads
 import "./crypto-polyfill.js";
+import { BrowserWorkflowService } from "./services/browser-workflows.js";
 import { readTeamWork } from "./services/team-chat.js";
 
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
+import { closeHttpServer } from "./http-shutdown.js";
 import { ControlAccess } from "./security/control-access.js";
 import { WsControlPlane } from "./ws.js";
 import { PrimaryLink } from "./services/primary-link.js";
 import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
+import { ChatLoopService } from "./services/chat-loops.js";
 import { SessionStateService } from "./services/session-state.js";
 import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface, RemoteTerminalSurface } from "./surfaces/index.js";
-import { mergeSavedProjectLayout, resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
+import { attentionKey, getPersonalChatNodeId, mergeSavedProjectLayout, resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
 import { shouldSyncProjectSurfaceUi } from "./surfaces/project-ui-sync.js";
 import { createToolRegistry, type ToolRegistryDeps } from "./tools/index.js";
 import { notifySessionsOfGatewayRestart } from "./routes/chat.js";
-import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
+import { createRemoteToolExecutor, resolveCallNodeTarget, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import { MemoryEngine } from "./memory/service.js";
@@ -29,6 +32,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { version: GATEWAY_VERSION } = require("../package.json") as { version: string };
+
 import { ConsentManager } from "./security/consent-manager.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
@@ -46,6 +50,8 @@ import { DeviceRegistry } from "./services/device-registry.js";
 import { MobilePushService } from "./services/mobile-push.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
+import { ComputerControlSessionService } from "./services/computer-control.js";
+import { ScreenShareControlCoordinator } from "./services/screen-share-control.js";
 import { ThreadService } from "./services/threads.js";
 import { RepositoryService } from "./services/repositories.js";
 import { PlanService } from "./services/plans.js";
@@ -70,6 +76,7 @@ import {
   CONSENT_ATTENTION_ACTIONS,
 } from "./services/attention.js";
 import { PreviewService } from "./services/preview.js";
+import { sessionWaits, terminalWaitKey } from "./services/session-waits.js";
 import { setSecurityWorkbenchDb } from "./security/workbench.js";
 import { setAssessmentDb } from "./security/assessment.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
@@ -204,7 +211,6 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   const sessionSqlService = new SessionSqlService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
   const databaseRetention = new DatabaseRetentionService(sqlite);
-  const diskJanitor = new DiskJanitor(sqlite);
 
   const repoService = new RepositoryService(db);
   const gitService = new GitService();
@@ -219,6 +225,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     stateSecret: config.jwtSecret,
   });
   const emailService = new EmailService(db, userSecretService);
+  emailService.startInboxRefresh();
   const calendarService = new CalendarService(db, userSecretService);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
@@ -252,11 +259,25 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config, db);
+  const chatLoops = new ChatLoopService(sessionService, ws);
   const threadReviewSync = new ThreadReviewSyncService({ threadService, ws });
 
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
-  providerUsageService.attachNotifications(notifications);
+
+  // Reclaim disk jait allocates but never frees. The notify hook matters: when
+  // scratch lives in a shared sticky temp root, the entries may belong to
+  // another account (CI runs as `ci-builder`) and this process cannot unlink
+  // them. Without a user-visible notice the janitor retries silently forever and
+  // the only symptom is a "disk full" warning nobody can act on.
+  const diskJanitor = new DiskJanitor(
+    sqlite,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (title, body) => notifications.warning(title, body),
+  );
 
   // Attention layer — every blocking prompt gets one keyed item so answering on
   // any device revokes the notification on all the others.
@@ -267,6 +288,20 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     raised: (item) => mobilePush.sendAttention(item),
     cleared: (event) => mobilePush.sendAttentionCleared(event),
   });
+
+  // Per-chat waiting state — the reason a chat is stopped (question, consent,
+  // secret, browser takeover, interactive terminal) or which background command
+  // it is waiting on. Every raise/clear broadcasts the session's full list so
+  // clients can replace rather than accumulate.
+  sessionWaits.setBroadcaster(({ sessionId, waits }) => {
+    ws.broadcastAll({
+      type: "session-wait.updated",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { sessionId, waits },
+    });
+  });
+  ws.getSessionWaits = () => sessionWaits.snapshot();
 
   // Project file watcher — uses @parcel/watcher (same as VS Code) for
   // native recursive watching with event coalescing.
@@ -467,6 +502,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // Tool registry — Sprint 3 + Sprint 10
   const voiceService = new VoiceService();
   const screenShare = new ScreenShareService();
+  const computerSessions = new ComputerControlSessionService();
+  const screenShareControl = new ScreenShareControlCoordinator(screenShare, computerSessions, ws);
+  ws.onNodeDisconnected = (nodeId) => screenShareControl.nodeDisconnected(nodeId);
   // Late-bound Fastify app: the registry is built before createServer() runs,
   // so tools that inject into their own HTTP API resolve it lazily.
   let httpAppRef: import("fastify").FastifyInstance | undefined;
@@ -477,10 +515,13 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // the executing registry — that drift is what left `agent.github` advertised but
   // unexecutable (Unknown tool) and agent terminals without an App identity.
   const toolDeps: ToolRegistryDeps = {
+    chatLoops,
     memoryService: memory,
     hooks,
     voiceService,
     screenShare,
+    computerSessions,
+    screenShareControl,
     ws,
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
@@ -507,7 +548,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     getApp: () => httpAppRef,
   };
   let toolRegistry = createToolRegistry(surfaceRegistry, toolDeps);
-  providerRegistry.register(new JaitProvider({
+  const jaitProvider = new JaitProvider({
     config,
     threadService,
     userService,
@@ -516,7 +557,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     // from the early build this provider is constructed with (see toolDeps above).
     getToolRegistry: () => toolRegistry,
     toolExecutor: (toolName, input, context) => toolExecutor(toolName, input, context),
-  }));
+  });
+  providerRegistry.register(jaitProvider);
   console.log(`Providers registered: ${providerRegistry.list().map(p => p.id).join(", ")}`);
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -532,6 +574,12 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         payload: request,
       });
       console.log(`Secret requested: ${request.title} (${request.id})`);
+      sessionWaits.raise({
+        key: attentionKey("question", request.id),
+        kind: "secret",
+        sessionId: request.sessionId,
+        detail: request.title,
+      });
     },
     onResolved: (request) => {
       ws.broadcastAll({
@@ -540,11 +588,11 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         timestamp: new Date().toISOString(),
         payload: { id: request.id, sessionId: request.sessionId, status: request.status },
       });
+      sessionWaits.clear(attentionKey("question", request.id));
       console.log(`Secret request ${request.status}: ${request.id}`);
     },
   });
   const userQuestionService = new UserQuestionService({
-    defaultTimeoutMs: 300_000,
     onRequest: (request) => {
       ws.broadcastAll({
         type: "user-question.requested",
@@ -553,6 +601,12 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         payload: request,
       });
       console.log(`User question requested: ${request.title} (${request.id})`);
+      sessionWaits.raise({
+        key: attentionKey("question", request.id),
+        kind: "question",
+        sessionId: request.sessionId,
+        detail: request.questions[0]?.question ?? request.title,
+      });
       attention.raise({
         kind: "question",
         requestId: request.id,
@@ -574,9 +628,13 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         timestamp: new Date().toISOString(),
         payload: { id: request.id, sessionId: request.sessionId, status: request.status },
       });
+      sessionWaits.clear(attentionKey("question", request.id));
       attention.clear("question", request.id, request.status === "submitted"
         ? "answered"
-        : request.status === "timeout" ? "timeout" : "cancelled");
+        : "cancelled");
+      if (request.status === "submitted") {
+        chatLoops.resumeAfterAnswer(request.sessionId, request.id, request.userId ?? undefined);
+      }
       console.log(`User question ${request.status}: ${request.id}`);
     },
   });
@@ -611,6 +669,12 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         detail: request as unknown as Record<string, unknown>,
         expiresAt: request.expiresAt,
       });
+      sessionWaits.raise({
+        key: attentionKey("consent", request.id),
+        kind: "consent",
+        sessionId: request.sessionId,
+        detail: request.toolName,
+      });
       console.log(`Consent required: ${request.toolName} (${request.id})`);
     },
     onDecision: (decision) => {
@@ -621,6 +685,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         payload: decision,
       });
       channelConsentDecisionBridge?.(decision);
+      sessionWaits.clear(attentionKey("consent", decision.requestId));
       attention.clear(
         "consent",
         decision.requestId,
@@ -630,6 +695,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     },
   });
   ws.getPendingConsents = () => consentManager.listPending().map(({ id, sessionId }) => ({ id, sessionId }));
+  ws.getPendingQuestions = () => userQuestionService.listPending().map(({ id, sessionId }) => ({ id, sessionId }));
   const permissions = getProfile(activeToolProfileName);
   const sessionApprovalsBySession = new Map<string, Set<string>>();
   const getSessionApprovals = (sessionId: string): Set<string> => {
@@ -657,7 +723,31 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       ? projectService.getById(sessionRecord.projectId, context.userId)
       : undefined;
     const projectPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
-    const remoteNodeId = resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId);
+    const personalNodeId = getPersonalChatNodeId(sessionRecord);
+
+    // Per-call device targeting: a chat whose project lives on this machine can
+    // still hand a terminal/filesystem call to another connected device (e.g.
+    // the user's Windows PC) by passing nodeId. The target must be a node the
+    // caller may use, and gateway-only tools are rejected rather than silently
+    // running locally.
+    const callTarget = resolveCallNodeTarget(toolName, input);
+    if (callTarget.error) return { ok: false, message: callTarget.error };
+    const remoteTargetId = callTarget.nodeId;
+    const forcesLocal = callTarget.forcesLocal;
+    if (remoteTargetId && !ws.canAccessNode?.(remoteTargetId, context.userId ?? null)) {
+      return { ok: false, message: "The selected node does not belong to this user" };
+    }
+    const effectiveInput = remoteTargetId || forcesLocal ? callTarget.input : input;
+    if (personalNodeId && personalNodeId !== "gateway" && !ws.canAccessNode?.(personalNodeId, context.userId ?? null)) {
+      return { ok: false, message: "The selected node does not belong to this user" };
+    }
+    // Keep an explicit device binding even when it is offline. The proxy then
+    // reports unavailability instead of executing on another machine.
+    const remoteNodeId = remoteTargetId ?? (forcesLocal
+      ? null
+      : personalNodeId
+        ? personalNodeId === "gateway" ? null : personalNodeId
+        : resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId));
     const executor = createRemoteToolExecutor(
       {
         ws,
@@ -665,7 +755,11 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       },
       remoteNodeId,
     );
-    return executor(toolName, input, context);
+    const runsOffProjectMachine = Boolean(remoteTargetId)
+      || Boolean(personalNodeId && personalNodeId !== "gateway");
+    return executor(toolName, effectiveInput, runsOffProjectMachine
+      ? { ...context, projectRoot: "." }
+      : context);
   };
 
   const toolExecutor = async (
@@ -699,6 +793,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     });
     return executor.execute(toolName, input, context, options);
   };
+
+  const browserWorkflows = new BrowserWorkflowService(db, (name, input, context) => toolExecutor(name, input, context));
 
   let diskSpaceWatchdog: DiskSpaceWatchdog | undefined;
   const scheduler = new SchedulerService({
@@ -740,6 +836,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // here (channel.send, skills.manage, …) become advertised to the model as well,
   // because the provider now reads the registry through a late-bound accessor.
   const lateToolDeps: ToolRegistryDeps = {
+    browserWorkflows,
     scheduler,
     sessionService,
     startedAt: Date.now(),
@@ -1006,6 +1103,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     const channelToolDeps = { channels: channelManager, scheduler, defaultTimeZone: hostTimeZone };
     toolRegistry.register(createChannelSendTool(channelToolDeps));
     toolRegistry.register(createChannelRemindTool(channelToolDeps));
+    const { createMessengerTools } = await import("./tools/messenger-tools.js");
+    for (const tool of createMessengerTools(ws.messenger, surfaceRegistry)) toolRegistry.register(tool);
   }
 
   // Forward gateway notifications (maintenance, routines, provider limits) to
@@ -1070,7 +1169,25 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // because the plugin manager itself depends on the tool registry).
   const { createSkillsManageTool, createExtensionsManageTool } = await import("./tools/index.js");
   toolRegistry.register(createSkillsManageTool({ skillRegistry, clawhub: clawhubClient }));
+  const { createSkillDiscoveryTools } = await import("./tools/skill-discovery-tools.js");
+  for (const tool of createSkillDiscoveryTools(skillRegistry)) toolRegistry.register(tool);
   toolRegistry.register(createExtensionsManageTool({ pluginManager, clawhub: clawhubClient }));
+
+  // External MCP servers: agents add them via `mcp.add_server`; persisted ones reconnect at boot.
+  const { McpManager } = await import("./tools/mcp-bridge.js");
+  const { createMcpAddServerTool, loadMcpServerConfigs } = await import("./tools/mcp-server-tools.js");
+  const mcpManager = new McpManager(toolRegistry);
+  toolRegistry.register(createMcpAddServerTool({ manager: mcpManager }));
+  try {
+    for (const cfg of await loadMcpServerConfigs()) mcpManager.addServer(cfg);
+    void mcpManager.connectAll().then((conns) => {
+      for (const c of conns) {
+        console.log(`MCP server '${c.serverId}': ${c.status}${c.status === "connected" ? ` (${c.tools.length} tools)` : ""}`);
+      }
+    });
+  } catch (err) {
+    console.warn("Failed to load MCP server config:", err instanceof Error ? err.message : err);
+  }
 
   // Voice assistant (OpenAI Realtime — global session, not project-scoped)
   const voiceAssistantService = new VoiceAssistantService({
@@ -1089,6 +1206,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   });
 
   const server = await createServer(config, {
+    chatLoops,
     db,
     sqlite,
     sessionService,
@@ -1119,6 +1237,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     voiceService,
     toolExecutor,
     screenShare,
+    screenShareControl,
     threadService,
     repoService,
     planService,
@@ -1153,6 +1272,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       const surface = surfaceRegistry.getSurface(terminalId);
       if (surface && surface.type === "terminal" && "write" in surface) {
         (surface as import("./surfaces/terminal.js").TerminalSurface).write(data);
+        // Someone typed into the terminal: whatever interactive prompt was
+        // holding this chat has been answered, so drop the wait marker.
+        sessionWaits.clear(terminalWaitKey(terminalId));
       }
     } catch (err) {
       console.error(`Terminal write error (${terminalId}):`, err);
@@ -1209,6 +1331,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // UI state sync (client → server → DB → other clients)
   ws.canAccessSession = (sid, userId) => Boolean(userId && sessionService.getById(sid, userId));
+  ws.onChatNotificationRead = (state, userId) => {
+    void mobilePush.sendChatNotificationRead(userId, state).catch(() => { /* best effort */ });
+  };
 
   ws.onUIStateUpdate = (sid, key, value, clientId) => {
     try {
@@ -1327,12 +1452,18 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     console.log(`Screen share start-request relayed for host: ${hostDeviceId}`);
   };
   ws.onScreenShareStop = (sessionId) => {
-    const session = screenShare.stopShare();
+    const existing = screenShare.getSession(sessionId);
+    void screenShareControl.stopForShare(sessionId);
+    if (existing?.nodeId && existing.chatId) void screenShareControl.stopForNode(existing.nodeId, existing.chatId, false);
+    const session = screenShare.stopShare(sessionId);
     if (session) {
       ws.broadcastScreenShareState(session);
       console.log(`Screen share stopped: ${sessionId}`);
     }
   };
+  // Signaling is scoped to the members of one share session so SDP/ICE never
+  // reaches unrelated clients.
+  ws.screenShareSessionLookup = (sessionId) => screenShare.getSession(sessionId) ?? null;
 
   // When a desktop/mobile FsNode registers, auto-claim legacy repos that have
   // no deviceId, are not present on the gateway, and match the node platform.
@@ -1429,6 +1560,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   }
 
   // Docker discovery and cleanup can wait until the gateway is responsive.
+  if (!options.evaluation) jaitProvider.startSandboxMaintenance();
   if (!options.evaluation) void browserSandboxManager.cleanupBrowserSandboxes().then((removed) => {
     if (removed.length > 0) {
       console.log(`[browser] Removed ${removed.length} stale browser sandbox container(s) from previous runs.`);
@@ -1500,9 +1632,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
             console.error(`Failed to stop idle preview browser ${browser.id}:`, err),
           );
         } else {
-          surfaceRegistry.stopSurface(browser.id, "browser idle timeout").catch((err) =>
-            console.error(`Failed to stop idle browser ${browser.id}:`, err),
-          );
+          previewService.suspendIdleAgentBrowser(browser.id).then((suspended) => {
+            if (!suspended) return surfaceRegistry.stopSurface(browser.id, "browser idle timeout");
+          }).catch((err) => console.error(`Failed to stop idle browser ${browser.id}:`, err));
         }
       }
 
@@ -1529,15 +1661,29 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("Shutting down...");
-    // Force exit after 5 seconds if graceful shutdown hangs
+    const shutdownStartedAt = Date.now();
+    // Exceeding the budget means something is genuinely stuck, so the forced
+    // exit stays non-zero on purpose — but the window must be wide enough for a
+    // loaded release VM, and operators can widen it further.
+    const shutdownTimeoutMs = (() => {
+      const configured = Number.parseInt(process.env["JAIT_SHUTDOWN_TIMEOUT_MS"] ?? "", 10);
+      return Number.isFinite(configured) && configured > 0 ? configured : 15_000;
+    })();
     const forceTimer = setTimeout(() => {
-      console.error("Graceful shutdown timed out, forcing exit.");
-      process.exit(1);
-    }, 5_000);
+      console.error(`Graceful shutdown timed out after ${shutdownTimeoutMs}ms, forcing exit.`);
+      // Under the desktop shell an overrun is a slow stop, not a failed one: the
+      // shell's stop() owns the exit code and the packaging smoke asserts 0. A
+      // non-zero exit here is what silently broke three releases. Standalone and
+      // CLI runs keep the non-zero signal so a real hang still fails loudly.
+      process.exit(process.env["JAIT_DESKTOP_HOST"] === "1" ? 0 : 1);
+    }, shutdownTimeoutMs);
     // Ensure the timer doesn't keep the process alive
     if (forceTimer.unref) forceTimer.unref();
     try {
+      browserWorkflows.stop();
+      emailService.stopInboxRefresh();
       consentManager.cancelAll("shutdown");
+      await jaitProvider.dispose();
       await pluginManager.disposeAll();
       await channelManager.dispose();
       await previewService.stopAll();
@@ -1550,8 +1696,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       diskJanitor.stop();
       primaryLink?.stop();
       ws.stop();
-      await server.close();
+      await closeHttpServer(server);
       sqlite.close();
+      console.log(`Shutdown complete in ${Date.now() - shutdownStartedAt}ms`);
     } catch (err) {
       console.error("Error during shutdown:", err);
     }

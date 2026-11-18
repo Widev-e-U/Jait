@@ -6,6 +6,7 @@ import { LocalPreviewRunner, detectFramework, detectPackageManager, detectPrevie
 
 function createProject(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "preview-runner-"));
+  writeFileSync(join(root, "package-lock.json"), "{}", "utf8");
   for (const [relativePath, content] of Object.entries(files)) {
     writeFileSync(join(root, relativePath), content, "utf8");
   }

@@ -14,4 +14,12 @@ describe('activeProjectDuringSwitch', () => {
       opening: true,
     })
   })
+
+  it('does not wait for a project open request when there is no session', () => {
+    const current = { surfaceId: 'surface', projectRoot: '/project', nodeId: 'gateway' }
+    expect(activeProjectDuringSwitch(current, { rootPath: '/project', nodeId: 'gateway' }, false))
+      .toEqual({ ...current, opening: false })
+    expect(activeProjectDuringSwitch(current, { rootPath: '/other', nodeId: 'gateway' }, false)).toBeNull()
+    expect(activeProjectDuringSwitch(current, { rootPath: '/project', nodeId: 'remote' }, false)).toBeNull()
+  })
 })

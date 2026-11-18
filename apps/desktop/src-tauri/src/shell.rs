@@ -152,8 +152,7 @@ fn create_tray(app: &AppHandle, glue: &Arc<HostState>) -> tauri::Result<()> {
     fn revoke_computer_control(glue: &Arc<HostState>) {
         // Legacy shell: if (getSetting("computerControl.trustedUntil", 0) > now)
         // setSetting("computerControl.trustedUntil", 0); computerControl.stop().
-        // The Tauri glue has no computer-control server yet, so only the
-        // setting is cleared (gap noted in the parity report).
+        glue.revoke_computer_control();
         let trusted_until = glue
             .dispatch(
                 "desktop:get-setting",
@@ -177,7 +176,7 @@ fn create_tray(app: &AppHandle, glue: &Arc<HostState>) -> tauri::Result<()> {
         Submenu::with_items(app, "Screen Share", true, &[&share_start, &share_stop])?;
     let revoke = MenuItemBuilder::with_id(
         "tray-revoke-computer-control",
-        "Revoke remembered computer-control approval",
+        "Revoke computer control",
     )
     .build(app)?;
     let quit = MenuItemBuilder::with_id("tray-quit", "Quit").build(app)?;

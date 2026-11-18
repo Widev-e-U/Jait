@@ -49,7 +49,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-fit max-w-xs rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 duration-75 motion-reduce:animate-none",
+          "z-50 w-fit max-w-xs whitespace-pre-line break-words rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 duration-75 motion-reduce:animate-none",
           className,
         )}
         {...props}
@@ -63,17 +63,19 @@ function TooltipContent({
 function TooltipHint({
   content,
   side,
+  contentClassName,
   children,
   ...props
 }: Omit<React.ComponentProps<typeof TooltipPrimitive.Trigger>, "content" | "children" | "asChild"> & {
   content: React.ReactNode
   side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"]
+  contentClassName?: string
   children: React.ReactElement
 }) {
   return (
     <Tooltip open={content ? undefined : false}>
       <TooltipTrigger asChild {...props}>{children}</TooltipTrigger>
-      {content && <TooltipContent side={side}>{content}</TooltipContent>}
+      {content && <TooltipContent side={side} className={contentClassName}>{content}</TooltipContent>}
     </Tooltip>
   )
 }

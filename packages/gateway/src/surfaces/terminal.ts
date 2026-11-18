@@ -419,6 +419,8 @@ export class TerminalSurface implements Surface {
   private _lastActivityAt: number = Date.now();
 
   /** External callbacks (wired by index.ts / routes) */
+  private readonly exitListeners = new Set<(exitCode: number | null) => void>();
+
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
   onExit?: (exitCode: number, signal?: number) => void;
@@ -562,6 +564,7 @@ export class TerminalSurface implements Surface {
         this._pid = null;
         this._pty = null;
         this._setState("stopped");
+        for (const listener of [...this.exitListeners]) { try { listener(event.exitCode); } catch { /* observer */ } }
         this.onExit?.(event.exitCode, event.signal);
       });
 
@@ -631,6 +634,9 @@ export class TerminalSurface implements Surface {
   }
 
   /** Add an output listener (used by terminal.run to mirror output) */
+  addExitListener(listener: (exitCode: number | null) => void): void { this.exitListeners.add(listener); }
+  removeExitListener(listener: (exitCode: number | null) => void): void { this.exitListeners.delete(listener); }
+
   addOutputListener(listener: (data: string) => void): void {
     this._outputListeners.push(listener);
   }

@@ -267,7 +267,28 @@ export class VoiceAssistantService {
             backgroundTasks,
             onBackgroundTaskComplete,
           };
-          const result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
+          // Cover the escalation gap out loud: if a foreground escalation runs
+          // past the filler budget, speak a short ack instead of dead air.
+          const fillerText = "Still working on that — one moment.";
+          const isForegroundEscalation =
+            fnName === "ask_agent_about_request" && fnArgs.background !== true;
+          let fillerTimer: ReturnType<typeof setTimeout> | undefined;
+          if (isForegroundEscalation && this.deps.config.voiceEscalationFillerMs > 0) {
+            fillerTimer = setTimeout(() => {
+              if (openaiWs.readyState !== WebSocket.OPEN || !openaiReady) return;
+              pendingAnnouncements.push(fillerText);
+              flushNextAnnouncement();
+            }, Math.max(500, this.deps.config.voiceEscalationFillerMs));
+          }
+
+          let result: string;
+          try {
+            result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
+          } finally {
+            if (fillerTimer) clearTimeout(fillerTimer);
+            const queuedFiller = pendingAnnouncements.indexOf(fillerText);
+            if (queuedFiller >= 0) pendingAnnouncements.splice(queuedFiller, 1);
+          }
 
           // ── Handle stop_voice: say goodbye then close ──
           if (result === "__STOP_VOICE__") {
@@ -401,6 +422,7 @@ export class VoiceAssistantService {
 
     // ── Browser → Gateway → OpenAI ───────────────────────────
     let audioChunkCount = 0;
+    let acceptedInitialText = false;
     clientWs.on("message", (raw) => {
       if (!openaiReady) return;
 
@@ -422,6 +444,20 @@ export class VoiceAssistantService {
             audio: msg.data,
           }));
           break;
+
+        case "initial_text": {
+          const text = typeof msg.text === "string" ? msg.text.trim() : "";
+          if (acceptedInitialText || !text || text.length > 4000) break;
+          acceptedInitialText = true;
+          openaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+          }));
+          responseInProgress = true;
+          openaiWs.send(JSON.stringify({ type: "response.create" }));
+          send(clientWs, { type: "status", status: "thinking" });
+          break;
+        }
 
         case "commit":
           openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
@@ -485,7 +521,7 @@ export class VoiceAssistantService {
         tool_choice: "auto",
         // Bias speech-to-text toward domain proper nouns (e.g. "Jait", not "Jade").
         input_audio_transcription: {
-          model: "gpt-4o-transcribe",
+          model: this.deps.config.realtimeTranscribeModel,
           prompt: sttPrompt,
         },
       },
@@ -567,13 +603,13 @@ You have direct access to the Jait system through function calls:
 - When calling search_web, the "query" parameter MUST be a non-empty descriptive search string.
 - When the user tells you personal information, use save_memory to remember it.
 - Before answering questions about past interactions, use search_memory.
-- Default to ask_agent_about_request for almost every real question from the user.
-- If the user says "ask the normal agent", "ask a normal agent", "ask the regular agent", "ask Jait agent", "ask Codex", or "ask an agent", you MUST call ask_agent_about_request with the user's exact request.
-- Only answer without ask_agent_about_request for very small talk or direct one-tool lookups like time/date, weather, memory recall, or short greetings.
-- When the user asks what something is, how something works, why something happened, what a tool/result means, or asks for a deeper explanation about Jait, code, threads, tools, providers, sessions, errors, or project state, you MUST call ask_agent_about_request before answering.
-- Use ask_agent_about_request whenever the normal agent is likely to know materially more than you do, which is most non-trivial questions.
-- After ask_agent_about_request returns, speak a short natural summary of the answer instead of reading raw structured output.
-- For tasks that may take a while (research, analysis, complex lookups), call ask_agent_about_request with background set to true so you can keep talking and be notified when Jait finishes. Then acknowledge to the user that you've started working on it.
+- Decide local-vs-escalate on every turn. That judgment is the core of this session.
+- Answer locally and instantly for: greetings, acknowledgements, "thanks/ok/yes", restating what you just said, short factual recall you are certain of, time/date/weather/memory/system lookups, and anything already in the transcript. Never spend an escalation on these.
+- Escalate with ask_agent_about_request for: Jait state you cannot see (what projects, threads, sessions, tools, providers or agents are doing), anything about the user's code or repo, multi-step reasoning, comparisons and trade-offs, design or architecture questions, error diagnosis, and anything where being wrong would cost the user real time.
+- When the user names an agent ("ask the normal agent", "ask Jait", "ask Codex"), call ask_agent_about_request with their exact request even if you could guess an answer.
+- You decide whether to escalate; Jait decides which model answers. Leave tier as "auto" so cheap questions go to the fast tier and hard ones to the deep tier. Force tier "deep" only when the user explicitly wants the strongest or most careful answer.
+- Escalated answers take a few seconds, so speak a brief natural lead-in first ("let me check that") instead of going silent. After the answer returns, summarize it in one or two spoken sentences rather than reading raw structured output.
+- For work that will obviously take minutes (deep research, analysis, multi-step code work), call ask_agent_about_request with background set to true, then tell the user you started it.
 - When the user asks what's running in the background, call list_background_tasks; to stop one, call cancel_background_task with its id.
 - When the user asks you to code or fix something, use send_to_agent.`;
   }

@@ -1,5 +1,5 @@
 /**
- * SegmentedControl — shared sliding-thumb tablist. Used by ViewModeSelector
+ * SegmentedControl — shared sliding-thumb tablist. Used by selectors
  * and SendTargetSelector.
  */
 

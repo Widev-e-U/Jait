@@ -1,0 +1,6470 @@
+[
+  {
+    "id": "internal.storage.session-sql.select-row-objects",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tables-includes",
+            "names": [
+              "messages",
+              "sessions",
+              "user_secrets",
+              "users",
+              "_migrations"
+            ]
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id, role, content FROM messages ORDER BY id LIMIT 10"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/messages",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/sessions",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/user_secrets",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/users",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/_migrations",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/columns",
+        "kind": "eq",
+        "value": [
+          "id",
+          "role",
+          "content"
+        ]
+      },
+      {
+        "path": "/0/1/data/rowCount",
+        "kind": "eq",
+        "value": 4
+      },
+      {
+        "path": "/0/1/data/truncated",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data/rows/0",
+        "kind": "eq",
+        "value": {
+          "id": "m-1",
+          "role": "user",
+          "content": "fix the flaky test"
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.with-cte-query",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH recent AS (SELECT * FROM messages WHERE created_at >= '2026-02-01') SELECT COUNT(*) AS n FROM recent"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0",
+        "kind": "eq",
+        "value": {
+          "n": 3
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.group-by-and-join",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT substr(created_at,1,10) AS d, COUNT(*) AS n FROM messages GROUP BY d ORDER BY d DESC LIMIT 14"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT s.id, COUNT(t.id) AS threads FROM sessions s LEFT JOIN agent_threads t ON t.session_id = s.id GROUP BY s.id ORDER BY s.id"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows",
+        "kind": "eq",
+        "value": [
+          {
+            "d": "2026-02-11",
+            "n": 1
+          },
+          {
+            "d": "2026-02-10",
+            "n": 2
+          },
+          {
+            "d": "2026-01-20",
+            "n": 1
+          }
+        ]
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/rows",
+        "kind": "eq",
+        "value": [
+          {
+            "id": "sess-a",
+            "threads": 1
+          },
+          {
+            "id": "sess-b",
+            "threads": 1
+          },
+          {
+            "id": "sess-c",
+            "threads": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.tables-list-first-call-only",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tables-attached"
+          },
+          {
+            "kind": "tables-attached"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.comments-and-string-literals-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "-- pick everything\n/* still one statement */\nSELECT id FROM sessions WHERE name != 'drop table users' LIMIT 5;"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 3
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-insert",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "INSERT INTO sessions (id, user_id, created_at, last_active_at) VALUES ('x', 'u', 'now', 'now')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-update",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "UPDATE sessions SET status = 'archived'"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-delete",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-drop",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "DROP TABLE messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-create",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "CREATE TABLE evil (id TEXT)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-alter",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "ALTER TABLE sessions ADD COLUMN evil TEXT"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-pragma",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "PRAGMA table_info(sessions)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-pragma-journal-mode",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "PRAGMA journal_mode = WAL"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-pragma-function-form",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM pragma_table_info('sessions') WHERE 1=1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-attach",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "ATTACH DATABASE '/tmp/x.db' AS x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-detach",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "DETACH DATABASE x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-vacuum",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "VACUUM"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-reindex",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "REINDEX"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-begin",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "BEGIN TRANSACTION"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-commit",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "COMMIT"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-transaction-multi-statement",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "BEGIN; SELECT 1; COMMIT;"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "multi_statement"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-mutation-in-cte",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (SELECT 1) DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-empty-and-comment-only",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": ""
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "   \n\t "
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "-- nothing here\n/* or here */"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "required"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/1/message",
+        "kind": "contains",
+        "value": "required"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/2/message",
+        "kind": "contains",
+        "value": "required"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-non-select-first-tokens",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "hello world"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "EXPLAIN SELECT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-multi-statement-input",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1; SELECT 2"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1; DROP TABLE messages"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1;"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1; \n\t "
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "multi_statement"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "multi_statement"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/3/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.reject-pragma-tvf-inside-union",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM sessions WHERE status = 'active' UNION SELECT 1, 2, 3, 4, 5, 6, 7, 8 FROM pragma_user_settings"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.blocks-secret-tables-everywhere",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM user_secrets"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT key FROM user_secrets WHERE id = 'sec-1'"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM users"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM user_settings"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT s.id FROM sessions s JOIN user_secrets u ON u.user_id = s.user_id"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT (SELECT COUNT(*) FROM user_secrets) AS leaked"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"user_secrets\""
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH c AS (SELECT * FROM user_secrets) SELECT * FROM c"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM automation_repositories"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM mobile_push_registrations"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/3/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/3/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/4/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/4/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/5/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/5/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/6/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/6/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/7/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/7/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/8/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/8/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/9/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/9/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.allows-consent-log",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT COUNT(*) AS n FROM consent_log"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0",
+        "kind": "eq",
+        "value": {
+          "n": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.truncates-at-default-cap",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM audit_log ORDER BY id"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows",
+        "kind": "length",
+        "value": 200
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.honors-lower-max-rows",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM audit_log ORDER BY id",
+              "maxRows": 5
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 5
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0",
+        "kind": "eq",
+        "value": {
+          "id": "audit-0"
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.cannot-raise-max-rows-above-cap",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM audit_log ORDER BY id",
+              "maxRows": 10000
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.clamps-oversized-limit-no-truncation",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM messages LIMIT 500000"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 4
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.no-truncation-when-results-fit",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM messages",
+              "maxRows": 10
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 4
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.schema-summary",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "schema"
+          },
+          {
+            "kind": "schema-table",
+            "table": "sessions"
+          },
+          {
+            "kind": "schema-table",
+            "table": "user_secrets"
+          },
+          {
+            "kind": "schema-table",
+            "table": "_migrations"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/blockedTables",
+        "kind": "eq",
+        "value": [
+          "automation_repositories",
+          "mobile_push_registrations",
+          "user_secrets",
+          "user_settings",
+          "users"
+        ]
+      },
+      {
+        "path": "/0/1/names",
+        "kind": "eq",
+        "value": [
+          "id",
+          "user_id",
+          "name",
+          "project_path",
+          "created_at",
+          "last_active_at",
+          "status",
+          "metadata",
+          "project_id",
+          "viewed_at"
+        ]
+      },
+      {
+        "path": "/0/1/types/created_at",
+        "kind": "eq",
+        "value": "TEXT"
+      },
+      {
+        "path": "/0/2/found",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/3/found",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.schema-broken-database",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "broken-schema"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "schema_error"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.tool-name-and-schema-mode",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool-name"
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "mode": "schema"
+            }
+          },
+          {
+            "kind": "tool-shape",
+            "input": {
+              "mode": "schema"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0",
+        "kind": "eq",
+        "value": "session.sql"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/tablesIsArray",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.tool-requires-sql-or-schema",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {}
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data",
+        "kind": "eq",
+        "value": {
+          "error": "invalid_input"
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.tool-row-count-message",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT id FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "4 row(s)"
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.session-sql.tool-passes-rejection-classes",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "DELETE FROM messages"
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT * FROM user_secrets"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data",
+        "kind": "eq",
+        "value": {
+          "error": "readonly_violation"
+        }
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data",
+        "kind": "eq",
+        "value": {
+          "error": "blocked_table"
+        }
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-delete-refused-rows-survive",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (DELETE FROM messages RETURNING *) SELECT * FROM x"
+            }
+          },
+          {
+            "kind": "count-messages"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/1/n",
+        "kind": "eq",
+        "value": 4
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-delete-with-trailing-limit",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (DELETE FROM messages RETURNING id) SELECT * FROM x LIMIT 5"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-insert-refused",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (INSERT INTO messages (id, session_id, role, content, created_at) VALUES ('adv-i', 'sess-a', 'user', 'pwned', '2026-01-01T00:00:00.000Z') RETURNING id) SELECT * FROM x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-update-refused",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (UPDATE messages SET content = 'pwned' RETURNING id) SELECT * FROM x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-mutation-second-arm",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH a AS (SELECT 1 AS v), b AS (DELETE FROM messages) SELECT v FROM a"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-with-delete-top-level",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (SELECT 1) DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-mutation-across-comment-boundary",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (SELECT 1 /*)*/ ) DELETE FROM messages SELECT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-keyword-after-unterminated-line-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 --;\nDELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-double-quoted",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"user_secrets\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-bracketed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM [user_secrets]"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-backticked",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM `user_secrets`"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-schema-qualified",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM main.user_secrets"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-schema-qualified-quoted",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM main.\"user_secrets\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-uppercase",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM USER_SECRETS"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-mixed-case",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM User_Secrets"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-double-quoted-uppercase",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"USER_SECRETS\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-in-subquery",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM (SELECT * FROM user_secrets) AS t"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-in-cte-body",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH c AS (SELECT * FROM user_secrets) SELECT * FROM c"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-joined",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT m.id FROM messages m JOIN user_secrets s ON s.id = m.id"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-joined-via-using",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT m.id FROM messages m JOIN users u USING (id)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-scalar-subquery",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT (SELECT group_concat(password_hash) FROM users) AS leak"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-exists-probe",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS x WHERE EXISTS (SELECT 1 FROM user_settings)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-quoted-uppercase-users",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"Users\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-as-bare-cte-name",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH user_secrets AS (SELECT 1 AS pw) SELECT * FROM user_secrets"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-in-union-arm",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM messages UNION SELECT id FROM mobile_push_registrations"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-table-attached-name-qualification",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 FROM evil.user_secrets"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.prefixed-benign-table-errors-natively",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM user_secrets_extra"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "sql_error"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "no such table"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.blocked-name-inside-string-literal-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'user_secrets' AS literal"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-semicolon-drop-in-block-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /*; DROP TABLE messages*/ AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-drop-in-string-literal",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'DROP TABLE messages' AS s"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-mutations-in-block-comments",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* INSERT */ /* UPDATE */ /* DELETE */ AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-line-comment-prefix",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "-- INSERT INTO messages\nSELECT 1 AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-line-comment-before-alias",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 -- DROP TABLE messages\n AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-split-keyword-block-comments",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT /* DROP */ /* TABLE */ 1 AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-harmless-semicolon-inside-string-literal",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'x; DELETE FROM messages; --' AS s"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-hostile-semicolon-after-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /*;*/ ; DROP TABLE messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-hostile-union-delete-in-parens",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* comment */ UNION ALL SELECT 1 FROM (DELETE FROM messages)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-hostile-semicolon-only-after-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* ; */; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-hostile-keyword-spans-comment-end",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* DE\nLE */ DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-nested-block-comment-mutation-tail",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* outer /* INSERT */ INSERT */ ; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-unterminated-block-comment-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* DROP TABLE messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.comment-unterminated-string-literal-refused",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM messages WHERE content = '; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-semicolon-after-leading-whitespace",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "   \n\t ; DROP TABLE messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-statement-after-trailing-semicolon",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-semicolon-before-comment-statement-after",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 ;-- note\nDROP TABLE messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-two-statements-split-after-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 /* ; */ ; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-nul-byte-separator",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1\u0000; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-semicolon-inside-cte-mutation-after",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH x AS (SELECT 1; DELETE FROM messages) SELECT * FROM x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-empty-plus-mutation",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "; DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-semicolon-then-with",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1; WITH x AS (SELECT 1) SELECT * FROM x"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-trailing-semicolon-and-whitespace-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS one ;"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "\r\n\t SELECT 1 AS one"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": " SELECT 1 AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-semicolon-inside-string-literal-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'a;b' AS s, 2 AS n"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-statement-split-only-after-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 -- intro\n; SELECT 2"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "multi_statement"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-comment-only-and-semicolon-only-rejected",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "-- just a comment"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": ";"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "/* block */"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.multi-unicode-whitespace-engine-rejects",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS one"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "sql_error"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-table-named-like-a-mutation",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id, note FROM updated_messages ORDER BY id LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-column-names-created-at-last-active-at",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT created_at, last_active_at FROM sessions LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-strftime-date-function",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT strftime('%Y-%m', created_at) AS m, COUNT(*) AS n FROM messages GROUP BY m"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-max-last-active-at-aggregate",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT MAX(last_active_at) AS latest FROM sessions"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-user-id-column-on-sessions",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT user_id FROM sessions LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.keyword-collision-banned-word-inside-string-literal",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'delete from messages' AS s"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-load-extension",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT load_extension('x')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-writefile-and-readfile",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT writefile('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT readfile('/etc/passwd') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-pragma-table-valued-functions",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM pragma_table_info('messages')"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM pragma_journal_mode"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM pragma_user_version"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-bare-pragma-first-keyword",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "PRAGMA journal_mode = WAL"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-replace-string-function",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT replace('a-b', 'a', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-explain",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "EXPLAIN SELECT * FROM messages"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "EXPLAIN QUERY PLAN SELECT * FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-bare-values-statement",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "VALUES (1), (2)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Refused"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.allows-with-recursive",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x < 5) SELECT SUM(x) AS total FROM cnt"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/total",
+        "kind": "eq",
+        "value": 15
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.allows-leading-comment-before-with",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "\n-- discovery\nWITH t AS (SELECT 41 AS v) SELECT v + 1 AS w FROM t"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/w",
+        "kind": "eq",
+        "value": 42
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.refuses-mutation-as-first-token",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "DELETE FROM messages"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "DROP TABLE messages"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "BEGIN"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "ATTACH ':memory:' AS evil"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "VACUUM"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/3/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      },
+      {
+        "path": "/0/4/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-missing-250-row-table",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/columns",
+        "kind": "eq",
+        "value": [
+          "id"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-oversized-clamped",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big LIMIT 999999"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-with-offset-clamped",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 999999 OFFSET 5"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/id",
+        "kind": "eq",
+        "value": 6
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-comma-form-clamped",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 5, 999999"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/id",
+        "kind": "eq",
+        "value": 6
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-below-cap-untouched",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 5"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 5
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-exactly-cap-plus-one",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big LIMIT 201"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-equal-to-row-count",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big WHERE id <= 200"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.subquery-limit-untouched",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM (SELECT id FROM adv_big ORDER BY id LIMIT 3) AS t"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 3
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/rows/0/id",
+        "kind": "eq",
+        "value": 1
+      },
+      {
+        "path": "/0/0/data/rows/1/id",
+        "kind": "eq",
+        "value": 2
+      },
+      {
+        "path": "/0/0/data/rows/2/id",
+        "kind": "eq",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.cte-inner-limit-untouched",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH top3 AS (SELECT id FROM adv_big ORDER BY id DESC LIMIT 3) SELECT id FROM top3"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 3
+      },
+      {
+        "path": "/0/0/data/rows/0/id",
+        "kind": "eq",
+        "value": 250
+      },
+      {
+        "path": "/0/0/data/rows/1/id",
+        "kind": "eq",
+        "value": 249
+      },
+      {
+        "path": "/0/0/data/rows/2/id",
+        "kind": "eq",
+        "value": 248
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.in-subquery-limit-untouched",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big WHERE id IN (SELECT id FROM adv_big ORDER BY id DESC LIMIT 2)"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 2
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.union-compound-order-by-clamp",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big WHERE id <= 120 UNION ALL SELECT id FROM adv_big WHERE id > 120 ORDER BY id"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-inside-string-literal-untouched",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'LIMIT 999999' AS literal"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/literal",
+        "kind": "eq",
+        "value": "LIMIT 999999"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-mentioning-comment",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id /* LIMIT 999999 */ LIMIT 999999"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-one",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT 10",
+              "maxRows": 1
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 1
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-fraction-floors-to-default",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "maxRows": 0.5
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-invalid-zero",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "maxRows": 0
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-invalid-negative",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "maxRows": -5
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-invalid-oversized",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "maxRows": 99999
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-special-nan",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big"
+            },
+            "maxRowsSpecial": "NaN"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.max-rows-special-infinity",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big"
+            },
+            "maxRowsSpecial": "Infinity"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tables-list-attached-first-query-only",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tables-attached"
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big"
+            }
+          },
+          {
+            "kind": "tables-attached"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.schema-listing",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "schema"
+          },
+          {
+            "kind": "tables-includes",
+            "names": [
+              "automation_repositories",
+              "mobile_push_registrations",
+              "user_secrets",
+              "user_settings",
+              "users",
+              "_migrations",
+              "messages_fts_data",
+              "sqlite_sequence",
+              "messages",
+              "sessions",
+              "agent_threads",
+              "agent_thread_activities",
+              "memories",
+              "scheduled_jobs",
+              "audit_log",
+              "messages_fts",
+              "agent_thread_activities_fts"
+            ]
+          },
+          {
+            "kind": "schema-table",
+            "table": "adv_big"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/blockedTables",
+        "kind": "eq",
+        "value": [
+          "automation_repositories",
+          "mobile_push_registrations",
+          "user_secrets",
+          "user_settings",
+          "users"
+        ]
+      },
+      {
+        "path": "/0/1/automation_repositories",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/mobile_push_registrations",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/user_secrets",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/user_settings",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/users",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/_migrations",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/messages_fts_data",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/sqlite_sequence",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/messages",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/sessions",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/agent_threads",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/agent_thread_activities",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/memories",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/scheduled_jobs",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/audit_log",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/messages_fts",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/agent_thread_activities_fts",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/names",
+        "kind": "eq",
+        "value": [
+          "id",
+          "filler"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.schema-blocked-tables-not-queryable",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT COUNT(*) AS n FROM user_secrets"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT username, password_hash FROM users LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.schema-sqlite-master-read-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-join-query-shape",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool-shape",
+            "input": {
+              "sql": "SELECT s.name, COUNT(m.id) AS msgs FROM sessions s LEFT JOIN messages m ON m.session_id = s.id GROUP BY s.id ORDER BY msgs DESC, s.name LIMIT 3"
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT s.name, COUNT(m.id) AS msgs FROM sessions s LEFT JOIN messages m ON m.session_id = s.id GROUP BY s.id ORDER BY msgs DESC, s.name LIMIT 3"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/tablesIsArray",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/columns",
+        "kind": "eq",
+        "value": [
+          "name",
+          "msgs"
+        ]
+      },
+      {
+        "path": "/0/1/data/rowCount",
+        "kind": "eq",
+        "value": 2
+      },
+      {
+        "path": "/0/1/data/truncated",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data/rows/0",
+        "kind": "eq",
+        "value": {
+          "name": "Refactor gateway",
+          "msgs": 3
+        }
+      },
+      {
+        "path": "/0/1/data/rows/1",
+        "kind": "eq",
+        "value": {
+          "name": "Write docs",
+          "msgs": 1
+        }
+      },
+      {
+        "path": "/0/1/message",
+        "kind": "contains",
+        "value": "2 row(s)"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-aggregation-query",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n FROM messages GROUP BY day ORDER BY day"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows",
+        "kind": "eq",
+        "value": [
+          {
+            "day": "2026-01-20",
+            "n": 1
+          },
+          {
+            "day": "2026-02-10",
+            "n": 2
+          },
+          {
+            "day": "2026-02-11",
+            "n": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-max-rows-clamping-direct-and-registry",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "max_rows": 2
+            }
+          },
+          {
+            "kind": "registry",
+            "input": {
+              "sql": "SELECT id FROM adv_big",
+              "max_rows": "3"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 2
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "truncated"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/rowCount",
+        "kind": "eq",
+        "value": 3
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-schema-mode",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool-shape",
+            "input": {
+              "mode": "schema"
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "mode": "schema"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/tablesLength",
+        "kind": "gt",
+        "value": 5
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/blockedTables",
+        "kind": "eq",
+        "value": [
+          "automation_repositories",
+          "mobile_push_registrations",
+          "user_secrets",
+          "user_settings",
+          "users"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-schema-mode-wins-over-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "mode": "schema",
+              "sql": "DELETE FROM messages"
+            }
+          },
+          {
+            "kind": "tool-shape",
+            "input": {
+              "mode": "schema",
+              "sql": "DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/tablesIsArray",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-refusal-error-classes",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT * FROM user_secrets"
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "DELETE FROM messages"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "blocked_table"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-blob-sanitized",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT data FROM adv_blob_test"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/data",
+        "kind": "eq",
+        "value": "<blob 4 bytes>"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-empty-result-inferred-columns",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT * FROM messages WHERE 1 = 0"
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT id, content FROM messages WHERE 1 = 0"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/columns",
+        "kind": "eq",
+        "value": [
+          "id",
+          "session_id",
+          "role",
+          "content",
+          "tool_calls",
+          "created_at",
+          "segments",
+          "context_flow",
+          "thinking",
+          "persona"
+        ]
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/data/columns",
+        "kind": "eq",
+        "value": [
+          "id",
+          "content"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-missing-empty-whitespace-null-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {}
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": ""
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "   "
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": null
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/3/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/3/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.tool-non-string-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": 123
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": [
+                "SELECT 1"
+              ]
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": {
+                "sql": "x"
+              }
+            }
+          },
+          {
+            "kind": "tool",
+            "input": {
+              "sql": true
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      },
+      {
+        "path": "/0/3/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/3/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.service-non-string-sql-invalid-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": 123
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": [
+                "SELECT 1"
+              ]
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": true
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/1/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/2/error",
+        "kind": "eq",
+        "value": "invalid_sql"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.registry-rejects-non-string-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "registry",
+            "input": {
+              "sql": 123
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "Input validation failed"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-writefile",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT writefile('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "writefile"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-readfile",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT readfile('/etc/passwd') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "readfile"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-fts3_tokenizer",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT fts3_tokenizer('simple') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "fts3_tokenizer"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-zipfile",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT zipfile('/tmp/jait-adversarial.zip') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "zipfile"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-sqlar",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT sqlar('/tmp/jait-adversarial.tar') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "sqlar"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-load_extension",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT load_extension('evil.so') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "load_extension"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-sqlite_load_extension",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT sqlite_load_extension('evil.so') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "sqlite_load_extension"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-space-before-paren",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT writefile ('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-uppercase-call",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT WRITEFILE('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-double-quoted-name",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT \"writefile\"('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-bracketed-name",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT [zipfile]('/tmp/jait-adversarial.zip') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-backticked-name",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT `load_extension`('evil.so') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-obfuscated-comment-between-name-and-paren",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT \"writefile\" /*note*/ ('/tmp/jait-adversarial-pwned', 'x') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "banned_function"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-benign-identifiers-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM writefile_log"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "WITH zipfile AS (SELECT 1 AS v) SELECT v FROM zipfile"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT strftime('%Y', '2024-01-01') AS y"
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 'writefile(' || note AS tag FROM writefile_log"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/data/rows/0/y",
+        "kind": "eq",
+        "value": "2024"
+      },
+      {
+        "path": "/0/3/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.banned-function-tool-wrapper-message",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT readfile('/etc/passwd') AS r"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "banned_function"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "readfile"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-double-quoted-tvf",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"pragma_table_info\"('user_secrets')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-bracketed-tvf",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM [pragma_table_info]('user_secrets')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-backticked-tvf",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM `pragma_table_info`('user_secrets')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-double-quoted-uppercase-tvf",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"PRAGMA_TABLE_INFO\"('user_secrets')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-quoted-standalone-pragma-tvf",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"pragma_journal_mode\"('DELETE')"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-quoted-pragma-table-name",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT * FROM \"pragma_user_version\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-quoted-tvf-in-union-arm",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS one UNION SELECT * FROM \"pragma_table_list\""
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-pragma-quoted-tvf-as-alias",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM messages AS \"pragma_table_info\" LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.quoted-benign-pragma-identifiers-allowed",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS \"pragma\""
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT 1 AS \"my_pragma_table_info\""
+            }
+          },
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT \"content\" FROM \"messages\" ORDER BY id LIMIT 1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/pragma",
+        "kind": "eq",
+        "value": 1
+      },
+      {
+        "path": "/0/1/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/2/ok",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-negative-one-row-cap-applies",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT -1"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 200
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rows/0/id",
+        "kind": "eq",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.adv.limit-signed-plus-five",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "SELECT id FROM adv_big ORDER BY id LIMIT +5"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 5
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.runtime-tool.session-sql-schema-mode",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "mode": "schema"
+            }
+          },
+          {
+            "kind": "tool-shape",
+            "input": {
+              "mode": "schema"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/1/tablesIsArray",
+        "kind": "eq",
+        "value": true
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.runtime-tool.session-sql-forwards-row-limit",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "SELECT id FROM audit_log ORDER BY id",
+              "max_rows": 5
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/data/rowCount",
+        "kind": "eq",
+        "value": 5
+      },
+      {
+        "path": "/0/0/data/truncated",
+        "kind": "eq",
+        "value": true
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "truncated"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.runtime-tool.session-sql-preserves-refusal",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {
+              "sql": "DELETE FROM sessions"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "readonly_violation"
+      }
+    ]
+  },
+  {
+    "id": "internal.storage.runtime-tool.session-sql-rejects-missing-sql",
+    "calls": [
+      {
+        "op": "storage.run",
+        "actions": [
+          {
+            "kind": "tool",
+            "input": {}
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/data/error",
+        "kind": "eq",
+        "value": "invalid_input"
+      }
+    ]
+  },
+{
+    "id": "internal.storage.adv.parenthesized-compound-select",
+    "calls": [
+      {
+        "op": "storage.run",
+        "fixture": "adversarial",
+        "actions": [
+          {
+            "kind": "query",
+            "input": {
+              "sql": "(SELECT 1) UNION SELECT 2"
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "path": "/0/0/ok",
+        "kind": "eq",
+        "value": false
+      },
+      {
+        "path": "/0/0/error",
+        "kind": "eq",
+        "value": "sql_error"
+      },
+      {
+        "path": "/0/0/message",
+        "kind": "contains",
+        "value": "syntax error"
+      }
+    ]
+  }
+]

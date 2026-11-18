@@ -1,0 +1,78 @@
+[
+  {
+    "name": "channel.send",
+    "description": "Send a message into a messaging channel conversation (Telegram, WhatsApp, …). Give `text` for a fixed message, or `prompt` to work the answer out at send time and deliver the result. Defaults to the conversation this turn belongs to.",
+    "tier": "standard",
+    "category": "channels",
+    "source": "builtin",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Message to send verbatim."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Instruction to run at send time; its answer is delivered instead of `text`."
+        },
+        "channelId": {
+          "type": "string",
+          "description": "Connector id, e.g. \"telegram\". Defaults to the current channel."
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Chat to deliver to. Defaults to the current chat."
+        }
+      }
+    }
+  },
+  {
+    "name": "channel.remind",
+    "description": "Schedule a reminder delivered into this chat. Use `at` (local \"YYYY-MM-DDTHH:mm\") for a one-off, or `cron` (5-field) for something recurring. Provide `text` for a fixed message, or `prompt` to work the answer out at delivery time. Times are read in the channel's local zone.",
+    "tier": "standard",
+    "category": "channels",
+    "source": "builtin",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Message to deliver verbatim."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Instruction to run at delivery time; its answer is delivered."
+        },
+        "at": {
+          "type": "string",
+          "description": "One-off local time, \"YYYY-MM-DDTHH:mm\" — no offset, no \"Z\"."
+        },
+        "cron": {
+          "type": "string",
+          "description": "5-field cron for a recurring reminder, e.g. \"0 7 * * 1-5\"."
+        },
+        "timeZone": {
+          "type": "string",
+          "description": "IANA zone the time is measured in. Defaults to the gateway's."
+        },
+        "name": {
+          "type": "string",
+          "description": "Short label shown in the scheduled-jobs list."
+        },
+        "channelId": {
+          "type": "string",
+          "description": "Connector id. Defaults to the current channel."
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Chat to deliver to. Defaults to the current chat."
+        }
+      }
+    }
+  }
+]

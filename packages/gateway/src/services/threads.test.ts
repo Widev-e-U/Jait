@@ -73,7 +73,7 @@ describe("ThreadService activity persistence", () => {
     const row = sqlite.prepare(
       "SELECT id FROM agent_thread_activities WHERE id = ?",
     ).get(activity!.id);
-    expect(row).toBeUndefined();
+    expect(row ?? undefined).toBeUndefined();
   });
 
   it("persists only the latest context-flow snapshot when a turn completes", () => {

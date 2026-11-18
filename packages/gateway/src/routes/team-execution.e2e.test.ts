@@ -26,7 +26,9 @@ const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, f
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));

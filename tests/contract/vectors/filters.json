@@ -1,0 +1,447 @@
+[
+  {
+    "id": "internal.filters.normalize-strips-posix-preamble",
+    "calls": [
+      { "op": "filters.normalize", "input": "export PAGER=cat GIT_PAGER=cat; git status" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "git status" }
+    ]
+  },
+  {
+    "id": "internal.filters.normalize-strips-powershell-preamble",
+    "calls": [
+      { "op": "filters.normalize", "input": "$env:PAGER = 'cat'; $env:LESS = '-FRX'; git log" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "git log" }
+    ]
+  },
+  {
+    "id": "internal.filters.normalize-strips-env-cd-and-sudo",
+    "calls": [
+      { "op": "filters.normalize", "input": "FOO=bar cd /srv/app && sudo ls -la" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "ls -la" }
+    ]
+  },
+  {
+    "id": "internal.filters.primary-command-uses-first-pipeline-stage",
+    "calls": [
+      { "op": "filters.primary-command", "input": "git status | head -20" }
+    ],
+    "assertions": [
+      { "path": "/0/tokens", "kind": "eq", "value": ["git", "status"] },
+      { "path": "/0/raw", "kind": "eq", "value": "git status" }
+    ]
+  },
+  {
+    "id": "internal.filters.primary-command-keeps-quoted-arguments",
+    "calls": [
+      { "op": "filters.primary-command", "input": "grep -rn \"a|b\" src" }
+    ],
+    "assertions": [
+      { "path": "/0/tokens", "kind": "eq", "value": ["grep", "-rn", "a|b", "src"] }
+    ]
+  },
+  {
+    "id": "internal.filters.enabled-default-on",
+    "calls": [
+      { "op": "filters.enabled", "env": {} }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": true }
+    ]
+  },
+  {
+    "id": "internal.filters.enabled-disable-values",
+    "calls": [
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "0" } },
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "false" } },
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "off" } },
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "no" } },
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "OFF" } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": false },
+      { "path": "/1", "kind": "eq", "value": false },
+      { "path": "/2", "kind": "eq", "value": false },
+      { "path": "/3", "kind": "eq", "value": false },
+      { "path": "/4", "kind": "eq", "value": false }
+    ]
+  },
+  {
+    "id": "internal.filters.enabled-explicit-on",
+    "calls": [
+      { "op": "filters.enabled", "env": { "JAIT_COMMAND_OUTPUT_FILTERS": "1" } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": true }
+    ]
+  },
+  {
+    "id": "internal.filters.git-status-human-output",
+    "calls": [
+      {
+        "op": "filters.git-status",
+        "lines": [
+          "On branch feature/x",
+          "Your branch is ahead of 'origin/feature/x' by 2 commits.",
+          "  (use \"git push\" to publish your local commits)",
+          "",
+          "Changes to be committed:",
+          "  (use \"git restore --staged <file>...\" to unstage)",
+          "\tmodified:   src/engine.ts",
+          "\tnew file:   src/engine.test.ts",
+          "",
+          "Changes not staged for commit:",
+          "  (use \"git add <file>...\" to update what will be committed)",
+          "\tmodified:   src/index.ts",
+          "\tdeleted:    src/old.ts",
+          "",
+          "Untracked files:",
+          "  (use \"git add <file>...\" to include in what will be committed)",
+          "\tdocs/notes.md",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "contains", "value": "branch: feature/x (ahead 2)" },
+      { "path": "/0", "kind": "contains", "value": "staged(2): src/engine.ts, src/engine.test.ts" },
+      { "path": "/0", "kind": "contains", "value": "modified(1): src/index.ts" },
+      { "path": "/0", "kind": "contains", "value": "deleted(1): src/old.ts" },
+      { "path": "/0", "kind": "contains", "value": "untracked(1): docs/notes.md" }
+    ]
+  },
+  {
+    "id": "internal.filters.git-status-porcelain-output",
+    "calls": [
+      {
+        "op": "filters.git-status",
+        "lines": [
+          "## main...origin/main [ahead 3]",
+          " M src/a.ts",
+          "M  src/b.ts",
+          "?? new.txt",
+          " D gone.ts",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "contains", "value": "branch: main...origin/main [ahead 3]" },
+      { "path": "/0", "kind": "contains", "value": "staged(1): src/b.ts" },
+      { "path": "/0", "kind": "contains", "value": "modified(1): src/a.ts" },
+      { "path": "/0", "kind": "contains", "value": "deleted(1): gone.ts" },
+      { "path": "/0", "kind": "contains", "value": "untracked(1): new.txt" }
+    ]
+  },
+  {
+    "id": "internal.filters.git-status-clean-tree",
+    "calls": [
+      {
+        "op": "filters.git-status",
+        "lines": ["On branch main", "nothing to commit, working tree clean", ""]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "branch: main\nclean" }
+    ]
+  },
+  {
+    "id": "internal.filters.git-status-unknown-format",
+    "calls": [
+      { "op": "filters.git-status", "input": "total nonsense\n" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.git-log-summary",
+    "calls": [
+      {
+        "op": "filters.git-log",
+        "lines": [
+          "commit 1111111111111111111111111111111111111111",
+          "Author: Ada Lovelace <ada@example.com>",
+          "Date:   Mon Jan 1 00:00:00 2024 +0000",
+          "",
+          "    add engine",
+          "",
+          "commit 2222222222222222222222222222222222222222",
+          "Author: Alan Turing <alan@example.com>",
+          "Date:   Sun Jan 1 00:00:00 2023 +0000",
+          "",
+          "    initial commit",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "1111111 Ada Lovelace — add engine\n2222222 Alan Turing — initial commit" }
+    ]
+  },
+  {
+    "id": "internal.filters.git-log-unknown-format",
+    "calls": [
+      { "op": "filters.git-log", "input": "no commits here\n" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.git-diff-drops-noise",
+    "calls": [
+      {
+        "op": "filters.git-diff",
+        "lines": [
+          "diff --git a/src/a.ts b/src/a.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/a.ts",
+          "+++ b/src/a.ts",
+          "@@ -1,3 +1,4 @@",
+          " const x = 1;",
+          "+const y = 3;",
+          "\\ No newline at end of file",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "not-contains", "value": "index 1111111" },
+      { "path": "/0", "kind": "not-contains", "value": "No newline" },
+      { "path": "/0", "kind": "contains", "value": "+const y = 3;" }
+    ]
+  },
+  {
+    "id": "internal.filters.git-diff-stat-only",
+    "calls": [
+      {
+        "op": "filters.git-diff",
+        "lines": [
+          " src/a.ts | 4 ++--",
+          " src/b.ts | 2 +-",
+          " 2 files changed, 3 insertions(+), 3 deletions(-)",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.grep-groups-by-file",
+    "calls": [
+      {
+        "op": "filters.grep",
+        "lines": [
+          { "$range": { "template": "src/a.ts:{n}:match {i}", "count": 20 } },
+          { "$range": { "template": "src/b.ts:{n}:match {i}", "count": 10 } }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "contains", "value": "src/a.ts (20): 1:match 0, 2:match 1" },
+      { "path": "/0", "kind": "not-contains", "value": "9:match 8" },
+      { "path": "/0", "kind": "contains", "value": "+12 more" },
+      { "path": "/0", "kind": "contains", "value": "src/b.ts (10):" }
+    ]
+  },
+  {
+    "id": "internal.filters.grep-declines-single-file-output",
+    "calls": [
+      { "op": "filters.grep", "lines": [{ "$range": { "template": "{n}:match", "count": 30 } }] }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.grep-declines-non-matching-lines",
+    "calls": [
+      { "op": "filters.grep", "input": { "$repeat": ["just text\n", 40] } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.tests-keeps-failures-and-summary",
+    "calls": [
+      {
+        "op": "filters.tests",
+        "lines": [
+          { "$range": { "template": " ✓ passes case {i} (2 ms)", "count": 60 } },
+          " ✗ fails when input is empty",
+          "   AssertionError: expected 1 to be 2",
+          "     at src/a.test.ts:12:5",
+          "Tests: 1 failed, 60 passed, 61 total"
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "ne", "value": null },
+      { "path": "/0", "kind": "contains", "value": "✗ fails when input is empty" },
+      { "path": "/0", "kind": "contains", "value": "AssertionError: expected 1 to be 2" },
+      { "path": "/0", "kind": "contains", "value": "Tests: 1 failed, 60 passed, 61 total" },
+      { "path": "/0", "kind": "not-contains", "value": "passes case 0" }
+    ]
+  },
+  {
+    "id": "internal.filters.tests-collapses-all-passing-run",
+    "calls": [
+      {
+        "op": "filters.tests",
+        "lines": [
+          { "$range": { "template": " ✓ case {i}", "count": 45 } },
+          "Tests: 45 passed, 45 total"
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": "Tests: 45 passed, 45 total" }
+    ]
+  },
+  {
+    "id": "internal.filters.tests-declines-short-output",
+    "calls": [
+      {
+        "op": "filters.tests",
+        "lines": [
+          { "$range": { "template": " ✓ case {i}", "count": 10 } },
+          "Tests: 10 passed, 10 total"
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.path-list-long-listing",
+    "calls": [
+      {
+        "op": "filters.path-list",
+        "lines": [
+          { "$range": { "template": "file{i}.ts", "count": 50 } },
+          { "$range": { "template": "data{i}.json", "count": 10 } }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "contains", "value": "60 entries" },
+      { "path": "/0", "kind": "contains", "value": ".ts: 50" },
+      { "path": "/0", "kind": "contains", "value": ".json: 10" },
+      { "path": "/0", "kind": "contains", "value": "…and 30 more" }
+    ]
+  },
+  {
+    "id": "internal.filters.path-list-ls-long-rows",
+    "calls": [
+      {
+        "op": "filters.path-list",
+        "lines": [
+          {
+            "$range": {
+              "template": "-rw-r--r-- 1 user group 1234 Jan  1 12:00 file{i}.ts",
+              "count": 45
+            }
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "contains", "value": "45 entries" },
+      { "path": "/0", "kind": "not-contains", "value": "-rw-r--r--" }
+    ]
+  },
+  {
+    "id": "internal.filters.path-list-declines-short-listing",
+    "calls": [
+      { "op": "filters.path-list", "input": "a.ts\nb.ts\n" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.dispatch-selects-git-status-filter",
+    "calls": [
+      {
+        "op": "filters.compress",
+        "command": "export PAGER=cat; git status",
+        "lines": [
+          "On branch main",
+          "Changes not staged for commit:",
+          "\tmodified:   src/a.ts",
+          "\tmodified:   src/b.ts",
+          "\tmodified:   src/c.ts",
+          "\tmodified:   src/d.ts",
+          "\tmodified:   src/e.ts",
+          "\tmodified:   src/f.ts",
+          "",
+          "Untracked files:",
+          "\tnew1.ts",
+          "\tnew2.ts",
+          ""
+        ]
+      }
+    ],
+    "assertions": [
+      { "path": "/0/filterId", "kind": "eq", "value": "git-status" },
+      { "path": "/0/note", "kind": "contains", "value": "git-status" },
+      { "path": "/0/compressedChars", "kind": "lt-path", "other": "/0/originalChars", "factor": 1 }
+    ]
+  },
+  {
+    "id": "internal.filters.dispatch-declines-unknown-command",
+    "calls": [
+      { "op": "filters.compress", "command": "echo hi", "input": { "$repeat": ["hello world ", 50] } }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.dispatch-declines-below-minimum",
+    "calls": [
+      { "op": "filters.compress", "command": "git status", "input": "On branch main\n" }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  },
+  {
+    "id": "internal.filters.dispatch-honours-disabled-option",
+    "calls": [
+      {
+        "op": "filters.compress",
+        "command": "git status",
+        "lines": [
+          "On branch main",
+          "Changes not staged for commit:",
+          "\tmodified:   src/a.ts",
+          "\tmodified:   src/b.ts",
+          "\tmodified:   src/c.ts",
+          "\tmodified:   src/d.ts",
+          "\tmodified:   src/e.ts",
+          "\tmodified:   src/f.ts",
+          "",
+          "Untracked files:",
+          "\tnew1.ts",
+          "\tnew2.ts",
+          ""
+        ],
+        "options": { "enabled": false }
+      }
+    ],
+    "assertions": [
+      { "path": "/0", "kind": "eq", "value": null }
+    ]
+  }
+]

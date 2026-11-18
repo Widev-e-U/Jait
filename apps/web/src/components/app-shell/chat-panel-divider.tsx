@@ -8,8 +8,12 @@ export function ChatPanelDivider() {
   const [percent, setPercent] = useState(50)
 
   const getPair = (divider: HTMLElement) => {
-    const left = divider.previousElementSibling
-    const right = divider.nextElementSibling
+    // Workspace overlays can be inserted between panels as portals mount. They
+    // are not flex panels and must never be included in the sizing calculation.
+    let left = divider.previousElementSibling
+    let right = divider.nextElementSibling
+    while (left?.hasAttribute('data-browser-workspace-overlay')) left = left.previousElementSibling
+    while (right?.hasAttribute('data-browser-workspace-overlay')) right = right.nextElementSibling
     if (!(left instanceof HTMLElement) || !(right instanceof HTMLElement)) return null
     const leftWidth = left.getBoundingClientRect().width
     const totalWidth = leftWidth + right.getBoundingClientRect().width

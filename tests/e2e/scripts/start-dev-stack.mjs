@@ -10,6 +10,9 @@ const gatewayDir = resolve(repoRoot, 'packages/gateway')
 const webDir = resolve(repoRoot, 'apps/web')
 
 const frontendUrl = process.env.FRONTEND_URL || 'http://127.0.0.1:3100'
+// Preview surfaces run Chromium inside a container and rewrite loopback targets
+// to host.docker.internal, so the web server has to listen on more than 127.0.0.1.
+const webHost = process.env.E2E_WEB_HOST || '127.0.0.1'
 const gatewayUrl = process.env.API_URL || 'http://127.0.0.1:8100'
 const frontendPort = String(new URL(frontendUrl).port || (new URL(frontendUrl).protocol === 'https:' ? 443 : 80))
 const gatewayPort = String(new URL(gatewayUrl).port || (new URL(gatewayUrl).protocol === 'https:' ? 443 : 80))
@@ -92,7 +95,7 @@ async function shutdown(exitCode = 0) {
 
   for (const child of children.slice().reverse()) {
     try {
-      if (!child.killed) child.kill('SIGKILL')
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     } catch {
       // ignore
     }
@@ -131,12 +134,17 @@ try {
     CORS_ORIGIN: frontendUrl,
     NODE_ENV: 'test',
     JAIT_DB_PATH: resolve(e2eStateDir, 'jait.db'),
+    JAIT_STATE_DIR: e2eStateDir,
+    // A fresh test DB cannot identify worktrees owned by the normal gateway.
+    // Never start cleanup against the host's shared worktrees or temp storage.
+    JAIT_DISK_JANITOR_ENABLED: '0',
+    JAIT_WINDOWS_SANDBOX_STORAGE: resolve(e2eStateDir, 'sandbox'),
     // The live viewer belongs to the gateway origin even while React uses Vite.
     JAIT_WEB_DIR: resolve(webDir, 'public'),
   })
   await waitForUrl(gatewayHealthUrl, 'gateway health')
 
-  spawnServer('web', 'bun', ['run', 'dev', '--host', '0.0.0.0'], webDir, {
+  spawnServer('web', process.execPath, [resolve(webDir, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts', '--host', webHost], webDir, {
     JAIT_GATEWAY_URL: gatewayUrl,
     VITE_WS_URL: gatewayUrl.replace(/^http/, 'ws'),
     NODE_ENV: 'development',

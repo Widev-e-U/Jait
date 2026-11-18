@@ -127,7 +127,10 @@ describe("registered previews", () => {
 it("allows a native preview WebSocket with its scoped grant and no account cookie", async () => {
   const upstream = httpServer();
   const upstreamWs = new WebSocketServer({ server: upstream });
-  upstreamWs.on("connection", (socket) => socket.on("message", (data) => socket.send(data.toString())));
+  upstreamWs.on("connection", (socket) => {
+    socket.on("message", (data) => socket.send(data.toString()));
+    socket.send("upstream-ready");
+  });
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   cleanups.push(() => { upstreamWs.close(); return new Promise<void>((resolve) => upstream.close(() => resolve())); });
   const port = (upstream.address() as import("node:net").AddressInfo).port;
@@ -141,9 +144,12 @@ it("allows a native preview WebSocket with its scoped grant and no account cooki
   const path = viewer.searchParams.get("path");
   const socket = new WebSocket("ws://127.0.0.1:" + appPort + "/" + path, { origin: "http://tauri.localhost" });
   cleanups.push(() => socket.terminate());
-  await new Promise<void>((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); });
-  // Upstream connection starts after the client handshake; allow it to settle.
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  // A message from upstream proves both proxy legs are ready, even under load.
+  const ready = new Promise<string>((resolve, reject) => {
+    socket.once("message", (data) => resolve(data.toString()));
+    socket.once("error", reject);
+  });
+  await ready;
   const echo = new Promise<string>((resolve) => socket.once("message", (data) => resolve(data.toString())));
   socket.send("native-preview-marker");
   expect(await echo).toBe("native-preview-marker");

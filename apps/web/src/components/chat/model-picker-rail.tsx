@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
  * Vertical jump rail for the model picker: one square tile per section
@@ -43,32 +44,32 @@ export function ModelPickerRail({ sections, activeRowIndex, onJump, className }:
         const active =
           activeRowIndex !== null && activeRowIndex >= section.startIndex && (sections[sections.findIndex((s) => s.key === section.key) + 1]?.startIndex ?? Number.POSITIVE_INFINITY) > activeRowIndex
         return (
-          <button
-            key={section.key}
-            type="button"
-            tabIndex={-1}
-            title={section.label}
-            aria-label={section.label}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              scrollToSection(section)
-            }}
-            className={cn(
-              'group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-            )}
-          >
-            {section.kind === 'favorites'
-              ? <Star className="h-4 w-4" aria-hidden="true" />
-              : (
-                <span className="flex h-5 w-5 items-center justify-center text-[10px] font-semibold uppercase leading-none">
-                  {section.label.slice(0, 2)}
-                </span>
+          <TooltipHint key={section.key} content={section.label}>
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={section.label}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                scrollToSection(section)
+              }}
+              className={cn(
+                'group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
               )}
-            {active && (
-              <span className="absolute right-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden="true" />
-            )}
-          </button>
+            >
+              {section.kind === 'favorites'
+                ? <Star className="h-4 w-4" aria-hidden="true" />
+                : (
+                  <span className="flex h-5 w-5 items-center justify-center text-[10px] font-semibold uppercase leading-none">
+                    {section.label.slice(0, 2)}
+                  </span>
+                )}
+              {active && (
+                <span className="absolute right-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden="true" />
+              )}
+            </button>
+          </TooltipHint>
         )
       })}
     </div>

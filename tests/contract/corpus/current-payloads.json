@@ -1,0 +1,564 @@
+{
+  "format": 1,
+  "purpose": "Current-schema raw storage retention vectors; not service semantic or historical-release fixtures. Every declared column has an explicit non-secret value.",
+  "rows": {
+    "account_invitations": {
+      "token_hash": "account_invitations:token_hash:α🙂",
+      "created_by": "account_invitations:created_by:α🙂",
+      "expires_at": "2026-10-19T00:00:00.000Z"
+    },
+    "agent_control": {
+      "user_id": "agent_control:user_id:α🙂",
+      "halted": 0,
+      "reason": "agent_control:reason:α🙂",
+      "halted_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "agent_github_apps": {
+      "id": "agent_github_apps:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "agent_id": "agent_github_apps:agent_id:α🙂",
+      "status": "agent_github_apps:status:α🙂",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "agent_thread_activities": {
+      "id": "agent_thread_activities:id:α🙂",
+      "thread_id": "agent_threads:id:α🙂",
+      "kind": "agent_thread_activities:kind:α🙂",
+      "summary": "agent_thread_activities:summary:α🙂",
+      "payload": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z"
+    },
+    "agent_threads": {
+      "id": "agent_threads:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "session_id": "sessions:id:α🙂",
+      "title": "agent_threads:title:α🙂",
+      "provider_id": "agent_threads:provider_id:α🙂",
+      "model": "agent_threads:model:α🙂",
+      "runtime_mode": "agent_threads:runtime_mode:α🙂",
+      "kind": "agent_threads:kind:α🙂",
+      "working_directory": "agent_threads:working_directory:α🙂",
+      "branch": "agent_threads:branch:α🙂",
+      "status": "agent_threads:status:α🙂",
+      "provider_session_id": "agent_threads:provider_session_id:α🙂",
+      "error": "agent_threads:error:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "completed_at": "2026-10-19T00:00:00.000Z",
+      "pr_url": "agent_threads:pr_url:α🙂",
+      "pr_number": 0,
+      "pr_title": "agent_threads:pr_title:α🙂",
+      "pr_state": "agent_threads:pr_state:α🙂",
+      "execution_node_id": "agent_threads:execution_node_id:α🙂",
+      "execution_node_name": "agent_threads:execution_node_name:α🙂",
+      "pr_base_branch": "agent_threads:pr_base_branch:α🙂",
+      "skill_ids": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "routing_plan": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "change_files": 0,
+      "change_insertions": 0,
+      "change_deletions": 0,
+      "reasoning_effort": "agent_threads:reasoning_effort:α🙂",
+      "persona_agent_id": "agent_threads:persona_agent_id:α🙂"
+    },
+    "architecture_diagrams": {
+      "id": "architecture_diagrams:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "project_root": "architecture_diagrams:project_root:α🙂",
+      "diagram": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "assistant_profiles": {
+      "id": "assistant_profiles:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "name": "assistant_profiles:name:α🙂",
+      "description": "assistant_profiles:description:α🙂",
+      "system_prompt": "assistant_profiles:system_prompt:α🙂",
+      "runtime_mode": "assistant_profiles:runtime_mode:α🙂",
+      "tool_profile": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "enabled_skills": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "enabled_plugins": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "is_default": 0,
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "audit_log": {
+      "id": "audit_log:id:α🙂",
+      "timestamp": "2026-10-19T00:00:00.000Z",
+      "session_id": "sessions:id:α🙂",
+      "surface_type": "audit_log:surface_type:α🙂",
+      "device_id": "audit_log:device_id:α🙂",
+      "action_id": "audit_log:action_id:α🙂",
+      "action_type": "audit_log:action_type:α🙂",
+      "tool_name": "audit_log:tool_name:α🙂",
+      "inputs": "audit_log:inputs:α🙂",
+      "outputs": "audit_log:outputs:α🙂",
+      "side_effects": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "signature": "audit_log:signature:α🙂",
+      "parent_action_id": "audit_log:parent_action_id:α🙂",
+      "status": "audit_log:status:α🙂",
+      "consent_method": "audit_log:consent_method:α🙂"
+    },
+    "automation_plans": {
+      "id": "automation_plans:id:α🙂",
+      "repo_id": "automation_repositories:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "title": "automation_plans:title:α🙂",
+      "status": "automation_plans:status:α🙂",
+      "tasks": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "automation_repo_proposals": {
+      "id": "automation_repo_proposals:id:α🙂",
+      "repo_id": "automation_repositories:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "message": "automation_repo_proposals:message:α🙂",
+      "status": "automation_repo_proposals:status:α🙂",
+      "priority": "automation_repo_proposals:priority:α🙂",
+      "due_date": "automation_repo_proposals:due_date:α🙂",
+      "tags": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "source_thread_id": "agent_threads:id:α🙂",
+      "source_thread_title": "automation_repo_proposals:source_thread_title:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "completed_at": "2026-10-19T00:00:00.000Z",
+      "completion_history": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "automation_repositories": {
+      "id": "automation_repositories:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "name": "automation_repositories:name:α🙂",
+      "default_branch": "automation_repositories:default_branch:α🙂",
+      "local_path": "automation_repositories:local_path:α🙂",
+      "github_token": "automation_repositories:github_token:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "device_id": "automation_repositories:device_id:α🙂",
+      "github_url": "automation_repositories:github_url:α🙂",
+      "strategy": "automation_repositories:strategy:α🙂"
+    },
+    "browser_interventions": {
+      "id": "browser_interventions:id:α🙂",
+      "browser_session_id": "browser_sessions:id:α🙂",
+      "thread_id": "agent_threads:id:α🙂",
+      "chat_session_id": "sessions:id:α🙂",
+      "kind": "browser_interventions:kind:α🙂",
+      "reason": "browser_interventions:reason:α🙂",
+      "instructions": "browser_interventions:instructions:α🙂",
+      "status": "browser_interventions:status:α🙂",
+      "secret_safe": 0,
+      "allow_user_note": 0,
+      "requested_by": "browser_interventions:requested_by:α🙂",
+      "resolved_by": "browser_interventions:resolved_by:α🙂",
+      "user_note": "browser_interventions:user_note:α🙂",
+      "requested_at": "2026-10-19T00:00:00.000Z",
+      "resolved_at": "2026-10-19T00:00:00.000Z"
+    },
+    "browser_sessions": {
+      "id": "browser_sessions:id:α🙂",
+      "name": "browser_sessions:name:α🙂",
+      "project_root": "browser_sessions:project_root:α🙂",
+      "target_url": "browser_sessions:target_url:α🙂",
+      "preview_url": "browser_sessions:preview_url:α🙂",
+      "preview_session_id": "browser_sessions:preview_session_id:α🙂",
+      "browser_id": "browser_sessions:browser_id:α🙂",
+      "mode": "browser_sessions:mode:α🙂",
+      "origin": "browser_sessions:origin:α🙂",
+      "controller": "browser_sessions:controller:α🙂",
+      "status": "browser_sessions:status:α🙂",
+      "secret_safe": 0,
+      "storage_profile": "browser_sessions:storage_profile:α🙂",
+      "created_by": "browser_sessions:created_by:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "calendar_accounts": {
+      "id": "calendar_accounts:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "provider": "calendar_accounts:provider:α🙂",
+      "email": "calendar_accounts:email:α🙂",
+      "display_name": "calendar_accounts:display_name:α🙂",
+      "status": "calendar_accounts:status:α🙂",
+      "error": "calendar_accounts:error:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "channels": {
+      "id": "channels:id:α🙂",
+      "enabled": 0,
+      "config": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "code_graph_indexes": {
+      "id": "code_graph_indexes:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "repository_id": "automation_repositories:id:α🙂",
+      "project_root": "code_graph_indexes:project_root:α🙂",
+      "provider": "code_graph_indexes:provider:α🙂",
+      "status": "code_graph_indexes:status:α🙂",
+      "graph_path": "code_graph_indexes:graph_path:α🙂",
+      "graph_version": "code_graph_indexes:graph_version:α🙂",
+      "source_revision": "code_graph_indexes:source_revision:α🙂",
+      "graphify_version": "code_graph_indexes:graphify_version:α🙂",
+      "stats": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "graphrag_status": "code_graph_indexes:graphrag_status:α🙂",
+      "graphrag_path": "code_graph_indexes:graphrag_path:α🙂",
+      "error": "code_graph_indexes:error:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "consent_log": {
+      "id": "consent_log:id:α🙂",
+      "action_id": "consent_log:action_id:α🙂",
+      "tool_name": "consent_log:tool_name:α🙂",
+      "decision": "consent_log:decision:α🙂",
+      "decided_at": "2026-10-19T00:00:00.000Z",
+      "decided_via": "consent_log:decided_via:α🙂"
+    },
+    "consent_session_approvals": {
+      "session_id": "consent_session_approvals:session_id:α🙂",
+      "approve_all": 0,
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "device_calendar_snapshots": {
+      "account_id": "calendar_accounts:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "calendars": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "events": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "synced_at": "2026-10-19T00:00:00.000Z"
+    },
+    "email_accounts": {
+      "id": "email_accounts:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "provider": "email_accounts:provider:α🙂",
+      "email": "email_accounts:email:α🙂",
+      "display_name": "email_accounts:display_name:α🙂",
+      "status": "email_accounts:status:α🙂",
+      "error": "email_accounts:error:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "memories": {
+      "id": "memories:id:α🙂",
+      "scope": "memories:scope:α🙂",
+      "content": "memories:content:α🙂",
+      "source_type": "memories:source_type:α🙂",
+      "source_id": "memories:source_id:α🙂",
+      "source_surface": "memories:source_surface:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "expires_at": "2026-10-19T00:00:00.000Z",
+      "embedding": "memories:embedding:α🙂"
+    },
+    "message_context_metadata": {
+      "message_id": "messages:id:α🙂",
+      "has_memory_provenance": 0
+    },
+    "messages": {
+      "id": "messages:id:α🙂",
+      "session_id": "sessions:id:α🙂",
+      "role": "messages:role:α🙂",
+      "content": "messages:content:α🙂",
+      "tool_calls": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "segments": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "context_flow": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "thinking": "messages:thinking:α🙂",
+      "persona": "messages:persona:α🙂"
+    },
+    "mobile_push_registrations": {
+      "device_id": "mobile_push_registrations:device_id:α🙂",
+      "user_id": "users:id:α🙂",
+      "token": "mobile_push_registrations:token:α🙂",
+      "platform": "mobile_push_registrations:platform:α🙂",
+      "enabled": 0,
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "last_seen_at": "2026-10-19T00:00:00.000Z"
+    },
+    "network_hosts": {
+      "ip": "network_hosts:ip:α🙂",
+      "mac": "network_hosts:mac:α🙂",
+      "hostname": "network_hosts:hostname:α🙂",
+      "os_version": "network_hosts:os_version:α🙂",
+      "open_ports": "network_hosts:open_ports:α🙂",
+      "ssh_reachable": 0,
+      "agent_status": "network_hosts:agent_status:α🙂",
+      "providers": "network_hosts:providers:α🙂",
+      "first_seen_at": "2026-10-19T00:00:00.000Z",
+      "last_seen_at": "2026-10-19T00:00:00.000Z",
+      "scanned_at": "2026-10-19T00:00:00.000Z"
+    },
+    "node_credentials": {
+      "token_hash": "node_credentials:token_hash:α🙂",
+      "node_id": "nodes:node_id:α🙂",
+      "user_id": "users:id:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z"
+    },
+    "node_permissions": {
+      "node_id": "node_permissions:node_id:α🙂",
+      "capability": "node_permissions:capability:α🙂",
+      "granted": 0,
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "nodes": {
+      "node_id": "nodes:node_id:α🙂",
+      "name": "nodes:name:α🙂",
+      "platform": "nodes:platform:α🙂",
+      "role": "nodes:role:α🙂",
+      "first_seen_at": "2026-10-19T00:00:00.000Z",
+      "last_seen_at": "2026-10-19T00:00:00.000Z",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "user_id": "users:id:α🙂"
+    },
+    "persona_agents": {
+      "id": "persona_agents:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "plugins": {
+      "id": "plugins:id:α🙂",
+      "display_name": "plugins:display_name:α🙂",
+      "version": "plugins:version:α🙂",
+      "description": "plugins:description:α🙂",
+      "author": "plugins:author:α🙂",
+      "path": "plugins:path:α🙂",
+      "status": "plugins:status:α🙂",
+      "config": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "error": "plugins:error:α🙂",
+      "installed_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "project_state": {
+      "project_id": "project_state:project_id:α🙂",
+      "key": "project_state:key:α🙂",
+      "value": "project_state:value:α🙂",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "projects": {
+      "id": "projects:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "title": "projects:title:α🙂",
+      "root_path": "projects:root_path:α🙂",
+      "node_id": "nodes:node_id:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "last_active_at": "2026-10-19T00:00:00.000Z",
+      "status": "projects:status:α🙂",
+      "metadata": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "parent_id": "projects:parent_id:α🙂",
+      "instructions": "projects:instructions:α🙂",
+      "description": "projects:description:α🙂",
+      "color": "projects:color:α🙂",
+      "kind": "projects:kind:α🙂"
+    },
+    "provider_accounts": {
+      "id": "provider_accounts:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "provider_type": "provider_accounts:provider_type:α🙂",
+      "label": "provider_accounts:label:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "node_id": "nodes:node_id:α🙂"
+    },
+    "provider_usage": {
+      "account_id": "provider_accounts:id:α🙂",
+      "rate_limit_type": "provider_usage:rate_limit_type:α🙂",
+      "provider_type": "provider_usage:provider_type:α🙂",
+      "status": "provider_usage:status:α🙂",
+      "utilization": 0,
+      "resets_at": "provider_usage:resets_at:α🙂",
+      "is_using_overage": 0,
+      "raw_json": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "reminders": {
+      "id": "reminders:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "project_id": "projects:id:α🙂",
+      "session_id": "sessions:id:α🙂",
+      "content": "reminders:content:α🙂",
+      "source_type": "reminders:source_type:α🙂",
+      "source_id": "reminders:source_id:α🙂",
+      "source_surface": "reminders:source_surface:α🙂",
+      "status": "reminders:status:α🙂",
+      "tags": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "usage_count": 0,
+      "last_retrieved_at": "2026-10-19T00:00:00.000Z"
+    },
+    "scheduled_job_runs": {
+      "id": "scheduled_job_runs:id:α🙂",
+      "job_id": "scheduled_jobs:id:α🙂",
+      "status": "scheduled_job_runs:status:α🙂",
+      "triggered_by": "scheduled_job_runs:triggered_by:α🙂",
+      "output": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "error": "scheduled_job_runs:error:α🙂",
+      "plan_id": "scheduled_job_runs:plan_id:α🙂",
+      "started_at": "2026-10-19T00:00:00.000Z",
+      "completed_at": "2026-10-19T00:00:00.000Z"
+    },
+    "scheduled_jobs": {
+      "id": "scheduled_jobs:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "name": "scheduled_jobs:name:α🙂",
+      "cron": "scheduled_jobs:cron:α🙂",
+      "tool_name": "scheduled_jobs:tool_name:α🙂",
+      "input": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "session_id": "sessions:id:α🙂",
+      "project_root": "scheduled_jobs:project_root:α🙂",
+      "enabled": 0,
+      "last_run_at": "scheduled_jobs:last_run_at:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "security_artifacts": {
+      "id": "security_artifacts:id:α🙂",
+      "run_id": "security_artifacts:run_id:α🙂",
+      "operator_id": "users:id:α🙂",
+      "sha256": "security_artifacts:sha256:α🙂",
+      "content_type": "security_artifacts:content_type:α🙂",
+      "raw": "security_artifacts:raw:α🙂"
+    },
+    "security_assessment_runs": {
+      "id": "security_assessment_runs:id:α🙂",
+      "operator_id": "users:id:α🙂",
+      "started_at": "2026-10-19T00:00:00.000Z",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "security_check_runs": {
+      "id": "security_check_runs:id:α🙂",
+      "operator_id": "users:id:α🙂",
+      "scope_id": "security_scopes:id:α🙂",
+      "started_at": "2026-10-19T00:00:00.000Z",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "security_findings": {
+      "id": "security_findings:id:α🙂",
+      "operator_id": "users:id:α🙂",
+      "scope_id": "security_scopes:id:α🙂",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "security_scopes": {
+      "id": "security_scopes:id:α🙂",
+      "operator_id": "users:id:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "session_events": {
+      "session_id": "session_events:session_id:α🙂",
+      "log_id": 0,
+      "type": "session_events:type:α🙂",
+      "payload": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": 0
+    },
+    "session_state": {
+      "session_id": "session_state:session_id:α🙂",
+      "key": "session_state:key:α🙂",
+      "value": "session_state:value:α🙂",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    },
+    "sessions": {
+      "id": "sessions:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "name": "sessions:name:α🙂",
+      "project_path": "sessions:project_path:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "last_active_at": "2026-10-19T00:00:00.000Z",
+      "status": "sessions:status:α🙂",
+      "metadata": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "project_id": "projects:id:α🙂",
+      "viewed_at": "sessions:viewed_at:α🙂"
+    },
+    "sub_agent_history": {
+      "sub_agent_id": "sub_agent_history:sub_agent_id:α🙂",
+      "session_id": "sessions:id:α🙂",
+      "message_id": "messages:id:α🙂",
+      "content": "sub_agent_history:content:α🙂",
+      "performative": "sub_agent_history:performative:α🙂",
+      "rounds": 0,
+      "duration_ms": 0,
+      "segments": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "tool_calls": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "created_at": "2026-10-19T00:00:00.000Z"
+    },
+    "team_room_deliveries": {
+      "id": "team_room_deliveries:id:α🙂",
+      "room_id": "team_rooms:id:α🙂",
+      "message_id": "team_room_deliveries:message_id:α🙂",
+      "agent_id": "team_room_deliveries:agent_id:α🙂",
+      "session_id": "sessions:id:α🙂",
+      "status": "team_room_deliveries:status:α🙂",
+      "error": "team_room_deliveries:error:α🙂"
+    },
+    "team_room_messages": {
+      "id": "team_room_messages:id:α🙂",
+      "room_id": "team_rooms:id:α🙂",
+      "client_key": "team_room_messages:client_key:α🙂",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "team_rooms": {
+      "id": "team_rooms:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "root_agent_id": "team_rooms:root_agent_id:α🙂",
+      "data": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}"
+    },
+    "thread_recovery": {
+      "thread_id": "thread_recovery:thread_id:α🙂",
+      "attempts": 0,
+      "pending": 0,
+      "stale_provider_session_id": "thread_recovery:stale_provider_session_id:α🙂"
+    },
+    "trust_levels": {
+      "action_type": "trust_levels:action_type:α🙂",
+      "approved_count": 0,
+      "reverted_count": 0,
+      "current_level": 0
+    },
+    "user_secrets": {
+      "id": "user_secrets:id:α🙂",
+      "user_id": "users:id:α🙂",
+      "type": "user_secrets:type:α🙂",
+      "key": "user_secrets:key:α🙂",
+      "label": "user_secrets:label:α🙂",
+      "encrypted_value": "user_secrets:encrypted_value:α🙂",
+      "iv": "user_secrets:iv:α🙂",
+      "auth_tag": "user_secrets:auth_tag:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "last_used_at": "2026-10-19T00:00:00.000Z"
+    },
+    "user_settings": {
+      "user_id": "user_settings:user_id:α🙂",
+      "theme": "user_settings:theme:α🙂",
+      "api_keys": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "stt_provider": "user_settings:stt_provider:α🙂",
+      "updated_at": "2026-10-19T00:00:00.000Z",
+      "disabled_tools": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "chat_provider": "user_settings:chat_provider:α🙂",
+      "project_picker_path": "user_settings:project_picker_path:α🙂",
+      "project_picker_node_id": "user_settings:project_picker_node_id:α🙂",
+      "jait_backend": "user_settings:jait_backend:α🙂",
+      "recent_models": "{\"fixture\":\"α🙂\",\"zero\":0,\"empty\":\"\"}",
+      "reasoning_effort": "user_settings:reasoning_effort:α🙂",
+      "last_selected_project_id": "user_settings:last_selected_project_id:α🙂",
+      "last_selected_session_id": "user_settings:last_selected_session_id:α🙂",
+      "last_selected_at": "user_settings:last_selected_at:α🙂",
+      "chat_streaming_action": "user_settings:chat_streaming_action:α🙂",
+      "selected_model": "user_settings:selected_model:α🙂"
+    },
+    "users": {
+      "id": "users:id:α🙂",
+      "username": "users:username:α🙂",
+      "password_hash": "users:password_hash:α🙂",
+      "created_at": "2026-10-19T00:00:00.000Z",
+      "updated_at": "2026-10-19T00:00:00.000Z"
+    }
+  }
+}

@@ -52,13 +52,16 @@ export async function getTestToken(page: Page, identity: TestAuthIdentity): Prom
 }
 
 export async function authenticatePage(page: Page, token: string): Promise<void> {
-  await page.addInitScript((storedToken) => {
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(({ storedToken, apiUrl }) => {
     localStorage.setItem('jait-auth-token', storedToken)
-  }, token)
+    sessionStorage.setItem('jait-auth-token', storedToken)
+    localStorage.setItem('jait-gateway-url', apiUrl)
+  }, { storedToken: token, apiUrl: API_URL })
   await page.addLocatorHandler(page.getByText('A node needs your permission', { exact: true }), async () => { await page.getByRole('button', { name: 'Dismiss', exact: true }).click() })
   await page.addLocatorHandler(page.getByRole('heading', { name: 'Set up your first project', exact: true }), async () => { await page.getByRole('button', { name: 'Skip for now', exact: true }).click() })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Sign in' })).not.toBeVisible({ timeout: 15000 })
+  await expect(page.getByRole('tablist', { name: 'View mode' })).toBeVisible({ timeout: 20_000 })
 }
 
 export async function cleanupTestJobs(token: string): Promise<void> {

@@ -33,6 +33,12 @@ describe('resolveChatImageUrl', () => {
     )
   })
 
+  it('includes the owning chat when resolving a project image', () => {
+    expect(resolveChatImageUrl('.jait/shots/provider-selector-390.png', apiUrl, 'chat-1')).toBe(
+      'http://localhost:8000/api/browser/screenshot?path=.jait%2Fshots%2Fprovider-selector-390.png&sessionId=chat-1',
+    )
+  })
+
   it('rejects non-image custom schemes', () => {
     expect(resolveChatImageUrl('file:///tmp/shot.png', apiUrl)).toBeNull()
   })

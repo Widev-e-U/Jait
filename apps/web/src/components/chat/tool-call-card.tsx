@@ -1,3 +1,6 @@
+import { coalesceQuestionCalls } from './user-question-calls'
+import { UserQuestionResult } from './user-question-result'
+import { EmailToolView } from '@/components/email/email-tool-view'
 import { MermaidToolResult } from './mermaid-tool-result'
 import { ImageViewerContent } from './image-viewer'
 import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type UIEvent } from 'react'
@@ -15,7 +18,7 @@ import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { humanizeToolName, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
 import type { ThreadActivity } from '@/lib/agents-api'
@@ -127,6 +130,10 @@ export interface ToolCallInfo {
   childSegments?: MessageSegment[]
   /** Accumulated raw JSON argument string while LLM is still streaming the tool call */
   streamingArgs?: string
+  /** Provider slot used to resume provisional tool call fragments. */
+  streamIndex?: number
+  /** Whether the provider has yet to assign the definitive call ID. */
+  provisional?: boolean
   startedAt: number
   completedAt?: number
 }
@@ -218,7 +225,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 function getToolMeta(tool: string) {
   const normalized = normalizeTool(tool)
   if (isSecurityToolName(normalized)) return { icon: Shield, label: SECURITY_TOOL_LABELS[normalized], color: 'text-sky-500' }
-  return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
+  return toolMeta[normalized] ?? { icon: Terminal, label: humanizeToolName(normalized), color: 'text-muted-foreground' }
 }
 
 /**
@@ -348,7 +355,7 @@ export function getToolInvocationLabels(
     return { running: 'Updating tasks', done: 'Updated tasks' }
   }
   if (normalized === 'user.ask') {
-    return { running: 'Asking a question', done: 'Asked a question' }
+    return { running: 'Waiting for your answer', done: 'Question answered' }
   }
   if (normalized === 'skill') {
     const names = displayStr(args.skills)
@@ -403,8 +410,8 @@ export function getToolInvocationLabels(
   if (normalized === 'image.view') {
     return { running: 'Viewing image', done: 'Viewed image' }
   }
-  if (normalized === 'preview.open') {
-    return { running: 'Opening preview', done: 'Opened preview' }
+  if (normalized === 'browser.open' || normalized === 'preview.open') {
+    return { running: 'Opening browser', done: 'Opened browser' }
   }
   if (normalized === 'jait') {
     const action = displayStr(args.action)
@@ -425,8 +432,8 @@ export function formatMcpHeaderText(
   invocationLabel: string,
   mcpLabel: { title: string | null; details: string | null },
 ): string {
-  if (mcpLabel.title && mcpLabel.details) return `${mcpLabel.title} • ${mcpLabel.details}`
-  if (mcpLabel.title) return mcpLabel.title
+  if (mcpLabel.title && mcpLabel.details) return `${humanizeToolName(mcpLabel.title)} • ${mcpLabel.details}`
+  if (mcpLabel.title) return humanizeToolName(mcpLabel.title)
   if (mcpLabel.details) return `${invocationLabel}: ${mcpLabel.details}`
   return invocationLabel
 }
@@ -499,7 +506,9 @@ export function shouldRenderToolCall(call: ToolCallInfo): boolean {
     ? call.result.data as Record<string, unknown>
     : undefined
   const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel(call.args, resultData) : null
-  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title) ?? normalizedTool
+  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title, call.args) ?? normalizedTool
+
+  if (displayTool === 'terminal.execution' && getJaitMcpToolArgs(call.args).action === 'inspect') return false
 
   if (displayTool === 'skill') {
     const skills = call.args.skills ?? resultData?.names ?? resultData?.skills
@@ -1038,7 +1047,7 @@ export function summarizeCollapsedToolCalls(calls: ToolCallInfo[]): string {
   if (calls.length === 0) return '0 tool calls'
 
   const counts = new Map<string, number>()
-  for (const call of calls) {
+  for (const call of calls.map(canonicalizeExecuteCall)) {
     const category = getCollapsedToolCategory(call.tool)
     counts.set(category, (counts.get(category) ?? 0) + 1)
   }
@@ -1052,7 +1061,7 @@ export function getToolCallWrapperIconKind(calls: ToolCallInfo[]): 'terminal' | 
   let hasMcp = false
   let hasWeb = false
 
-  for (const call of calls) {
+  for (const call of calls.map(canonicalizeExecuteCall)) {
     const normalized = normalizeTool(call.tool)
     const displayTool = getJaitMcpToolName(normalized) ?? normalized
     if (displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) return 'terminal'
@@ -1231,7 +1240,7 @@ export function getCallSummary(
   if (normalized === 'browser.screenshot') return displayStr(args.path, 'auto path')
   if (normalized === 'browser.search') return displayStr(normalizedArgs.query) || extractSiteFromText(resultMessage) || 'search'
   if (normalized === 'browser.fetch') return getUrlHost(normalizedArgs.url) ?? extractSiteFromText(resultMessage) ?? displayStr(normalizedArgs.url)
-  if (normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
+  if (normalized === 'browser.open' || normalized === 'preview.open') return displayStr(normalizedArgs.url ?? args.url ?? normalizedArgs.target ?? args.target)
   if (normalized === 'surfaces.start') return `Start ${displayStr(args.type, 'surface')}`
   if (normalized === 'surfaces.stop') return `Stop ${displayStr(args.surfaceId, 'surface')}`
   if (normalized === 'surfaces.list') return 'List surfaces'
@@ -1319,10 +1328,11 @@ function formatFetchedResults(data: Record<string, unknown>): string | null {
     const content = typeof entry.content === 'string' ? entry.content.trim() : ''
     lines.push(`${i + 1}. ${url || `Result ${i + 1}`}`)
     if (message) lines.push(`   ${message}`)
-    if (content) lines.push(`   ${truncate(content, 240)}`)
+    if (content) lines.push(`   ${content}`)
     if (i < results.length - 1) lines.push('')
   }
 
+  if (rawResults.length > results.length) lines.push(`… ${rawResults.length - results.length} more results`)
   return lines.join('\n').trim() || null
 }
 
@@ -1760,6 +1770,10 @@ function formatTerminalResult(result: ToolCallInfo['result']): string | null {
   return output || null
 }
 
+function isGenericCompletion(value: string): boolean {
+  return /^(?:tool |command |operation )?(?:completed|done|success(?:ful(?:ly)?)?)[.!]?$/i.test(value.trim())
+}
+
 /** Format the output data from a tool result */
 export function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
@@ -1837,8 +1851,8 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
     if (extracted) return extracted
   }
 
-  if (result.message && result.message !== 'Command executed successfully') return result.message
-  if (data) return safeStringify(data)
+  if (result.message && !isGenericCompletion(result.message) && result.message !== 'Command executed successfully') return result.message
+  if (rawDataOutput && (!data || Object.keys(data).some(key => !['status', 'ok', 'success'].includes(key)))) return rawDataOutput
   return result.message
 }
 
@@ -2080,7 +2094,7 @@ export function ToolSearchResultsView({ items }: { items: ToolSearchListItem[] }
             <div className="flex min-w-0 items-center gap-2">
               <TooltipHint content={item.name}>
               <code className="min-w-0 truncate text-[11px] font-semibold text-purple-600 dark:text-purple-400">
-                {item.name}
+                {humanizeToolName(item.name)}
               </code>
               </TooltipHint>
               <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2251,7 +2265,7 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
       {allowedTools && (
         <div className="flex flex-wrap gap-1">
           {allowedTools.split(',').map((tool) => tool.trim()).filter(Boolean).map((tool) => (
-            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{humanizeToolName(tool)}</code>
           ))}
         </div>
       )}
@@ -2625,12 +2639,13 @@ function BrowserSnapshotView({ snapshot }: { snapshot: string | null | undefined
 }
 
 function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
+  const { sessionId } = useContext(SubAgentAuthContext)
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const trimmedPath = typeof path === 'string' ? path.trim() : ''
   const source = trimmedPath
-    ? resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
+    ? resolveChatImageUrl(trimmedPath, getApiUrl(), sessionId) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ''}`
     : null
   const { src, failed: fetchFailed } = useGatewayImage(source)
 
@@ -2682,6 +2697,7 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
  * `useGatewayImage` instead of a bare `<img src>`.
  */
 function ImageView({ src, path, alt, caption }: { src?: string | null; path?: string | null; alt: string; caption?: string }) {
+  const { sessionId } = useContext(SubAgentAuthContext)
   const [loaded, setLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // An inline data URI can still arrive truncated when a very large chat forced
@@ -2691,7 +2707,7 @@ function ImageView({ src, path, alt, caption }: { src?: string | null; path?: st
   const trimmedSrc = typeof src === 'string' ? src.trim() : ''
   const trimmedPath = typeof path === 'string' ? path.trim() : ''
   const pathSource = trimmedPath
-    ? resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
+    ? resolveChatImageUrl(trimmedPath, getApiUrl(), sessionId) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ''}`
     : null
   const useInline = Boolean(trimmedSrc) && brokenSrc !== trimmedSrc
   const source = useInline ? trimmedSrc : pathSource
@@ -3230,7 +3246,7 @@ function PendingToolLabel({
   if (!tool) return <span className="text-muted-foreground">Preparing...</span>
   return (
     <span className="text-blue-400">
-      <code className="text-xs font-mono">{tool}</code>
+      <code className="text-xs font-mono">{humanizeToolName(tool)}</code>
       <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
     </span>
   )
@@ -3443,7 +3459,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink' || bodyKind === 'mermaidDiagram'
+  return bodyKind === 'questionAnswers' || bodyKind === 'emailView' || bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink' || bodyKind === 'mermaidDiagram'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -3474,6 +3490,13 @@ function formatLineRangeLabel(lineRange: { start: number; end: number } | null |
     : `:${lineRange.start}-${lineRange.end}`
 }
 
+/**
+ * Opens a file in the project viewer. Provided per chat message so file names
+ * deep inside (memoized) tool-call cards are clickable without threading a
+ * prop through every card layer.
+ */
+export const ChatOpenPathContext = createContext<((path: string, line?: number, column?: number) => Promise<void> | void) | null>(null)
+
 function FileSummaryButton({
   path,
   context,
@@ -3488,7 +3511,14 @@ function FileSummaryButton({
   disabled?: boolean
 }) {
   const fileName = getBaseName(path)
-  const interactive = !!onOpenDiff && !disabled
+  const openPath = useContext(ChatOpenPathContext)
+  // Edits open their diff; everything else (reads, writes without a diff) opens the file.
+  const openTarget = onOpenDiff ?? (openPath ? (target: string) => { void openPath(target, lineRange?.start) } : undefined)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  // Image files preview in a dialog; the project panel stays reachable via "Open in editor".
+  const isImage = !onOpenDiff && /\.(?:png|jpe?g|gif|webp)$/i.test(path)
+  const activate = isImage ? () => setPreviewOpen(true) : openTarget
+  const interactive = !!activate && !disabled
   const lineRangeLabel = formatLineRangeLabel(lineRange)
   const content = (
     <>
@@ -3512,27 +3542,48 @@ function FileSummaryButton({
   }
 
   return (
-    <TooltipHint content={`Open diff for ${path}`}>
+    <>
+    <TooltipHint content={onOpenDiff ? `Open diff for ${path}` : `Open ${path}`}>
     <span
       role="button"
       tabIndex={0}
+      data-chat-path={path}
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        onOpenDiff(path)
+        activate!(path)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           event.stopPropagation()
-          onOpenDiff(path)
+          activate!(path)
         }
       }}
     >
       {content}
     </span>
     </TooltipHint>
+    {previewOpen && <ImagePathPreview path={path} onClose={() => setPreviewOpen(false)} onOpenInEditor={openPath ? () => { setPreviewOpen(false); void openPath(path) } : undefined} />}
+    </>
+  )
+}
+
+function ImagePathPreview({ path, onClose, onOpenInEditor }: { path: string; onClose: () => void; onOpenInEditor?: () => void }) {
+  const { sessionId } = useContext(SubAgentAuthContext)
+  const source = resolveChatImageUrl(path, getApiUrl(), sessionId)
+  const { src, failed } = useGatewayImage(source)
+  const unservable = !source || failed
+  useEffect(() => {
+    // Not servable (e.g. outside the project): fall back to the editor tab.
+    if (unservable) { if (onOpenInEditor) onOpenInEditor(); else onClose() }
+  }, [unservable]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!src) return null
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <ImageViewerContent src={src} alt={getBaseName(path)} />
+    </Dialog>
   )
 }
 
@@ -3732,7 +3783,7 @@ function ThreadActivityRow({ activity }: { activity: ThreadActivity }) {
       <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', isToolStart && 'animate-spin', isToolResult ? 'text-green-500' : isError ? 'text-red-500' : 'text-muted-foreground')} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-          {tool && <code className="rounded bg-muted px-1 py-0.5 font-mono">{tool}</code>}
+          {tool && <code className="rounded bg-muted px-1 py-0.5 font-mono">{humanizeToolName(tool)}</code>}
           {role && <span>{role}</span>}
           <span className="ml-auto shrink-0">{new Date(activity.createdAt).toLocaleTimeString()}</span>
         </div>
@@ -3883,6 +3934,20 @@ function TodoToolListView({
   )
 }
 
+/**
+ * Claude Code (ACP) reports a shell call with the command line as its tool
+ * name and `kind: "execute"` in the args, where Codex sends `tool: "execute"`.
+ * Fold the former into the latter so both get the same terminal card body.
+ */
+function canonicalizeExecuteCall(call: ToolCallInfo): ToolCallInfo {
+  if (call.tool === 'execute') return call
+  const args = call.args
+  if (!args || typeof args !== 'object' || args.kind !== 'execute') return call
+  const command = typeof args.command === 'string' ? args.command : typeof args.title === 'string' ? args.title : null
+  if (command === null || call.tool !== command) return call
+  return { ...call, tool: 'execute' }
+}
+
 function ToolCallCardInner({
   call,
   childCalls,
@@ -3895,6 +3960,7 @@ function ToolCallCardInner({
   hideTopConnector = false,
   hideBottomConnector = false,
 }: ToolCallCardProps) {
+  call = canonicalizeExecuteCall(coalesceQuestionCalls([call])[0])
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   // Cards created mid-stream (pending/running) mount open underneath the
@@ -3906,6 +3972,8 @@ function ToolCallCardInner({
   const [streamingMounted] = useState(call.status === 'pending' || call.status === 'running')
   const [now, setNow] = useState(() => Date.now())
   const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
+  const [approvalError, setApprovalError] = useState<string | null>(null)
+  const approvalSubmittingRef = useRef(false)
   const prevStatusRef = useRef(call.status)
   // Keeps the card itself put while its body opens or closes: the top edge is
   // pinned in the upper half of the viewport (content below moves down), the
@@ -3934,7 +4002,9 @@ function ToolCallCardInner({
   const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const editDiffCounts = getEditDiffCounts(displayTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, displayTool)
-  const displayOutput = finalOutput || call.streamingOutput || ''
+  const displayOutput = (isGenericCompletion(finalOutput) && call.streamingOutput?.trim())
+    ? call.streamingOutput
+    : finalOutput || call.streamingOutput || ''
   const toolSearchItems = displayTool === 'tools.search'
     ? getToolSearchResultItems(call.result?.data, call.result?.message)
     : []
@@ -3966,14 +4036,19 @@ function ToolCallCardInner({
   const isPending = call.status === 'pending'
   const isApprovalPending = !!call.approvalRequestId && call.status === 'pending'
   const handleApprovalResponse = useCallback(async (approved: boolean) => {
-    if (!call.approvalRequestId || !onApprovalResponse || approvalSubmitting) return
+    if (!call.approvalRequestId || !onApprovalResponse || approvalSubmittingRef.current) return
+    approvalSubmittingRef.current = true
+    setApprovalError(null)
     setApprovalSubmitting(approved ? 'approve' : 'reject')
     try {
       await onApprovalResponse(call.approvalRequestId, approved)
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : 'Could not submit approval response')
     } finally {
+      approvalSubmittingRef.current = false
       setApprovalSubmitting(null)
     }
-  }, [approvalSubmitting, call.approvalRequestId, onApprovalResponse])
+  }, [call.approvalRequestId, onApprovalResponse])
   const filePaths = getToolFilePaths(displayTool, normalizedArgs, call.result?.data, call.result?.message)
     .map((path) => path.trim())
     .filter(Boolean)
@@ -4004,7 +4079,7 @@ function ToolCallCardInner({
     ? getTodoToolListItems(normalizedArgs, resultData)
     : []
   const effectiveOpen = hasInlineSecretPrompt ? true : open
-  const { sessionId, authToken } = useContext(SubAgentAuthContext)
+  const { authToken } = useContext(SubAgentAuthContext)
   const terminalSurfaceState = useToolTerminalSurface({
     enabled: isPersistentTerminal && (effectiveOpen || isBackgroundCall || call.status === 'running' || call.status === 'pending'),
     terminalId: structuredTerminalId,
@@ -4272,7 +4347,7 @@ function ToolCallCardInner({
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             {mcpLabel.title ? (
               <span className="min-w-0 truncate">
-                <code className="text-[11px] font-mono">{mcpLabel.title}</code>
+                <code className="text-[11px] font-mono">{humanizeToolName(mcpLabel.title)}</code>
                 {mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
                 {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
               </span>
@@ -4323,15 +4398,17 @@ function ToolCallCardInner({
       </div>
     </div>
   ) : bodyKind === 'browserActivity' ? (
-    <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput} sessionId={sessionId} authToken={authToken}>
+    <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput}>
       {screenshotPath ? <BrowserScreenshotView key={screenshotPath} path={screenshotPath} /> : null}
     </BrowserActivityView>
   ) : bodyKind === 'browserSnapshot' && snapshotText ? (
     <BrowserSnapshotView snapshot={snapshotText} />
   ) : bodyKind === 'browserScreenshot' && screenshotPath ? (
     <BrowserScreenshotView path={screenshotPath} />
+  ) : bodyKind === 'emailView' ? (
+    <EmailToolView data={resultData} args={normalizedArgs} />
   ) : bodyKind === 'imageView' ? (
-    <ImageView src={imageDataUri} path={screenshotPath} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
+    <ImageView src={imageDataUri} path={screenshotPath} alt="Image" caption={screenshotPath ? `Image: ${screenshotPath}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
       <AgentSpecialistBlock
@@ -4359,6 +4436,8 @@ function ToolCallCardInner({
     )
   ) : bodyKind === 'threadList' ? (
     <ThreadListView items={threadListItems} resultMessage={call.result?.message} />
+  ) : bodyKind === 'questionAnswers' ? (
+    <UserQuestionResult args={normalizedArgs} data={call.result?.data} status={call.status} message={call.result?.message} />
   ) : bodyKind === 'todoList' ? (
     <TodoToolListView
       items={todoListItems}
@@ -4370,8 +4449,7 @@ function ToolCallCardInner({
       oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.search != null) ? String(normalizedArgs.search ?? '') : undefined}
       newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.replace != null) ? String(normalizedArgs.replace ?? '') : undefined}
       writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
-      isNewFile={normalizedTool === 'file.write'}
-    />
+      isNewFile={normalizedTool === 'file.write'}    />
   ) : bodyKind === 'mermaidDiagram' && call.result?.ok ? (
     <MermaidToolResult data={call.result.data ?? call.result.message} />
   ) : bodyKind === 'jaitLink' && call.result?.ok ? (
@@ -4516,70 +4594,74 @@ function ToolCallCardInner({
           className={cn('tool-call-collapsible', streamingMounted && 'tool-call-collapsible-streaming')}
         >
           <div className={cn(
-            'ml-8 mr-3 mb-2 rounded-md',
-            bodyKind === 'terminal' ? 'bg-transparent p-0' : cn('px-3 py-2', stateClasses.body),
+            'ml-8 mr-3 mb-2',
+            ['terminal', 'pending', 'editDiff', 'runningHint'].includes(bodyKind)
+              ? 'bg-transparent p-0'
+              : cn('rounded-md px-3 py-2', stateClasses.body),
           )}>
             {bodyContent}
           </div>
         </CollapsibleContent>
       )}
       {inlineBody && (
-        <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
+        <div className={cn(
+          'ml-8 mr-3 mb-2 rounded-md',
+          bodyKind === 'emailView'
+            ? 'bg-transparent p-0'
+            : cn('px-3 py-2', stateClasses.body),
+        )}>
           {bodyContent}
         </div>
       )}
       {isApprovalPending && (
-        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-2.5 py-2 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">
-          <div className="rounded-md bg-background/35 px-3 py-2.5 sm:px-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                  <span className="text-[13px] font-medium text-foreground">Waiting for approval</span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Approval required to continue.
-                  {summary ? <span className="text-muted-foreground/70"> — {summary}</span> : null}
-                </p>
-              </div>
+        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-3 py-2.5 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  disabled={!onApprovalResponse || approvalSubmitting !== null}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    void handleApprovalResponse(false)
-                  }}
-                >
-                  {approvalSubmitting === 'reject' ? 'Rejecting...' : 'Reject'}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  disabled={!onApprovalResponse || approvalSubmitting !== null}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    void handleApprovalResponse(true)
-                  }}
-                >
-                  {approvalSubmitting === 'approve' ? 'Approving...' : 'Approve'}
-                </Button>
+                <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span className="text-[13px] font-medium text-foreground">Waiting for approval</span>
               </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Approval required to continue.
+                {summary ? <span className="text-muted-foreground/70"> — {summary}</span> : null}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={!onApprovalResponse || approvalSubmitting !== null}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void handleApprovalResponse(false)
+                }}
+              >
+                {approvalSubmitting === 'reject' ? 'Rejecting...' : 'Reject'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={!onApprovalResponse || approvalSubmitting !== null}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void handleApprovalResponse(true)
+                }}
+              >
+                {approvalSubmitting === 'approve' ? 'Approving...' : 'Approve'}
+              </Button>
             </div>
           </div>
+          {approvalError && <p role="alert" className="mt-2 text-xs text-destructive">{approvalError}</p>}
         </div>
       )}
       {hasInlineSecretPrompt && (
-        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-yellow-500/[0.035] px-2.5 py-2 ring-1 ring-yellow-500/15 sm:ml-8 sm:mr-3 sm:px-3">
-          <div className="rounded-md bg-background/35 px-2.5 py-2 sm:px-3">
-            {resolvedInlineSecretPrompt}
-          </div>
+        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-yellow-500/[0.035] px-3 py-2.5 ring-1 ring-yellow-500/15 sm:ml-8 sm:mr-3 sm:px-3">
+          {resolvedInlineSecretPrompt}
         </div>
       )}
     </Collapsible>
@@ -4781,6 +4863,7 @@ function TopLevelToolCall({
 }
 
 function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: ToolCallGroupProps) {
+  calls = coalesceQuestionCalls(calls)
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
@@ -4959,6 +5042,7 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
 }
 
 function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: AgentToolCallWrapperProps) {
+  calls = coalesceQuestionCalls(calls)
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())

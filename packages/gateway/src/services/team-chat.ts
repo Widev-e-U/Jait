@@ -1,12 +1,13 @@
 import { evaluateDecision, systemOneEnabled } from "./system-one.js";
 import { personaAgentProfileSchema } from "@jait/shared";
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, eq, desc, inArray, or, sql } from "drizzle-orm";
 import type { PersonaAgentProfile, TeamRoom, TeamRoomMessage, TeamSender, TeamMessageKind, TeamDelivery, TeamWorkContext } from "@jait/shared";
 import type { JaitDB } from "../db/connection.js";
 import { teamRooms, teamMessages, teamDeliveries } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { SessionService } from "./sessions.js";
 import type { ThreadService } from "./threads.js";
+import { isAgentHaltedError } from "./agent-control.js";
 
 export function teamRoot(agentId: string, agents: PersonaAgentProfile[]): string {
   const byId = new Map(agents.map(agent => [agent.id, agent]));
@@ -52,10 +53,26 @@ export function rankTeamRecipients(content: string, members: PersonaAgentProfile
   }).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
+/** Maximum simultaneous deliveries for one saved agent. Invalid values fall back to four. */
+function deliveryLimit(): number {
+  const raw = process.env.JAIT_TEAM_DELIVERY_CONCURRENCY;
+  if (!raw || !/^[1-9]\d*$/.test(raw)) return 4;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value <= 100 ? value : 4;
+}
+
 export class TeamChatService {
   private dispatch?: (delivery: TeamDelivery, agent: PersonaAgentProfile, prompt: string) => Promise<{ content: string; delivered?: boolean }>;
   private decisionKeys?: (userId: string) => Record<string, string> | undefined;
   setDecisionKeys(reader: NonNullable<TeamChatService["decisionKeys"]>) { this.decisionKeys = reader; }
+  private halted?: (userId: string) => boolean;
+  /**
+   * Owner-wide halt predicate. Held deliveries stay `queued` instead of being
+   * marked failed, so lifting the halt (which calls `pump()` again) delivers
+   * them rather than turning an emergency stop into lost work.
+   */
+  setHaltGuard(reader: NonNullable<TeamChatService["halted"]>) { this.halted = reader; }
+  private isHalted(userId: string) { return this.halted?.(userId) === true; }
   private running = new Set<string>();
   private closed = false;
   constructor(private db: JaitDB, private sessions: SessionService, private profiles: ThreadService, private workspaceForAgent?: (userId: string, agent: PersonaAgentProfile) => string | undefined) {}
@@ -125,11 +142,36 @@ export class TeamChatService {
   }
   history(userId: string, roomId: string): TeamRoomMessage[] {
     this.get(userId, roomId);
-    return this.db.select().from(teamMessages).where(eq(teamMessages.roomId, roomId)).orderBy(asc(teamMessages.id)).all().map(row => JSON.parse(row.data));
+    return this.db.select().from(teamMessages).where(eq(teamMessages.roomId, roomId)).orderBy(sql`${teamMessages}.rowid`).all().map(row => JSON.parse(row.data));
+  }
+  /** Newest `limit` messages (optionally strictly older than `beforeId`), returned oldest first. */
+  historyPage(userId: string, roomId: string, limit: number, beforeId?: string): { messages: TeamRoomMessage[]; hasMore: boolean } {
+    this.get(userId, roomId);
+    const cursor = beforeId ? sql` and ${teamMessages}.rowid < (select rowid from ${teamMessages} where ${teamMessages.id} = ${beforeId} and ${teamMessages.roomId} = ${roomId})` : sql``;
+    const rows = this.db.select().from(teamMessages).where(sql`${teamMessages.roomId} = ${roomId}${cursor}`)
+      .orderBy(sql`${teamMessages}.rowid desc`).limit(limit + 1).all();
+    return { messages: rows.slice(0, limit).reverse().map(row => JSON.parse(row.data)), hasMore: rows.length > limit };
+  }
+  deliveriesFor(userId: string, roomId: string, messageIds: ReadonlySet<string>): TeamDelivery[] {
+    this.get(userId, roomId);
+    const pageIds = [...messageIds];
+    const selection = pageIds.length ? or(inArray(teamDeliveries.messageId, pageIds), eq(teamDeliveries.status, "running")) : eq(teamDeliveries.status, "running");
+    return this.db.select().from(teamDeliveries).where(and(eq(teamDeliveries.roomId, roomId), selection)).orderBy(sql`${teamDeliveries}.rowid`).all().map(row => {
+      const thread = this.threadById(userId, row.sessionId);
+      return { ...row, ...(thread ? { threadId: thread.id, threadStatus: thread.status } : {}) } as TeamDelivery;
+    });
+  }
+  // UUIDv7 suffixes are random within a millisecond. SQLite insertion order
+  // is the durable event order, including for messages written before upgrade.
+  private historyAfter(userId: string, roomId: string, messageId: string): TeamRoomMessage[] {
+    const history = this.history(userId, roomId);
+    if (!messageId) return history;
+    const index = history.findIndex(message => message.id === messageId);
+    return index < 0 ? [] : history.slice(index + 1);
   }
   deliveries(userId: string, roomId: string): TeamDelivery[] {
     this.get(userId, roomId);
-    return this.db.select().from(teamDeliveries).where(eq(teamDeliveries.roomId, roomId)).all().map(row => {
+    return this.db.select().from(teamDeliveries).where(eq(teamDeliveries.roomId, roomId)).orderBy(sql`${teamDeliveries}.rowid`).all().map(row => {
       const thread = this.threadById(userId, row.sessionId);
       return { ...row, ...(thread ? { threadId: thread.id, threadStatus: thread.status } : {}) } as TeamDelivery;
     });
@@ -137,7 +179,7 @@ export class TeamChatService {
   workForSession(userId: string, sessionId: string): TeamWorkContext | null {
     const thread = this.profiles.getById(sessionId);
     if (thread?.userId === userId) {
-      const delivery = this.db.select().from(teamDeliveries).where(eq(teamDeliveries.sessionId, sessionId)).orderBy(desc(teamDeliveries.id)).get();
+      const delivery = this.db.select().from(teamDeliveries).where(eq(teamDeliveries.sessionId, sessionId)).orderBy(sql`${teamDeliveries}.rowid DESC`).get();
       if (delivery && this.owner(delivery.roomId) === userId) return {
         roomId: delivery.roomId, agentId: delivery.agentId, deliveryId: delivery.id, messageId: delivery.messageId,
       };
@@ -172,6 +214,10 @@ export class TeamChatService {
     routingDecision?: TeamRoomMessage["routingDecision"];
     clientKey: string; parentMessageId?: string; workSessionId?: string; workThreadId?: string; targetSessionId?: string;
   }): TeamRoomMessage {
+    return this.persistMessage(userId, roomId, input);
+  }
+  private persistMessage(userId: string, roomId: string, input: Parameters<TeamChatService["post"]>[2],
+    coordinationEvent?: TeamRoomMessage["coordinationEvent"]): TeamRoomMessage {
     const room = this.get(userId, roomId);
     if (!input.content.trim() || input.content.length > 20_000) throw new Error("Message must contain 1–20,000 characters.");
     if (!input.clientKey || input.clientKey.length > 200) throw new Error("Message idempotency key is required.");
@@ -192,10 +238,13 @@ export class TeamChatService {
     }
     const parent = input.parentMessageId ? this.history(userId, roomId).find(message => message.id === input.parentMessageId) : undefined;
     if (input.parentMessageId && !parent) throw new Error("Parent message not found.");
-    const depth = parent ? parent.depth + 1 : 0;
+    // Gateway task events start a new execution chain, preserving the source
+    // message as provenance. Ordinary agent handoffs retain their loop bound.
+    const depth = coordinationEvent ? 0 : parent ? parent.depth + 1 : 0;
     if (depth > 32 && recipients.length) throw new Error("Handoff limit reached. Ask the user to clarify the blocker before continuing.");
     const message: TeamRoomMessage = { id: uuidv7(), roomId, sender: input.sender, kind: input.kind ?? "discussion",
       content: input.content.trim(), ...(input.attachments?.length ? { attachments: input.attachments } : {}), recipientIds: recipients, createdAt: new Date().toISOString(), depth,
+      ...(coordinationEvent ? { coordinationEvent } : {}),
       ...(input.routingDecision ? { routingDecision: input.routingDecision } : {}),
       ...(input.targetSessionId ? { targetSessionId: input.targetSessionId } : {}),
       ...(parent ? { parentMessageId: parent.id } : {}), ...(input.workSessionId ? { workSessionId: input.workSessionId } : {}), ...(input.workThreadId ? { workThreadId: input.workThreadId } : {}) };
@@ -286,7 +335,7 @@ export class TeamChatService {
     const room = this.get(userId, roomId);
     if (sender.kind !== "user" && !(sender.kind === "agent" && sender.id === room.rootAgentId)) throw new Error("Only the user or coordinator can close the goal.");
     if (!room.goal || room.goal.status !== "active" || evidence.length !== room.goal.criteria.length || evidence.some(e => !e.trim())) throw new Error("Completion requires evidence for every acceptance criterion.");
-    if (sender.kind !== "user" && !this.history(userId, roomId).some(message => message.id > (room.goal?.verificationAfterId ?? "") && message.kind === "verification" && message.sender.kind === "agent" && message.sender.id !== sender.id)) throw new Error("An independent team member must post verification before completion.");
+    if (sender.kind !== "user" && !this.historyAfter(userId, roomId, room.goal?.verificationAfterId ?? "").some(message => message.kind === "verification" && message.sender.kind === "agent" && message.sender.id !== sender.id)) throw new Error("An independent team member must post verification before completion.");
     room.goal = { ...room.goal, status: "completed", evidence };
     this.db.update(teamRooms).set({ data: JSON.stringify(room) }).where(eq(teamRooms.id, roomId)).run();
     return room;
@@ -311,9 +360,11 @@ export class TeamChatService {
     const members = this.roomMembers(userId, room.id).map(member => ({ id: member.id, name: member.name, role: member.role, reportsToId: member.reportsToId, paused: member.paused }));
     const leadsWork = agent.id === room.rootAgentId || this.agents(userId).some(member => member.reportsToId === agent.id);
     return [
-      leadsWork ? "Leadership completion check: As a coordinator or manager with direct reports, you are accountable for verifying delegated work. After each result, review or failure, and before ending your turn, inspect the actual work and acceptance evidence. Record each applicable criterion as met, not-yet-met or blocked with evidence. A finished worker turn or claimed success is not verified completion. Continue the next executable step in existing persona-linked Threads. If waiting, record the remaining criterion, owner, thread and expected resumption event. If blocked, keep work incomplete and report what is needed without retry loops. Confirm your delegated task outcome to your manager; only claim Done after the required checks and independent verification pass. Only the room coordinator may close the overall team goal, with evidence for every criterion. Preserve scope, consent, pause state and required merge or deployment approval." : "",
+      leadsWork ? "Leadership completion check: As a coordinator or manager with direct reports, you are accountable for verifying delegated work. After each result, review or failure, and before ending your turn, inspect the actual work and acceptance evidence. Record each applicable criterion as met, not-yet-met or blocked with evidence in the task thread or work record, not as a team-room ledger. A finished worker turn or claimed success is not verified completion. Continue the next executable step in existing persona-linked Threads. If waiting, record the remaining criterion, owner, thread and expected resumption event. If blocked, keep work incomplete and report what is needed without retry loops. Confirm your delegated task outcome to your manager; only claim Done after the required checks and independent verification pass. Only the room coordinator may close the overall team goal, with evidence for every criterion. Preserve scope, consent, pause state and required merge or deployment approval." : "",
       "You are " + agent.name + ". " + agent.persona,
       "Your persistent identity is independent of your work conversations. Coordinate through team.chat, not by starting other agents.",
+      "Write team-room messages as a human teammate speaking directly to another person, usually in 1–3 short sentences. Address them by @display name in the text and their listed ID in recipientIds when they need to act. Examples: 'Hey @Captain, my fix is ready for review; the checks pass.' 'Hey @Developer, could you fix the upload bug in ticket #123?' 'Hey @Reviewer, I checked your change; one edge case still fails.' Use these only when the facts support them. Answer the actual question and continue the conversation rather than broadcasting a task report.",
+      "Keep acceptance ledgers, detailed plans, command output, IDs and evidence in the task thread or issue. Give the room the outcome, needed action or blocker and a useful work link. Avoid headings, board field dumps, prompt-like instructions and repeated goal summaries. A brief reply that resolves a question or confirms a handoff is useful; avoid acknowledgement-only wakeups. Before finishing, explicitly post your short room update with team.chat so your detailed final report is not used as the chat message.",
       "Coordinator: " + room.rootAgentId + ". Your manager: " + (members.some(member => member.id === agent.reportsToId) ? agent.reportsToId : "none in this room (coordinate with the listed members)") + ". Your direct reports: " + members.filter(member => member.reportsToId === agent.id).map(member => member.id).join(", "),
       "Delegate to the member whose role fits the task. Escalate blockers, conflicts and decisions beyond your role to your manager; the coordinator resolves cross-team priorities. Use recipientIds with the listed IDs, and preserve existing authorization boundaries. Paused members cannot take work.",
       "Team room: " + room.id + ". Members: " + JSON.stringify(members),
@@ -350,12 +401,35 @@ export class TeamChatService {
   }
   async recover() {
     this.db.update(teamDeliveries).set({ status: "interrupted", error: "Gateway restarted. Review the work chat before retrying." }).where(eq(teamDeliveries.status, "running")).run();
+    // Messages are the durable event source. Reconcile the gap between an
+    // outcome/failure commit and its review enqueue without replaying work.
+    for (const row of this.db.select().from(teamRooms).all()) {
+      const room = this.get(row.userId, row.id);
+      for (const outcome of this.historyAfter(row.userId, row.id, room.goal?.verificationAfterId ?? "")) {
+        this.requestCompletionCheck(row.userId, room, outcome);
+      }
+      for (const delivery of this.deliveries(row.userId, row.id)) {
+        if (delivery.status !== "failed" || !delivery.error || delivery.error.startsWith("Execution blocked:")) continue;
+        if (room.goal && (room.goal.status !== "active" || !this.historyAfter(row.userId, row.id, room.goal.verificationAfterId ?? "").some(message => message.id === delivery.messageId))) continue;
+        const agent = this.agent(delivery.agentId, row.userId);
+        if (agent && !agent.paused && !this.abandonedByStop(delivery.sessionId)) this.requestRecovery(row.userId, delivery, agent, delivery.error);
+      }
+    }
     await this.pump();
   }
   async pump() {
     if (!this.dispatch || this.closed) return;
-    const pending = this.db.select().from(teamDeliveries).where(eq(teamDeliveries.status, "queued")).orderBy(teamDeliveries.id).all();
+    const pending = this.db.select().from(teamDeliveries).where(eq(teamDeliveries.status, "queued")).orderBy(sql`${teamDeliveries}.rowid`).all();
+    const roomOwners = new Map<string, string>();
     for (const delivery of pending) {
+      // A halted owner's deliveries are held, not failed: leave them queued so
+      // the resume path can deliver them once the user lifts the stop.
+      let userId = roomOwners.get(delivery.roomId);
+      if (userId === undefined) {
+        userId = this.db.select().from(teamRooms).where(eq(teamRooms.id, delivery.roomId)).get()?.userId ?? "";
+        roomOwners.set(delivery.roomId, userId);
+      }
+      if (userId && this.isHalted(userId)) continue;
       // A saved identity can own independent threads; serialize turns within each thread.
       if (this.abandonedByStop(delivery.sessionId)) {
         this.cancelQueuedDeliveries(delivery.sessionId, "Thread was stopped before this delivery started.");
@@ -363,6 +437,11 @@ export class TeamChatService {
       }
       if (this.db.select().from(teamDeliveries).where(and(eq(teamDeliveries.status, "running"), eq(teamDeliveries.sessionId, delivery.sessionId))).get()) continue;
       if (this.running.has(delivery.id)) continue;
+      // Running rows include deliveries from every room. Keep excess work queued;
+      // the rowid-ordered scan starts the oldest eligible delivery when a slot frees.
+      const activeForAgent = this.db.select({ id: teamDeliveries.id }).from(teamDeliveries)
+        .where(and(eq(teamDeliveries.agentId, delivery.agentId), eq(teamDeliveries.status, "running"))).all().length;
+      if (activeForAgent >= deliveryLimit()) continue;
       // Re-read before claiming: a concurrent stop must not be overwritten by this claim.
       if (this.db.select().from(teamDeliveries).where(eq(teamDeliveries.id, delivery.id)).get()?.status !== "queued") continue;
       this.running.add(delivery.id);
@@ -372,41 +451,72 @@ export class TeamChatService {
   }
   private requestCompletionCheck(userId: string, room: TeamRoom, outcome: TeamRoomMessage) {
     if (room.goal?.status !== "active" || outcome.sender.kind !== "agent" ||
-      !["result", "verification"].includes(outcome.kind) || outcome.depth >= 32 ||
+      !["result", "verification"].includes(outcome.kind) ||
       !outcome.sender.sourceSessionId) return;
-    const work = this.workForSession(userId, outcome.sender.sourceSessionId);
-    if (!work || work.roomId !== room.id || work.agentId !== outcome.sender.id) return;
+    // Associate historical outcomes with the turn that preceded them, rather
+    // than the newest delivery in a thread that may have since been resumed.
+    const history = this.history(userId, room.id);
+    const position = new Map(history.map((message, index) => [message.id, index]));
+    const indexOf = (id: string) => position.get(id) ?? -1;
+    const work = this.deliveries(userId, room.id).filter(delivery => delivery.sessionId === outcome.sender.sourceSessionId &&
+      delivery.agentId === outcome.sender.id && indexOf(delivery.messageId) >= 0 && indexOf(delivery.messageId) < indexOf(outcome.id))
+      .at(-1);
+    if (!work || ["failed", "blocked", "cancelled", "interrupted"].includes(work.status)) return;
+    // Older versions keyed reviews by outcome id. Honor those existing events
+    // too, so an upgrade does not dispatch a second completion check.
+    if (history.some(message => message.kind === "review" && message.parentMessageId &&
+      message.content.startsWith("Leadership completion check:") && history.some(source => source.id === message.parentMessageId &&
+        source.sender.sourceSessionId === work.sessionId && indexOf(source.id) > indexOf(work.messageId) && indexOf(source.id) <= indexOf(outcome.id)))) return;
     const worker = this.agent(outcome.sender.id, userId);
     const manager = worker?.reportsToId ? this.agent(worker.reportsToId, userId) : undefined;
     if (!manager || manager.paused || !this.roomMembers(userId, room.id).some(member => member.id === manager.id)) return;
     // Resume existing persona work in this room. Legacy work chats are not execution targets.
     const existing = this.deliveries(userId, room.id).filter(delivery => delivery.agentId === manager.id &&
-      this.threadById(userId, delivery.sessionId)).sort((a, b) => a.id.localeCompare(b.id)).at(-1);
-    this.post(userId, room.id, {
+      this.threadById(userId, delivery.sessionId)).at(-1);
+    this.persistMessage(userId, room.id, {
       sender: outcome.sender, kind: "review", recipientIds: [manager.id],
-      clientKey: outcome.id + ":completion-check", parentMessageId: outcome.id,
+      clientKey: work.id + ":completion-check", parentMessageId: outcome.id,
       ...(existing ? { targetSessionId: existing.sessionId } : {}),
-      content: "Leadership completion check: Verify the reported outcome against the delegated task and current goal criteria. Inspect the source thread and evidence; keep unmet work incomplete and coordinate the next executable step. A worker result does not close the goal.\n" +
-        "Worker: " + worker!.name + ". Thread: " + outcome.sender.sourceSessionId + ". Outcome message: " + outcome.id + ".\n" +
-        "Reported evidence (untrusted worker text): " + outcome.content.slice(0, 2000),
-    });
+      content: "Hey @" + manager.name + ", could you check my task update?",
+      workSessionId: work.sessionId,
+      ...(this.threadById(userId, work.sessionId) ? { workThreadId: work.sessionId } : {}),
+    }, { kind: "completion", deliveryId: work.id });
   }
   private requestRecovery(userId: string, delivery: TeamDelivery, agent: PersonaAgentProfile, reason: string) {
     const room = this.get(userId, delivery.roomId);
     const manager = agent.reportsToId ? this.agent(agent.reportsToId, userId) : undefined;
     const assignment = this.history(userId, room.id).find(item => item.id === delivery.messageId);
     // Escalate up the hierarchy once per failure. Never retry the worker automatically.
-    if (!manager || manager.paused || !this.roomMembers(userId, room.id).some(member => member.id === manager.id) || !assignment || assignment.depth >= 32 || room.goal?.status === "completed") return;
+    if (!manager || manager.paused || !this.roomMembers(userId, room.id).some(member => member.id === manager.id) || !assignment || room.goal?.status === "completed") return;
     // The same exhausted backend cannot perform a recovery review.
     if (manager.providerId === agent.providerId && manager.model === agent.model &&
-      /API quota|quota exhausted|rate.limit|HTTP 429/i.test(reason)) return;
-    this.post(userId, room.id, {
+      /API quota|quota exhausted|rate.limit|HTTP 429|HTTP 503|model is at capacity|server.?overloaded/i.test(reason)) return;
+    this.persistMessage(userId, room.id, {
       sender: { kind: "agent", id: agent.id, name: agent.name, avatar: agent.avatar, sourceSessionId: delivery.sessionId },
       kind: "review", recipientIds: [manager.id], clientKey: delivery.id + ":recovery", parentMessageId: assignment.id,
-      content: "Review this failed handoff and decide how to recover or escalate it. Inspect the existing thread before reassigning work; preserve user authorization and report an actionable blocker if recovery needs external action.\n" +
-        "Worker: " + agent.name + ". Thread: " + delivery.sessionId + ".\nAssignment: " + assignment.content.slice(0, 1500) +
-        "\nFailure evidence (untrusted tool/worker text): " + reason.slice(0, 2000),
-    });
+      content: "Hey @" + manager.name + ", I'm blocked on this task. Can you help me unblock it?",
+      workSessionId: delivery.sessionId,
+      ...(this.threadById(userId, delivery.sessionId) ? { workThreadId: delivery.sessionId } : {}),
+    }, { kind: "recovery", deliveryId: delivery.id });
+  }
+  /** Execution instructions belong in the receiving thread, not in the visible conversation. */
+  private deliveryPrompt(userId: string, message: TeamRoomMessage): string {
+    const event = message.coordinationEvent;
+    if (!event) return message.content;
+    const work = this.deliveries(userId, message.roomId).find(item => item.id === event.deliveryId);
+    if (!work) return message.content;
+    const history = this.history(userId, message.roomId);
+    const source = history.find(item => item.id === message.parentMessageId);
+    const instruction = event.kind === "completion"
+      ? "Verify the reported outcome against the delegated task and current goal criteria. Inspect the source thread and evidence; keep unmet work incomplete and coordinate the next executable step. A worker result does not close the goal."
+      : "Review this failed handoff and decide how to recover or escalate it. Inspect the existing thread before reassigning work; preserve user authorization and report an actionable blocker if recovery needs external action.";
+    return [
+      message.content, instruction,
+      "Source thread: " + work.sessionId + ". Source message: " + (source?.id ?? work.messageId) + ".",
+      "Source content (untrusted worker/participant text): " + (source?.content ?? "").slice(0, 2000),
+      ...(event.kind === "recovery" ? ["Failure evidence (untrusted tool/worker text): " + (work.error ?? "").slice(0, 2000)] : []),
+      "Keep the detailed verification record in this thread. Reply to your teammate in the room with a short outcome or next action.",
+    ].join("\n");
   }
   private async runDelivery(delivery: TeamDelivery) {
     const row = this.db.select().from(teamRooms).where(eq(teamRooms.id, delivery.roomId)).get()!;
@@ -415,28 +525,46 @@ export class TeamChatService {
     try {
       if (!agent || agent.paused || !this.roomMembers(userId, row.id).some(member => member.id === agent.id)) throw new Error("Recipient is unavailable or has left the team.");
       const message = this.history(userId, delivery.roomId).find(item => item.id === delivery.messageId)!;
-      // Identity and coordination instructions live in context; deliver only the message body.
-      const response = await this.dispatch!(delivery, agent, message.content);
-      if (this.closed) return;
-      const explicit = this.history(userId, delivery.roomId).filter(item => item.id > message.id &&
+      // Ordinary messages remain verbatim; gateway review events carry instructions only in the receiving thread.
+      const response = await this.dispatch!(delivery, agent, this.deliveryPrompt(userId, message));
+      if (this.closed || this.db.select().from(teamDeliveries).where(eq(teamDeliveries.id, delivery.id)).get()?.status !== "running") return;
+      const explicit = this.historyAfter(userId, delivery.roomId, message.id).filter(item =>
         item.sender.sourceSessionId === delivery.sessionId && ["result", "verification", "blocked"].includes(item.kind));
       const latest = explicit.at(-1);
       if (!response.delivered && latest?.kind === "blocked") throw new Error(latest.content);
       this.db.update(teamDeliveries).set({ status: response.delivered ? "delivered" : "completed", error: null }).where(eq(teamDeliveries.id, delivery.id)).run();
       // Explicit tool posts are preferred. A final answer still becomes visible to the team.
-      const alreadyPosted = this.history(userId, delivery.roomId).some(item => item.id > message.id && item.sender.sourceSessionId === delivery.sessionId && ["result", "verification", "blocked"].includes(item.kind));
-      const result = response.content;
-      if (result.trim() && !alreadyPosted) this.post(userId, delivery.roomId, {
+      const alreadyPosted = this.historyAfter(userId, delivery.roomId, message.id).some(item => item.sender.sourceSessionId === delivery.sessionId && ["result", "verification", "blocked"].includes(item.kind));
+      const result = response.content.trim();
+      // Detailed final answers are retained by the task thread. Never infer a
+      // successful outcome from a turn ending or truncate away its qualifications.
+      const hasThread = !!this.threadById(userId, delivery.sessionId);
+      const roomResult = hasThread && (result.length > 600 || /^#{1,6}\s/m.test(result) || result.split("\n").length > 4)
+        ? "I've left a detailed update in my task thread. Please check it for the outcome and next steps."
+        : result;
+      if (result && !alreadyPosted) this.post(userId, delivery.roomId, {
         sender: { kind: "agent", id: agent.id, name: agent.name, avatar: agent.avatar, sourceSessionId: delivery.sessionId },
-        content: result.slice(0,20_000), kind: "result", recipientIds: [], clientKey: delivery.id + ":result", parentMessageId: message.id, workSessionId: delivery.sessionId, ...(this.threadById(userId, delivery.sessionId) ? { workThreadId: delivery.sessionId } : {}),
+        content: roomResult.slice(0,20_000), kind: "result", recipientIds: [], clientKey: delivery.id + ":result", parentMessageId: message.id, workSessionId: delivery.sessionId, ...(this.threadById(userId, delivery.sessionId) ? { workThreadId: delivery.sessionId } : {}),
       });
     } catch (error) {
-      if (this.closed) return;
+      if (this.closed || this.db.select().from(teamDeliveries).where(eq(teamDeliveries.id, delivery.id)).get()?.status !== "running") return;
+      // A halt is not a delivery failure. Put the work back in the queue so
+      // resume can deliver it, and post nothing: the user's own stop must not
+      // read back to them as an agent that blocked or broke.
+      if (isAgentHaltedError(error)) {
+        this.db.update(teamDeliveries).set({ status: "queued", error: null }).where(eq(teamDeliveries.id, delivery.id)).run();
+        return;
+      }
+      // A user halt may interrupt a turn that had already started. Preserve
+      // that outcome for explicit review without enqueuing recovery work.
+      if (this.isHalted(userId)) {
+        this.db.update(teamDeliveries).set({ status: "interrupted", error: "Autonomous work halted by user." }).where(eq(teamDeliveries.id, delivery.id)).run();
+        return;
+      }
       const reason = error instanceof Error ? error.message : "Delivery failed.";
       this.db.update(teamDeliveries).set({ status: reason.startsWith("Execution blocked:") ? "blocked" : "failed", error: reason }).where(eq(teamDeliveries.id, delivery.id)).run();
       // Provider failures cannot rely on another model turn to report a blocker.
-      const alreadyBlocked = this.history(userId, delivery.roomId).some(item => item.id > delivery.messageId
-        && item.sender.sourceSessionId === delivery.sessionId && item.kind === "blocked");
+      const alreadyBlocked = this.historyAfter(userId, delivery.roomId, delivery.messageId).some(item => item.sender.sourceSessionId === delivery.sessionId && item.kind === "blocked");
       if (agent && !alreadyBlocked) this.post(userId, delivery.roomId, {
         sender: { kind: "agent", id: agent.id, name: agent.name, avatar: agent.avatar, sourceSessionId: delivery.sessionId },
         content: reason.slice(0, 2000), kind: "blocked", recipientIds: [], clientKey: delivery.id + ":blocked",

@@ -1,0 +1,106 @@
+[
+  {
+    "name": "skills.manage",
+    "description": "Manage skills (specialized instruction sets). Actions: `list` installed skills; `search` the ClawHub marketplace; `install`/`uninstall` a ClawHub skill by id; `enable`/`disable` an installed skill; `install_tool` to install a CLI tool a skill requires (npm); `create` to write a new skill yourself from what you just worked out \u2014 pass `id`, `name`, `description` (a \"use this when \u2026\" line) and `body` (markdown instructions). Use this to set up skills the user asks for, and to record know-how worth reusing.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "The operation to perform.",
+          "enum": [
+            "list",
+            "search",
+            "install",
+            "uninstall",
+            "enable",
+            "disable",
+            "install_tool",
+            "create"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "Skill id/slug (for install/uninstall/enable/disable/install_tool/create)."
+        },
+        "query": {
+          "type": "string",
+          "description": "Search query (for `search`)."
+        },
+        "version": {
+          "type": "string",
+          "description": "Optional version to install."
+        },
+        "installId": {
+          "type": "string",
+          "description": "Optional install-option id (for `install_tool`)."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results for search/list (default 25)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name (for `create`)."
+        },
+        "description": {
+          "type": "string",
+          "description": "One-line \"use this when \u2026\" summary (for `create`)."
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown instructions the skill teaches (for `create`)."
+        },
+        "overwrite": {
+          "type": "boolean",
+          "description": "Replace an existing skill of the same id (for `create`)."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "extensions.manage",
+    "description": "Manage extensions (plugins, including OpenClaw-format channel/tool plugins). Actions: `list` installed extensions; `scan` the extensions directory for new ones; `enable`/`disable`/`uninstall` an extension by id; `search` the ClawHub plugin marketplace. Note: extensions are installed by placing them in ~/.jait/extensions/ then running `scan`.",
+    "tier": "standard",
+    "category": "gateway",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "The operation to perform.",
+          "enum": [
+            "list",
+            "enable",
+            "disable",
+            "uninstall",
+            "scan",
+            "search"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "Extension/plugin id (for enable/disable/uninstall)."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max results for `search` (default 25)."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  }
+]

@@ -174,6 +174,7 @@ export function registerAuthRoutes(
       reasoning_effort: settings.reasoningEffort,
       project_picker_path: settings.projectPickerPath,
       project_picker_node_id: settings.projectPickerNodeId,
+      navigation_order: settings.navigationOrder ?? [],
       updated_at: settings.updatedAt,
     };
   });
@@ -195,7 +196,12 @@ export function registerAuthRoutes(
       reasoningEffort?: ReasoningEffort | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
+      navigationOrder?: string[];
     } = {};
+
+    if (Array.isArray(body.navigation_order)) {
+      patch.navigationOrder = [...new Set(body.navigation_order.filter((v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64))].slice(0, 50);
+    }
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
       patch.theme = body.theme as ThemeMode;
@@ -269,6 +275,7 @@ export function registerAuthRoutes(
       reasoning_effort: updated.reasoningEffort,
       project_picker_path: updated.projectPickerPath,
       project_picker_node_id: updated.projectPickerNodeId,
+      navigation_order: updated.navigationOrder ?? [],
       updated_at: updated.updatedAt,
     };
   });

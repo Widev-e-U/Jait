@@ -340,6 +340,7 @@ describe("chat route OpenRouter backend selection", () => {
       payload: {
         content: "slow queued effort turn",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: "high",
       },
@@ -353,6 +354,7 @@ describe("chat route OpenRouter backend selection", () => {
       payload: {
         content: "queued explicit default",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: null,
       },
@@ -461,6 +463,43 @@ describe("chat route OpenRouter backend selection", () => {
       expect(body).toContain('"type":"token","content":"B"');
     } finally {
       await app.close();
+    }
+  });
+
+  it("cancels while memory retrieval is stalled and releases the session", { timeout: 10_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("memory-cancel-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Memory Cancellation" });
+    const memoryService = createMockMemoryService([]);
+    let markStarted = () => {};
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let releaseMemory = () => {};
+    const pending = new Promise<MemoryEntry[]>((resolve) => { releaseMemory = () => resolve([]); });
+    memoryService.search = vi.fn(() => { markStarted(); return pending; });
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService, memoryService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const turn = app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { content: "stalled memory", sessionId: session.id } });
+    try {
+      await started;
+      const cancel = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/cancel`, headers });
+      expect(cancel.json()).toMatchObject({ ok: true, cancelled: true });
+      const response = await Promise.race([
+        turn,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Cancelled preparation stayed active")), 500)),
+      ]);
+      expect(response.body).toContain('"type":"done"');
+      const streaming = await app.inject({ method: "GET", url: "/api/sessions/streaming", headers });
+      expect(streaming.json().sessionIds).not.toContain(session.id);
+    } finally {
+      releaseMemory();
+      await turn;
+      await app.close();
+      sqlite.close();
     }
   });
 
@@ -993,13 +1032,9 @@ describe("chat route OpenRouter backend selection", () => {
       },
     });
 
+    let sentMessages: Array<{ role: string; content: string }> = [];
     const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
-      const memoryMessage = body.messages.find((message) => String(message.content).includes("<relevant_memory>"));
-      expect(memoryMessage).toMatchObject({ role: "system" });
-      expect(String(memoryMessage?.content)).toContain("mem-project-1");
-      expect(body.messages.at(-1)).toMatchObject({ role: "system" });
-
+      sentMessages = JSON.parse(String(init?.body)).messages;
       return createOpenAIStreamResponse();
     });
     globalThis.fetch = fetchMock as typeof fetch;
@@ -1025,6 +1060,10 @@ describe("chat route OpenRouter backend selection", () => {
     });
 
     expect(response.statusCode).toBe(200);
+    const memoryMessage = sentMessages.find((message) => String(message.content).includes("<relevant_memory>"));
+    expect(memoryMessage).toMatchObject({ role: "system" });
+    expect(String(memoryMessage?.content)).toContain("mem-project-1");
+    expect(sentMessages.at(-1)).toMatchObject({ role: "user", content: "use our todo controls preference" });
     expect(response.body).toContain("mem-project-1");
     expect(response.body).toContain('"sourceType":"test"');
     expect(response.body).toContain('"sourceId":"session-1"');
@@ -1066,22 +1105,9 @@ describe("chat route OpenRouter backend selection", () => {
       },
     });
 
+    let sentMessages: Array<{ role: string; content: string }> = [];
     const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
-      const memoryMessage = body.messages.find((message) => String(message.content).includes("<relevant_memory>"));
-      const memoryContent = String(memoryMessage?.content ?? "");
-
-      expect(memoryMessage).toMatchObject({ role: "system" });
-      expect(memoryContent).toContain("prior-session-contracts");
-      expect(memoryContent).toContain("packages/shared");
-      expect(memoryContent).toContain("prior-session-progress");
-      expect(memoryContent).toContain("concise progress updates");
-      expect(memoryContent).not.toContain("prior-session-release");
-      expect(body.messages.at(-1)).toMatchObject({
-        role: "user",
-        content: "Based on what you know, where should shared API contracts live and how should progress updates be written?",
-      });
-
+      sentMessages = JSON.parse(String(init?.body)).messages;
       return createOpenAIStreamResponse();
     });
     globalThis.fetch = fetchMock as typeof fetch;
@@ -1107,6 +1133,21 @@ describe("chat route OpenRouter backend selection", () => {
     });
 
     expect(response.statusCode).toBe(200);
+    // Check outside the mock: the agent loop catches provider errors.
+    const body = { messages: sentMessages };
+    const memoryMessage = body.messages.find((message) => String(message.content).includes("<relevant_memory>"));
+    const memoryContent = String(memoryMessage?.content ?? "");
+
+    expect(memoryMessage).toMatchObject({ role: "system" });
+    expect(memoryContent).toContain("prior-session-contracts");
+    expect(memoryContent).toContain("packages/shared");
+    expect(memoryContent).toContain("prior-session-progress");
+    expect(memoryContent).toContain("concise progress updates");
+    expect(memoryContent).not.toContain("prior-session-release");
+    expect(body.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: "Based on what you know, where should shared API contracts live and how should progress updates be written?",
+    });
     expect(response.body).toContain("prior-session-contracts");
     expect(response.body).toContain("prior-session-progress");
     expect(fetchMock).toHaveBeenCalledTimes(1);

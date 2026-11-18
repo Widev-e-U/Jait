@@ -1,0 +1,56 @@
+[
+  {
+    "name": "calendar_list",
+    "description": "List the calendars available through the user's connected Google Calendar account. This includes calendars shown in Samsung Calendar when Samsung Calendar syncs that Google account.",
+    "tier": "standard",
+    "category": "web",
+    "source": "builtin",
+    "risk": "low",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Connected calendar account id. Omit for the default account."
+        }
+      }
+    }
+  },
+  {
+    "name": "calendar_events",
+    "description": "Read upcoming or matching events from the user's connected calendars. Defaults to the next 7 days across selected calendars. Use this before alarms, wake-up prompts, planning, or any job that should account for work, appointments, travel, birthdays, or other important events.",
+    "tier": "standard",
+    "category": "web",
+    "source": "builtin",
+    "risk": "low",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Connected calendar account id. Omit for the default account."
+        },
+        "calendarId": {
+          "type": "string",
+          "description": "Specific calendar id. Omit to search all selected calendars."
+        },
+        "timeMin": {
+          "type": "string",
+          "description": "Inclusive ISO 8601 start. Defaults to now."
+        },
+        "timeMax": {
+          "type": "string",
+          "description": "Exclusive ISO 8601 end. Defaults to 7 days from now."
+        },
+        "query": {
+          "type": "string",
+          "description": "Optional text search across event title, description, location, and attendees."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum events to return (1-250, default 50)."
+        }
+      }
+    }
+  }
+]

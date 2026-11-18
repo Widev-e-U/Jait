@@ -35,3 +35,8 @@ cpSync(join(packageRoot, "src", "surfaces", "playwright-node-bridge.cjs"),
   join(packageRoot, "dist", "surfaces", "playwright-node-bridge.cjs"));
 
 console.log(`Copied shell integration scripts → ${target}`);
+
+for (const asset of ["browser-cursor.cjs", "browser-cursor.d.cts"]) {
+  cpSync(join(packageRoot, "src", "surfaces", asset),
+    join(packageRoot, "dist", "surfaces", asset));
+}

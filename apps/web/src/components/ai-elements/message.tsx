@@ -1,3 +1,4 @@
+import { MessageLink } from '@/components/ui/message-link'
 import { type ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -95,6 +96,7 @@ export function MessageResponse({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          a: ({ node: _node, ...props }) => <MessageLink {...props} />,
           table: ({ children, ref: _ref, node: _node, ...props }) => (
             <div className="my-0 w-full max-w-full overflow-x-auto">
               <table {...props}>{children}</table>

@@ -1,3 +1,4 @@
+import { embedInlineImages, inlineImageData, INLINE_IMAGE_TYPE } from "./inline-images.js";
 // Outlook mailbox client (Microsoft Graph v1.0).
 
 import type {
@@ -107,11 +108,26 @@ export class OutlookClient implements MailboxClient {
     const m = (await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(id)}`)) as GraphMessage;
     const summary = this.summarize(m);
     const isHtml = (m.body?.contentType ?? "").toLowerCase() === "html";
+    let html = isHtml ? m.body?.content ?? "" : "";
+    if (/cid:/i.test(html)) {
+      const images = new Map<string, string>();
+      try {
+        const attachments = await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(id)}/attachments?$select=id,contentId,isInline,contentType,size&$top=20`) as { value?: { id: string; contentId?: string; isInline?: boolean; contentType?: string; size?: number }[] };
+        for (const attachment of (attachments.value ?? []).slice(0, 20)) {
+          if (images.size >= 12) break;
+          if (!attachment.isInline || !attachment.contentId || !html.includes("cid:" + attachment.contentId) || !INLINE_IMAGE_TYPE.test(attachment.contentType || "") || (attachment.size ?? 0) > 1024 * 1024) continue;
+          const raw = await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachment.id)}?$select=contentBytes`) as { contentBytes?: string };
+          const data = raw.contentBytes && inlineImageData(attachment.contentType!, raw.contentBytes);
+          if (data) images.set(attachment.contentId, data);
+        }
+      } catch { /* Keep the message available when attachments are unavailable. */ }
+      html = embedInlineImages(html, images);
+    }
     return {
       ...summary,
       cc: fmtRecipients(m.ccRecipients),
       bodyText: isHtml ? "" : m.body?.content ?? "",
-      bodyHtml: isHtml ? m.body?.content ?? "" : "",
+      bodyHtml: html,
     };
   }
 

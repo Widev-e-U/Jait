@@ -10,11 +10,13 @@ import {
   isTurnEndEvent,
   isTurnStartEvent,
   parseQueuedChatResponse,
+  planTurnStartMessage,
   reconcileQueuedMessagesAtTurnStart,
   shouldFlushStreamTextImmediately,
   segmentsWithError,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
+  WAKE_RESUME_STALE_MS,
 } from '@/hooks/useChat'
 import type { MessageStreamSnapshot } from '@/lib/message-stream'
 
@@ -132,6 +134,14 @@ describe('getChatWakeRecoveryAction', () => {
       hasSubscription: true,
       transport: { state: 'open', attempts: 0, idleMs: 40_000 },
     })).toBe('none')
+  })
+
+  it('holds a woken app to a one-missed-heartbeat bound', () => {
+    // Android keeps a socket that died in the background looking `open`; after
+    // the wake settle delay a live one has delivered a heartbeat already.
+    const transport = { state: 'open' as const, attempts: 0, idleMs: 30_000 }
+    expect(getChatWakeRecoveryAction({ ...activeStreamParams, transport })).toBe('none')
+    expect(getChatWakeRecoveryAction({ ...activeStreamParams, transport, staleMs: WAKE_RESUME_STALE_MS })).toBe('snapshot')
   })
 
   it('rebuilds from a snapshot when the wire went stale (sleep / half-open socket)', () => {
@@ -420,6 +430,55 @@ describe('turn boundary event classification', () => {
   })
 })
 
+describe('turn-start message planning', () => {
+  const base = { isReplay: false, wasLocallySent: false, startedContent: 'hello' }
+
+  it('renders a user bubble for an ordinary typed turn', () => {
+    expect(planTurnStartMessage(base)).toEqual({ kind: 'user', content: 'hello' })
+  })
+
+  it('renders the notice text for a background-command continuation turn', () => {
+    // The gateway starts these itself: `_systemNotification`, no prompt text.
+    // Minting a bubble from that empty string produced blank user messages, so
+    // the notice text now rides along on the event and renders the same gray
+    // line history renders for the persisted row.
+    expect(
+      planTurnStartMessage({
+        ...base,
+        startedContent: '',
+        systemNotice: true,
+        noticeText: '  Background command finished (exit 0)  ',
+      }),
+    ).toEqual({ kind: 'system-notice', content: 'Background command finished (exit 0)' })
+  })
+
+  it('renders nothing for a notice turn that carried no notice text', () => {
+    expect(planTurnStartMessage({ ...base, startedContent: '', systemNotice: true })).toBeNull()
+    expect(planTurnStartMessage({ ...base, startedContent: '', systemNotice: true, noticeText: '   ' })).toBeNull()
+  })
+
+  it('renders nothing for empty content without a notice flag', () => {
+    expect(planTurnStartMessage({ ...base, startedContent: '' })).toBeNull()
+  })
+
+  it('renders nothing for turns this client sent or replayed from history', () => {
+    // `sendMessage` already rendered the optimistic bubble; history is authoritative.
+    expect(planTurnStartMessage({ ...base, wasLocallySent: true })).toBeNull()
+    expect(planTurnStartMessage({ ...base, isReplay: true })).toBeNull()
+  })
+
+  it('keeps the bubble for an attachment-only turn', () => {
+    expect(planTurnStartMessage({ ...base, startedContent: '', attachmentCount: 1 })).toEqual({
+      kind: 'user',
+      content: '',
+    })
+  })
+
+  it('renders nothing when the event carried no content field', () => {
+    expect(planTurnStartMessage({ ...base, startedContent: null })).toBeNull()
+  })
+})
+
 describe('gateway-drained queue messages', () => {
   const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
 
@@ -429,11 +488,15 @@ describe('gateway-drained queue messages', () => {
   // the transcript streamed the whole turn without its user message.
   it('synthesizes the user bubble at turn start for messages this client did not send', () => {
     const src = source()
-    // The synthesis is gated on: not a replay (history owns the bubble) and
-    // not a turn this client initiated (`sendMessage` already rendered it).
-    const gateAt = src.indexOf('if (!isReplay && !wasLocallySent && startedContent !== null) {')
+    // The synthesis is gated by `planTurnStartMessage`, which encodes "not a
+    // replay (history owns the bubble), not a turn this client initiated
+    // (`sendMessage` already rendered it), and not a gateway-started notice
+    // turn (no prompt text — those render the gateway's notice line instead)".
+    const gateAt = src.indexOf('const turnStart = planTurnStartMessage({')
     expect(gateAt).toBeGreaterThan(-1)
-    const appendedAt = src.indexOf('setState(prev => ({ ...prev, messages: [...prev.messages, userBubble] }))', gateAt)
+    const branchAt = src.indexOf("if (turnStart?.kind === 'user') {", gateAt)
+    expect(branchAt).toBeGreaterThan(-1)
+    const appendedAt = src.indexOf('setState(prev => ({ ...prev, messages: [...prev.messages, userBubble] }))', branchAt)
     expect(appendedAt).toBeGreaterThan(-1)
 
     const block = src.slice(gateAt, appendedAt)
@@ -446,14 +509,40 @@ describe('gateway-drained queue messages', () => {
     expect(block).toContain('drainedItem.attachments')
   })
 
+  it('renders a gateway-started notice turn as a notice line history can reconcile in place', () => {
+    const src = source()
+    // A continuation turn has no prompt, so its visible content is the notice
+    // line the gateway persists. The live line must use exactly the shape
+    // `mapSnapshotMessages` builds for that persisted row — role `user`, kind
+    // `system-notice`, same text — because
+    // `mergeSnapshotMessagesWithOptimisticUsers` matches on that signature and
+    // drops the optimistic copy. Anything else renders the notice twice.
+    const noticeAt = src.indexOf("if (turnStart?.kind === 'system-notice') {")
+    expect(noticeAt).toBeGreaterThan(-1)
+    const appendedAt = src.indexOf(
+      'setState(prev => ({ ...prev, messages: [...prev.messages, noticeLine] }))',
+      noticeAt,
+    )
+    expect(appendedAt).toBeGreaterThan(-1)
+
+    const block = src.slice(noticeAt, appendedAt)
+    expect(block).toContain("kind: 'system-notice'")
+    expect(block).toContain("role: 'user'")
+    expect(block).toContain('optimistic: true')
+    // A `user-` id would take the durable-id branch of the merge instead of the
+    // content-signature branch, leaving the live line behind as a duplicate.
+    expect(block).toContain("createOptimisticMessageId('notice')")
+  })
+
   it('marks locally initiated sends so turn start does not double-render them', () => {
     const src = source()
     // Set inside the single-consumer send path, cleared inside the turn-start
     // handler, and matched on trimmed content with a bounded arrival window.
-    expect(src).toContain('localPendingSendRef.current = { content, at: Date.now() }')
+    expect(src).toContain('const pendingSend = { content, at: Date.now() }')
+    expect(src).toContain('localPendingSendRef.current = pendingSend')
     expect(src).toContain('localPendingSendRef.current = null')
     expect(src).toContain('LOCAL_SEND_TURN_START_TOLERANCE_MS')
-    expect(src).toContain('safeTrim(pending.content) === startedContent')
+    expect(src).toContain('safeTrim(pending.content) !== startedContent')
   })
 
   it('still releases the chat POST body on the single-consumer path', () => {

@@ -442,7 +442,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
   return {
     name: "ssh.run",
     description:
-      "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password. Set sudo:true to run the command with elevated privileges — the sudo password is collected through a secure user-only prompt (never sent to the model) and can be remembered per host, mirroring elevated.run.",
+      "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password. Set sudo:true to run the command with elevated privileges — the sudo password is collected through a secure user-only prompt (never sent to the model) and can be remembered per host, mirroring terminal.run with elevated:true.",
     tier: "standard",
     category: "network",
     source: "builtin",

@@ -1,4 +1,4 @@
-import type { NotificationContext } from "@jait/shared";
+import type { ChatNotificationState, NotificationContext } from "@jait/shared";
 import { and, eq } from "drizzle-orm";
 import { SignJWT, importPKCS8 } from "jose";
 import type { JaitDB } from "../db/index.js";
@@ -93,11 +93,14 @@ export class MobilePushService {
    */
   async sendAttention(item: AttentionItem): Promise<void> {
     if (!this.serviceAccount || !item.userId) return;
-    const ttlSeconds = Math.max(0, Math.floor((Date.parse(item.expiresAt) - Date.now()) / 1000));
+    // Questions have no deadline; do not manufacture one for their notification.
+    const ttl = item.expiresAt === null
+      ? undefined
+      : `${Math.max(0, Math.floor((Date.parse(item.expiresAt) - Date.now()) / 1000))}s`;
     await Promise.all(this.list(item.userId).map((registration) => this.sendData(
       registration,
       { type: "attention.raised", key: item.key, item: JSON.stringify(item) },
-      `${ttlSeconds}s`,
+      ttl,
     )));
   }
 
@@ -127,7 +130,7 @@ export class MobilePushService {
    * one stale registration failing must not suppress the toast on healthy
    * devices, and devices owned by other users never receive it.
    */
-  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string } & NotificationContext): Promise<number> {
+  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string; roomId?: string; eventId?: string; imageAvailable?: boolean; timestamp?: number } & NotificationContext): Promise<number> {
     if (!this.serviceAccount) return 0;
     const targets = this.list(userId);
     await Promise.all(targets.map(async (registration) => {
@@ -147,6 +150,10 @@ export class MobilePushService {
           ...(notification.agentName ? { agentName: notification.agentName } : {}),
           ...(notification.agentRole ? { agentRole: notification.agentRole } : {}),
           ...(notification.agentAvatar ? { agentAvatar: notification.agentAvatar } : {}),
+          ...(notification.roomId ? { roomId: notification.roomId } : {}),
+          ...(notification.eventId ? { eventId: notification.eventId } : {}),
+          ...(notification.imageAvailable ? { imageAvailable: "true" } : {}),
+          ...(notification.timestamp ? { timestamp: String(notification.timestamp) } : {}),
         }, "3600s");
       } catch (error) {
         console.warn("[mobile-push] chat completion push failed for", registration.deviceId, error);
@@ -155,10 +162,47 @@ export class MobilePushService {
     return targets.length;
   }
 
+  /**
+   * Alert the owner's phones about a new chat message, even when the app is
+   * asleep. Reuses the completion payload so the installed app shows it as-is;
+   * `replaceId` collapses a burst from one room into a single card.
+   */
+  async sendMessengerMessage(
+    userId: string,
+    message: { roomId: string; eventId: string; title: string; body: string; image?: boolean; timestamp?: number },
+  ): Promise<number> {
+    return this.sendChatCompleted(userId, {
+      id: `matrix-message:${message.eventId}`,
+      replaceId: `matrix-room:${message.roomId}`,
+      title: message.title,
+      body: message.body,
+      roomId: message.roomId,
+      eventId: message.eventId,
+      imageAvailable: !!message.image,
+      timestamp: message.timestamp,
+      link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
+    });
+  }
+
+  /** WebSockets carry reads live; data push also reaches a sleeping Android app. */
+  async sendChatNotificationRead(userId: string, state: ChatNotificationState): Promise<void> {
+    if (!this.serviceAccount) return;
+    await Promise.all(this.list(userId).map(async (registration) => {
+      try {
+        await this.sendData(registration, {
+          type: "chat.notification-read", id: state.id,
+          sessionId: state.sessionId, replaceId: state.replaceId,
+        }, "3600s");
+      } catch (error) {
+        console.warn("[mobile-push] chat read push failed for", registration.deviceId, error);
+      }
+    }));
+  }
+
   private async sendData(
     registration: PushRegistration,
     data: Record<string, string>,
-    ttl: string,
+    ttl?: string,
   ): Promise<void> {
     const account = this.serviceAccount;
     if (!account) return;

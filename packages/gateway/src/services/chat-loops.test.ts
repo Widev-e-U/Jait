@@ -1,0 +1,409 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openDatabase, migrateDatabase } from "../db/index.js";
+import { SessionService } from "./sessions.js";
+import { ChatLoopService, chatLoopInstructions } from "./chat-loops.js";
+import * as systemOne from "./system-one.js";
+import { backgroundCommandMonitor } from "./background-command-monitor.js";
+import { sessionWaits } from "./session-waits.js";
+import { createLoopTools } from "../tools/loop-tools.js";
+
+describe("persistent chat goal loops", () => {
+  let sessions: SessionService;
+  let loops: ChatLoopService;
+  let sessionId: string;
+  let close: () => void;
+  beforeEach(async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  });
+  afterEach(() => { sessionWaits.clearForTests(); vi.restoreAllMocks(); close(); });
+
+  it("checks cited execution status within the chat before accepting completion", async () => {
+    const inspect = vi.spyOn(backgroundCommandMonitor, "inspectExecution");
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tests pass",
+      evidence: ["Test execution passed"], executionRefs: [{ criterion: 0, terminalId: "terminal", executionId: "run" }] };
+    inspect.mockReturnValueOnce(null);
+    await expect(loops.checkMonitored(sessionId, input)).rejects.toThrow("unavailable or belongs to another chat");
+    expect(inspect).toHaveBeenCalledWith(sessionId, "terminal", "run");
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "failed", exitCode: 101, output: "compile failed", durationMs: 1 });
+    await expect(loops.checkMonitored(sessionId, input)).rejects.toThrow("failed");
+    expect(loops.get(sessionId)?.status).toBe("running");
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "completed", exitCode: 0, output: "ok", durationMs: 1 });
+    const result = await loops.checkMonitored(sessionId, input);
+    expect(result.executionEvidence).toEqual([{ criterion: 0, terminalId: "terminal", executionId: "run", status: "completed", exitCode: 0 }]);
+    expect(result.status).toBe("running");
+  });
+
+  it("persists the measured turn duration", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    loops.finishTurn(sessionId, undefined, false, 1250.4);
+    expect(new ChatLoopService(sessions).get(sessionId)?.lastTurnDurationMs).toBe(1250);
+  });
+
+  it("rejects waiting without a real blocking Q&A in the same chat", async () => {
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    const input = { revision: goal.revision, outcome: "waiting" as const, summary: "Can I stop?" };
+    expect(() => loops.check(sessionId, input)).toThrow("pending user.ask");
+    sessionWaits.raise({ key: "other", kind: "question", sessionId: "another-chat" });
+    sessionWaits.raise({ key: "consent", kind: "consent", sessionId });
+    sessionWaits.raise({ key: "nonblocking", kind: "question", sessionId, blocking: false });
+    await expect(loops.checkMonitored(sessionId, input)).rejects.toThrow("pending user.ask");
+    expect(loops.finishTurn(sessionId)?.status).toBe("running");
+  });
+
+  it("waits for actual Q&A even when the model omits its checkpoint", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    sessionWaits.raise({ key: "question:real", kind: "question", sessionId });
+    expect(loops.finishTurn(sessionId)?.status).toBe("waiting");
+    sessionWaits.clear("question:real");
+    expect(loops.resumeAfterAnswer(sessionId, "real")?.status).toBe("running");
+  });
+
+  it("continues beyond 50 turns and respects questions", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 55; i++) expect(loops.finishTurn(sessionId)?.status).toBe("running");
+    sessionWaits.raise({ key: "question:last", kind: "question", sessionId });
+    expect(loops.finishTurn(sessionId)?.status).toBe("waiting");
+    sessionWaits.clear("question:last");
+    expect(loops.resumeAfterAnswer(sessionId)?.status).toBe("running");
+  });
+
+  it("reviews unchecked turns and schedules a bounded automatic wait", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue({ model: "test", answers: { continuation: { type: "choice", choice: "wait", confidence: 0.9 } } });
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    const ended = loops.finishTurn(sessionId, undefined, false, 10, "Waiting for compilation")!;
+    const reviewed = await loops.reviewContinuation(sessionId, ended.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    expect(reviewed?.continuation).toMatchObject({ iteration: 1, decision: "wait" });
+    expect(reviewed!.continuation!.waitUntil).toBeGreaterThan(Date.now());
+    expect(reviewed?.nextMessage).toContain("brief wait");
+    await loops.reviewContinuation(sessionId, reviewed!.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it("redacts review input and falls back if System One fails", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("unavailable"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    const ended = loops.finishTurn(sessionId, undefined, false, 10, "Bearer abc123 and secret-key")!;
+    const reviewed = await loops.reviewContinuation(sessionId, ended.revision, { SYSTEM_ONE_API_KEY: "secret-key" });
+    const state = evaluate.mock.calls[0]![1];
+    expect(state).not.toContain("abc123");
+    expect(state).not.toContain("secret-key");
+    expect(reviewed?.continuation?.decision).toBe("fallback");
+    expect(new ChatLoopService(sessions).get(sessionId)?.continuation).toEqual(reviewed?.continuation);
+    expect(reviewed?.status).toBe("running");
+  });
+
+  it("does not override a pause while the reviewer is running", async () => {
+    vi.spyOn(systemOne, "systemOneEnabled").mockReturnValue(true);
+    let resolve!: (value: any) => void;
+    vi.spyOn(systemOne, "evaluateDecision").mockReturnValue(new Promise(r => { resolve = r; }));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    const ended = loops.finishTurn(sessionId)!;
+    const pending = loops.reviewContinuation(sessionId, ended.revision, {});
+    loops.control(sessionId, "pause");
+    resolve({ model: "test", answers: { continuation: { type: "choice", choice: "follow", confidence: 1 } } });
+    expect((await pending)?.status).toBe("paused");
+  });
+
+  it("requires execution references for designated criteria", async () => {
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [0]);
+    await expect(loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Tests passed"] })).rejects.toThrow("requires a tracked execution");
+    expect(loops.get(sessionId)?.status).toBe("running");
+    expect(() => loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [1])).toThrow("Invalid execution criteria");
+  });
+
+  it("rejects malformed execution references", async () => {
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    await expect(loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: "Trying",
+      nextMessage: "Check", executionRefs: [{ criterion: 1, terminalId: "t", executionId: "e" }] })).rejects.toThrow("Invalid execution reference");
+  });
+
+  it("persists checkpoints, uses the next self-message once and keeps unrelated metadata", () => {
+    const wake = vi.fn();
+    loops.onWake = wake;
+    const goal = loops.goal(sessionId, "Fix the issue", ["Regression test passes"]);
+    loops.check(sessionId, { revision: goal.revision, outcome: "continue", summary: "Reproduced", nextMessage: "Implement the fix and rerun the test" });
+    expect(loops.finishTurn(sessionId)).toMatchObject({ status: "running", iteration: 1, nextMessage: "Implement the fix and rerun the test" });
+    const restarted = new ChatLoopService(sessions);
+    expect(restarted.running()).toHaveLength(1);
+    expect(restarted.get(sessionId)).toMatchObject({ goal: "Fix the issue", iteration: 1, summary: "Reproduced" });
+    expect(JSON.parse(sessions.getById(sessionId)!.metadata!).chat.model).toBe("saved");
+    expect(restarted.finishTurn(sessionId)?.nextMessage).toContain("Verify completed work before repeating actions");
+    expect(wake).toHaveBeenCalledWith(sessionId);
+  });
+
+  it("rejects empty goals and false completion without verification for every criterion", () => {
+    expect(() => loops.goal(sessionId, " ", ["Pass"])).toThrow();
+    const goal = loops.goal(sessionId, "Fix", ["Regression passes", "Build passes"]);
+    expect(() => loops.check(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Regression passes"] })).toThrow(/per acceptance criterion/);
+    expect(loops.get(sessionId)?.status).toBe("running");
+    expect(loops.check(sessionId, { revision: goal.revision, outcome: "complete", summary: "Verified", evidence: ["Test command exit 0", "Build command exit 0"] }).status).toBe("running");
+    expect(loops.running()).toHaveLength(1);
+    expect(loops.get(sessionId)?.nextMessage).toContain("user.ask");
+  });
+
+  it("pause, replacement and resume invalidate stale agent checks", () => {
+    const first = loops.goal(sessionId, "First", ["Pass"]);
+    loops.control(sessionId, "pause");
+    expect(loops.finishTurn(sessionId)?.status).toBe("paused");
+    loops.control(sessionId, "resume");
+    expect(() => loops.check(sessionId, { revision: first.revision, outcome: "complete", summary: "Stale", evidence: ["old"] })).toThrow(/changed/);
+    const next = loops.goal(sessionId, "Second", ["New evidence"]);
+    expect(next.id).not.toBe(first.id);
+    // Replacing a goal also needs a fresh revision, even at the same iteration.
+    expect(() => loops.check(sessionId, { revision: first.revision, outcome: "complete", summary: "Stale", evidence: ["old"] })).toThrow(/changed/);
+  });
+
+  it("pauses on cancellation and errors and preserves an explicit waiting checkpoint", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    expect(loops.finishTurn(sessionId, undefined, true)?.status).toBe("paused");
+    loops.control(sessionId, "resume");
+    expect(loops.finishTurn(sessionId, "Provider failed")?.status).toBe("error");
+    const goal = loops.control(sessionId, "resume");
+    sessionWaits.raise({ key: "question:test", kind: "question", sessionId });
+    loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "Which target is authorized?" });
+    expect(loops.finishTurn(sessionId)?.status).toBe("waiting");
+    expect(chatLoopInstructions(loops.get(sessionId))).toContain("Loop status: waiting");
+  });
+
+  it("keeps stopped goals visible without granting permission to resume", () => {
+    expect(chatLoopInstructions(null)).toBeUndefined();
+    loops.goal(sessionId, "Finish migration", ["All components verified"]);
+    loops.finishTurn(sessionId, "Workspace is out of credits");
+    const instructions = chatLoopInstructions(loops.get(sessionId))!;
+    expect(instructions).toContain("Loop status: error");
+    expect(instructions).toContain("Workspace is out of credits");
+    expect(instructions).toContain("All components verified");
+    expect(instructions).toContain("loop.resume before working on it");
+    expect(instructions).toContain("Background notifications and unrelated messages do not authorize resumption");
+    expect(loops.running()).toHaveLength(0);
+    loops.control(sessionId, "pause");
+    expect(chatLoopInstructions(loops.get(sessionId))).toContain("Loop status: paused");
+    const resumed = loops.control(sessionId, "resume");
+    expect(chatLoopInstructions(resumed)).toContain("Before ending this turn");
+    loops.check(sessionId, { revision: resumed.revision, outcome: "complete", summary: "Verified", evidence: ["All checks passed"] });
+    expect(chatLoopInstructions(loops.get(sessionId))).toContain("user.ask");
+  });
+
+  it("collects submitted structured answers before continuing and preserves explicit pauses", () => {
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    sessionWaits.raise({ key: "question:test", kind: "question", sessionId });
+    loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "Which target?" });
+    expect(loops.resumeAfterAnswer(sessionId, "question-1")).toMatchObject({ status: "running", checkedIteration: -1 });
+    expect(loops.get(sessionId)?.nextMessage).toContain('requestId="question-1"');
+    loops.control(sessionId, "pause");
+    expect(loops.resumeAfterAnswer(sessionId, "question-2")?.status).toBe("paused");
+  });
+
+  it("does not copy autorun into question branches", () => {
+    const user = sessions.create({ userId: "fork-owner", name: "Original" });
+    loops.goal(user.id, "Fix", ["Pass"], "fork-owner");
+    const branch = sessions.fork(user.id, { userId: "fork-owner" })!;
+    expect(loops.get(branch.id)).toBeNull();
+    expect(loops.get(user.id)?.status).toBe("running");
+  });
+
+  it("does not expose a model-facing pause tool while preserving user controls", () => {
+    expect(createLoopTools(loops).some(tool => tool.name === "loop.pause")).toBe(false);
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    expect(loops.control(sessionId, "pause")?.status).toBe("paused");
+  });
+
+  it("tools reject unauthenticated and worker contexts", async () => {
+    const goal = createLoopTools(loops).find(tool => tool.name === "loop.goal")!;
+    const context = { sessionId, actionId: "test", projectRoot: ".", requestedBy: "test" };
+    expect((await goal.execute({ goal: "Fix", criteria: ["Pass"] }, context)).ok).toBe(false);
+    expect((await goal.execute({ goal: "Fix", criteria: ["Pass"] }, { ...context, userId: "owner", threadId: "different-thread" })).ok).toBe(false);
+    expect(loops.get(sessionId)).toBeNull();
+  });
+  const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+  function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+
+  it("requires configured System One to accept completion and records its review", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false));
+    const goal = loops.goal(sessionId, "Fix", ["Regression passes"]);
+    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tested", evidence: ["Regression test exit 0"] };
+    const rejected = await loops.checkMonitored(sessionId, input, undefined, keys);
+    expect(rejected).toMatchObject({ status: "running", monitor: { status: "rejected", criteriaPassed: [false], reviewedRevision: goal.revision } });
+    expect(rejected.nextMessage).toContain("criteria 1");
+    evaluate.mockResolvedValue(verdict());
+    const completed = await loops.checkMonitored(sessionId, { ...input, revision: rejected.revision }, undefined, keys);
+    expect(completed).toMatchObject({ status: "running", monitor: { status: "accepted", model: "monitor-test" } });
+    expect(evaluate.mock.calls[0][1]).toContain("Regression test exit 0");
+    expect(evaluate.mock.calls[0][1]).not.toContain("test-key");
+  });
+
+  it("rejects uncertain or missing criterion decisions", async () => {
+    const result = verdict();
+    result.answers.criterion_0.confidence = 0.5;
+    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(result);
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    expect(await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys))
+      .toMatchObject({ status: "running", monitor: { status: "rejected" } });
+  });
+
+  it("keeps running on monitor failure without leaking errors or accepting completion", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("private endpoint credentials"));
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys);
+    expect(result).toMatchObject({ status: "running", stalledChecks: 1, monitor: { status: "unavailable" } });
+    expect(result.nextMessage).toContain("completion is not confirmed");
+    expect(JSON.stringify(result)).not.toContain("private endpoint");
+  });
+
+  it("logs the review failure cause server-side and records only the error class", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new TypeError("fetch failed: private endpoint"));
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: "Step", nextMessage: "Next" }, undefined, keys);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`chat ${sessionId}`), "TypeError: fetch failed: private endpoint");
+    expect(result.monitor?.reason).toContain("TypeError");
+    expect(JSON.stringify(result)).not.toContain("private endpoint");
+  });
+
+  it("does not pause continue checkpoints when System One is unavailable", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("timeout"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 5; i++) {
+      const goal = loops.get(sessionId)!;
+      const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: `Attempt ${i}`, nextMessage: "Keep going" }, undefined, keys);
+      expect(result).toMatchObject({ status: "running", stalledChecks: 0, monitor: { status: "unavailable" } });
+      loops.finishTurn(sessionId);
+    }
+  });
+
+  it("keeps running when completion cannot be reviewed repeatedly", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("down"));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 3; i++) {
+      const goal = loops.get(sessionId)!;
+      await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: `Done ${i}`, evidence: ["Test exit 0"] }, undefined, keys);
+      loops.finishTurn(sessionId);
+    }
+    expect(loops.get(sessionId)).toMatchObject({ status: "running", stalledChecks: 3 });
+  });
+
+  it("does not overwrite pauses or replacement goals during model evaluation", async () => {
+    let resolve!: (value: ReturnType<typeof verdict>) => void;
+    vi.spyOn(systemOne, "evaluateDecision").mockImplementation(() => new Promise(r => { resolve = r; }));
+    for (const action of ["pause", "replace"] as const) {
+      const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+      const pending = loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys);
+      if (action === "pause") loops.control(sessionId, "pause");
+      else loops.goal(sessionId, "Different goal", ["Different check"]);
+      resolve(verdict());
+      await expect(pending).rejects.toThrow("changed");
+      expect(loops.get(sessionId)?.status).toBe(action === "pause" ? "paused" : "running");
+      expect(loops.get(sessionId)?.monitor).toBeUndefined();
+    }
+  });
+
+  it("keeps running after stalled checkpoints and renews budgets only on explicit resume", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false, false));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 3; i++) {
+      const goal = loops.get(sessionId)!;
+      await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: `Attempt ${i}`, nextMessage: "Inspect failure" }, undefined, keys);
+      loops.finishTurn(sessionId);
+    }
+    expect(loops.get(sessionId)).toMatchObject({ status: "running", stalledChecks: 3 });
+    expect(loops.control(sessionId, "resume")).toMatchObject({ status: "running", stalledChecks: 0, budgetStartIteration: 3 });
+  });
+
+  it("tracks unchecked turns and continues without System One", () => {
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 3; i++) loops.finishTurn(sessionId);
+    expect(loops.get(sessionId)).toMatchObject({ status: "running", uncheckedTurns: 3 });
+    loops.control(sessionId, "resume");
+    for (let i = 0; i < 50; i++) {
+      const goal = loops.get(sessionId)!;
+      loops.check(sessionId, { revision: goal.revision, outcome: "continue", summary: `Progress ${i}`, nextMessage: "Next" });
+      loops.finishTurn(sessionId);
+    }
+    expect(loops.get(sessionId)).toMatchObject({ status: "running", iteration: 53 });
+    expect(loops.get(sessionId)?.summary).toContain("Progress 49");
+  });
+
+  it("awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision");
+    const user = sessions.create({ userId: "owner", name: "Tool chat" });
+    const goal = loops.goal(user.id, "Fix", ["Pass"], "owner");
+    const tool = createLoopTools(loops).find(t => t.name === "loop.check")!;
+    const result = await tool.execute({ revision: goal.revision, outcome: "complete", summary: "Tested", evidence: ["exit 0"] },
+      { sessionId: user.id, userId: "owner", actionId: "test", projectRoot: ".", requestedBy: "test" });
+    expect(result).toMatchObject({ ok: true, data: { status: "running", monitor: { status: "disabled" } } });
+    const waiting = loops.goal(sessionId, "Fix", ["Pass"]);
+    sessionWaits.raise({ key: "question:test", kind: "question", sessionId });
+    expect(await loops.checkMonitored(sessionId, { revision: waiting.revision, outcome: "waiting", summary: "Need user answer" }, undefined, keys)).toMatchObject({ status: "waiting" });
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it("scrubs configured credentials and authorization text from review state", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict());
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete",
+      summary: "Bearer other-secret https://user:password@example.com",
+      evidence: ["Test passed; test-key"] }, undefined, keys);
+    const state = evaluate.mock.calls[0][1];
+    expect(state).not.toContain("test-key");
+    expect(state).not.toContain("other-secret");
+    expect(state).not.toContain("user:password");
+    expect(state).toContain("[REDACTED]");
+  });
+
+  it("does not accept oversized review state without sending incomplete criteria", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision");
+    const goal = loops.goal(sessionId, "Fix", Array.from({ length: 20 }, () => "x".repeat(2000)));
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete",
+      summary: "Done", evidence: Array.from({ length: 20 }, () => "Reported test passed") }, undefined, keys);
+    expect(result).toMatchObject({ status: "running", monitor: { status: "unavailable" } });
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it("allows verified completion after previous stalled checkpoints", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false, false));
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    for (let i = 0; i < 2; i++) {
+      const goal = loops.get(sessionId)!;
+      await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: `Attempt ${i}`, nextMessage: "Verify" }, undefined, keys);
+      loops.finishTurn(sessionId);
+    }
+    vi.mocked(systemOne.evaluateDecision).mockResolvedValue(verdict(true, false));
+    const goal = loops.get(sessionId)!;
+    const completed = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Verified", evidence: ["Test exit 0"] }, undefined, keys);
+    expect(completed.status).toBe("running");
+    expect(loops.finishTurn(sessionId)?.status).toBe("running");
+  });
+
+  it("routes configured tool checks through System One and waits for the verdict", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false));
+    const user = sessions.create({ userId: "owner", name: "Monitored tool chat" });
+    const goal = loops.goal(user.id, "Fix", ["Pass"], "owner");
+    const tool = createLoopTools(loops).find(t => t.name === "loop.check")!;
+    const result = await tool.execute({ revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] },
+      { sessionId: user.id, userId: "owner", actionId: "test", projectRoot: ".", requestedBy: "test", apiKeys: keys });
+    expect(result).toMatchObject({ ok: true, data: { status: "running", monitor: { status: "rejected" } } });
+    expect(evaluate).toHaveBeenCalledOnce();
+  });
+
+  it("requires a separate supported verdict for every acceptance criterion", async () => {
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict());
+    const goal = loops.goal(sessionId, "Fix", ["Tests pass", "Build passes"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Verified", evidence: ["Tests exit 0", "Build exit 0"] }, undefined, keys);
+    expect(result).toMatchObject({ status: "running", monitor: { criteriaPassed: [true, false] } });
+    expect(evaluate.mock.calls[0][2]).toHaveProperty("criterion_1");
+  });
+
+});

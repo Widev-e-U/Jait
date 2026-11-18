@@ -1,0 +1,118 @@
+{
+  "lane": "http-edge",
+  "declarations": [
+    {
+      "id": "packages/gateway/src/routes/agent-control.test.ts:87:3",
+      "status": "verified",
+      "parity_review": "Rust requires HTTP 401 for GET state and POST halt/resume without credentials and proves the owner's full before/after state is unchanged.",
+      "rust_cases": [
+        {
+          "id": "edge.control-anonymous-denied",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/agent-control.test.ts:93:3",
+      "status": "verified",
+      "parity_review": "Rust halts with a reason, checks numeric stopped count and null stop error, reads the same halted state, requires the exact 409 agent_halted/create-thread refusal, resumes and successfully creates a thread record with HTTP 201. No provider turn is launched.",
+      "rust_cases": [
+        {
+          "id": "edge.control-halt-refusal-body",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/agent-control.test.ts:207:3",
+      "status": "verified",
+      "parity_review": "Rust submits a 501-character halt reason, requires HTTP 400 and proves the full control state unchanged. Number/null/array reasons get the same no-mutation check.",
+      "rust_cases": [
+        {
+          "id": "edge.control-invalid-halt-unchanged",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/auth-refresh.test.ts:30:3",
+      "status": "verified",
+      "parity_review": "Rust sends invalid bearer tokens to refresh, requires HTTP 204 with empty bodies, and verifies no replacement cookie is issued. Invalid cookie refresh is also refused.",
+      "rust_cases": [
+        {
+          "id": "edge.refresh-invalid-token",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/repo-proposals.test.ts:33:3",
+      "status": "verified",
+      "parity_review": "Rust persists two proposals then lists exactly two in newest-first identity order, with source thread id/title, priority, due date, serialized tags, null completion time and empty history. Complete listed rows must equal their creation responses.",
+      "rust_cases": [
+        {
+          "id": "edge.repo-proposal-history",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/repo-proposals.test.ts:62:3",
+      "status": "verified",
+      "parity_review": "Rust updates message/status/priority/dueDate/tags and checks null completion, completes from in_progress with exactly one history entry tied to completedAt, reopens with cleared completedAt and retained history, and deletes with an empty persisted list afterwards.",
+      "rust_cases": [
+        {
+          "id": "edge.repo-proposal-history",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/repo-proposals.test.ts:102:3",
+      "status": "verified",
+      "parity_review": "Rust creates a done proposal and requires a completion timestamp and exactly one history entry containing that timestamp and previousStatus:null.",
+      "rust_cases": [
+        {
+          "id": "edge.repo-proposal-history",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/services/project-repositories.test.ts:119:3",
+      "status": "verified",
+      "parity_review": "Rust creates a project over an existing disposable folder without .git, attempts assignment, and requires HTTP 400 with the exact PROJECT_NOT_GIT code and details.",
+      "rust_cases": [
+        {
+          "id": "edge.project-node-claims",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "packages/gateway/src/routes/chat-auth.test.ts:25:3",
+      "status": "verified",
+      "parity_review": "Rust requires HTTP 401 for anonymous chat POST, message GET, stream GET, and cancel POST, covering all four protected endpoints.",
+      "rust_cases": [
+        {
+          "id": "edge.session-message-cancel-auth",
+          "source": "tests/contract/src/edge_contracts.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        },
+        {
+          "id": "auth.anonymous-denied",
+          "source": "tests/contract/src/scenarios.rs",
+          "report": ".jait/artifacts/contracts/2bec43f2-83a1-4bfb-8056-9cc4d8e2b45f/report.json"
+        }
+      ]
+    }
+  ]
+}

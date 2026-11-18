@@ -1,0 +1,54 @@
+name: Gateway migration contracts
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: Gateway implementation to measure (Rust may still fail or be blocked)
+        type: choice
+        options: [bun, rust]
+        default: bun
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: bun install --frozen-lockfile
+      - name: Build gateway workspace dependencies
+        run: |
+          bun run --filter @jait/shared build
+          bun run --filter @jait/screen-share build
+      - name: Validate adapter types and backend selection
+        run: |
+          bun run test:gateway:migration:types
+          node --test tests/contract/tooling/migration-cli.test.mjs tests/contract/tooling/flow-report.test.mjs
+      - name: Run identical migration scenarios against selected backend
+        env:
+          MIGRATION_BACKEND: ${{ inputs.backend || 'bun' }}
+        run: bun run test:gateway:migration --backend "$MIGRATION_BACKEND"
+      - name: Upload migration verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-migration-contracts
+          path: |
+            .jait/artifacts/migration-suite/*/report.json
+            .jait/artifacts/migration-suite/*/*.log
+            .jait/artifacts/migration-suite/*/chat-flow.json
+            .jait/artifacts/migration-suite/*/chat-flow.md
+          retention-days: 7

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuPosition, SessionSelector as SessionSelectorBase } from './session-selector'
+import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, SessionSelector as SessionSelectorBase, sortSessionsByActivity } from './session-selector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
@@ -368,6 +368,36 @@ describe('SessionSelector', () => {
     expect(getSessionContextMenuPosition(100, 300, 400, 400, 240)).toEqual({ left: 100, top: 152, })
   })
 
+  it('creates projects and personal chats from their section headers', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject()]}
+        activeProjectId="project-1"
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onNewPersonalSession={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />
+    )
+
+    const searchField = markup.indexOf('type="search"')
+    const projectsHeader = markup.indexOf('Projects &amp; Chats')
+    const newProject = markup.indexOf('aria-label="New project"')
+    const personalHeader = markup.indexOf('Personal chats')
+    const newPersonalChat = markup.indexOf('aria-label="New personal chat"')
+
+    // The search field owns its whole row — no trailing + button anymore.
+    expect(searchField).toBeGreaterThan(-1)
+    expect(projectsHeader).toBeGreaterThan(searchField)
+    expect(markup.slice(searchField, projectsHeader)).not.toContain('<button')
+
+    // One + sits with "Projects & Chats", the other with "Personal chats".
+    expect(newProject).toBeGreaterThan(projectsHeader)
+    expect(personalHeader).toBeGreaterThan(newProject)
+    expect(newPersonalChat).toBeGreaterThan(personalHeader)
+  })
+
   describe('folder tree', () => {
     function folder(id: string, title: string, overrides: Partial<ProjectRecord> = {}): ProjectRecord {
       return {
@@ -494,4 +524,56 @@ it('highlights every open chat across projects and removes closed highlights', (
   expect(render(['session-1', 'other']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
   expect(render(['session-1', 'personal']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
   expect(render(['session-1']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(1)
+})
+
+it('offers a separate new chat control when the latest chat is open', () => {
+  const project = createProject()
+  const projectRow = (markup: string) => markup.match(/class="group grid w-full grid-cols-\[auto,auto,minmax\(0,1fr\),auto\][^"]*"/)?.[0] ?? ''
+  const render = (onNewChatInProject?: (projectId: string) => void) => renderToStaticMarkup(<SessionSelector
+    projects={[project]} activeProjectId="project-1" activeSessionId="session-1"
+    onSelectProject={() => {}} onNewChatInProject={onNewChatInProject} onCreateProject={() => {}}
+    onRemoveProject={() => {}} onChangeDirectory={() => {}}
+  />)
+  expect(projectRow(render())).toContain('cursor-default')
+  expect(projectRow(render(() => {}))).toContain('cursor-default')
+  expect(render(() => {})).toContain('aria-label="New chat in Jait"')
+})
+
+describe('sidebar manual order', () => {
+  it('places dragged items before or after the target and preserves the other items', () => {
+    expect(moveSidebarItem(['a', 'b', 'c'], 'c', 'a', false)).toEqual(['c', 'a', 'b'])
+    expect(moveSidebarItem(['a', 'b', 'c'], 'a', 'c', true)).toEqual(['b', 'c', 'a'])
+    expect(moveSidebarItem(['a', 'b'], 'a', 'a', true)).toEqual(['a', 'b'])
+  })
+
+  it('keeps saved items in order while placing new items first', () => {
+    expect(orderSidebarItems([{ id: 'b' }, { id: 'new' }, { id: 'a' }], ['a', 'b', 'removed']).map((item) => item.id)).toEqual(['new', 'a', 'b'])
+  })
+})
+
+describe('sortSessionsByActivity', () => {
+  const session = (id: string, lastActiveAt: string, metadata: string | null = null) => ({ id, createdAt: '2026-01-01T00:00:00.000Z', lastActiveAt, metadata })
+  const loop = (status: string) => JSON.stringify({ loop: { id: 'loop', goal: 'ship it', criteria: ['shipped'], status, iteration: 1, revision: 1, checkedIteration: -1, summary: '', nextMessage: '', evidence: [], updatedAt: '2026-01-01T00:00:00.000Z' } })
+
+  it('orders by last activity, newest first', () => {
+    expect(sortSessionsByActivity([
+      session('old', '2026-01-01T10:00:00.000Z'),
+      session('new', '2026-01-01T12:00:00.000Z'),
+    ]).map((s) => s.id)).toEqual(['new', 'old'])
+  })
+
+  it('keeps a streaming chat above chats used since its turn started', () => {
+    expect(sortSessionsByActivity([
+      session('recent', '2026-01-01T12:00:00.000Z'),
+      session('long-turn', '2026-01-01T10:00:00.000Z'),
+    ], new Set(['long-turn'])).map((s) => s.id)).toEqual(['long-turn', 'recent'])
+  })
+
+  it('keeps a running goal loop on top between its turns', () => {
+    expect(sortSessionsByActivity([
+      session('recent', '2026-01-01T12:00:00.000Z'),
+      session('loop', '2026-01-01T10:00:00.000Z', loop('running')),
+      session('paused', '2026-01-01T11:00:00.000Z', loop('paused')),
+    ]).map((s) => s.id)).toEqual(['loop', 'recent', 'paused'])
+  })
 })

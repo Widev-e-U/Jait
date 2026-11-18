@@ -7,17 +7,7 @@ import type {
   CodeGraphQueryResult,
   CodeGraphSnapshot,
 } from '@jait/shared'
-import {
-  AlertCircle,
-  Braces,
-  DatabaseZap,
-  GitBranch,
-  Loader2,
-  RefreshCw,
-  Search,
-  Sparkles,
-  X,
-} from 'lucide-react'
+import { AlertCircle, Braces, DatabaseZap, GitBranch, Loader2, RefreshCw, Search, X, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -110,7 +100,7 @@ function EmptyGraph({
         </div>
       ) : null}
       <Button size="sm" onClick={onIndex} disabled={busy}>
-        {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+        {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Bot className="mr-1.5 h-3.5 w-3.5" />}
         {index?.status === 'error' ? 'Retry index' : 'Index with Graphify'}
       </Button>
       <p className="text-2xs text-muted-foreground">Graphify is installed and versioned automatically by Jait.</p>

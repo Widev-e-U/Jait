@@ -6,6 +6,20 @@ import { describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./preview.js";
 
 describe("PreviewService", () => {
+  it("notifies capture listeners when control is taken or the preview stops", async () => {
+    const browser = { id: "browser-1", sessionId: "owner", type: "browser", state: "running", getLiveViewInfo: () => null };
+    const service = new PreviewService({ getSurface: () => browser, stopSurface: async () => {} } as any);
+    service.attachAgentBrowser("owner", browser as any);
+    const listener = vi.fn();
+    const unsubscribe = service.onBrowserControlLost(listener);
+    service.setSharedWithAgent("owner", false);
+    expect(listener).toHaveBeenCalledWith("browser-1");
+    service.setSharedWithAgent("owner", true);
+    await service.stop("owner");
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
   it("revokes DevTools grants across handoff, restart and pending attachment", async () => {
     const browser = {
       id: "browser-1", sessionId: "owner", type: "browser", state: "running",
@@ -51,8 +65,32 @@ describe("PreviewService", () => {
     expect(result?.sharedWithAgent).toBe(false);
     expect(registry.startSurface).not.toHaveBeenCalled();
     service.setSharedWithAgent("owner", true);
-    await expect(service.reload("owner")).rejects.toThrow("Take control");
-    expect(browser.reload).toHaveBeenCalledOnce();
+    const sharedResult = await service.reload("owner");
+    expect(sharedResult?.sharedWithAgent).toBe(true);
+    expect(sharedResult?.browserId).toBe("browser-1");
+    expect(browser.reload).toHaveBeenCalledTimes(2);
+    expect(() => service.assertAgentControl("browser-1")).not.toThrow();
+  });
+
+  it("moves through history without replacing the browser or changing control", async () => {
+    const browser = {
+      id: "browser-1", sessionId: "owner", type: "browser", state: "running",
+      history: vi.fn().mockResolvedValue({ url: "https://example.com/previous" }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue(null),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("owner", browser as any, undefined, false);
+    expect(await service.history("missing", "back")).toBeNull();
+    expect(await service.history("owner", "back")).toMatchObject({ browserId: "browser-1", sharedWithAgent: false });
+    expect(browser.history).toHaveBeenCalledWith("back");
+    service.setSharedWithAgent("owner", true);
+    expect(await service.history("owner", "forward")).toMatchObject({ browserId: "browser-1", sharedWithAgent: true });
+    expect(browser.history).toHaveBeenCalledWith("forward");
+    registry.getSurface.mockReturnValueOnce(null as any);
+    expect(await service.history("owner", "back")).toBeNull();
+    expect(registry.startSurface).not.toHaveBeenCalled();
   });
 
   it("navigates the owner's browser without recreating it or granting agent control", async () => {
@@ -76,7 +114,11 @@ describe("PreviewService", () => {
     expect(result?.sharedWithAgent).toBe(false);
     expect(registry.startSurface).not.toHaveBeenCalled();
     service.setSharedWithAgent("owner", true);
-    await expect(service.navigate("owner", "https://example.com/")).rejects.toThrow("Take control");
+    const sharedResult = await service.navigate("owner", "https://example.com/");
+    expect(sharedResult?.sharedWithAgent).toBe(true);
+    expect(sharedResult?.browserId).toBe("browser-1");
+    expect(() => service.assertAgentControl("browser-1")).not.toThrow();
+    await expect(service.navigate("owner", "file:///etc/passwd")).rejects.toThrow("HTTP");
   });
 
   it("cleans up a managed server when the preview browser fails", async () => {
@@ -141,7 +183,9 @@ describe("PreviewService", () => {
     };
     const service = new PreviewService(registry as any);
     const started = await service.start({ sessionId: "sharing-session", target: "4173" });
-    expect(started.sharedWithAgent).toBe(false);
+    expect(started.sharedWithAgent).toBe(true);
+    expect(() => service.assertAgentControl(started.browserId!)).not.toThrow();
+    service.setSharedWithAgent("sharing-session", false);
     expect(() => service.assertAgentControl(started.browserId!)).toThrow(/not shared with the agent/i);
 
     const shared = service.setSharedWithAgent("sharing-session", true);

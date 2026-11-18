@@ -5,6 +5,9 @@ import type { SSEDebugEvent } from './sse-debug-panel'
 
 const API_URL = getApiUrl()
 
+/** Quiet period after the last replayed event before the history counts as loaded. */
+const REPLAY_SETTLE_MS = 150
+
 function authHeaders(token?: string | null): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
@@ -16,6 +19,8 @@ export interface SessionTrajectoryState {
   events: SSEDebugEvent[]
   /** True while the gateway SSE stream is open. */
   connected: boolean
+  /** True once the persisted history replay has been published (or the log is empty). */
+  loaded: boolean
   /** Drop the locally accumulated events (view reset). */
   clear: () => void
 }
@@ -30,6 +35,7 @@ export interface SessionTrajectoryState {
 export function useSessionTrajectory(sessionId: string | null, token: string | null): SessionTrajectoryState {
   const [events, setEvents] = useState<SSEDebugEvent[]>([])
   const [connected, setConnected] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const eventsRef = useRef<SSEDebugEvent[]>([])
   const maxLogIdRef = useRef(0)
 
@@ -46,6 +52,7 @@ export function useSessionTrajectory(sessionId: string | null, token: string | n
     eventsRef.current = []
     maxLogIdRef.current = 0
     setEvents([])
+    setLoaded(false)
     if (!sessionId || !token) {
       setConnected(false)
       return
@@ -55,6 +62,20 @@ export function useSessionTrajectory(sessionId: string | null, token: string | n
     let controller: AbortController | null = null
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let attempts = 0
+    let pending: SSEDebugEvent[] = []
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flush = () => {
+      if (flushTimer) clearTimeout(flushTimer)
+      flushTimer = null
+      if (cancelled) return
+      if (pending.length > 0) {
+        eventsRef.current = [...eventsRef.current, ...pending]
+        pending = []
+        setEvents(eventsRef.current)
+      }
+      setLoaded(true)
+    }
 
     const appendEvent = (ev: TrajectoryStreamEvent) => {
       const logId = Number(ev.log_id)
@@ -68,8 +89,15 @@ export function useSessionTrajectory(sessionId: string | null, token: string | n
         type: String((payload as { type?: unknown }).type ?? 'unknown'),
         raw,
       }
-      eventsRef.current = [...eventsRef.current, wrapped]
-      setEvents(eventsRef.current)
+      pending.push(wrapped)
+      if (ev.replay) {
+        // Replayed history arrives as a burst: collect it and publish once the
+        // burst settles, instead of re-rendering (and visibly spawning) per event.
+        if (flushTimer) clearTimeout(flushTimer)
+        flushTimer = setTimeout(flush, REPLAY_SETTLE_MS)
+      } else {
+        flush()
+      }
     }
 
     const scheduleReconnect = () => {
@@ -96,6 +124,8 @@ export function useSessionTrajectory(sessionId: string | null, token: string | n
           if (!res.ok) throw new Error(`trajectory stream ${res.status}`)
           attempts = 0
           setConnected(true)
+          // An empty log sends no replay events — don't hold the panel hidden.
+          if (!flushTimer) flushTimer = setTimeout(flush, REPLAY_SETTLE_MS)
           const reader = res.body?.getReader()
           if (!reader) return
           const decoder = new TextDecoder()
@@ -139,10 +169,11 @@ export function useSessionTrajectory(sessionId: string | null, token: string | n
     connect()
     return () => {
       cancelled = true
+      if (flushTimer) clearTimeout(flushTimer)
       if (retryTimer) clearTimeout(retryTimer)
       controller?.abort()
     }
   }, [sessionId, token])
 
-  return { events, connected, clear }
+  return { events, connected, loaded, clear }
 }

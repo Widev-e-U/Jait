@@ -50,6 +50,7 @@ const IMAGE_FILE_PATTERN = /\.(?:png|jpe?g|gif|webp)$/i;
  * tool result (or the model context) at all.
  */
 const MAX_INLINE_IMAGE_BYTES = 8_000;
+const MAX_MODEL_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<FileReadInput> {
   return {
@@ -233,7 +234,7 @@ export function createFileStatTool(registry: SurfaceRegistry): ToolDefinition<Fi
 export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<ImageViewInput> {
   return {
     name: "image.view",
-    description: "Display a project image in the tool card. The user already sees the image there; do not repeat it in assistant messages with Markdown image embeds, attachments, or redundant file links unless explicitly requested. Do not call again when a tool card has already shown the image.",
+    description: "Display a project image in the tool card. The user already sees the image there; do not repeat it in assistant messages with Markdown image embeds, attachments, or redundant file links unless explicitly requested. Do not call after screenshot.capture or browser.screenshot: those tools already display the image. Do not call again when a tool card has already shown the image.",
     tier: "standard",
     category: "filesystem",
     source: "builtin",
@@ -259,7 +260,7 @@ export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<I
         const extension = trimmedPath.match(/\.(png|jpe?g|gif|webp)$/i)?.[1]?.toLowerCase() ?? "png";
         const mimeType = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : extension === "gif" ? "image/gif" : "image/jpeg";
         const inline = bytes.length <= MAX_INLINE_IMAGE_BYTES;
-        return {
+        const result: ToolResult = {
           ok: true,
           message: inline
             ? `Displaying image ${basename(trimmedPath)}`
@@ -272,8 +273,13 @@ export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<I
             isDirectory: info.isDirectory,
             inline,
             ...(inline ? { base64: Buffer.from(bytes).toString("base64") } : {}),
+            ...(bytes.length > MAX_MODEL_IMAGE_BYTES ? { modelImageUnavailable: "Image exceeds the 10 MiB model-view limit; resize it before viewing." } : {}),
           },
         };
+        if (bytes.length <= MAX_MODEL_IMAGE_BYTES) {
+          Object.defineProperty(result, "modelImage", { value: { base64: Buffer.from(bytes).toString("base64"), mimeType }, enumerable: false });
+        }
+        return result;
       } catch (err) {
         return {
           ok: false,

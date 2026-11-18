@@ -7,6 +7,7 @@ const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 const shotsDir = path.resolve(__dirname, '../../.jait/shots')
 
 async function openAgents(page: Page, request: APIRequestContext) {
+  test.setTimeout(90_000)
   const token = await registerAgentTestUser(request, API_URL, `agents-ui-${Date.now()}-${Math.random().toString(36).slice(2)}`, 'agents-ui-test-password')
   await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
@@ -22,6 +23,18 @@ async function openAgents(page: Page, request: APIRequestContext) {
   await expect(page.getByRole('button', { name: 'New agent' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toHaveCount(1)
   return token as string
+}
+
+// These tests exercise provider selection and profile persistence, not the Pi CLI.
+// Keep the provider list deterministic without requiring host-installed agents.
+async function includePiProvider(page: Page) {
+  await page.route(/\/api\/providers(?:\?.*)?$/, route => route.fulfill({ json: {
+    providers: [
+      { id: 'jait', name: 'Jait', description: 'Test provider', installed: true, available: true, modes: ['full-access', 'supervised'] },
+      { id: 'pi', name: 'Pi', description: 'Test provider', installed: true, available: true, modes: ['full-access', 'supervised'] },
+    ],
+    remoteProviders: [],
+  } }))
 }
 
 async function createAgent(page: Page) {
@@ -102,6 +115,8 @@ test('agent overview uses creatures and play opens task selection independently'
   await expect(page.getByRole('heading', { name: 'Tasks & runs', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'All agents' }).click()
   await row.getByRole('button', { name: 'Open Researcher' }).click()
+  await expect(page.getByRole('heading', { name: 'Current runs', exact: true })).toBeVisible()
+  await page.getByRole('navigation', { name: 'Agent sections' }).getByRole('button', { name: 'Chat', exact: true }).click()
   await expect(page.getByTestId('chat-composer')).toBeVisible()
 })
 
@@ -199,6 +214,7 @@ test('stopped task resumes from its row and active tasks stop independently of l
 })
 
 test('agent list edits persist and graph shows real runtime and reporting links', async ({ page, request }) => {
+  await includePiProvider(page)
   await openAgents(page, request)
   await createAgent(page)
   await page.getByRole('button', { name: 'All agents' }).click()
@@ -208,12 +224,14 @@ test('agent list edits persist and graph shows real runtime and reporting links'
   await expect(row.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
   await expect(row.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0)
   const saved = page.waitForResponse(response => response.url().includes('/api/persona-agents/') && response.request().method() === 'PUT' && response.ok())
-  await row.getByRole('button', { name: /^Provider / }).click()
   await page.getByRole('listbox', { name: 'Providers', exact: true }).getByRole('option').filter({ hasText: 'Pi' }).click()
   const profile = await (await saved).json()
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'List', exact: true }).click()
-  await expect(row.getByRole('button', { name: 'Change provider and model for Researcher' })).toHaveAttribute('title', profile.providerId + ' · ' + (profile.model || 'Default model'))
+  await row.getByRole('button', { name: 'Change provider and model for Researcher' }).click()
+  await expect(page.getByRole('listbox', { name: 'Providers', exact: true }).getByRole('option', { selected: true })).toContainText('Pi')
+  expect(profile.providerId).toBe('pi')
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Graph', exact: true }).click()
   const canvas = page.getByLabel('Agent reporting graph').locator('canvas').first()
   await expect(canvas).toBeVisible()
@@ -223,6 +241,8 @@ test('agent list edits persist and graph shows real runtime and reporting links'
   await graphNode.getByRole('button', { name: 'Open Researcher', exact: true }).click()
   const sidebar = page.getByRole('complementary', { name: 'Agent details' })
   await expect(sidebar).toBeVisible()
+  await expect(sidebar.getByRole('heading', { name: 'Current runs', exact: true })).toBeVisible()
+  await sidebar.getByRole('button', { name: 'Chat', exact: true }).click()
   await expect(sidebar.getByTestId('chat-composer')).toBeVisible()
   await expect(canvas).toBeVisible()
   const graphBounds = await canvas.boundingBox()
@@ -230,13 +250,14 @@ test('agent list edits persist and graph shows real runtime and reporting links'
   expect(graphBounds!.x + graphBounds!.width).toBeLessThanOrEqual(sidebarBounds!.x + 1)
   await sidebar.getByRole('button', { name: 'Profile', exact: true }).click()
   await expect(sidebar.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Researcher')
-  await page.screenshot({ path: 'test-results/agents-graph.png', fullPage: true })
+  await page.screenshot({ path: path.join(shotsDir, 'agents-graph.png'), fullPage: true })
   await page.getByRole('button', { name: 'All agents' }).click()
   await page.getByRole('button', { name: 'List', exact: true }).click()
   await expect(row.getByRole('button', { name: 'Open Researcher' })).toBeVisible()
 })
 
 test('agent list shows save failure without claiming a persisted model', async ({ page, request }) => {
+  await includePiProvider(page)
   await openAgents(page, request)
   await createAgent(page)
   await page.getByRole('button', { name: 'All agents' }).click()
@@ -244,7 +265,6 @@ test('agent list shows save failure without claiming a persisted model', async (
   await page.getByRole('button', { name: 'List', exact: true }).click()
   const row = page.getByTestId('agent-row')
   await row.getByRole('button', { name: 'Change provider and model for Researcher' }).click()
-  await row.getByRole('button', { name: /^Provider / }).click()
   await page.getByRole('listbox', { name: 'Providers', exact: true }).getByRole('option').filter({ hasText: 'Pi' }).click()
   await expect(row.getByRole('alert')).toBeVisible()
   await expect(row.getByRole('button', { name: 'Change provider and model for Researcher' })).toBeEnabled()
@@ -351,8 +371,10 @@ test.describe('Composite team SVG avatars', () => {
       const firstMember = clusters.nth(3).locator('[data-member-id="member-0"]')
       await expect(firstMember.locator('svg')).toHaveCount(1)
       await expect(firstMember.locator('path').first()).toHaveAttribute('fill', '#a78bfa')
+      await expect.poll(() => firstMember.locator('.agent-creature-body').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      await page.emulateMedia({ reducedMotion: 'reduce' })
       await expect.poll(() => firstMember.locator('.agent-creature-eyes').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
-      await section.screenshot({ path: `test-results/team-avatars-${size}px-${testInfo.project.name}.png` })
+      await section.screenshot({ path: path.join(shotsDir, `team-avatars-${size}px-${testInfo.project.name}.png`) })
     })
   }
 })

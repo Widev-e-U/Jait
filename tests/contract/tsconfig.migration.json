@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "typeRoots": [
+      "../../packages/gateway/node_modules/@types",
+      "../../node_modules/@types",
+      "../../packages/screen-share/node_modules/@types"
+    ]
+  },
+  "include": [
+    "drivers/migration-*.ts",
+    "drivers/active-stream.ts"
+  ]
+}

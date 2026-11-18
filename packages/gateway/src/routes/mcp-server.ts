@@ -1,3 +1,6 @@
+import type { UserQuestionService } from "../services/user-questions.js";
+import { projectToolEvidence } from "../tools/context-evidence.js";
+import { projectModelData, boundModelData } from "../tools/model-result.js";
 /**
  * MCP HTTP Server — exposes Jait's tool registry as MCP-compatible endpoints.
  *
@@ -28,6 +31,7 @@ type McpToolExecutor = (
 ) => Promise<ToolResult>;
 
 interface McpDeps {
+  userQuestionService?: UserQuestionService;
   toolRegistry: ToolRegistry;
   toolExecutor?: McpToolExecutor;
   config: AppConfig;
@@ -56,11 +60,16 @@ interface McpResponse {
 
 interface McpToolContextOverrides {
   sessionId?: string;
+  /** Legacy unbound MCP clients may infer a chat; interactive browsers must not. */
+  sessionIdInferred?: boolean;
+  threadId?: string;
   projectRoot?: string;
   userId?: string;
   providerId?: string;
   model?: string;
   runtimeMode?: string;
+  /** Server-side user settings keys; never sent to the model. */
+  apiKeys?: Record<string, string>;
 }
 
 type McpToolContent =
@@ -81,7 +90,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
+export function mcpContentForToolResult(uiResult: ToolResult, context?: ToolContext, toolName?: string): McpToolContent[] {
+  if (toolName === "image.view" && uiResult.ok && uiResult.modelImage) {
+    // Keep image bytes out of text evidence and persisted tool data; MCP carries
+    // them as actual visual content to the selected provider.
+    const data = isRecord(uiResult.data) ? { ...uiResult.data } : {};
+    delete data.base64;
+    const sanitized = { ok: uiResult.ok, message: uiResult.message, data };
+    const content = context?.userId ? projectToolEvidence(sanitized, context, toolName).content
+      : JSON.stringify(sanitized);
+    return [{ type: "text", text: content }, { type: "image", data: uiResult.modelImage.base64, mimeType: uiResult.modelImage.mimeType }];
+  }
+  if (context?.userId && !(isRecord(uiResult.data) && isRecord(uiResult.data.screenshot))) {
+    return [{ type: "text", text: projectToolEvidence(uiResult, context, toolName).content }];
+  }
+  const result = { ...uiResult, data: projectModelData(uiResult.data) };
   if (typeof result.data === "string") return [{ type: "text", text: capMcpToolResultText(result.data) }];
 
   if (isRecord(result.data) && isRecord(result.data.screenshot)) {
@@ -93,7 +116,7 @@ export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
       return [
         {
           type: "text",
-          text: capMcpToolResultText(result.message + (Object.keys(sanitizedData).length > 0 ? `\n${JSON.stringify(sanitizedData)}` : "")),
+          text: capMcpToolResultText(result.message + (Object.keys(sanitizedData).length > 0 ? `\n${JSON.stringify(boundModelData(sanitizedData, MAX_MCP_TOOL_RESULT_TEXT_CHARS - Math.min(result.message.length, 1000) - 1))}` : "")),
         },
         { type: "image", data: pngBase64, mimeType: "image/png" },
       ];
@@ -102,7 +125,7 @@ export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
 
   return [{
     type: "text",
-    text: capMcpToolResultText(result.message + (result.data ? `\n${JSON.stringify(result.data)}` : "")),
+    text: result.message.slice(0, 1000) + (result.data !== undefined ? `\n${JSON.stringify(boundModelData(result.data, MAX_MCP_TOOL_RESULT_TEXT_CHARS - 1001))}` : ""),
   }];
 }
 
@@ -211,11 +234,27 @@ async function resolveMcpToolContext(
   sessionService?: SessionService,
   userService?: UserService,
   sessionState?: SessionStateService,
+  threadService?: ThreadService,
+  params?: Record<string, unknown>,
+): Promise<McpToolContextOverrides> {
+  const resolved = await resolveMcpIdentityContext(request, config, sessionService, userService, sessionState, threadService, params);
+  // Native chats load user API keys per request; MCP tools (System One, Home Assistant, ...) need the same.
+  const apiKeys = resolved.userId ? userService?.getSettings(resolved.userId).apiKeys : undefined;
+  return apiKeys ? { ...resolved, apiKeys } : resolved;
+}
+
+async function resolveMcpIdentityContext(
+  request: FastifyRequest | null,
+  config: AppConfig,
+  sessionService?: SessionService,
+  userService?: UserService,
+  sessionState?: SessionStateService,
+  threadService?: ThreadService,
   params?: Record<string, unknown>,
 ): Promise<McpToolContextOverrides> {
   const overrides = resolveMcpToolContextOverrides(request, params);
   if (!request) {
-    return inferSessionBackedToolContext(overrides, sessionService, userService, sessionState);
+    return inferExecutionBackedToolContext(overrides, sessionService, userService, sessionState, threadService);
   }
 
   const token = extractBearerToken(request.headers.authorization);
@@ -234,6 +273,7 @@ async function resolveMcpToolContext(
             return {
               ...overrides,
               sessionId: session.id,
+              sessionIdInferred: true,
               projectRoot: overrides.projectRoot ?? session.projectPath ?? undefined,
               userId: user.id,
             };
@@ -243,28 +283,35 @@ async function resolveMcpToolContext(
   if (!user && !authBackedOverrides.sessionId && sessionService) {
     const session = sessionService.lastActive();
     if (session?.id) {
-      return inferSessionBackedToolContext({
+      return inferExecutionBackedToolContext({
         ...authBackedOverrides,
         sessionId: session.id,
+        sessionIdInferred: true,
         projectRoot: authBackedOverrides.projectRoot ?? session.projectPath ?? undefined,
-      }, sessionService, userService, sessionState);
+      }, sessionService, userService, sessionState, threadService);
     }
   }
 
-  return inferSessionBackedToolContext(authBackedOverrides, sessionService, userService, sessionState);
+  return inferExecutionBackedToolContext(authBackedOverrides, sessionService, userService, sessionState, threadService);
 }
 
-function inferSessionBackedToolContext(
+function inferExecutionBackedToolContext(
   overrides: McpToolContextOverrides,
   sessionService?: SessionService,
   userService?: UserService,
   sessionState?: SessionStateService,
+  threadService?: ThreadService,
 ): McpToolContextOverrides {
   const session = overrides.sessionId && sessionService
     ? sessionService.getById(overrides.sessionId)
     : null;
-  const userId = overrides.userId ?? session?.userId ?? undefined;
-  const projectRoot = overrides.projectRoot ?? session?.projectPath ?? undefined;
+  // CLI workers pass a durable Thread ID, which is not a chat session row.
+  // Resolve its owner here so tool consent, team access, and App identity all
+  // receive the same execution context; never borrow a different user's thread.
+  const thread = overrides.sessionId ? threadService?.getById(overrides.sessionId) : undefined;
+  const userId = overrides.userId ?? thread?.userId ?? session?.userId ?? undefined;
+  const ownedThread = thread?.userId === userId ? thread : undefined;
+  const projectRoot = overrides.projectRoot ?? ownedThread?.workingDirectory ?? session?.projectPath ?? undefined;
 
   const defaults = resolveThreadSelectionDefaults({
     userId,
@@ -275,11 +322,12 @@ function inferSessionBackedToolContext(
 
   return {
     ...overrides,
+    threadId: ownedThread?.id,
     userId,
     projectRoot,
-    providerId: overrides.providerId ?? defaults.providerId,
-    model: overrides.model ?? defaults.model,
-    runtimeMode: overrides.runtimeMode ?? defaults.runtimeMode,
+    providerId: overrides.providerId ?? ownedThread?.providerId ?? defaults.providerId,
+    model: overrides.model ?? ownedThread?.model ?? defaults.model,
+    runtimeMode: overrides.runtimeMode ?? ownedThread?.runtimeMode ?? defaults.runtimeMode,
   };
 }
 
@@ -353,10 +401,51 @@ export function listToolsForMcp(
   return tools;
 }
 
+/**
+ * Resolve the tool a client means by the name it was shown in `tools/list`.
+ *
+ * Advertising replaces `.` with `_`, which is lossy: `mcp.add_server` and
+ * `mcp.add.server` both become `mcp_add_server`. Turning every `_` back into
+ * `.` can therefore never reach a tool whose real name contains an underscore,
+ * such as every bridged `mcp.<server>.<tool>` or `project.assign_repository`.
+ *
+ * The exact and fully dotted lookups keep their historical precedence. Only
+ * when both miss are the names this endpoint advertises compared by their
+ * provider-safe form. A name two tools share is refused rather than guessed,
+ * because the guess could run a different, possibly high-risk, tool.
+ */
+function resolveMcpTool(
+  toolRegistry: ToolRegistry,
+  rawName: string,
+  dottedName: string,
+  toolSet: McpToolSet,
+): { tool?: ToolDefinition; ambiguousWith?: string[] } {
+  const direct = toolRegistry.get(dottedName) ?? toolRegistry.get(rawName);
+  if (direct) return { tool: direct };
+  const advertised = listToolsForMcp(toolRegistry, toolSet)
+    .filter((candidate) => candidate.name.replace(/\./g, "_") === rawName);
+  if (advertised.length === 1) return { tool: advertised[0] };
+  return advertised.length > 1 ? { ambiguousWith: advertised.map((candidate) => candidate.name) } : {};
+}
+
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry, toolExecutor, config, sessionService, userService, sessionState } = deps;
+  const { toolRegistry, config, sessionService, userService, sessionState, threadService } = deps;
+  const toolExecutor: McpToolExecutor = async (name, input, context) => {
+    const pending = deps.userQuestionService?.listPending(context.sessionId, context.userId)
+      .find(question => question.userId === (context.userId ?? null));
+    const args = input as { requestId?: unknown } | null;
+    const resumeTool = pending?.requestedBy === "browser.handoff" ? "browser.handoff" : "user.ask";
+    const recoveryTool = ["context.read", "tools.search", "jait.catalog"].includes(name);
+    if (pending && !recoveryTool && !(name === resumeTool && args?.requestId === pending.id)) {
+      return { ok: false,
+        message: `Waiting for the user's answer. Call ${resumeTool} with only requestId=${JSON.stringify(pending.id)}; other actions are paused until answered or cancelled.`,
+        data: { status: "pending", requestId: pending.id },
+      };
+    }
+    return deps.toolExecutor ? deps.toolExecutor(name, input, context) : toolRegistry.get(name)!.execute(input, context);
+  };
 
   // Callback for post-tool-execution side effects (e.g., thread todo activities)
   const onToolExecuted: McpToolExecutedCallback = (toolName, result, context) => {
@@ -436,7 +525,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
     const negotiatedVersion = requestedVersion ?? DEFAULT_MCP_PROTOCOL_VERSION;
     applyMcpProtocolVersionHeader(reply, negotiatedVersion);
-    const context = await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params);
+    const context = await resolveMcpToolContext(request, config, sessionService, userService, sessionState, threadService, body.params);
     const toolSet = resolveMcpToolSet(request.query);
     const progressToken = resolveMcpProgressToken(body);
     const acceptsEventStream = String(request.headers.accept ?? "").includes("text/event-stream");
@@ -570,7 +659,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       body,
       toolRegistry,
       DEFAULT_MCP_PROTOCOL_VERSION,
-      await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
+      await resolveMcpToolContext(request, config, sessionService, userService, sessionState, threadService, body.params),
       onToolExecuted,
       progressToken != null && client?.alive
         ? (chunk) => {
@@ -658,9 +747,8 @@ export async function handleMcpRequest(
       const toolName = rawToolName.replace(/_/g, ".");
       const args = params["arguments"] ?? {};
 
-      let tool = toolRegistry.get(toolName);
-      // Fallback: try the raw name as-is (in case a tool actually uses underscores)
-      if (!tool && toolName !== rawToolName) tool = toolRegistry.get(rawToolName);
+      const resolved = resolveMcpTool(toolRegistry, rawToolName, toolName, toolSet);
+      let tool = resolved.tool;
       if (tool) {
         const isCoreTool = MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name);
         if ((toolSet === "core" && !isCoreTool) || (toolSet === "deferred" && isCoreTool)) {
@@ -672,7 +760,28 @@ export async function handleMcpRequest(
           jsonrpc: "2.0",
           id: request.id ?? null,
           result: {
-            content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
+            content: [{
+              type: "text",
+              text: resolved.ambiguousWith
+                ? `Ambiguous tool name ${rawToolName}: it matches ${resolved.ambiguousWith.join(", ")}. Call the intended tool by its exact registered name.`
+                : `Unknown tool: ${toolName}`,
+            }],
+            isError: true,
+          },
+        };
+      }
+
+      // Browser control and handoff belong to a specific conversation. The
+      // legacy last-active fallback can change whenever another chat is used,
+      // so it cannot provide authority to open or control an interactive browser.
+      const startsBrowser = tool.name === "surfaces.start"
+        && (args as Record<string, unknown>)["type"] === "browser";
+      if (contextOverrides.sessionIdInferred && (tool.category === "browser" || startsBrowser)) {
+        return {
+          jsonrpc: "2.0",
+          id: request.id ?? null,
+          result: {
+            content: [{ type: "text", text: "Browser tools require an explicit sessionId for the originating chat. Reconnect using this chat's session-scoped MCP URL or x-jait-session-id; the last-active chat cannot be used for browser control or handoff." }],
             isError: true,
           },
         };
@@ -694,6 +803,7 @@ export async function handleMcpRequest(
 
       const context: ToolContext = {
         sessionId: contextOverrides.sessionId,
+        threadId: contextOverrides.threadId,
         actionId: uuidv7(),
         projectRoot: contextOverrides.projectRoot ?? process.cwd(),
         requestedBy: "mcp-client",
@@ -701,6 +811,7 @@ export async function handleMcpRequest(
         providerId: contextOverrides.providerId,
         model: contextOverrides.model,
         runtimeMode: contextOverrides.runtimeMode,
+        apiKeys: contextOverrides.apiKeys,
         onOutputChunk: onProgress,
       };
 
@@ -708,12 +819,12 @@ export async function handleMcpRequest(
         const result = toolExecutor
           ? await toolExecutor(tool.name, args, context)
           : await tool.execute(args, context);
-        onToolExecuted?.(toolName, result, context);
+        onToolExecuted?.(tool.name, result, context);
         return {
           jsonrpc: "2.0",
           id: request.id ?? null,
           result: {
-            content: mcpContentForToolResult(result),
+            content: mcpContentForToolResult(result, context, tool.name),
             isError: !result.ok,
           },
         };

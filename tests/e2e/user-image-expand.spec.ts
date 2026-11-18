@@ -19,7 +19,7 @@ test('expanding a user message image opens the lightbox and never the editor', a
   const imagePreview = page.getByRole('img', { name: 'photo.png' })
   await expect(imagePreview).toBeVisible()
 
-  const expandButton = page.getByRole('button', { name: 'Expand image photo.png' })
+  const expandButton = page.getByRole('button', { name: 'View image 1: photo.png' })
   await expect(expandButton).toBeVisible()
 
   await expandButton.hover()

@@ -17,14 +17,18 @@ import {
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 import { desktopOperationError } from '@/lib/desktop-operation-error'
+import { desktopComputerControlAvailable, desktopScreenShareControlAvailable } from '@/lib/desktop-computer-capabilities'
+import { hostedScreenShareCapture } from '@/lib/hosted-screen-share-capture'
 import { applyTerminalExecutionEvent } from '@/lib/tool-terminal-live'
 import { invalidateTerminalSnapshot } from '@/lib/terminal-snapshot'
+import { ChatNotificationSync } from '@/lib/chat-notification-sync'
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getWsUrl } from '@/lib/gateway-url'
 import { detectPlatform, initDeviceId } from '@/lib/device-id'
 import {
   revokeSystemNotification,
+  getVisibleNotificationSession,
   setNativeNotificationsEnabled,
   triggerSystemNotification,
   type SystemNotificationInput,
@@ -58,10 +62,10 @@ const DESKTOP_NODE_TOOLS = [
   'search',
   'file.search',
   'os.query',
-  'computer.session',
-  'computer.observe',
-  'computer.act',
 ]
+
+const DESKTOP_COMPUTER_TOOLS = ['computer.session', 'computer.observe', 'computer.act']
+const DESKTOP_SHARE_CONTROL_TOOLS = ['computer.geometry', 'computer.share.capture', 'computer.clipboard.read', 'computer.clipboard.write']
 
 // ── Device / platform helpers ───────────────────────────────────────
 
@@ -153,6 +157,27 @@ export function shouldApplySessionScopedWsEvent(
   return typeof eventSessionId === 'string' && eventSessionId === activeSessionId
 }
 
+/** `resume` and `visibilitychange` often fire together on Android. */
+const WAKE_RECONNECT_DEDUPE_MS = 2_000
+
+/**
+ * Whether a wake signal (visibility, Capacitor `resume`, `online`) should
+ * replace the UI socket. A socket that died in the background still reports
+ * OPEN, so a wake always reconnects — unless a fresh socket was just opened
+ * for the same wake, or this is an always-on desktop node that never paused.
+ */
+export function shouldReconnectUiSocketAfterWake(params: {
+  isAlwaysOnNode: boolean
+  hidden: boolean
+  hasSocket: boolean
+  sinceLastWakeReconnectMs: number
+  force?: boolean
+}): boolean {
+  if (params.isAlwaysOnNode || params.hidden) return false
+  if (params.force || !params.hasSocket) return true
+  return params.sinceLastWakeReconnectMs >= WAKE_RECONNECT_DEDUPE_MS
+}
+
 /**
  * Callback for thread-related WS events (thread.created, thread.updated, etc.).
  * `eventType` is the full WS event type (e.g. "thread.created").
@@ -181,6 +206,16 @@ interface UseUICommandsOptions {
   /** Called with the authoritative running-session set after every WebSocket connection. */
   onSessionStreamingSnapshot?: (sessionIds: string[]) => void
   onConsentEvent?: (event: { type: string; payload: unknown }) => void
+  /** Called when the gateway broadcasts a `user.ask` question lifecycle event. */
+  onUserQuestionEvent?: (event: { type: string; payload: unknown }) => void
+  /**
+   * Called when the gateway reports that a chat started or stopped waiting on
+   * something (question, consent, secret, browser control, terminal input,
+   * background command) — the chat-list icon is driven from this.
+   */
+  onSessionWaitEvent?: (event: { type: string; payload: unknown }) => void
+  /** Called with the authoritative agent-control state after a halt/resume. */
+  onAgentHaltEvent?: (payload: unknown) => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway broadcasts preview session state changes. */
@@ -217,6 +252,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onSessionStreamingChange,
     onSessionStreamingSnapshot,
     onConsentEvent,
+    onUserQuestionEvent,
+    onSessionWaitEvent,
+    onAgentHaltEvent,
     onThreadEvent,
     onFsChanges,
     onConnectionStateChange,
@@ -238,6 +276,12 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onSessionStreamingSnapshotRef.current = onSessionStreamingSnapshot
   const onConsentEventRef = useRef(onConsentEvent)
   onConsentEventRef.current = onConsentEvent
+  const onUserQuestionEventRef = useRef(onUserQuestionEvent)
+  onUserQuestionEventRef.current = onUserQuestionEvent
+  const onSessionWaitEventRef = useRef(onSessionWaitEvent)
+  onSessionWaitEventRef.current = onSessionWaitEvent
+  const onAgentHaltEventRef = useRef(onAgentHaltEvent)
+  onAgentHaltEventRef.current = onAgentHaltEvent
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
   const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
@@ -247,6 +291,19 @@ export function useUICommands(opts: UseUICommandsOptions) {
   const onConnectionStateChangeRef = useRef(onConnectionStateChange)
   onConnectionStateChangeRef.current = onConnectionStateChange
   const wsRef = useRef<WebSocket | null>(null)
+  const notificationSyncRef = useRef<ChatNotificationSync | null>(null)
+  if (!notificationSyncRef.current) {
+    notificationSyncRef.current = new ChatNotificationSync(
+      getVisibleNotificationSession,
+      (state) => {
+        const ws = wsRef.current
+        if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({
+          type: 'notification.read', sessionId: state.sessionId, payload: { id: state.id },
+        }))
+      },
+      (state) => { void revokeSystemNotification(state.replaceId, state.id) },
+    )
+  }
   const currentSessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
   const hasConnectedRef = useRef(false)
@@ -276,7 +333,14 @@ export function useUICommands(opts: UseUICommandsOptions) {
   // ── Cross-platform notification handler ──────────────────────────
 
   const handleGatewayNotification = useCallback(async (notif: SystemNotificationInput) => {
+    if (notif.kind === 'completion' && notif.sessionId) {
+      notificationSyncRef.current?.receive({
+        id: notif.id, sessionId: notif.sessionId,
+        replaceId: notif.replaceId ?? notif.id, read: false,
+      })
+    }
     await triggerSystemNotification({ ...notif, includeToast: notif.includeToast ?? notif.kind !== 'completion' })
+    if (notif.sessionId) notificationSyncRef.current?.afterShow(notif.id, notif.sessionId)
   }, [])
 
   // Handle incoming messages — extracted so it's stable across reconnects
@@ -328,6 +392,19 @@ export function useUICommands(opts: UseUICommandsOptions) {
         }
       } else if (['consent.required', 'consent.resolved', 'consent.pending-snapshot'].includes(msg.type)) {
         onConsentEventRef.current?.(msg)
+      } else if (['user-question.requested', 'user-question.resolved', 'user-question.pending-snapshot'].includes(msg.type)) {
+        // Pending `user.ask` questions — the sidebar badges the owning chat so a
+        // question raised in a background chat is visible without opening it.
+        onUserQuestionEventRef.current?.(msg)
+      } else if (['session-wait.updated', 'session-wait.snapshot'].includes(msg.type)) {
+        // One reason-aware "this chat is stopped because…" channel feeds the
+        // chat-list icon: questions, consent, secrets, browser control,
+        // terminal prompts and background commands all report here.
+        onSessionWaitEventRef.current?.(msg)
+      } else if (msg.type === 'agent.halted') {
+        // Owner-wide kill switch changed on some device. Driven from the server
+        // payload so a halt started in another tab (or a resume) lands here too.
+        onAgentHaltEventRef.current?.(msg.payload)
       } else if (msg.type === 'session.streaming') {
         // Any of the user's sessions started/stopped streaming — sidebar-wide, not session-scoped
         const payload = msg.payload as SessionStreamingData
@@ -372,6 +449,11 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // agentAvatar) stays part of the contract: the in-app identity toast
         // reads those fields, and the gateway sends them on completion.
         void handleGatewayNotification(msg.payload as SystemNotificationInput)
+      } else if (msg.type === 'notification.cleared') {
+        notificationSyncRef.current?.receive(msg.payload)
+      } else if (msg.type === 'notification.snapshot') {
+        const states = (msg.payload as { notifications?: unknown[] })?.notifications
+        if (Array.isArray(states)) for (const state of states) notificationSyncRef.current?.receive(state)
       } else if (msg.type === 'attention.raised') {
         // The gateway decides which surface owns the OS notification for this
         // machine. When Desktop is connected it takes the toast and this tab
@@ -598,7 +680,25 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, tool, args, sessionId, projectRoot, backgroundId } = payload
     try {
       const platform = detectPlatform()
+      if (platform === 'desktop' && tool === 'computer.share.capture') {
+        const shareId = typeof args.shareSessionId === 'string' ? args.shareSessionId : ''
+        const capture = hostedScreenShareCapture.inspect(shareId, sessionId ?? '')
+        ws.send(JSON.stringify({ type: 'tool.op-response', payload: { requestId,
+          result: capture ? { ok: true, message: 'Active monitor capture verified.', data: capture }
+            : { ok: false, message: 'No matching active monitor capture.' },
+        } }))
+        return
+      }
       if (platform === 'desktop' && window.jaitDesktop?.toolOp) {
+        // Screen-control effects are bound to the capture that the local UI
+        // is still presenting. The gateway's earlier check alone can become
+        // stale while an operation is in flight.
+        if (tool.startsWith('computer.') && 'shareSessionId' in args) {
+          const shareId = typeof args.shareSessionId === 'string' ? args.shareSessionId : ''
+          if (!hostedScreenShareCapture.inspect(shareId, sessionId ?? '')) {
+            throw new Error('No matching active monitor capture.')
+          }
+        }
         const result = await window.jaitDesktop.toolOp(
           tool,
           args,
@@ -675,6 +775,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       const ws = wsRef.current
       if (!ws) return
       ws.onclose = null
+      if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
       ws.close()
       wsRef.current = null
       currentSessionRef.current = null
@@ -700,6 +801,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
       ws.onopen = () => {
         invalidateTerminalSnapshot()
+        ws.send(JSON.stringify({ type: 'resource.subscribe', payload: { resource: 'root:/chat-notifications' } }))
         const reconnected = hasConnectedRef.current
         hasConnectedRef.current = true
         onConnectionStateChangeRef.current?.({ connected: true, reconnected })
@@ -715,6 +817,15 @@ export function useUICommands(opts: UseUICommandsOptions) {
           type: 'resource.subscribe',
           payload: { resource: 'root:/pending-consents' },
         }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/pending-questions' },
+        }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/session-wait' },
+        }))
+        ws.send(JSON.stringify({ type: 'resource.subscribe', payload: { resource: 'root:/agent-control' } }))
         ws.send(JSON.stringify({
           type: 'resource.subscribe',
           payload: { resource: 'root:/streaming-sessions' },
@@ -754,6 +865,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
             const providers = providerStatuses
               .filter((provider) => provider.installed && provider.authenticated !== false)
               .map((provider) => provider.id)
+            const computerControl = detectPlatform() === 'desktop' && await desktopComputerControlAvailable(window.jaitDesktop)
+            const shareControl = computerControl && await desktopScreenShareControlAvailable(window.jaitDesktop)
             const nodeMsg = JSON.stringify({
               type: 'node.hello',
               payload: {
@@ -764,8 +877,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 protocolVersion: NODE_PROTOCOL_VERSION,
                 capabilities: {
                   providers,
-                  surfaces: ['filesystem', 'terminal', 'computer'],
-                  tools: DESKTOP_NODE_TOOLS,
+                  surfaces: ['filesystem', 'terminal', ...(computerControl ? ['computer'] : [])],
+                  tools: [...DESKTOP_NODE_TOOLS, ...(computerControl ? DESKTOP_COMPUTER_TOOLS : []), ...(shareControl ? DESKTOP_SHARE_CONTROL_TOOLS : [])],
                   screenShare: true,
                   voice: false,
                   preview: false,
@@ -796,6 +909,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
       ws.onmessage = handleMessage
 
       ws.onclose = () => {
+        // A remote controller must re-authorize after the node link drops.
+        if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
         wsRef.current = null
         currentSessionRef.current = null
         onConnectionStateChangeRef.current?.({ connected: false, reconnected: false })
@@ -809,6 +924,29 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // onclose will fire after onerror, triggering reconnect
       }
     }
+
+    // Android WebViews do not always flip `visibilityState` when the app comes
+    // back; Capacitor's `resume` and a network comeback are the only signals.
+    // A socket that died in the background still reports OPEN, and `send()` on
+    // it silently drops — a queued chat message then never reaches the gateway.
+    let lastWakeReconnectAt = 0
+    const reconnectAfterWake = (force = false) => {
+      if (!mountedRef.current) return
+      const now = Date.now()
+      if (!shouldReconnectUiSocketAfterWake({
+        isAlwaysOnNode,
+        hidden: typeof document !== 'undefined' && document.hidden,
+        hasSocket: wsRef.current != null,
+        sinceLastWakeReconnectMs: now - lastWakeReconnectAt,
+        force,
+      })) return
+      lastWakeReconnectAt = now
+      pausedForHiddenDocument = false
+      clearReconnectTimer()
+      closeSocket()
+      connect()
+    }
+    const handleWake = () => reconnectAfterWake()
 
     // Desktop always-on nodes keep their connection live while hidden to the
     // tray; browsers/capacitor pause and reconnect on visibility changes.
@@ -832,14 +970,17 @@ export function useUICommands(opts: UseUICommandsOptions) {
       // missed broadcasts. Reconnect unconditionally so the gateway re-pushes
       // the authoritative `session.streaming-snapshot` and the sidebar never
       // keeps a stale streaming spinner after the tab was hidden.
-      closeSocket()
-      connect()
+      reconnectAfterWake(true)
     }
 
+    const readVisibleNotification = () => notificationSyncRef.current?.readVisible()
+    window.addEventListener('jait:notification-visibility', readVisibleNotification)
     connect()
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange)
+      document.addEventListener('resume', handleWake)
     }
+    window.addEventListener('online', handleWake)
 
     // Set up Desktop IPC listener for provider events from child processes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -889,10 +1030,14 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
     return () => {
       mountedRef.current = false
+      notificationSyncRef.current?.reset()
+      window.removeEventListener('jait:notification-visibility', readVisibleNotification)
       clearReconnectTimer()
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
+        document.removeEventListener('resume', handleWake)
       }
+      window.removeEventListener('online', handleWake)
       // Clean up Desktop IPC listener
       if (detectPlatform() === 'desktop' && window.jaitDesktop?.removeGatewayEventListener) {
         window.jaitDesktop.removeGatewayEventListener()
