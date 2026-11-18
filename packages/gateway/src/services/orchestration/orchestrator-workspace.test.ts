@@ -234,6 +234,13 @@ describe("plan runs over real worktrees", () => {
       ["C", "passed"],
       ["D", "passed"],
     ]);
+    // Dependency edges are part of the run view that owners inspect.
+    expect(final.tasks.map((task) => [task.taskId, task.dependsOn])).toEqual([
+      ["A", []],
+      ["B", ["A"]],
+      ["C", ["A"]],
+      ["D", ["B", "C"]],
+    ]);
     expect(maxRunning).toBe(2);
     // Dependencies gate starts: A ends before B and C start, and D starts only after B and C end.
     expect(events.indexOf("end:A")).toBeLessThan(events.indexOf("start:B"));
