@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-const { clickWithVisibleCursor, guardedFieldAction } = require("./browser-cursor.cjs");
+const { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction } = require("./browser-cursor.cjs");
 
 const { chromium } = require("playwright");
 const { createInterface } = require("node:readline");
@@ -277,18 +277,18 @@ async function launchWithFallback(strategies) {
 }
 
 async function selectVisiblePage(pages, fallback) {
-  let visiblePage;
   // Multiple windows can all report focus (e.g. Chromium under Xvfb).
   // Prefer the most recently adopted page when visibility is ambiguous.
-  for (const candidate of [fallback, ...pages.filter(page => page !== fallback)]) {
-    if (isPageClosed(candidate)) continue;
-    try {
-      const state = await candidate.evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }));
-      if (state.visible && state.focused) return candidate;
-      if (state.visible) visiblePage ??= candidate;
-    } catch { /* A closing or navigating tab cannot be inspected yet. */ }
-  }
-  return visiblePage ?? fallback;
+  const candidates = [fallback, ...pages.filter(page => page !== fallback)].filter(page => page && !isPageClosed(page));
+  // A single tab needs no probe; this runs before every browser action.
+  if (candidates.length <= 1) return candidates[0] ?? fallback;
+  const states = await Promise.all(candidates.map(candidate => candidate
+    .evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }))
+    .catch(() => null))); // A closing or navigating tab cannot be inspected yet.
+  const focused = states.findIndex(state => state?.visible && state.focused);
+  if (focused >= 0) return candidates[focused];
+  const visible = states.findIndex(state => state?.visible);
+  return visible >= 0 ? candidates[visible] : fallback;
 }
 
 async function main() {
@@ -323,7 +323,15 @@ async function main() {
     }
     await targetPage.bringToFront();
   };
-  await presentPage(page);
+  // Presenting is a CDP round trip (or a fullscreen request in compact view);
+  // only repeat it when the automated tab actually changes.
+  let presentedPage = null;
+  const presentOnce = async (targetPage) => {
+    if (targetPage === presentedPage) return;
+    await presentPage(targetPage);
+    presentedPage = targetPage;
+  };
+  await presentOnce(page);
 
   const events = [];
   const consoleGuard = createConsoleFloodGuard(process.env);
@@ -433,7 +441,7 @@ async function main() {
   context.on("page", (nextPage) => {
     page = nextPage;
     attachPageEvents(nextPage);
-    presentingPage = presentPage(nextPage);
+    presentingPage = presentOnce(nextPage);
     void presentingPage.catch(() => {});
   });
   const ensurePage = async () => {
@@ -444,11 +452,11 @@ async function main() {
     else await presentingPage;
     if (page && !isPageClosed(page)) {
       attachPageEvents(page);
-      await presentPage(page);
+      await presentOnce(page);
       return page;
     }
     page = await selectInitialPage(context);
-    await presentPage(page);
+    await presentOnce(page);
     attachPageEvents(page);
     return page;
   };
@@ -514,174 +522,7 @@ async function main() {
       await (await ensurePage()).screenshot({ path: outPath, fullPage: !params.viewportOnly });
       return outPath;
     },
-    snapshot: async (params) => (await ensurePage()).evaluate((requestedTarget) => {
-      const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
-      const bodyText = requestedTarget === undefined ? normalize(document.body?.innerText ?? "").slice(0, 12000) : "";
-      const title = document.title || "(untitled)";
-      const esc = (raw) => {
-        if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
-        return String(raw || "").replace(/[^a-zA-Z0-9_-]/g, "_");
-      };
-      const isVisible = (el) => {
-        if (!el || !(el instanceof Element)) return false;
-        const style = window.getComputedStyle(el);
-        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      };
-      const guessRole = (el, tag) =>
-        el.getAttribute("role")
-        ?? (tag === "a" ? "link" : tag === "textarea" ? "textbox" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
-      const getName = (el) => normalize(
-        el.getAttribute("aria-label")
-          ?? el.getAttribute("aria-labelledby")
-          ?? el.getAttribute("name")
-          ?? el.getAttribute("title")
-          ?? el.getAttribute("placeholder")
-          ?? el.innerText
-          ?? el.textContent
-          ?? "",
-      ).slice(0, 200);
-      const buildSelectors = (el, tag, role, name) => {
-        const suggestions = [];
-        const push = (kind, value, selector) => {
-          if (!value || !selector || suggestions.some((item) => item.selector === selector)) return;
-          suggestions.push({ kind, value: normalize(value).slice(0, 200), selector });
-        };
-        const id = el.getAttribute("id");
-        const testId = el.getAttribute("data-testid");
-        const placeholder = el.getAttribute("placeholder");
-        const fieldName = el.getAttribute("name");
-        if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
-        if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
-        if (placeholder) push("placeholder", placeholder, `${tag}[placeholder=${esc(placeholder)}]`);
-        if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
-        if (id) push("id", id, `#${esc(id)}`);
-        const css = id
-          ? `#${esc(id)}`
-          : testId
-            ? `${tag}[data-testid="${testId.replace(/"/g, '\\"')}"]`
-            : `${tag}${fieldName ? `[name="${fieldName.replace(/"/g, '\\"')}"]` : ""}`;
-        push("css", css, css);
-        return suggestions;
-      };
-      const serializeElement = (el) => {
-        const tag = el.tagName.toLowerCase();
-        const role = guessRole(el, tag);
-        const name = getName(el);
-        const text = normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
-        const id = el.getAttribute("id") ?? undefined;
-        const testId = el.getAttribute("data-testid") ?? undefined;
-        const placeholder = el.getAttribute("placeholder") ?? undefined;
-        const selectors = buildSelectors(el, tag, role, name);
-        const selectedValue = tag === "select"
-          ? normalize(Array.from(el.selectedOptions ?? []).map((option) => option.textContent ?? option.value ?? "").join(", ")).slice(0, 200)
-          : role === "tab" || role === "radio" || role === "checkbox"
-            ? String(el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true" || el.checked === true)
-            : undefined;
-        return {
-          role,
-          name,
-          text,
-          selector: (tag === "textarea" ? selectors.find(item => item.kind === "id") ?? selectors.find(item => item.kind === "placeholder") ?? selectors.find(item => item.kind === "name") : undefined)?.selector ?? selectors[0]?.selector ?? undefined,
-          selectors,
-          tagName: tag,
-          placeholder,
-          testId,
-          id,
-          disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
-          selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
-          active: document.activeElement === el,
-          value: selectedValue,
-          inputType: tag === "input" ? String(el.type ?? "text").toLowerCase() : undefined,
-          readOnly: el.readOnly === true,
-          options: tag === "select" ? Array.from(el.options ?? []).slice(0, 30).map(option => ({ value: String(option.value).slice(0, 200), label: normalize(option.textContent ?? "").slice(0, 200), disabled: option.disabled === true || option.parentElement?.disabled === true })) : undefined,
-        };
-      };
-
-      const rawElements = Array.from(
-        document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
-      );
-      const normalizeMatch = (value) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
-      const intent = requestedTarget === undefined ? "" : normalizeMatch(requestedTarget);
-      const clickRoles = new Set(["button", "link", "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio", "switch", "tab"]);
-      const elements = rawElements.filter((el) => {
-        if (!isVisible(el)) return false;
-        if (requestedTarget === undefined) return true;
-        if (el.disabled === true || el.getAttribute("aria-disabled") === "true") return false;
-        const tag = el.tagName.toLowerCase();
-        const role = guessRole(el, tag).toLowerCase();
-        const rawLabel = getName(el) || normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
-        if (rawLabel.length >= 200) return false;
-        const label = normalizeMatch(rawLabel);
-        return Boolean(label && (clickRoles.has(role) || tag === "button" || tag === "a") && (` ${intent} `).includes(` ${label} `));
-      }).slice(0, requestedTarget === undefined ? 60 : 32).map((el) => serializeElement(el));
-      if (requestedTarget !== undefined) return { url: window.location.href, documentTimeOrigin: performance.timeOrigin, title, text: "", elements };
-      const activeElement = document.activeElement && document.activeElement !== document.body
-        ? {
-          ...serializeElement(document.activeElement),
-          type: document.activeElement.getAttribute("type") ?? undefined,
-          readOnly: document.activeElement.readOnly === true,
-          isContentEditable: document.activeElement.isContentEditable === true,
-        }
-        : null;
-      const dialogs = Array.from(document.querySelectorAll("dialog[open], [role='dialog'], [role='alertdialog'], [aria-modal='true']"))
-        .filter((el) => isVisible(el))
-        .slice(0, 10)
-        .map((el) => ({
-          ...serializeElement(el),
-          title: normalize(
-            el.getAttribute("aria-label")
-              ?? document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent
-              ?? el.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
-              ?? el.innerText
-              ?? "",
-          ).slice(0, 200),
-          ariaModal: el.getAttribute("aria-modal") === "true",
-          open: el.hasAttribute("open") || el.getAttribute("aria-hidden") !== "true",
-        }));
-      const topLayer = Array.from(document.querySelectorAll("body *"))
-        .filter((el) => {
-          if (!isVisible(el)) return false;
-          const style = window.getComputedStyle(el);
-          if (style.pointerEvents === "none") return false;
-          if (!(style.position === "fixed" || style.position === "sticky")) return false;
-          const rect = el.getBoundingClientRect();
-          return rect.width >= window.innerWidth * 0.35 && rect.height >= window.innerHeight * 0.2;
-        })
-        .slice(0, 6)
-        .map((el) => {
-          const style = window.getComputedStyle(el);
-          return {
-            ...serializeElement(el),
-            reason: "fixed or sticky overlay",
-            zIndex: Number.parseInt(style.zIndex || "0", 10) || 0,
-          };
-        });
-
-      return {
-        url: window.location.href,
-        documentTimeOrigin: performance.timeOrigin,
-        scrollPosition: { x: window.scrollX, y: window.scrollY, height: window.innerHeight },
-        title,
-        text: bodyText,
-        elements,
-        activeElement,
-        dialogs,
-        obstruction: {
-          hasModal: dialogs.some((dialog) => dialog.ariaModal),
-          dialogCount: dialogs.length,
-          activeDialogTitle: dialogs[0]?.title ?? null,
-          topLayer,
-          notes: [
-            dialogs.length > 0 ? `${dialogs.length} dialog(s) visible.` : "No visible dialogs detected.",
-            topLayer.length > 0
-              ? "Top-layer obstruction diagnostics are heuristic and should be confirmed with a hit test when an action fails."
-              : "No likely top-layer blockers detected from static DOM inspection.",
-          ],
-        },
-      };
-    }, params.fastTarget),
+    snapshot: async (params) => (await ensurePage()).evaluate(collectPageSnapshot, params.fastTarget),
     getMetrics: async () => (await ensurePage()).evaluate(() => {
       const navEntries = performance.getEntriesByType("navigation");
       const nav = navEntries.length > 0 ? navEntries[0] : null;

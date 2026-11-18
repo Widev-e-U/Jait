@@ -117,6 +117,23 @@ describe("adaptive browser task", () => {
     expect(execute.mock.calls.map(call => call[0])).toEqual(["browser.snapshot", "browser.click"]);
     expect(evaluateDecision).toHaveBeenCalledTimes(1);
   });
+  it("uses controls beyond ten from the action result without taking a second snapshot", async () => {
+    const { service, execute } = fixture();
+    const elements = Array.from({ length: 30 }, (_, i) => ({ selector: `#c${i}`, tagName: "button", name: `Button ${i}` }));
+    const page = { documentUrl: "https://example.test/", documentTimeOrigin: 123 };
+    execute.mockResolvedValueOnce({ ok: true, message: "captured", data: { ...page, interactiveElements: elements.slice(0, 1) } })
+      .mockResolvedValueOnce({ ok: true, message: "clicked", data: { ...page, interactiveElements: elements } });
+    const click = (choice: string) => ({ model: "test", answers: { next: { type: "choice" as const, choice: "click" }, clickTarget: { type: "choice" as const, choice } } });
+    vi.mocked(evaluateDecision).mockReset()
+      .mockResolvedValueOnce(click("c0"))
+      .mockResolvedValueOnce(click("c29"))
+      .mockResolvedValueOnce({ model: "test", answers: { next: { type: "choice", choice: "complete" } } });
+
+    const result = await service.runTask({ task: "Open the menu and click Button 29" }, context);
+    expect(result).toMatchObject({ ok: true, data: { history: [{ selector: "#c0" }, { selector: "#c29" }] } });
+    expect(execute.mock.calls.map(call => call[0])).toEqual(["browser.snapshot", "browser.click", "browser.click", "browser.snapshot"]);
+  });
+
   it("offers controls beyond ten and binds clicks to their observed identity", async () => {
     const { service, execute } = fixture();
     const elements = Array.from({ length: 20 }, (_, i) => ({ selector: `#c${i}`, tagName: "button", name: `Button ${i}`, text: "" }));

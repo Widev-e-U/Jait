@@ -10,7 +10,7 @@ import { resolve, win32 } from "node:path";
 import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { BrowserSurface, type BrowserNetworkQuery, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
+import { BrowserSurface, describeBrowserSnapshot, type BrowserNetworkQuery, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 // PreviewService provides the sharing boundary for managed browser sessions.
@@ -401,8 +401,8 @@ export function createBrowserSnapshotTool(
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
       const maxElements = z.number().int().min(1).max(30).default(10).parse(input.maxElements);
-      const description = await surface.describe(context.signal);
-      const inspection = await surface.inspect(undefined, context.signal);
+      const snapshot = await surface.capturePageSnapshot(context.signal);
+      collaboration?.assertAgentControl(surface.id);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
@@ -412,8 +412,8 @@ export function createBrowserSnapshotTool(
         data: {
           snapshot: isSecretSafeSession(session)
             ? "Browser capture is suppressed while the session is marked secret-safe."
-            : description,
-          ...buildSnapshotPayload(surface.id, inspection.snapshot, session, undefined, maxElements),
+            : describeBrowserSnapshot(snapshot),
+          ...buildSnapshotPayload(surface.id, snapshot, session, undefined, maxElements),
         },
       };
     },
@@ -495,17 +495,17 @@ function makeActionTool<TInput>(
       }
       // Return a page snapshot after every action so agents can verify the
       // result without a separate browser.snapshot / browser.inspect call.
-      let inspection: Awaited<ReturnType<BrowserSurface["inspect"]>> | null = null;
+      let snapshot: BrowserPageSnapshot | undefined;
       try {
         collaboration?.assertAgentControl(surface.id);
         if (!isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
-          inspection = await surface.inspect(undefined, context.signal);
+          snapshot = await surface.capturePageSnapshot(context.signal);
           collaboration?.assertAgentControl(surface.id);
         }
-      } catch { inspection = null; }
+      } catch { snapshot = undefined; }
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
-      const payload = inspection
-        ? buildSnapshotPayload(surface.id, inspection.snapshot, session)
+      const payload = snapshot
+        ? buildSnapshotPayload(surface.id, snapshot, session, undefined, context.browserTaskSnapshotElements)
         : redactBrowserCapturePayload({ browserId: surface.id }, session);
       return {
         ok: true,

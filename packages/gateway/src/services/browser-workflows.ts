@@ -191,6 +191,7 @@ export class BrowserWorkflowService {
     const history = continuation?.history ?? [];
     let snapshot: unknown;
     let feedback: ToolResult | undefined;
+    const maxElements = 30;
     let workingState = continuation?.workingState ?? "";
     const typedFields = continuation?.typedFields ?? [];
     const usedFieldSelectors = continuation?.usedFieldSelectors ?? [];
@@ -202,7 +203,7 @@ export class BrowserWorkflowService {
       const callId = `${context.actionId}-adaptive-${callSequence++}-${id}`;
       const visibleArgs = tool === "browser.type" ? { ...(args as Record<string, unknown>), text: "[provided text]" } : args;
       context.onNestedEvent?.({ type: "tool_start", tool, args: visibleArgs, call_id: callId });
-      const result = await this.executeTool(tool, args, { ...context, signal, actionId: callId, browserTaskRecoverStale: true });
+      const result = await this.executeTool(tool, args, { ...context, signal, actionId: callId, browserTaskRecoverStale: true, browserTaskSnapshotElements: maxElements });
       context.onNestedEvent?.({ type: "tool_result", tool, call_id: callId, ...result });
       return result;
     };
@@ -219,7 +220,7 @@ export class BrowserWorkflowService {
       }
       for (let i = history.length; i <= plan.maxActions; i++) {
         stage = "browser snapshot";
-        const observed = feedback ?? await call("browser.snapshot", { maxElements: 30 }, "snapshot");
+        const observed = feedback ?? await call("browser.snapshot", { maxElements }, "snapshot");
         feedback = undefined;
         const data = observed.data as { secretSafe?: boolean; captureSuppressed?: boolean; title?: string; textPreview?: string; visualContent?: { canvas?: boolean; iframe?: boolean }; documentUrl?: string; documentTimeOrigin?: number; interactiveElements?: Array<{ selector?: string; name?: string; text?: string; role?: string; tagName?: string; disabled?: boolean; readOnly?: boolean; inputType?: string; options?: Array<{ value: string; label: string; disabled: boolean }> }>; scrollPosition?: { x: number; y: number; height: number } } | undefined;
         if (!observed.ok || !data || data.secretSafe || data.captureSuppressed || observed.message.includes("suppressed"))
@@ -365,9 +366,10 @@ export class BrowserWorkflowService {
         } };
         staleRetries = 0;
         history.push({ label: `${answer.choice}: ${(selected?.name || selected?.text || selected?.role || "page").slice(0, 180)}`, selector: selected?.selector ?? "" });
-        // Action tools return a fresh inspection. Reuse only a complete snapshot,
-        // and still apply the suppression checks at the top of the next iteration.
-        if (result.data && Array.isArray((result.data as { interactiveElements?: unknown }).interactiveElements) && (result.data as { interactiveElements: unknown[] }).interactiveElements.length < 10) feedback = result;
+        // The action executor collects the same observation as browser.snapshot.
+        // Recheck capture suppression before using it for the next decision.
+        const actionData = result.data as { interactiveElements?: unknown; captureSuppressed?: boolean } | undefined;
+        if (actionData?.captureSuppressed || Array.isArray(actionData?.interactiveElements)) feedback = result;
       }
       return { ok: false, message: "Action limit reached; completion is not verified.", data: { history, snapshot, status: "limit" } };
     } catch (error) {

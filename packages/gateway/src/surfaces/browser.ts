@@ -5,7 +5,7 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
-import { clickWithVisibleCursor, guardedFieldAction, type BrowserClickGuard, type CursorPage } from "./browser-cursor.cjs";
+import { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction, type BrowserClickGuard, type CursorPage } from "./browser-cursor.cjs";
 export type { BrowserClickGuard } from "./browser-cursor.cjs";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -424,6 +424,33 @@ function appendBrowserRuntimeEvent(
   }
 }
 
+export function describeBrowserSnapshot(snap: BrowserPageSnapshot): string {
+  const lines = [
+    `URL: ${snap.url}`,
+    `Title: ${snap.title || "(untitled)"}`,
+    snap.activeElement
+      ? `Active element: ${[
+        snap.activeElement.role ?? snap.activeElement.tagName ?? "element",
+        snap.activeElement.name,
+        snap.activeElement.selector,
+      ].filter(Boolean).join(" — ")}`
+      : "Active element: (none)",
+    snap.dialogs?.length
+      ? `Dialogs: ${snap.dialogs.map((dialog) => dialog.title || dialog.name || dialog.selector || dialog.role || "dialog").join(", ")}`
+      : "Dialogs: (none)",
+    "",
+    "Text:",
+    snap.text.trim() || "(no textual content)",
+    "",
+    "Interactive elements:",
+    ...snap.elements.slice(0, 30).map((el, i) => {
+      const parts = [el.role ?? "element", el.name, el.text].filter(Boolean).join(" — ");
+      return `${i + 1}. ${parts || "unnamed"}${el.selector ? ` [${el.selector}]` : ""}`;
+    }),
+  ];
+  return lines.join("\n").trim();
+}
+
 export class BrowserSurface implements Surface {
   readonly type = "browser" as const;
 
@@ -507,9 +534,7 @@ export class BrowserSurface implements Surface {
     const driver = this.requireDriver();
     await driver.navigate(url, signal);
     this._actionCount++;
-    const snap = await driver.snapshot(signal);
-    this.captureSnapshotMeta(snap);
-    this.touch();
+    const snap = await this.capturePageSnapshot(signal);
     this.onOutput?.(`navigate ${snap.url}`);
     return snap;
   }
@@ -524,9 +549,7 @@ export class BrowserSurface implements Surface {
     if (!driver.reload) throw new Error("This browser does not support refresh.");
     await driver.reload(signal);
     this._actionCount++;
-    const snap = await driver.snapshot(signal);
-    this.captureSnapshotMeta(snap);
-    this.touch();
+    const snap = await this.capturePageSnapshot(signal);
     this.onOutput?.(`reload ${snap.url}`);
     return snap;
   }
@@ -537,42 +560,27 @@ export class BrowserSurface implements Surface {
     if (!driver.history) throw new Error("This browser does not support history navigation.");
     await driver.history(direction, signal);
     this._actionCount++;
-    const snap = await driver.snapshot(signal);
-    this.captureSnapshotMeta(snap);
-    this.touch();
+    const snap = await this.capturePageSnapshot(signal);
     this.onOutput?.(`history ${direction} ${snap.url}`);
     return snap;
   }
 
   async describe(signal?: AbortSignal): Promise<string> {
+    return describeBrowserSnapshot(await this.capturePageSnapshot(signal));
+  }
+
+  async capturePageSnapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot> {
     this.touch();
-    const snap = await this.requireDriver().snapshot(signal);
-    this.captureSnapshotMeta(snap);
+    signal?.throwIfAborted();
+    const driver = this.requireDriver();
+    const snapshot = await driver.snapshot(signal).catch((error: unknown) => {
+      if (signal?.aborted || !(error instanceof Error) || !error.message.includes("Execution context was destroyed")) throw error;
+      // A redirect may replace the document between navigation and inspection.
+      return this.requireDriver().snapshot(signal);
+    });
+    this.captureSnapshotMeta(snapshot);
     this.touch();
-    const lines = [
-      `URL: ${snap.url}`,
-      `Title: ${snap.title || "(untitled)"}`,
-      snap.activeElement
-        ? `Active element: ${[
-          snap.activeElement.role ?? snap.activeElement.tagName ?? "element",
-          snap.activeElement.name,
-          snap.activeElement.selector,
-        ].filter(Boolean).join(" — ")}`
-        : "Active element: (none)",
-      snap.dialogs?.length
-        ? `Dialogs: ${snap.dialogs.map((dialog) => dialog.title || dialog.name || dialog.selector || dialog.role || "dialog").join(", ")}`
-        : "Dialogs: (none)",
-      "",
-      "Text:",
-      snap.text.trim() || "(no textual content)",
-      "",
-      "Interactive elements:",
-      ...snap.elements.slice(0, 30).map((el, i) => {
-        const parts = [el.role ?? "element", el.name, el.text].filter(Boolean).join(" — ");
-        return `${i + 1}. ${parts || "unnamed"}${el.selector ? ` [${el.selector}]` : ""}`;
-      }),
-    ];
-    return lines.join("\n").trim();
+    return snapshot;
   }
 
   async inspect(selector?: string, signal?: AbortSignal): Promise<{
@@ -582,8 +590,7 @@ export class BrowserSurface implements Surface {
   }> {
     this.touch();
     const driver = this.requireDriver();
-    const snapshot = await driver.snapshot(signal);
-    this.captureSnapshotMeta(snapshot);
+    const snapshot = await this.capturePageSnapshot(signal);
     const target = selector ? await driver.diagnose(selector, signal) : undefined;
     const metrics = await driver.getMetrics(signal);
     this.touch();
@@ -808,17 +815,17 @@ export async function selectVisibleBrowserPage<T extends {
   isClosed?: () => boolean;
   evaluate: (fn: () => { visible: boolean; focused: boolean }) => Promise<{ visible: boolean; focused: boolean }>;
 }>(pages: T[], fallback: T): Promise<T> {
-  let visiblePage: T | undefined;
   // Multiple windows may all report focus; prefer the latest adopted page.
-  for (const candidate of [fallback, ...pages.filter(page => page !== fallback)]) {
-    if (isBrowserPageClosed(candidate)) continue;
-    try {
-      const state = await candidate.evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }));
-      if (state.visible && state.focused) return candidate;
-      if (state.visible) visiblePage ??= candidate;
-    } catch { /* A closing or navigating tab cannot be inspected yet. */ }
-  }
-  return visiblePage ?? fallback;
+  const candidates = [fallback, ...pages.filter(page => page !== fallback)].filter(page => !isBrowserPageClosed(page));
+  // A single tab needs no probe; this runs before every browser action.
+  if (candidates.length <= 1) return candidates[0] ?? fallback;
+  const states = await Promise.all(candidates.map(candidate => candidate
+    .evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }))
+    .catch(() => null))); // A closing or navigating tab cannot be inspected yet.
+  const focused = states.findIndex(state => state?.visible && state.focused);
+  if (focused >= 0) return candidates[focused]!;
+  const visible = states.findIndex(state => state?.visible);
+  return visible >= 0 ? candidates[visible]! : fallback;
 }
 
 function isReusableBootstrapPageUrl(url: string | undefined): boolean {
@@ -949,6 +956,13 @@ async function createInProcessPlaywrightDriver(
   activeContext.on?.("close", () => { browserAvailable = false; });
   let activePage = page;
   let presentingPage: Promise<void> = Promise.resolve();
+  // bringToFront is a CDP round trip; repeat it only when the tab changes.
+  let frontPage: PlaywrightPage | null = null;
+  const bringToFrontOnce = async (targetPage: PlaywrightPage): Promise<void> => {
+    if (targetPage === frontPage) return;
+    await targetPage.bringToFront?.();
+    frontPage = targetPage;
+  };
   const events: BrowserRuntimeEvent[] = [];
   const consoleGuard = createConsoleFloodGuard({
     windowMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_WINDOW_MS"], CONSOLE_FLOOD_WINDOW_MS),
@@ -1020,7 +1034,7 @@ async function createInProcessPlaywrightDriver(
     if (!browserAvailable) return;
     activePage = nextPage;
     attachPageEvents(nextPage);
-    presentingPage = Promise.resolve(nextPage.bringToFront?.());
+    presentingPage = bringToFrontOnce(nextPage);
     void presentingPage.catch(() => {});
   });
   const ensureActivePage = async (): Promise<PlaywrightPage> => {
@@ -1033,11 +1047,11 @@ async function createInProcessPlaywrightDriver(
     else await presentingPage;
     if (!isBrowserPageClosed(activePage)) {
       attachPageEvents(activePage);
-      await activePage.bringToFront?.();
+      await bringToFrontOnce(activePage);
       return activePage;
     }
     activePage = await selectInitialBrowserPage(activeContext);
-    await activePage.bringToFront?.();
+    await bringToFrontOnce(activePage);
     attachPageEvents(activePage);
     return activePage;
   };
@@ -1129,180 +1143,7 @@ async function createInProcessPlaywrightDriver(
     },
     async snapshot(signal?: AbortSignal, fastTarget?: string) {
       const page = await ensureActivePage();
-      const snapshot = await withSignal(page.evaluate((requestedTarget?: string) => {
-        const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
-        const bodyText = requestedTarget === undefined ? normalize(document.body?.innerText ?? "").slice(0, 12_000) : "";
-        const title = document.title || "(untitled)";
-        const esc = (raw: string) => {
-          if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
-          return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
-        };
-        const isVisible = (el: any) => {
-          if (!el || !(el instanceof Element)) return false;
-          const style = window.getComputedStyle(el);
-          if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
-          const rect = el.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0;
-        };
-        const guessRole = (el: any, tag: string) =>
-          el.getAttribute("role")
-          ?? (tag === "a" ? "link" : tag === "textarea" ? "textbox" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
-        const getName = (el: any) => normalize(
-          el.getAttribute("aria-label")
-            ?? el.getAttribute("aria-labelledby")
-            ?? el.getAttribute("name")
-            ?? el.getAttribute("title")
-            ?? el.getAttribute("placeholder")
-            ?? el.innerText
-            ?? el.textContent
-            ?? "",
-        ).slice(0, 200);
-        const buildSelectors = (el: any, tag: string, role: string, name: string) => {
-          const suggestions: Array<{ kind: "role" | "name" | "placeholder" | "testId" | "id" | "css"; value: string; selector: string }> = [];
-          const push = (kind: "role" | "name" | "placeholder" | "testId" | "id" | "css", value: string, selector: string) => {
-            if (!value || !selector || suggestions.some((item) => item.selector === selector)) return;
-            suggestions.push({ kind, value: normalize(value).slice(0, 200), selector });
-          };
-          const id = el.getAttribute("id");
-          const testId = el.getAttribute("data-testid");
-          const placeholder = el.getAttribute("placeholder");
-          const fieldName = el.getAttribute("name");
-          if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
-          if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
-          if (placeholder) push("placeholder", placeholder, `${tag}[placeholder=${esc(placeholder)}]`);
-          if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
-          if (id) push("id", id, `#${esc(id)}`);
-          const css = id
-            ? `#${esc(id)}`
-            : testId
-              ? `${tag}[data-testid="${testId.replace(/"/g, '\\"')}"]`
-              : `${tag}${fieldName ? `[name="${fieldName.replace(/"/g, '\\"')}"]` : ""}`;
-          push("css", css, css);
-          return suggestions;
-        };
-        const serializeElement = (el: any) => {
-          const tag = el.tagName.toLowerCase();
-          const role = guessRole(el, tag);
-          const name = getName(el);
-          const text = normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
-          const id = el.getAttribute("id") ?? undefined;
-          const testId = el.getAttribute("data-testid") ?? undefined;
-          const placeholder = el.getAttribute("placeholder") ?? undefined;
-          const selectors = buildSelectors(el, tag, role, name);
-          const selectedValue = tag === "select"
-            ? normalize(Array.from(el.selectedOptions ?? []).map((option: any) => option.textContent ?? option.value ?? "").join(", ")).slice(0, 200)
-            : role === "tab" || role === "radio" || role === "checkbox"
-              ? String(el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true" || el.checked === true)
-              : undefined;
-          return {
-            role,
-            name,
-            text,
-            selector: (tag === "textarea" ? selectors.find(item => item.kind === "id") ?? selectors.find(item => item.kind === "placeholder") ?? selectors.find(item => item.kind === "name") : undefined)?.selector ?? selectors[0]?.selector ?? undefined,
-            selectors,
-            tagName: tag,
-            placeholder,
-            testId,
-            id,
-            disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
-            selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
-            active: document.activeElement === el,
-            value: selectedValue,
-            inputType: tag === "input" ? String(el.type ?? "text").toLowerCase() : undefined,
-            readOnly: el.readOnly === true,
-            options: tag === "select" ? Array.from(el.options ?? []).slice(0, 30).map((option: any) => ({ value: String(option.value).slice(0, 200), label: normalize(option.textContent ?? "").slice(0, 200), disabled: option.disabled === true || option.parentElement?.disabled === true })) : undefined,
-          };
-        };
-
-        const rawElements = Array.from(
-          document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
-        ) as any[];
-        const normalizeMatch = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
-        const intent = requestedTarget === undefined ? "" : normalizeMatch(requestedTarget);
-        const clickRoles = new Set(["button", "link", "checkbox", "radio", "menuitem", "menuitemcheckbox", "menuitemradio", "switch", "tab"]);
-        const elements = rawElements.filter((el: any) => {
-          if (!isVisible(el)) return false;
-          if (requestedTarget === undefined) return true;
-          if (el.disabled === true || el.getAttribute("aria-disabled") === "true") return false;
-          const tag = el.tagName.toLowerCase();
-          const role = guessRole(el, tag).toLowerCase();
-          const rawLabel = getName(el) || normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
-          if (rawLabel.length >= 200) return false;
-          const label = normalizeMatch(rawLabel);
-          return Boolean(label && (clickRoles.has(role) || tag === "button" || tag === "a") && (` ${intent} `).includes(` ${label} `));
-        }).slice(0, requestedTarget === undefined ? 60 : 32).map((el: any) => serializeElement(el));
-        if (requestedTarget !== undefined) return { url: window.location.href, documentTimeOrigin: performance.timeOrigin, title, text: "", elements };
-        const activeElement = document.activeElement && document.activeElement !== document.body
-          ? {
-            ...serializeElement(document.activeElement),
-            type: document.activeElement.getAttribute("type") ?? undefined,
-            readOnly: document.activeElement.readOnly === true,
-            isContentEditable: document.activeElement.isContentEditable === true,
-          }
-          : null;
-        const dialogs = Array.from(document.querySelectorAll("dialog[open], [role='dialog'], [role='alertdialog'], [aria-modal='true']"))
-          .filter((el: any) => isVisible(el))
-          .slice(0, 10)
-          .map((el: any) => ({
-            ...serializeElement(el),
-            title: normalize(
-              el.getAttribute("aria-label")
-                ?? document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent
-                ?? el.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
-                ?? el.innerText
-                ?? "",
-            ).slice(0, 200),
-            ariaModal: el.getAttribute("aria-modal") === "true",
-            open: el.hasAttribute("open") || el.getAttribute("aria-hidden") !== "true",
-          }));
-        const topLayer = Array.from(document.querySelectorAll("body *"))
-          .filter((el: any) => {
-            if (!isVisible(el)) return false;
-            const style = window.getComputedStyle(el);
-            if (style.pointerEvents === "none") return false;
-            if (!(style.position === "fixed" || style.position === "sticky")) return false;
-            const rect = el.getBoundingClientRect();
-            return rect.width >= window.innerWidth * 0.35 && rect.height >= window.innerHeight * 0.2;
-          })
-          .slice(0, 6)
-          .map((el: any) => {
-            const style = window.getComputedStyle(el);
-            return {
-              ...serializeElement(el),
-              reason: dialogs.some((dialog: any) => dialog.selector === buildSelectors(el, el.tagName.toLowerCase(), guessRole(el, el.tagName.toLowerCase()), getName(el))[0]?.selector)
-                ? "open dialog"
-                : "fixed or sticky overlay",
-              zIndex: Number.parseInt(style.zIndex || "0", 10) || 0,
-            };
-          });
-
-        return {
-          url: window.location.href,
-          documentTimeOrigin: performance.timeOrigin,
-          scrollPosition: { x: window.scrollX, y: window.scrollY, height: window.innerHeight },
-          title,
-          text: bodyText,
-          elements,
-          visualContent: {
-            canvas: Array.from(document.querySelectorAll("canvas")).some(isVisible),
-            iframe: Array.from(document.querySelectorAll("iframe")).some(isVisible),
-          },
-          activeElement,
-          dialogs,
-          obstruction: {
-            hasModal: dialogs.some((dialog: any) => dialog.ariaModal),
-            dialogCount: dialogs.length,
-            activeDialogTitle: dialogs[0]?.title ?? null,
-            topLayer,
-            notes: [
-              dialogs.length > 0 ? `${dialogs.length} dialog(s) visible.` : "No visible dialogs detected.",
-              topLayer.length > 0
-                ? "Top-layer obstruction diagnostics are heuristic and should be confirmed with a hit test when an action fails."
-                : "No likely top-layer blockers detected from static DOM inspection.",
-            ],
-          },
-        };
-      }, fastTarget) as Promise<BrowserPageSnapshot>, signal);
+      const snapshot = await withSignal(page.evaluate(collectPageSnapshot, fastTarget) as Promise<BrowserPageSnapshot>, signal);
       return {
         ...snapshot,
         documentUrl: snapshot.url,

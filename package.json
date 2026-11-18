@@ -66,7 +66,8 @@
     "build:gateway:rust": "node packages/gateway-rust/run.mjs build",
     "test:gateway:rust": "node packages/gateway-rust/tooling/check-native.mjs",
     "test:gateway:migration": "node tests/contract/migration.mjs",
-    "test:gateway:migration:types": "tsc --project tests/contract/tsconfig.migration.json --noEmit"
+    "test:gateway:migration:types": "tsc --project tests/contract/tsconfig.migration.json --noEmit",
+    "bench:browser": "JAIT_BROWSER_BENCH=1 vitest run packages/gateway/src/surfaces/browser-bench/browser-flow.bench.test.ts"
   },
   "devDependencies": {
     "@vitest/coverage-istanbul": "3.2.7",

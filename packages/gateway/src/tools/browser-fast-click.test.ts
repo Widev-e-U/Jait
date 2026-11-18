@@ -20,7 +20,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -124,7 +124,7 @@ describe("System One browser clicks", () => {
     f.browser.click.mockImplementationOnce(async () => { f.loseControl(); });
     expect(await f.tool.execute({ target: "Open Settings" }, context)).toMatchObject({ ok: true });
     expect(f.browser.fastClickSnapshot).toHaveBeenCalledTimes(1);
-    expect(f.browser.inspect).not.toHaveBeenCalled();
+    expect(f.browser.capturePageSnapshot).not.toHaveBeenCalled();
   });
 
   it("uses the existing browser.click consent policy before inference or action", async () => {

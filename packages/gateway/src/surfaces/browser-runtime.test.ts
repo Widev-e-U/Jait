@@ -129,6 +129,27 @@ describe("BrowserSurface idle tracking", () => {
   });
 });
 
+describe("browser page capture during navigation", () => {
+  it("retries a read interrupted by a redirect without navigating again", async () => {
+    const page = { url: "https://example.test/redirected", title: "Redirected", text: "", elements: [] };
+    const snapshot = vi.fn()
+      .mockRejectedValueOnce(new Error("page.evaluate: Execution context was destroyed, most likely because of a navigation"))
+      .mockResolvedValueOnce(page);
+    const navigate = vi.fn().mockResolvedValue(undefined);
+    const driver = { navigate, snapshot, close: vi.fn().mockResolvedValue(undefined) } as unknown as BrowserDriver;
+    const surface = new BrowserSurface("redirect-browser", { driverFactory: async () => driver });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
+    try {
+      expect(await surface.navigate("https://example.test/start")).toEqual(page);
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(snapshot).toHaveBeenCalledTimes(2);
+      expect(surface.snapshot().metadata).toMatchObject({ currentUrl: page.url, actionCount: 1 });
+    } finally {
+      await surface.stop();
+    }
+  });
+});
+
 describe("closed browser readiness", () => {
   it("uses the driver for history and reports unsupported drivers", async () => {
     const history = vi.fn().mockResolvedValue(undefined);

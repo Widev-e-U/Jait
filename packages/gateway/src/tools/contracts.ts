@@ -43,6 +43,8 @@ export interface ToolContext {
   onNestedEvent?: (event: NestedAgentEvent) => void;
   /** Internal browser task may recover only from a verified pre-dispatch stale target. */
   browserTaskRecoverStale?: boolean;
+  /** Internal adaptive task requests a full observation after an action. */
+  browserTaskSnapshotElements?: number;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
   /**

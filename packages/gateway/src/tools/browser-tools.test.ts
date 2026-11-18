@@ -21,7 +21,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -49,7 +49,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -100,6 +100,28 @@ describe.each(cases)("$name", ({ name, input, method, args }) => {
       expect(result.data).toMatchObject({ browserId: f.surface.id, title: snapshot.title, textPreview: snapshot.text });
     }
   });
+
+  if (name === "browser.snapshot") {
+    it("formats and structures one page read without inspecting browser metrics", async () => {
+      const f = fixture();
+      const result = await f.tool(name).execute(input, context);
+      expect(result.data).toMatchObject({ snapshot: expect.stringContaining(snapshot.text), textPreview: snapshot.text });
+      expect(f.surface.capturePageSnapshot).toHaveBeenCalledTimes(1);
+      expect(f.surface.inspect).not.toHaveBeenCalled();
+    });
+  }
+
+  if (name === "browser.click") {
+    it("returns up to thirty controls from a single read for an adaptive task", async () => {
+      const f = fixture();
+      const elements = Array.from({ length: 35 }, (_, index) => ({ role: "button", name: `Button ${index}`, selector: `#button-${index}` }));
+      f.surface.capturePageSnapshot.mockResolvedValue({ ...snapshot, elements });
+      const result = await f.tool(name).execute(input, { ...context, browserTaskSnapshotElements: 30 });
+      expect(result.data).toMatchObject({ interactiveElements: elements.slice(0, 30) });
+      expect(f.surface.capturePageSnapshot).toHaveBeenCalledTimes(1);
+      expect(f.surface.inspect).not.toHaveBeenCalled();
+    });
+  }
 
   it("does no work after cancellation", async () => {
     const f = fixture();
