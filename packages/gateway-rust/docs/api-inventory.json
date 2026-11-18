@@ -1,28 +1,28 @@
 {
   "summary": {
-    "httpTotal": 437,
-    "missing": 29,
+    "httpTotal": 446,
+    "missing": 38,
     "mounted-fail-closed": 104,
     "native-untested": 131,
     "native-tested": 166,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 68,
+    "nativeRouteReferencePct": 66.6,
     "nativeTested": 169,
-    "nativeTestedDenominator": 519,
-    "nativeTestedPct": 32.56,
+    "nativeTestedDenominator": 528,
+    "nativeTestedPct": 32.01,
     "wsTotal": 74,
     "wsInbound": 38,
     "wsOutboundCandidates": 36,
     "wsWithoutDirectionalRustReference": 65,
-    "clientPathCandidates": 258,
-    "clientCandidatesWithoutServerPathReference": 30,
+    "clientPathCandidates": 253,
+    "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
       "native-tested": 166,
       "native-untested": 131,
-      "missing": 140
+      "missing": 149
     },
     "wsRustStatus": {
       "native-tested": 3,
@@ -1491,6 +1491,17 @@
         }
       ],
       "rustStatus": "native-tested"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plan-runs/:runId",
+      "nodeFiles": [
+        "routes/plan-runs.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -4322,6 +4333,28 @@
     },
     {
       "method": "POST",
+      "path": "/api/plan-runs/:runId/cancel",
+      "nodeFiles": [
+        "routes/plan-runs.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plan-runs/:runId/resume",
+      "nodeFiles": [
+        "routes/plan-runs.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
       "path": "/api/plans/:id/generate",
       "nodeFiles": [
         "routes/plans.ts"
@@ -4331,6 +4364,17 @@
       "rustFile": "routes/plans.rs",
       "binaryTests": [],
       "rustStatus": "native-untested"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/runs",
+      "nodeFiles": [
+        "routes/plan-runs.ts"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -6080,6 +6124,72 @@
         }
       ],
       "rustStatus": "native-tested"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/dev-file",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "apps/web/src/lib/version-watchdog.ts"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/dev-proxy",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "apps/web/src/lib/chat-image-url.ts",
+        "apps/web/src/lib/version-watchdog.ts"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/git",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "apps/web/src/lib/git-transport.ts"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/project",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "apps/web/src/components/project/project-panel.tsx"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/security/findings",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "packages/api-client/src/client.ts"
+      ],
+      "status": "missing",
+      "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
     }
   ],
   "ws": [
@@ -6747,7 +6857,41 @@
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "ALL /api/dev-proxy/:port/*",
+        "DELETE /api/assistants/profiles/:id",
+        "DELETE /api/calendar/accounts/:id",
+        "DELETE /api/email/accounts/:id",
+        "DELETE /api/mobile/push-devices/:deviceId",
+        "DELETE /api/preview/devtools/:grantId",
+        "DELETE /api/security/checks/:id",
+        "DELETE /api/store/skills/:slug",
+        "GET /api/assistants/profiles/:id",
+        "GET /api/consent/pending/:sessionId",
+        "GET /api/dev-file/:encodedPath/*",
+        "GET /api/email/connect/:provider",
+        "GET /api/email/messages/:id",
+        "GET /api/maintenance/runs/:id",
+        "GET /api/preview/inspect/:sessionId",
+        "GET /api/preview/logs/:sessionId",
+        "GET /api/preview/screenshot/:sessionId",
+        "GET /api/preview/session/:sessionId",
+        "GET /api/screen-share/chat/:chatId",
+        "GET /api/security/assessments/:id",
+        "GET /api/security/checks/:id",
+        "GET /api/sessions/:sessionId/runtime",
+        "GET /api/store/skills/:slug",
+        "GET /api/threads/:id/runtime",
+        "GET /api/trust/levels/:actionType",
+        "GET /api/voice/state/:sessionId",
+        "PATCH /api/assistants/profiles/:id",
+        "PATCH /api/email/accounts/:id",
+        "PATCH /api/voice/state/:sessionId",
+        "POST /api/email/config/:provider",
+        "POST /api/screen-share/control/:operation",
+        "PUT /api/mobile/routines/:kind"
+      ]
     },
     {
       "path": "/api/{}/{}/state",
@@ -6755,112 +6899,196 @@
         "apps/web/src/hooks/useBackendState.ts",
         "apps/web/src/lib/state-batch.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "ALL /api/dev-proxy/:port/*",
+        "DELETE /api/assistants/profiles/:id",
+        "DELETE /api/calendar/accounts/:id",
+        "DELETE /api/email/accounts/:id",
+        "DELETE /api/mobile/push-devices/:deviceId",
+        "DELETE /api/preview/devtools/:grantId",
+        "DELETE /api/security/checks/:id",
+        "DELETE /api/store/skills/:slug",
+        "GET /api/assistants/profiles/:id",
+        "GET /api/consent/pending/:sessionId",
+        "GET /api/dev-file/:encodedPath/*",
+        "GET /api/email/connect/:provider",
+        "GET /api/email/messages/:id",
+        "GET /api/maintenance/runs/:id",
+        "GET /api/preview/inspect/:sessionId",
+        "GET /api/preview/logs/:sessionId",
+        "GET /api/preview/screenshot/:sessionId",
+        "GET /api/preview/session/:sessionId",
+        "GET /api/projects/:id/state",
+        "GET /api/screen-share/chat/:chatId",
+        "GET /api/security/assessments/:id",
+        "GET /api/security/checks/:id",
+        "GET /api/sessions/:id/state",
+        "GET /api/store/skills/:slug",
+        "GET /api/trust/levels/:actionType",
+        "GET /api/voice/state/:sessionId",
+        "PATCH /api/assistants/profiles/:id",
+        "PATCH /api/email/accounts/:id",
+        "PATCH /api/projects/:id/state",
+        "PATCH /api/sessions/:id/state",
+        "PATCH /api/voice/state/:sessionId",
+        "POST /api/email/config/:provider",
+        "POST /api/screen-share/control/:operation",
+        "PUT /api/mobile/routines/:kind"
+      ]
     },
     {
       "path": "/api/agent-control",
       "files": [
         "apps/web/src/lib/agent-control-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/agent-control"
+      ]
     },
     {
       "path": "/api/agent-control/halt",
       "files": [
         "apps/web/src/lib/agent-control-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/agent-control/halt"
+      ]
     },
     {
       "path": "/api/agent-control/resume",
       "files": [
         "apps/web/src/lib/agent-control-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/agent-control/resume"
+      ]
     },
     {
-      "path": "/api/agents/{}/github-app{}",
+      "path": "/api/agents/{}/github-app",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/agents/:agentId/github-app",
+        "GET /api/agents/:agentId/github-app"
+      ]
     },
     {
       "path": "/api/architecture",
       "files": [
         "apps/web/src/App.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/architecture",
+        "PUT /api/architecture"
+      ]
     },
     {
       "path": "/api/auth/invitations",
       "files": [
         "apps/web/src/components/settings/AccountInvitations.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/invitations"
+      ]
     },
     {
       "path": "/api/auth/login",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/login"
+      ]
     },
     {
       "path": "/api/auth/logout",
       "files": [
         "apps/web/src/lib/auth-token.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/logout"
+      ]
     },
     {
       "path": "/api/auth/me",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/auth/me"
+      ]
     },
     {
       "path": "/api/auth/refresh",
       "files": [
         "apps/web/src/lib/auth-token.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/refresh"
+      ]
     },
     {
       "path": "/api/auth/register",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/register"
+      ]
     },
     {
       "path": "/api/auth/session/bind",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/auth/session/bind"
+      ]
     },
     {
       "path": "/api/auth/settings",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/auth/settings",
+        "PATCH /api/auth/settings"
+      ]
     },
     {
       "path": "/api/auth/settings/archive",
       "files": [
         "apps/web/src/hooks/useAuth.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/auth/settings/archive"
+      ]
     },
     {
       "path": "/api/auth/settings/env-status",
       "files": [
         "apps/web/src/components/settings/SettingsPage.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/auth/settings/env-status"
+      ]
     },
     {
       "path": "/api/auth/settings/tools",
@@ -6868,7 +7096,11 @@
         "apps/web/src/components/manager/agents-page.tsx",
         "apps/web/src/components/settings/ToolSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/auth/settings/tools",
+        "PATCH /api/auth/settings/tools"
+      ]
     },
     {
       "path": "/api/browser/screenshot",
@@ -6877,199 +7109,271 @@
         "apps/web/src/hooks/useGatewayImage.ts",
         "apps/web/src/lib/chat-image-url.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/browser/screenshot"
+      ]
     },
     {
       "path": "/api/calendar/accounts",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/calendar/accounts"
+      ]
     },
     {
       "path": "/api/calendar/accounts/{}",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/calendar/accounts/:id"
+      ]
     },
     {
       "path": "/api/calendar/calendars",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/calendar/calendars"
+      ]
     },
     {
       "path": "/api/calendar/config",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/calendar/config"
+      ]
     },
     {
       "path": "/api/calendar/config/google",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/calendar/config/google"
+      ]
     },
     {
       "path": "/api/calendar/connect/google",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/calendar/connect/google"
+      ]
     },
     {
       "path": "/api/calendar/device/sync",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/calendar/device/sync"
+      ]
     },
     {
       "path": "/api/calendar/events",
       "files": [
         "apps/web/src/lib/calendar-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/calendar/events"
+      ]
     },
     {
       "path": "/api/channels",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/channels"
+      ]
     },
     {
       "path": "/api/channels/{}/config",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "PATCH /api/channels/:id/config"
+      ]
     },
     {
       "path": "/api/channels/{}/pair",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/channels/:id/pair"
+      ]
     },
     {
       "path": "/api/channels/{}/setup",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/channels/:id/setup"
+      ]
     },
     {
       "path": "/api/channels/{}/start",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/channels/:id/start"
+      ]
     },
     {
       "path": "/api/channels/{}/status",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/channels/:id/status"
+      ]
     },
     {
       "path": "/api/channels/{}/stop",
       "files": [
         "apps/web/src/components/settings/ChannelSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/channels/:id/stop"
+      ]
     },
     {
       "path": "/api/chat",
       "files": [
         "apps/web/src/hooks/useChat.ts",
+        "apps/web/src/lib/chat-prewarm.ts",
         "apps/web/src/lib/message-stream.ts",
         "apps/web/src/repro/use-chat-resume-repro.tsx",
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/chat:",
-      "files": [
-        "apps/web/src/lib/chat-prewarm.ts"
-      ],
-      "serverPathReference": false
-    },
-    {
-      "path": "/api/chat.",
-      "files": [
-        "apps/web/src/hooks/useChat.ts"
-      ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/chat"
+      ]
     },
     {
       "path": "/api/chat/prewarm",
       "files": [
         "apps/web/src/lib/chat-prewarm.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/chat/prewarm"
+      ]
     },
     {
       "path": "/api/code-graph",
       "files": [
         "apps/web/src/components/project/code-graph-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/code-graph"
+      ]
     },
     {
       "path": "/api/code-graph/graphrag/prepare",
       "files": [
         "apps/web/src/components/project/code-graph-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/code-graph/graphrag/prepare"
+      ]
     },
     {
       "path": "/api/code-graph/index",
       "files": [
         "apps/web/src/components/project/code-graph-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/code-graph/index"
+      ]
     },
     {
       "path": "/api/code-graph/query",
       "files": [
         "apps/web/src/components/project/code-graph-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/code-graph/query"
+      ]
     },
     {
       "path": "/api/code-graph/snapshot",
       "files": [
         "apps/web/src/components/project/code-graph-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/code-graph/snapshot"
+      ]
     },
     {
       "path": "/api/consent/{}/{}",
       "files": [
         "apps/web/src/components/consent/action-card.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/consent/pending/:sessionId",
+        "POST /api/consent/:id/approve",
+        "POST /api/consent/:id/approve-all",
+        "POST /api/consent/:id/reject"
+      ]
     },
     {
       "path": "/api/consent/pending",
       "files": [
         "apps/web/src/components/consent/action-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/consent/:id",
+        "GET /api/consent/pending"
+      ]
     },
     {
       "path": "/api/consent/pending/{}",
       "files": [
         "apps/web/src/components/consent/action-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/consent/pending/:sessionId",
+        "POST /api/consent/:id/approve",
+        "POST /api/consent/:id/approve-all",
+        "POST /api/consent/:id/reject"
+      ]
     },
     {
       "path": "/api/consent/pending/{}/approve-all",
@@ -7077,28 +7381,41 @@
         "apps/web/src/App.tsx",
         "apps/web/src/components/consent/action-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/consent/pending/:sessionId/approve-all",
+        "GET /api/consent/pending/:sessionId/approve-all",
+        "POST /api/consent/pending/:sessionId/approve-all"
+      ]
     },
     {
       "path": "/api/consent/policy",
       "files": [
         "apps/web/src/components/consent/action-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/consent/:id",
+        "GET /api/consent/policy"
+      ]
     },
     {
       "path": "/api/dev-file",
       "files": [
         "apps/web/src/lib/version-watchdog.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/dev-file/{}",
       "files": [
         "apps/web/src/components/chat/dev-preview-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/dev-file/:encodedPath"
+      ]
     },
     {
       "path": "/api/dev-proxy",
@@ -7106,126 +7423,170 @@
         "apps/web/src/lib/chat-image-url.ts",
         "apps/web/src/lib/version-watchdog.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/dev-proxy/{}",
       "files": [
         "apps/web/src/components/chat/dev-preview-panel.tsx"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/dev-proxy/{}{}",
-      "files": [
-        "apps/web/src/components/chat/dev-preview-panel.tsx"
-      ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "ALL /api/dev-proxy/:port"
+      ]
     },
     {
       "path": "/api/email/accounts",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/accounts",
+        "POST /api/email/accounts"
+      ]
     },
     {
       "path": "/api/email/accounts/{}",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/email/accounts/:id",
+        "PATCH /api/email/accounts/:id"
+      ]
     },
     {
       "path": "/api/email/config",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/config"
+      ]
     },
     {
       "path": "/api/email/config/{}",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/email/config/:provider"
+      ]
     },
     {
       "path": "/api/email/connect/{}",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/connect/:provider"
+      ]
     },
     {
       "path": "/api/email/discover",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/discover"
+      ]
     },
     {
       "path": "/api/email/folders",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/folders"
+      ]
     },
     {
       "path": "/api/email/images",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/email/images"
+      ]
     },
     {
       "path": "/api/email/messages",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/messages"
+      ]
     },
     {
       "path": "/api/email/messages/{}",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/messages/:id"
+      ]
     },
     {
       "path": "/api/email/messages/{}/delete",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/email/messages/:id/delete"
+      ]
     },
     {
       "path": "/api/email/messages/{}/tag",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/email/messages/:id/tag"
+      ]
     },
     {
       "path": "/api/email/oauth/callback",
       "files": [
         "apps/web/src/components/settings/EmailSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/email/oauth/callback"
+      ]
     },
     {
       "path": "/api/email/send",
       "files": [
         "apps/web/src/lib/email-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/email/send"
+      ]
     },
     {
       "path": "/api/filesystem/browse",
       "files": [
         "apps/web/src/components/project/folder-picker-dialog.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/filesystem/browse"
+      ]
     },
     {
       "path": "/api/filesystem/nodes",
@@ -7233,98 +7594,171 @@
         "apps/web/src/App.tsx",
         "apps/web/src/components/project/folder-picker-dialog.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/filesystem/nodes"
+      ]
     },
     {
       "path": "/api/filesystem/roots",
       "files": [
         "apps/web/src/components/project/folder-picker-dialog.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/filesystem/roots"
+      ]
     },
     {
       "path": "/api/git",
       "files": [
         "apps/web/src/lib/git-transport.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/git/{}",
       "files": [
         "apps/web/src/lib/git-transport.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/git/branches",
+        "POST /api/git/checkout",
+        "POST /api/git/create-branch",
+        "POST /api/git/create-worktree",
+        "POST /api/git/diff",
+        "POST /api/git/diff-stats",
+        "POST /api/git/discard",
+        "POST /api/git/fetch",
+        "POST /api/git/file-diffs",
+        "POST /api/git/forge-auth",
+        "POST /api/git/forge-pr-checks",
+        "POST /api/git/forge-status",
+        "POST /api/git/generate-commit-message",
+        "POST /api/git/gh-auth",
+        "POST /api/git/gh-status",
+        "POST /api/git/identity",
+        "POST /api/git/init",
+        "POST /api/git/pr-checks",
+        "POST /api/git/pull",
+        "POST /api/git/remove-worktree",
+        "POST /api/git/run-commit-flow",
+        "POST /api/git/run-stacked-action",
+        "POST /api/git/stage",
+        "POST /api/git/status",
+        "POST /api/git/sync",
+        "POST /api/git/unstage"
+      ]
     },
     {
       "path": "/api/github-apps",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/github-apps"
+      ]
     },
     {
       "path": "/api/jait-todos/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/jait-todos/:id",
+        "PATCH /api/jait-todos/:id"
+      ]
     },
     {
       "path": "/api/jobs",
       "files": [
         "apps/web/src/lib/jobs-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/jobs",
+        "POST /api/jobs"
+      ]
     },
     {
       "path": "/api/jobs/{}",
       "files": [
         "apps/web/src/lib/jobs-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/jobs/:id",
+        "GET /api/jobs/:id",
+        "PATCH /api/jobs/:id"
+      ]
     },
     {
       "path": "/api/jobs/{}/runs",
       "files": [
         "apps/web/src/lib/jobs-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/jobs/:id/runs"
+      ]
     },
     {
       "path": "/api/jobs/{}/trigger",
       "files": [
         "apps/web/src/lib/jobs-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/jobs/:id/trigger"
+      ]
     },
     {
       "path": "/api/jobs/providers/available",
       "files": [
         "apps/web/src/lib/jobs-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/jobs/providers/available"
+      ]
     },
     {
       "path": "/api/messenger",
       "files": [
         "apps/web/src/lib/messenger/gateway-store.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/messenger",
+        "GET /api/messenger",
+        "POST /api/messenger"
+      ]
     },
     {
       "path": "/api/messenger/bridge-accounts/teams",
       "files": [
         "apps/web/src/components/messenger/teams-connection-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/messenger/bridge-accounts/teams"
+      ]
     },
     {
       "path": "/api/messenger/bridge-reauth/teams",
       "files": [
         "apps/web/src/components/messenger/teams-connection-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/messenger/bridge-reauth/teams",
+        "GET /api/messenger/bridge-reauth/teams",
+        "POST /api/messenger/bridge-reauth/teams"
+      ]
     },
     {
       "path": "/api/messenger/bridge-status",
@@ -7332,28 +7766,42 @@
         "apps/web/src/components/messenger/messenger-services-bar.tsx",
         "apps/web/src/components/messenger/teams-connection-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/messenger/bridge-status",
+        "POST /api/messenger/bridge-status"
+      ]
     },
     {
       "path": "/api/messenger/presence",
       "files": [
         "apps/web/src/components/messenger/messenger-services-bar.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/messenger/presence",
+        "PUT /api/messenger/presence"
+      ]
     },
     {
       "path": "/api/mobile-update/check",
       "files": [
         "apps/web/src/hooks/useUpdateChecker.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/mobile-update/check"
+      ]
     },
     {
       "path": "/api/mobile/devices/register",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/mobile/devices/register"
+      ]
     },
     {
       "path": "/api/network/deploy",
@@ -7361,21 +7809,30 @@
         "apps/web/src/components/network/network-panel.tsx",
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/network/deploy"
+      ]
     },
     {
       "path": "/api/network/interfaces",
       "files": [
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/network/interfaces"
+      ]
     },
     {
       "path": "/api/network/nodes",
       "files": [
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/network/nodes"
+      ]
     },
     {
       "path": "/api/network/scan",
@@ -7383,105 +7840,160 @@
         "apps/web/src/components/network/network-panel.tsx",
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/network/scan"
+      ]
     },
     {
       "path": "/api/network/scan/latest",
       "files": [
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/network/scan/latest"
+      ]
     },
     {
       "path": "/api/network/ssh/enable",
       "files": [
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/network/ssh/enable"
+      ]
     },
     {
       "path": "/api/network/ssh/test",
       "files": [
         "apps/web/src/hooks/useNetwork.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/network/ssh/test"
+      ]
     },
     {
       "path": "/api/network/topology",
       "files": [
         "apps/web/src/components/network/network-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/network/topology"
+      ]
     },
     {
       "path": "/api/persona-agents",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/persona-agents"
+      ]
     },
     {
       "path": "/api/persona-agents/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/persona-agents/:id",
+        "PUT /api/persona-agents/:id"
+      ]
     },
     {
       "path": "/api/plans/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/plans/:id",
+        "GET /api/plans/:id",
+        "PATCH /api/plans/:id"
+      ]
     },
     {
       "path": "/api/plans/{}/generate",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plans/:id/generate"
+      ]
     },
     {
       "path": "/api/plans/{}/start",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plans/:id/start"
+      ]
     },
     {
       "path": "/api/plans/{}/tasks/{}/start",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plans/:id/tasks/:taskId/start"
+      ]
     },
     {
       "path": "/api/plugins",
       "files": [
         "apps/web/src/components/settings/ExtensionSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/plugins"
+      ]
     },
     {
       "path": "/api/plugins/{}",
       "files": [
         "apps/web/src/components/settings/ExtensionSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/plugins/:id",
+        "GET /api/plugins/:id",
+        "POST /api/plugins/scan"
+      ]
     },
     {
       "path": "/api/plugins/{}/{}",
       "files": [
         "apps/web/src/components/settings/ExtensionSettings.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/plugins/:id/config",
+        "PATCH /api/plugins/:id/config",
+        "POST /api/plugins/:id/disable",
+        "POST /api/plugins/:id/enable"
+      ]
     },
     {
       "path": "/api/plugins/scan",
       "files": [
         "apps/web/src/components/settings/ExtensionSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/plugins/:id",
+        "GET /api/plugins/:id",
+        "POST /api/plugins/scan"
+      ]
     },
     {
       "path": "/api/preview/{}",
@@ -7489,42 +8001,69 @@
         "apps/web/src/components/chat/chat-browser-view.tsx",
         "apps/web/src/components/remote/browser-address-bar.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/access",
+        "POST /api/preview/devtools",
+        "POST /api/preview/history",
+        "POST /api/preview/navigate",
+        "POST /api/preview/reload",
+        "POST /api/preview/reopen",
+        "POST /api/preview/restart",
+        "POST /api/preview/share",
+        "POST /api/preview/start",
+        "POST /api/preview/stop"
+      ]
     },
     {
       "path": "/api/preview/access",
       "files": [
         "apps/web/src/hooks/use-preview-access.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/access"
+      ]
     },
     {
       "path": "/api/preview/devtools",
       "files": [
         "apps/web/src/components/remote/browser-tools-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/devtools"
+      ]
     },
     {
       "path": "/api/preview/devtools/{}",
       "files": [
         "apps/web/src/components/remote/browser-tools-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/preview/devtools/:grantId"
+      ]
     },
     {
       "path": "/api/preview/history",
       "files": [
         "apps/web/src/components/remote/browser-address-bar.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/history"
+      ]
     },
     {
-      "path": "/api/preview/inspect/{}{}",
+      "path": "/api/preview/inspect/{}",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/preview/inspect/:sessionId"
+      ]
     },
     {
       "path": "/api/preview/restart",
@@ -7533,14 +8072,20 @@
         "apps/web/src/components/chat/dev-preview-panel.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/restart"
+      ]
     },
     {
       "path": "/api/preview/screenshot/{}",
       "files": [
         "apps/web/src/components/chat/dev-preview-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/preview/screenshot/:sessionId"
+      ]
     },
     {
       "path": "/api/preview/session/{}",
@@ -7550,7 +8095,10 @@
         "apps/web/src/components/project/project-panel.tsx",
         "apps/web/src/components/remote/browser-address-bar.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/preview/session/:sessionId"
+      ]
     },
     {
       "path": "/api/preview/share",
@@ -7559,7 +8107,10 @@
         "apps/web/src/components/chat/dev-preview-panel.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/share"
+      ]
     },
     {
       "path": "/api/preview/start",
@@ -7567,7 +8118,10 @@
         "apps/web/src/components/chat/dev-preview-panel.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/start"
+      ]
     },
     {
       "path": "/api/preview/stop",
@@ -7575,21 +8129,45 @@
         "apps/web/src/components/chat/dev-preview-panel.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/preview/stop"
+      ]
     },
     {
       "path": "/api/project",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/project/{}",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/backup",
+        "GET /api/project/download",
+        "GET /api/project/info",
+        "GET /api/project/list",
+        "GET /api/project/read",
+        "GET /api/project/search",
+        "GET /api/project/stat",
+        "POST /api/project/apply-diff",
+        "POST /api/project/create-directory",
+        "POST /api/project/create-file",
+        "POST /api/project/delete",
+        "POST /api/project/move",
+        "POST /api/project/open",
+        "POST /api/project/rename",
+        "POST /api/project/reveal",
+        "POST /api/project/undo",
+        "POST /api/project/undo-all",
+        "POST /api/project/write"
+      ]
     },
     {
       "path": "/api/project/apply-diff",
@@ -7597,7 +8175,10 @@
         "apps/web/src/hooks/useChat.ts",
         "apps/web/src/hooks/useProjectFileActions.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/apply-diff"
+      ]
     },
     {
       "path": "/api/project/backup",
@@ -7605,14 +8186,20 @@
         "apps/web/src/components/project/project-panel.tsx",
         "apps/web/src/hooks/useProjectFileActions.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/backup"
+      ]
     },
     {
       "path": "/api/project/delete",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/delete"
+      ]
     },
     {
       "path": "/api/project/download",
@@ -7620,7 +8207,10 @@
         "apps/web/src/components/ui/file-download-link.tsx",
         "apps/web/src/e2e-fixtures/message-links.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/download"
+      ]
     },
     {
       "path": "/api/project/list",
@@ -7628,21 +8218,30 @@
         "apps/web/src/App.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/list"
+      ]
     },
     {
       "path": "/api/project/move",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/move"
+      ]
     },
     {
       "path": "/api/project/open",
       "files": [
         "apps/web/src/App.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/open"
+      ]
     },
     {
       "path": "/api/project/read",
@@ -7650,21 +8249,30 @@
         "apps/web/src/components/project/project-panel.tsx",
         "apps/web/src/hooks/useProjectFileActions.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/read"
+      ]
     },
     {
       "path": "/api/project/rename",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/rename"
+      ]
     },
     {
       "path": "/api/project/reveal",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/reveal"
+      ]
     },
     {
       "path": "/api/project/search",
@@ -7672,28 +8280,40 @@
         "apps/web/src/components/project/project-panel.tsx",
         "apps/web/src/hooks/useProjectFileActions.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/search"
+      ]
     },
     {
       "path": "/api/project/stat",
       "files": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/project/stat"
+      ]
     },
     {
       "path": "/api/project/undo",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/undo"
+      ]
     },
     {
       "path": "/api/project/undo-all",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/undo-all"
+      ]
     },
     {
       "path": "/api/project/write",
@@ -7701,7 +8321,10 @@
         "apps/web/src/components/project/detached-tab-view.tsx",
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/project/write"
+      ]
     },
     {
       "path": "/api/projects",
@@ -7709,7 +8332,23 @@
         "apps/web/src/e2e-fixtures/project-selection-refresh.tsx",
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/projects",
+        "POST /api/projects"
+      ]
+    },
+    {
+      "path": "/api/projects/:id",
+      "files": [
+        "apps/web/src/hooks/useProjects.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "GET /api/projects/:id",
+        "PATCH /api/projects/:id"
+      ]
     },
     {
       "path": "/api/projects/{}",
@@ -7717,49 +8356,82 @@
         "apps/web/src/App.tsx",
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "DELETE /api/projects/archived",
+        "GET /api/projects/:id",
+        "GET /api/projects/archived",
+        "GET /api/projects/last-active",
+        "GET /api/projects/search",
+        "PATCH /api/projects/:id",
+        "POST /api/projects/select"
+      ]
     },
     {
       "path": "/api/projects/{}/move",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/projects/:id/move"
+      ]
     },
     {
       "path": "/api/projects/{}/repository",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/projects/:id/repository"
+      ]
     },
     {
       "path": "/api/projects/{}/restore",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/projects/:id/restore"
+      ]
     },
     {
       "path": "/api/projects/{}/sessions",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/projects/:id/sessions",
+        "POST /api/projects/:id/sessions"
+      ]
     },
     {
       "path": "/api/projects/{}/subtree",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/projects/:id/subtree"
+      ]
     },
     {
       "path": "/api/projects/archived",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "DELETE /api/projects/archived",
+        "GET /api/projects/:id",
+        "GET /api/projects/archived",
+        "PATCH /api/projects/:id"
+      ]
     },
     {
       "path": "/api/projects/last-active",
@@ -7767,21 +8439,39 @@
         "apps/web/src/App.tsx",
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "GET /api/projects/:id",
+        "GET /api/projects/last-active",
+        "PATCH /api/projects/:id"
+      ]
     },
     {
       "path": "/api/projects/search",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "GET /api/projects/:id",
+        "GET /api/projects/search",
+        "PATCH /api/projects/:id"
+      ]
     },
     {
       "path": "/api/projects/select",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/projects/:id",
+        "GET /api/projects/:id",
+        "PATCH /api/projects/:id",
+        "POST /api/projects/select"
+      ]
     },
     {
       "path": "/api/provider-accounts",
@@ -7789,113 +8479,154 @@
         "apps/web/src/components/settings/UsageSettings.tsx",
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/provider-accounts",
+        "POST /api/provider-accounts"
+      ]
     },
     {
       "path": "/api/provider-accounts/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/provider-accounts/:id",
+        "PATCH /api/provider-accounts/:id"
+      ]
     },
     {
       "path": "/api/provider-accounts/{}/opencode-go",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/provider-accounts/:id/opencode-go"
+      ]
     },
     {
       "path": "/api/provider-usage",
       "files": [
         "apps/web/src/components/settings/UsageSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/provider-usage"
+      ]
     },
     {
       "path": "/api/provider-usage/ollama/api-key",
       "files": [
         "apps/web/src/components/app-shell/ollama-usage-setup.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/provider-usage/ollama/api-key"
+      ]
     },
     {
       "path": "/api/provider-usage/ollama/session",
       "files": [
         "apps/web/src/components/app-shell/ollama-usage-setup.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/provider-usage/ollama/session"
+      ]
     },
     {
       "path": "/api/provider-usage/summary",
       "files": [
         "apps/web/src/lib/usage-summary-store.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/provider-usage/summary"
+      ]
     },
     {
       "path": "/api/providers",
       "files": [
         "apps/web/src/hooks/useProviders.ts",
+        "apps/web/src/lib/agents-api.ts",
         "apps/web/src/lib/provider-store.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/providers{}",
-      "files": [
-        "apps/web/src/lib/agents-api.ts"
-      ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/providers"
+      ]
     },
     {
       "path": "/api/providers/{}/auth/login",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/:id/auth/login"
+      ]
     },
     {
       "path": "/api/providers/{}/auth/login/input",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/:id/auth/login/input"
+      ]
     },
     {
       "path": "/api/providers/{}/auth/logout",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/:id/auth/logout"
+      ]
     },
     {
       "path": "/api/providers/{}/auth/status",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/providers/:id/auth/status"
+      ]
     },
     {
-      "path": "/api/providers/{}/models{}",
+      "path": "/api/providers/{}/models",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/providers/:id/models"
+      ]
     },
     {
       "path": "/api/providers/{}/update",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/:id/update"
+      ]
     },
     {
       "path": "/api/providers/backend/test",
       "files": [
         "apps/web/src/components/settings/SettingsPage.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/backend/test"
+      ]
     },
     {
       "path": "/api/providers/models/reset",
@@ -7903,161 +8634,240 @@
         "apps/web/src/components/settings/SettingsPage.tsx",
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/models/reset"
+      ]
     },
     {
       "path": "/api/providers/omniroute/test",
       "files": [
         "apps/web/src/components/settings/SettingsPage.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/providers/omniroute/test"
+      ]
     },
     {
       "path": "/api/reminders",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/reminders{}",
-      "files": [
-        "apps/web/src/lib/agents-api.ts"
-      ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/reminders",
+        "POST /api/reminders"
+      ]
     },
     {
       "path": "/api/reminders/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/reminders/:id",
+        "GET /api/reminders/export.md",
+        "PATCH /api/reminders/:id"
+      ]
     },
     {
-      "path": "/api/reminders/export.md{}",
+      "path": "/api/reminders/export.md",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/reminders/:id",
+        "GET /api/reminders/export.md",
+        "PATCH /api/reminders/:id"
+      ]
     },
     {
       "path": "/api/repos",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/repos",
+        "POST /api/repos"
+      ]
     },
     {
       "path": "/api/repos/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/repos/:id",
+        "PATCH /api/repos/:id"
+      ]
     },
     {
       "path": "/api/repos/{}/plans",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/repos/:repoId/plans",
+        "POST /api/repos/:repoId/plans"
+      ]
     },
     {
-      "path": "/api/repos/{}/pull-requests{}",
+      "path": "/api/repos/{}/pull-requests",
       "files": [
         "apps/web/src/lib/pull-requests-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/repos/:id/pull-requests"
+      ]
     },
     {
       "path": "/api/repos/{}/strategy",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/repos/:id/strategy",
+        "PUT /api/repos/:id/strategy"
+      ]
     },
     {
       "path": "/api/repos/{}/strategy/generate",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/repos/:id/strategy/generate"
+      ]
     },
     {
       "path": "/api/repos/{}/todos",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/repos/:repoId/todos",
+        "POST /api/repos/:repoId/todos"
+      ]
     },
     {
       "path": "/api/repos/{}/todos/generate",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/repos/:repoId/todos/generate"
+      ]
     },
     {
       "path": "/api/screen-share/{}",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/screen-share/devices",
+        "GET /api/screen-share/state",
+        "POST /api/screen-share/approve",
+        "POST /api/screen-share/capture",
+        "POST /api/screen-share/handoff",
+        "POST /api/screen-share/join",
+        "POST /api/screen-share/leave",
+        "POST /api/screen-share/record",
+        "POST /api/screen-share/start",
+        "POST /api/screen-share/stop",
+        "POST /api/screen-share/transfer-control"
+      ]
     },
     {
       "path": "/api/screen-share/approve",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/approve"
+      ]
     },
     {
       "path": "/api/screen-share/chat/{}",
       "files": [
         "apps/web/src/components/chat/chat-screen-share-view.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/screen-share/chat/:chatId"
+      ]
     },
     {
       "path": "/api/screen-share/control/{}",
       "files": [
         "apps/web/src/hooks/useScreenShareControl.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/control/:operation"
+      ]
     },
     {
       "path": "/api/screen-share/devices/register",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/devices/register"
+      ]
     },
     {
       "path": "/api/screen-share/handoff",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/handoff"
+      ]
     },
     {
       "path": "/api/screen-share/leave",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/leave"
+      ]
     },
     {
       "path": "/api/screen-share/start",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/start"
+      ]
     },
     {
       "path": "/api/screen-share/state",
       "files": [
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/screen-share/state"
+      ]
     },
     {
       "path": "/api/screen-share/stop",
@@ -8065,49 +8875,63 @@
         "apps/web/src/components/chat/chat-screen-share-view.tsx",
         "apps/web/src/hooks/useScreenShare.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/screen-share/stop"
+      ]
     },
     {
       "path": "/api/secrets",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/secrets{}",
-      "files": [
-        "apps/web/src/lib/agents-api.ts"
-      ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/secrets",
+        "POST /api/secrets"
+      ]
     },
     {
       "path": "/api/secrets/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/secrets/:id",
+        "GET /api/secrets/requests"
+      ]
     },
     {
       "path": "/api/secrets/requests",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/secrets/:id",
+        "GET /api/secrets/requests"
+      ]
     },
     {
       "path": "/api/secrets/requests/{}/cancel",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/secrets/requests/:id/cancel"
+      ]
     },
     {
       "path": "/api/secrets/requests/{}/submit",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/secrets/requests/:id/submit"
+      ]
     },
     {
       "path": "/api/security/assessments",
@@ -8115,42 +8939,59 @@
         "apps/web/src/components/network/service-checks.tsx",
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/security/assessments",
+        "POST /api/security/assessments"
+      ]
     },
     {
       "path": "/api/security/checks",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/security/checks"
+      ]
     },
     {
       "path": "/api/security/comparisons",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/security/comparisons"
+      ]
     },
     {
       "path": "/api/security/engines",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/security/engines"
+      ]
     },
     {
       "path": "/api/security/findings",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/security/monitors",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/security/monitors"
+      ]
     },
     {
       "path": "/api/security/scopes",
@@ -8158,14 +8999,20 @@
         "apps/web/src/components/network/service-checks.tsx",
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/security/scopes"
+      ]
     },
     {
       "path": "/api/security/workbench",
       "files": [
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/security/workbench"
+      ]
     },
     {
       "path": "/api/sessions",
@@ -8175,7 +9022,32 @@
         "apps/web/src/hooks/useProjects.ts",
         "apps/web/src/repro/use-chat-resume-repro.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions",
+        "POST /api/sessions"
+      ]
+    },
+    {
+      "path": "/api/sessions/:id/events",
+      "files": [
+        "apps/web/src/lib/session-event-subscription.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/events"
+      ]
+    },
+    {
+      "path": "/api/sessions/:id/runtime",
+      "files": [
+        "apps/web/src/lib/agent-activity-chip.ts",
+        "apps/web/src/lib/agent-activity-source.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/runtime"
+      ]
     },
     {
       "path": "/api/sessions/{}",
@@ -8185,21 +9057,35 @@
         "apps/web/src/hooks/usePersonalChatNode.ts",
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/sessions/:id",
+        "GET /api/sessions/:id",
+        "GET /api/sessions/last-active",
+        "GET /api/sessions/streaming",
+        "GET /api/sessions/unread-count",
+        "PATCH /api/sessions/:id"
+      ]
     },
     {
       "path": "/api/sessions/{}/approve",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/approve"
+      ]
     },
     {
       "path": "/api/sessions/{}/archive",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:id/archive"
+      ]
     },
     {
       "path": "/api/sessions/{}/cancel",
@@ -8208,36 +9094,51 @@
         "apps/web/src/hooks/useChat.ts",
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/cancel"
+      ]
     },
     {
       "path": "/api/sessions/{}/events",
       "files": [
-        "apps/web/src/hooks/useChat.ts",
-        "apps/web/src/lib/session-event-subscription.ts"
+        "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/events"
+      ]
     },
     {
       "path": "/api/sessions/{}/fork",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/fork"
+      ]
     },
     {
       "path": "/api/sessions/{}/generate-title",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:id/generate-title"
+      ]
     },
     {
       "path": "/api/sessions/{}/loop",
       "files": [
         "apps/web/src/components/chat/loop-goal-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/loop",
+        "POST /api/sessions/:sessionId/loop"
+      ]
     },
     {
       "path": "/api/sessions/{}/messages",
@@ -8245,50 +9146,60 @@
         "apps/web/src/hooks/useChat.ts",
         "packages/api-client/src/client.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/messages"
+      ]
     },
     {
       "path": "/api/sessions/{}/messages/{}/context-flow",
       "files": [
         "apps/web/src/lib/context-flow-cache.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/messages/:messageIndex/context-flow"
+      ]
     },
     {
       "path": "/api/sessions/{}/move",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:id/move"
+      ]
     },
     {
       "path": "/api/sessions/{}/plan/execute",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/plan/execute"
+      ]
     },
     {
       "path": "/api/sessions/{}/plan/reject",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/plan/reject"
+      ]
     },
     {
       "path": "/api/sessions/{}/restart-from",
       "files": [
         "apps/web/src/hooks/useChat.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/sessions/{}/runtime",
-      "files": [
-        "apps/web/src/lib/agent-activity-chip.ts",
-        "apps/web/src/lib/agent-activity-source.ts"
-      ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/restart-from"
+      ]
     },
     {
       "path": "/api/sessions/{}/steer",
@@ -8296,63 +9207,93 @@
         "apps/web/src/App.tsx",
         "apps/web/src/components/app-shell/parallel-chat-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:sessionId/steer"
+      ]
     },
     {
       "path": "/api/sessions/{}/sub-agents/{}",
       "files": [
         "apps/web/src/components/chat/tool-call-card.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/sub-agents/:subAgentId"
+      ]
     },
     {
       "path": "/api/sessions/{}/trajectory",
       "files": [
         "apps/web/src/components/debug/use-session-trajectory.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/trajectory"
+      ]
     },
     {
       "path": "/api/sessions/{}/viewed",
       "files": [
         "apps/web/src/hooks/useProjects.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/sessions/:id/viewed"
+      ]
     },
     {
       "path": "/api/sessions/completion-repro/events",
       "files": [
         "apps/web/src/repro/chat-completion-repro.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/events"
+      ]
     },
     {
       "path": "/api/sessions/completion-repro/messages",
       "files": [
         "apps/web/src/repro/chat-completion-repro.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/messages"
+      ]
     },
     {
       "path": "/api/sessions/latency-repro-session/events",
       "files": [
         "apps/web/src/repro/chat-stream-latency-repro.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/events"
+      ]
     },
     {
       "path": "/api/sessions/latency-repro-session/messages",
       "files": [
         "apps/web/src/repro/chat-stream-latency-repro.tsx"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/sessions/:sessionId/messages"
+      ]
     },
     {
       "path": "/api/sessions/unread-count",
       "files": [
         "apps/web/src/hooks/useUnreadChatCount.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/sessions/:id",
+        "GET /api/sessions/:id",
+        "GET /api/sessions/unread-count",
+        "PATCH /api/sessions/:id"
+      ]
     },
     {
       "path": "/api/skills",
@@ -8361,49 +9302,71 @@
         "apps/web/src/components/settings/SkillSettings.tsx",
         "apps/web/src/hooks/useSkills.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/skills"
+      ]
     },
     {
       "path": "/api/skills/{}",
       "files": [
         "apps/web/src/components/settings/SkillSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "PATCH /api/skills/:id"
+      ]
     },
     {
       "path": "/api/skills/{}/install-tool",
       "files": [
         "apps/web/src/components/settings/SkillSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/skills/:id/install-tool"
+      ]
     },
     {
       "path": "/api/store/packages",
       "files": [
         "apps/web/src/components/settings/ExtensionSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/store/packages"
+      ]
     },
     {
       "path": "/api/store/skills",
       "files": [
         "apps/web/src/components/settings/SkillSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/store/skills"
+      ]
     },
     {
       "path": "/api/store/skills/{}/install",
       "files": [
         "apps/web/src/components/settings/SkillSettings.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/store/skills/:slug/install"
+      ]
     },
     {
       "path": "/api/team-rooms",
       "files": [
         "apps/web/src/lib/team-chat-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/team-rooms",
+        "POST /api/team-rooms"
+      ]
     },
     {
       "path": "/api/terminals",
@@ -8413,127 +9376,179 @@
         "apps/web/src/lib/terminal-snapshot.ts",
         "apps/web/src/lib/tool-terminal-live.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/terminals",
+        "POST /api/terminals"
+      ]
     },
     {
       "path": "/api/terminals/{}",
       "files": [
         "apps/web/src/components/terminal/terminal-view.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/terminals/:id",
+        "GET /api/terminals/:id",
+        "GET /api/terminals/shells"
+      ]
     },
     {
       "path": "/api/terminals/{}/resize",
       "files": [
         "apps/web/src/components/terminal/terminal-view.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/terminals/:id/resize"
+      ]
     },
     {
       "path": "/api/terminals/shells",
       "files": [
         "apps/web/src/components/terminal/terminal-view.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/terminals/:id",
+        "GET /api/terminals/:id",
+        "GET /api/terminals/shells"
+      ]
     },
     {
       "path": "/api/threads",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/threads",
+        "POST /api/threads"
+      ]
     },
     {
-      "path": "/api/threads{}",
+      "path": "/api/threads/:id/runtime",
       "files": [
-        "apps/web/src/lib/agents-api.ts"
+        "apps/web/src/lib/agent-activity-chip.ts",
+        "apps/web/src/lib/agent-activity-source.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/threads/:id/runtime"
+      ]
     },
     {
       "path": "/api/threads/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "DELETE /api/threads/:id",
+        "GET /api/threads/:id",
+        "PATCH /api/threads/:id"
+      ]
     },
     {
-      "path": "/api/threads/{}/activities{}",
+      "path": "/api/threads/{}/activities",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": false
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/threads/:id/activities"
+      ]
     },
     {
       "path": "/api/threads/{}/approve",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/approve"
+      ]
     },
     {
       "path": "/api/threads/{}/create-pr",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/create-pr"
+      ]
     },
     {
       "path": "/api/threads/{}/interrupt",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/interrupt"
+      ]
     },
     {
       "path": "/api/threads/{}/resume",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
-    },
-    {
-      "path": "/api/threads/{}/runtime",
-      "files": [
-        "apps/web/src/lib/agent-activity-chip.ts",
-        "apps/web/src/lib/agent-activity-source.ts"
-      ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/resume"
+      ]
     },
     {
       "path": "/api/threads/{}/send",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/send"
+      ]
     },
     {
       "path": "/api/threads/{}/start",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/start"
+      ]
     },
     {
       "path": "/api/threads/{}/steer",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/steer"
+      ]
     },
     {
       "path": "/api/threads/{}/stop",
       "files": [
         "apps/web/src/lib/agents-api.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/threads/:id/stop"
+      ]
     },
     {
       "path": "/api/tools",
       "files": [
         "apps/web/src/components/app-shell/catalogue-graph.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/tools"
+      ]
     },
     {
       "path": "/api/update/apply",
@@ -8541,14 +9556,20 @@
         "apps/web/src/components/network/jait-nodes-panel.tsx",
         "apps/web/src/hooks/useUpdateChecker.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/update/apply"
+      ]
     },
     {
       "path": "/api/update/changelog",
       "files": [
         "apps/web/src/hooks/useUpdateChecker.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/update/changelog"
+      ]
     },
     {
       "path": "/api/update/check",
@@ -8556,56 +9577,80 @@
         "apps/web/src/components/network/jait-nodes-panel.tsx",
         "apps/web/src/hooks/useUpdateChecker.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/update/check"
+      ]
     },
     {
       "path": "/api/update/nodes",
       "files": [
         "apps/web/src/components/network/jait-nodes-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/update/nodes"
+      ]
     },
     {
       "path": "/api/update/nodes/{}/apply",
       "files": [
         "apps/web/src/components/network/jait-nodes-panel.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/update/nodes/:nodeId/apply"
+      ]
     },
     {
       "path": "/api/user-questions/requests",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/user-questions/requests"
+      ]
     },
     {
       "path": "/api/user-questions/requests/{}/cancel",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/user-questions/requests/:id/cancel"
+      ]
     },
     {
       "path": "/api/user-questions/requests/{}/submit",
       "files": [
         "apps/web/src/components/prompts/input-prompts.tsx"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/user-questions/requests/:id/submit"
+      ]
     },
     {
       "path": "/api/voice/transcribe-audio",
       "files": [
         "apps/web/src/hooks/useVoiceRecording.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/voice/transcribe-audio"
+      ]
     },
     {
       "path": "/api/voice/wake-candidate",
       "files": [
         "apps/web/src/hooks/useWakeWord.ts"
       ],
-      "serverPathReference": true
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/voice/wake-candidate"
+      ]
     }
   ],
   "rustOnly": [

@@ -26,6 +26,13 @@ test('inventory does not turn path references into tested parity claims', () => 
   assert.ok(chatCandidate?.serverPathReference);
   assert.ok(chatCandidate.files.includes('packages/api-client/src/client.ts'));
   assert.ok(inventory.clientCandidates.some((candidate) => !candidate.serverPathReference));
+  // Client routes without a Node route are inventory rows, not dropped candidates.
+  const clientOnly = inventory.clientCandidates.filter((candidate) => !candidate.serverPathReference);
+  assert.equal(summary.clientOnlyRoutes, clientOnly.length);
+  for (const candidate of clientOnly) {
+    assert.ok(inventory.http.some((route) => route.clientOnly && route.path === candidate.path), `client-only row for ${candidate.path}`);
+  }
+  assert.ok(inventory.clientCandidates.find((candidate) => candidate.path === '/api/providers')?.serverPathReference, 'a query-suffixed client call maps to its route');
   assert.ok(inventory.clientCandidates.every((candidate) => !('status' in candidate)));
 });
 

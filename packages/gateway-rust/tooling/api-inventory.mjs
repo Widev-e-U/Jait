@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { clientPathCandidates, normalizeClientPath } from './client-inventory.mjs';
+import { clientPathCandidates, clientRouteShape, clientShapeMatchesRoute, normalizeClientPath } from './client-inventory.mjs';
 import { applyBinaryEvidence } from './binary-test-evidence.mjs';
 
 // These lexical matches are candidates only; they do not establish behavior or parity.
@@ -202,45 +202,64 @@ const WS_FAIL_CLOSED = new Set([
 ]);
 for (const w of wsEntries) w.status = w.rustReference && !WS_FAIL_CLOSED.has(`${w.direction} ${w.type}`) ? 'native-untested' : 'missing';
 
-const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
-  const native = rustRoutes.has(key);
-  return {
-    method: r.method,
-    path: r.path,
-    nodeFiles: [...new Set(r.files)],
-    status: !native
-      ? 'missing'
-      : !MOUNTED.has(rustFile.get(key))
-        ? 'router-unmounted'
-        : FAIL_CLOSED.has(rustFile.get(key)) || FAIL_CLOSED_ROUTES.has(key)
-        ? 'mounted-fail-closed'
-        : INCOMPLETE_ROUTES.has(key)
-          ? 'mounted-incomplete'
-          : 'native-untested',
-    testPathReference: isTested(r.path),
-    rustFile: native ? rustFile.get(key) : undefined,
-  };
-});
+// Node and client-only routes share one status ladder: an unmounted, fail-closed or incomplete Rust
+// router is reported as such, and only a mounted, complete router is native-untested.
+const routeStatus = (key) => {
+  if (!rustRoutes.has(key)) return 'missing';
+  const file = rustFile.get(key);
+  if (!MOUNTED.has(file)) return 'router-unmounted';
+  if (FAIL_CLOSED.has(file) || FAIL_CLOSED_ROUTES.has(key)) return 'mounted-fail-closed';
+  if (INCOMPLETE_ROUTES.has(key)) return 'mounted-incomplete';
+  return 'native-untested';
+};
+const nodeEntries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => ({
+  method: r.method,
+  path: r.path,
+  nodeFiles: [...new Set(r.files)],
+  status: routeStatus(key),
+  testPathReference: isTested(r.path),
+  rustFile: rustRoutes.has(key) ? rustFile.get(key) : undefined,
+}));
 // Client-side lexical references complement the server scan. They include comments and
 // partial expressions, do not identify HTTP methods, and require manual review.
 const repo = join(pkgs, '..');
-const clientPaths = new Map();
+const clientFiles = new Map();
 for (const root of ['apps/web/src', 'apps/desktop/src', 'apps/desktop/src-tauri/src', 'packages/cli/src', 'packages/api-client/src']) {
   const directory = join(repo, root);
   if (!existsSync(directory)) continue;
   for (const file of walk(directory, ['.ts', '.tsx', '.rs'])) {
     if (/\.(test|spec)\.[^.]+$/.test(file)) continue;
     for (const path of clientPathCandidates(readFileSync(file, 'utf8'))) {
-      const key = normalizeClientPath(path);
-      if (!clientPaths.has(key)) clientPaths.set(key, new Set());
-      clientPaths.get(key).add(relative(repo, file));
+      const shape = clientRouteShape(path);
+      if (!shape.startsWith('/api/')) continue;
+      if (!clientFiles.has(shape)) clientFiles.set(shape, new Set());
+      clientFiles.get(shape).add(relative(repo, file));
     }
   }
 }
-const serverPaths = new Set(entries.map((entry) => normalizeClientPath(entry.path)));
-const clientCandidates = [...clientPaths.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([path, files]) => ({
-  path, files: [...files].sort(), serverPathReference: serverPaths.has(path),
-}));
+// Each client route shape is one inventory row. A shape the Node gateway registers references that route;
+// any other shape is a client-only row, counted as missing unless a Rust route has the same shape.
+const clientCandidates = [...clientFiles.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([shape, files]) => {
+  const serverRoutes = nodeEntries
+    .filter((entry) => clientShapeMatchesRoute(shape, normalizeClientPath(entry.path)))
+    .map((entry) => `${entry.method} ${entry.path}`);
+  return { path: shape, files: [...files].sort(), serverPathReference: serverRoutes.length > 0, serverRoutes };
+});
+const clientOnlyEntries = clientCandidates.filter((candidate) => !candidate.serverPathReference).map((candidate) => {
+  // A client call names no method; take the status of the first Rust route with the same shape, if any.
+  const rustKey = [...rustRoutes].sort().find((key) => clientShapeMatchesRoute(candidate.path, key.slice(key.indexOf(' ') + 1)));
+  return {
+    method: rustKey ? rustKey.slice(0, rustKey.indexOf(' ')) : 'ANY',
+    path: candidate.path,
+    clientOnly: true,
+    nodeFiles: [],
+    clientFiles: candidate.files,
+    status: rustKey ? routeStatus(rustKey) : 'missing',
+    testPathReference: isTested(candidate.path),
+    rustFile: rustKey ? rustFile.get(rustKey) : undefined,
+  };
+});
+const entries = [...nodeEntries, ...clientOnlyEntries];
 const extraRust = [...rustRoutes].filter((k) => !nodeRoutes.has(k)).sort();
 const manifest = JSON.parse(readFileSync(join(here, 'binary-test-evidence.json'), 'utf8'));
 const evidence = applyBinaryEvidence(entries, wsEntries, manifest, (file) => readFileSync(join(here, '..', file), 'utf8'));
@@ -266,7 +285,7 @@ const summary = {
   wsOutboundCandidates: wsEntries.filter((w) => w.direction === 'server-to-client-candidate').length,
   wsWithoutDirectionalRustReference: wsEntries.filter((w) => !w.rustReference).length,
   clientPathCandidates: clientCandidates.length,
-  clientCandidatesWithoutServerPathReference: clientCandidates.filter((candidate) => !candidate.serverPathReference).length,
+  clientOnlyRoutes: clientOnlyEntries.length,
   rustOnlyRoutes: extraRust.length,
 };
 // Background services started from packages/gateway/src/index.ts. Rust status is a lexical
@@ -344,9 +363,9 @@ if (process.argv.includes('--write')) {
     '',
     '## Client path candidates (heuristic)',
     '',
-    'Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. A matching server path does not identify a method or establish parity. Dynamic constructions may be omitted.',
+    'Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. Shapes are normalized (glued query suffixes and trailing punctuation dropped). A shape that matches a Node route references it; any other shape has its own row in the HTTP table with an empty Node source. A matching path does not identify a method or establish parity. Dynamic constructions that are not literal may still be omitted.',
     '',
-    ...clientCandidates.map((candidate) => `- \`${candidate.path}\` — ${candidate.serverPathReference ? 'server path reference' : 'no server path reference'} — ${candidate.files.join(', ')}`),
+    ...clientCandidates.map((candidate) => `- \`${candidate.path}\` — ${candidate.serverPathReference ? candidate.serverRoutes.join(', ') : 'client-only row (see HTTP table)'} — ${candidate.files.join(', ')}`),
     '',
     '## WS message candidates (heuristic)',
     '',

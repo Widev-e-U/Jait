@@ -6,29 +6,29 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 
 ```json
 {
-  "httpTotal": 437,
-  "missing": 29,
+  "httpTotal": 446,
+  "missing": 38,
   "mounted-fail-closed": 104,
   "native-untested": 131,
   "native-tested": 166,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 68,
+  "nativeRouteReferencePct": 66.6,
   "nativeTested": 169,
-  "nativeTestedDenominator": 519,
-  "nativeTestedPct": 32.56,
+  "nativeTestedDenominator": 528,
+  "nativeTestedPct": 32.01,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
   "wsWithoutDirectionalRustReference": 65,
-  "clientPathCandidates": 258,
-  "clientCandidatesWithoutServerPathReference": 30,
+  "clientPathCandidates": 253,
+  "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
     "native-tested": 166,
     "native-untested": 131,
-    "missing": 140
+    "missing": 149
   },
   "wsRustStatus": {
     "native-tested": 3,
@@ -149,6 +149,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/network/scan/latest` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | GET | `/api/network/topology` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | GET | `/api/persona-agents` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
+| GET | `/api/plan-runs/:runId` | missing | missing |  | routes/plan-runs.ts |
 | GET | `/api/plans/:id` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | GET | `/api/plugins` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | GET | `/api/plugins/:id` | missing | mounted-fail-closed |  | routes/plugins.ts |
@@ -352,7 +353,10 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/network/ssh/enable` | native-tested | native-tested | `tests/binary_network_security_routes.rs::network_security_codegraph_through_the_binary` | routes/network.ts |
 | POST | `/api/network/ssh/test` | missing | missing |  | routes/network.ts |
 | POST | `/api/nodes/:id/credential` | native-untested | native-untested |  | server.ts |
+| POST | `/api/plan-runs/:runId/cancel` | missing | missing |  | routes/plan-runs.ts |
+| POST | `/api/plan-runs/:runId/resume` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plans/:id/generate` | native-untested | native-untested |  | routes/plans.ts |
+| POST | `/api/plans/:id/runs` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plans/:id/start` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | POST | `/api/plans/:id/tasks/:taskId/start` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | POST | `/api/plugins/:id/disable` | missing | mounted-fail-closed |  | routes/plugins.ts |
@@ -482,6 +486,11 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | PUT | `/api/mobile/routines/:kind` | missing | mounted-fail-closed |  | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | PUT | `/api/repos/:id/strategy` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
+| ANY | `/api/dev-file` | missing | missing |  |  |
+| ANY | `/api/dev-proxy` | missing | missing |  |  |
+| ANY | `/api/git` | missing | missing |  |  |
+| ANY | `/api/project` | missing | missing |  |  |
+| ANY | `/api/security/findings` | missing | missing |  |  |
 
 ## Background services (heuristic)
 
@@ -498,266 +507,261 @@ Services started from the Node composition root. A keyword hit in Rust source do
 
 ## Client path candidates (heuristic)
 
-Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. A matching server path does not identify a method or establish parity. Dynamic constructions may be omitted.
+Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. Shapes are normalized (glued query suffixes and trailing punctuation dropped). A shape that matches a Node route references it; any other shape has its own row in the HTTP table with an empty Node source. A matching path does not identify a method or establish parity. Dynamic constructions that are not literal may still be omitted.
 
-- `/api/{}/{}/runtime` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/{}/{}/state` — no server path reference — apps/web/src/hooks/useBackendState.ts, apps/web/src/lib/state-batch.ts
-- `/api/agent-control` — server path reference — apps/web/src/lib/agent-control-api.ts
-- `/api/agent-control/halt` — server path reference — apps/web/src/lib/agent-control-api.ts
-- `/api/agent-control/resume` — server path reference — apps/web/src/lib/agent-control-api.ts
-- `/api/agents/{}/github-app{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/architecture` — server path reference — apps/web/src/App.tsx
-- `/api/auth/invitations` — server path reference — apps/web/src/components/settings/AccountInvitations.tsx
-- `/api/auth/login` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/logout` — server path reference — apps/web/src/lib/auth-token.ts
-- `/api/auth/me` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/refresh` — server path reference — apps/web/src/lib/auth-token.ts
-- `/api/auth/register` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/session/bind` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/settings` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/settings/archive` — server path reference — apps/web/src/hooks/useAuth.ts
-- `/api/auth/settings/env-status` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
-- `/api/auth/settings/tools` — server path reference — apps/web/src/components/manager/agents-page.tsx, apps/web/src/components/settings/ToolSettings.tsx
-- `/api/browser/screenshot` — server path reference — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/hooks/useGatewayImage.ts, apps/web/src/lib/chat-image-url.ts
-- `/api/calendar/accounts` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/accounts/{}` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/calendars` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/config` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/config/google` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/connect/google` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/device/sync` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/calendar/events` — server path reference — apps/web/src/lib/calendar-api.ts
-- `/api/channels` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/config` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/pair` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/setup` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/start` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/status` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/channels/{}/stop` — server path reference — apps/web/src/components/settings/ChannelSettings.tsx
-- `/api/chat` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/lib/message-stream.ts, apps/web/src/repro/use-chat-resume-repro.tsx, packages/api-client/src/client.ts
-- `/api/chat:` — no server path reference — apps/web/src/lib/chat-prewarm.ts
-- `/api/chat.` — no server path reference — apps/web/src/hooks/useChat.ts
-- `/api/chat/prewarm` — server path reference — apps/web/src/lib/chat-prewarm.ts
-- `/api/code-graph` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
-- `/api/code-graph/graphrag/prepare` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
-- `/api/code-graph/index` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
-- `/api/code-graph/query` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
-- `/api/code-graph/snapshot` — server path reference — apps/web/src/components/project/code-graph-panel.tsx
-- `/api/consent/{}/{}` — no server path reference — apps/web/src/components/consent/action-card.tsx
-- `/api/consent/pending` — server path reference — apps/web/src/components/consent/action-card.tsx
-- `/api/consent/pending/{}` — server path reference — apps/web/src/components/consent/action-card.tsx
-- `/api/consent/pending/{}/approve-all` — server path reference — apps/web/src/App.tsx, apps/web/src/components/consent/action-card.tsx
-- `/api/consent/policy` — server path reference — apps/web/src/components/consent/action-card.tsx
-- `/api/dev-file` — no server path reference — apps/web/src/lib/version-watchdog.ts
-- `/api/dev-file/{}` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
-- `/api/dev-proxy` — no server path reference — apps/web/src/lib/chat-image-url.ts, apps/web/src/lib/version-watchdog.ts
-- `/api/dev-proxy/{}` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
-- `/api/dev-proxy/{}{}` — no server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
-- `/api/email/accounts` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/accounts/{}` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/config` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/config/{}` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/connect/{}` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/discover` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/folders` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/images` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/messages` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/messages/{}` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/messages/{}/delete` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/messages/{}/tag` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/email/oauth/callback` — server path reference — apps/web/src/components/settings/EmailSettings.tsx
-- `/api/email/send` — server path reference — apps/web/src/lib/email-api.ts
-- `/api/filesystem/browse` — server path reference — apps/web/src/components/project/folder-picker-dialog.tsx
-- `/api/filesystem/nodes` — server path reference — apps/web/src/App.tsx, apps/web/src/components/project/folder-picker-dialog.tsx
-- `/api/filesystem/roots` — server path reference — apps/web/src/components/project/folder-picker-dialog.tsx
-- `/api/git` — no server path reference — apps/web/src/lib/git-transport.ts
-- `/api/git/{}` — no server path reference — apps/web/src/lib/git-transport.ts
-- `/api/github-apps` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/jait-todos/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/jobs` — server path reference — apps/web/src/lib/jobs-api.ts
-- `/api/jobs/{}` — server path reference — apps/web/src/lib/jobs-api.ts
-- `/api/jobs/{}/runs` — server path reference — apps/web/src/lib/jobs-api.ts
-- `/api/jobs/{}/trigger` — server path reference — apps/web/src/lib/jobs-api.ts
-- `/api/jobs/providers/available` — server path reference — apps/web/src/lib/jobs-api.ts
-- `/api/messenger` — server path reference — apps/web/src/lib/messenger/gateway-store.ts
-- `/api/messenger/bridge-accounts/teams` — server path reference — apps/web/src/components/messenger/teams-connection-card.tsx
-- `/api/messenger/bridge-reauth/teams` — server path reference — apps/web/src/components/messenger/teams-connection-card.tsx
-- `/api/messenger/bridge-status` — server path reference — apps/web/src/components/messenger/messenger-services-bar.tsx, apps/web/src/components/messenger/teams-connection-card.tsx
-- `/api/messenger/presence` — server path reference — apps/web/src/components/messenger/messenger-services-bar.tsx
-- `/api/mobile-update/check` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
-- `/api/mobile/devices/register` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/network/deploy` — server path reference — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
-- `/api/network/interfaces` — server path reference — apps/web/src/hooks/useNetwork.ts
-- `/api/network/nodes` — server path reference — apps/web/src/hooks/useNetwork.ts
-- `/api/network/scan` — server path reference — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
-- `/api/network/scan/latest` — server path reference — apps/web/src/hooks/useNetwork.ts
-- `/api/network/ssh/enable` — server path reference — apps/web/src/hooks/useNetwork.ts
-- `/api/network/ssh/test` — server path reference — apps/web/src/hooks/useNetwork.ts
-- `/api/network/topology` — server path reference — apps/web/src/components/network/network-panel.tsx
-- `/api/persona-agents` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/persona-agents/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/plans/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/plans/{}/generate` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/plans/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/plans/{}/tasks/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/plugins` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
-- `/api/plugins/{}` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
-- `/api/plugins/{}/{}` — no server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
-- `/api/plugins/scan` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
-- `/api/preview/{}` — no server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/remote/browser-address-bar.tsx
-- `/api/preview/access` — server path reference — apps/web/src/hooks/use-preview-access.ts
-- `/api/preview/devtools` — server path reference — apps/web/src/components/remote/browser-tools-panel.tsx
-- `/api/preview/devtools/{}` — server path reference — apps/web/src/components/remote/browser-tools-panel.tsx
-- `/api/preview/history` — server path reference — apps/web/src/components/remote/browser-address-bar.tsx
-- `/api/preview/inspect/{}{}` — no server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/preview/restart` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/preview/screenshot/{}` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx
-- `/api/preview/session/{}` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx, apps/web/src/components/remote/browser-address-bar.tsx
-- `/api/preview/share` — server path reference — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/preview/start` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/preview/stop` — server path reference — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/project` — no server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/{}` — no server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/apply-diff` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/hooks/useProjectFileActions.ts
-- `/api/project/backup` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
-- `/api/project/delete` — server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/download` — server path reference — apps/web/src/components/ui/file-download-link.tsx, apps/web/src/e2e-fixtures/message-links.tsx
-- `/api/project/list` — server path reference — apps/web/src/App.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/project/move` — server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/open` — server path reference — apps/web/src/App.tsx
-- `/api/project/read` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
-- `/api/project/rename` — server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/reveal` — server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/search` — server path reference — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
-- `/api/project/stat` — server path reference — apps/web/src/components/project/project-panel.tsx
-- `/api/project/undo` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/project/undo-all` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/project/write` — server path reference — apps/web/src/components/project/detached-tab-view.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/projects` — server path reference — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}/move` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}/repository` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}/restore` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}/sessions` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/{}/subtree` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/archived` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/last-active` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
-- `/api/projects/search` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/projects/select` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/provider-accounts` — server path reference — apps/web/src/components/settings/UsageSettings.tsx, apps/web/src/lib/agents-api.ts
-- `/api/provider-accounts/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/provider-accounts/{}/opencode-go` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/provider-usage` — server path reference — apps/web/src/components/settings/UsageSettings.tsx
-- `/api/provider-usage/ollama/api-key` — server path reference — apps/web/src/components/app-shell/ollama-usage-setup.tsx
-- `/api/provider-usage/ollama/session` — server path reference — apps/web/src/components/app-shell/ollama-usage-setup.tsx
-- `/api/provider-usage/summary` — server path reference — apps/web/src/lib/usage-summary-store.ts
-- `/api/providers` — server path reference — apps/web/src/hooks/useProviders.ts, apps/web/src/lib/provider-store.ts
-- `/api/providers{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/auth/login` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/auth/login/input` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/auth/logout` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/auth/status` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/models{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/{}/update` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/providers/backend/test` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
-- `/api/providers/models/reset` — server path reference — apps/web/src/components/settings/SettingsPage.tsx, apps/web/src/lib/agents-api.ts
-- `/api/providers/omniroute/test` — server path reference — apps/web/src/components/settings/SettingsPage.tsx
-- `/api/reminders` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/reminders{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/reminders/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/reminders/export.md{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}/plans` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}/pull-requests{}` — no server path reference — apps/web/src/lib/pull-requests-api.ts
-- `/api/repos/{}/strategy` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}/strategy/generate` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}/todos` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/repos/{}/todos/generate` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/screen-share/{}` — no server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/approve` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/chat/{}` — server path reference — apps/web/src/components/chat/chat-screen-share-view.tsx
-- `/api/screen-share/control/{}` — server path reference — apps/web/src/hooks/useScreenShareControl.ts
-- `/api/screen-share/devices/register` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/handoff` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/leave` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/start` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/state` — server path reference — apps/web/src/hooks/useScreenShare.ts
-- `/api/screen-share/stop` — server path reference — apps/web/src/components/chat/chat-screen-share-view.tsx, apps/web/src/hooks/useScreenShare.ts
-- `/api/secrets` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/secrets{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/secrets/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/secrets/requests` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/secrets/requests/{}/cancel` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/secrets/requests/{}/submit` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/security/assessments` — server path reference — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
-- `/api/security/checks` — server path reference — packages/api-client/src/client.ts
-- `/api/security/comparisons` — server path reference — packages/api-client/src/client.ts
-- `/api/security/engines` — server path reference — packages/api-client/src/client.ts
-- `/api/security/findings` — no server path reference — packages/api-client/src/client.ts
-- `/api/security/monitors` — server path reference — packages/api-client/src/client.ts
-- `/api/security/scopes` — server path reference — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
-- `/api/security/workbench` — server path reference — packages/api-client/src/client.ts
-- `/api/sessions` — server path reference — apps/web/src/components/manager/agents-page.tsx, apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts, apps/web/src/repro/use-chat-resume-repro.tsx
-- `/api/sessions/{}` — server path reference — apps/web/src/App.tsx, apps/web/src/components/chat/prompt-input.tsx, apps/web/src/hooks/usePersonalChatNode.ts, apps/web/src/hooks/useProjects.ts
-- `/api/sessions/{}/approve` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/sessions/{}/archive` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/sessions/{}/cancel` — server path reference — apps/web/src/App.tsx, apps/web/src/hooks/useChat.ts, apps/web/src/lib/agents-api.ts
-- `/api/sessions/{}/events` — server path reference — apps/web/src/hooks/useChat.ts, apps/web/src/lib/session-event-subscription.ts
-- `/api/sessions/{}/fork` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/sessions/{}/generate-title` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/sessions/{}/loop` — server path reference — apps/web/src/components/chat/loop-goal-card.tsx
-- `/api/sessions/{}/messages` — server path reference — apps/web/src/hooks/useChat.ts, packages/api-client/src/client.ts
-- `/api/sessions/{}/messages/{}/context-flow` — server path reference — apps/web/src/lib/context-flow-cache.ts
-- `/api/sessions/{}/move` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/sessions/{}/plan/execute` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/sessions/{}/plan/reject` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/sessions/{}/restart-from` — server path reference — apps/web/src/hooks/useChat.ts
-- `/api/sessions/{}/runtime` — server path reference — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
-- `/api/sessions/{}/steer` — server path reference — apps/web/src/App.tsx, apps/web/src/components/app-shell/parallel-chat-panel.tsx
-- `/api/sessions/{}/sub-agents/{}` — server path reference — apps/web/src/components/chat/tool-call-card.tsx
-- `/api/sessions/{}/trajectory` — server path reference — apps/web/src/components/debug/use-session-trajectory.ts
-- `/api/sessions/{}/viewed` — server path reference — apps/web/src/hooks/useProjects.ts
-- `/api/sessions/completion-repro/events` — no server path reference — apps/web/src/repro/chat-completion-repro.tsx
-- `/api/sessions/completion-repro/messages` — no server path reference — apps/web/src/repro/chat-completion-repro.tsx
-- `/api/sessions/latency-repro-session/events` — no server path reference — apps/web/src/repro/chat-stream-latency-repro.tsx
-- `/api/sessions/latency-repro-session/messages` — no server path reference — apps/web/src/repro/chat-stream-latency-repro.tsx
-- `/api/sessions/unread-count` — server path reference — apps/web/src/hooks/useUnreadChatCount.ts
-- `/api/skills` — server path reference — apps/web/src/components/automation/ThreadSkillPicker.tsx, apps/web/src/components/settings/SkillSettings.tsx, apps/web/src/hooks/useSkills.ts
-- `/api/skills/{}` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
-- `/api/skills/{}/install-tool` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
-- `/api/store/packages` — server path reference — apps/web/src/components/settings/ExtensionSettings.tsx
-- `/api/store/skills` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
-- `/api/store/skills/{}/install` — server path reference — apps/web/src/components/settings/SkillSettings.tsx
-- `/api/team-rooms` — server path reference — apps/web/src/lib/team-chat-api.ts
-- `/api/terminals` — server path reference — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/components/terminal/terminal-view.tsx, apps/web/src/lib/terminal-snapshot.ts, apps/web/src/lib/tool-terminal-live.ts
-- `/api/terminals/{}` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
-- `/api/terminals/{}/resize` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
-- `/api/terminals/shells` — server path reference — apps/web/src/components/terminal/terminal-view.tsx
-- `/api/threads` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/activities{}` — no server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/approve` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/create-pr` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/interrupt` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/resume` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/runtime` — server path reference — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
-- `/api/threads/{}/send` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/start` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/steer` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/threads/{}/stop` — server path reference — apps/web/src/lib/agents-api.ts
-- `/api/tools` — server path reference — apps/web/src/components/app-shell/catalogue-graph.tsx
-- `/api/update/apply` — server path reference — apps/web/src/components/network/jait-nodes-panel.tsx, apps/web/src/hooks/useUpdateChecker.ts
-- `/api/update/changelog` — server path reference — apps/web/src/hooks/useUpdateChecker.ts
-- `/api/update/check` — server path reference — apps/web/src/components/network/jait-nodes-panel.tsx, apps/web/src/hooks/useUpdateChecker.ts
-- `/api/update/nodes` — server path reference — apps/web/src/components/network/jait-nodes-panel.tsx
-- `/api/update/nodes/{}/apply` — server path reference — apps/web/src/components/network/jait-nodes-panel.tsx
-- `/api/user-questions/requests` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/user-questions/requests/{}/cancel` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/user-questions/requests/{}/submit` — server path reference — apps/web/src/components/prompts/input-prompts.tsx
-- `/api/voice/transcribe-audio` — server path reference — apps/web/src/hooks/useVoiceRecording.ts
-- `/api/voice/wake-candidate` — server path reference — apps/web/src/hooks/useWakeWord.ts
+- `/api/{}/{}/runtime` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:sessionId/runtime, GET /api/store/skills/:slug, GET /api/threads/:id/runtime, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/lib/agents-api.ts
+- `/api/{}/{}/state` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/projects/:id/state, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:id/state, GET /api/store/skills/:slug, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/projects/:id/state, PATCH /api/sessions/:id/state, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/hooks/useBackendState.ts, apps/web/src/lib/state-batch.ts
+- `/api/agent-control` — GET /api/agent-control — apps/web/src/lib/agent-control-api.ts
+- `/api/agent-control/halt` — POST /api/agent-control/halt — apps/web/src/lib/agent-control-api.ts
+- `/api/agent-control/resume` — POST /api/agent-control/resume — apps/web/src/lib/agent-control-api.ts
+- `/api/agents/{}/github-app` — DELETE /api/agents/:agentId/github-app, GET /api/agents/:agentId/github-app — apps/web/src/lib/agents-api.ts
+- `/api/architecture` — GET /api/architecture, PUT /api/architecture — apps/web/src/App.tsx
+- `/api/auth/invitations` — POST /api/auth/invitations — apps/web/src/components/settings/AccountInvitations.tsx
+- `/api/auth/login` — POST /api/auth/login — apps/web/src/hooks/useAuth.ts
+- `/api/auth/logout` — POST /api/auth/logout — apps/web/src/lib/auth-token.ts
+- `/api/auth/me` — GET /api/auth/me — apps/web/src/hooks/useAuth.ts
+- `/api/auth/refresh` — POST /api/auth/refresh — apps/web/src/lib/auth-token.ts
+- `/api/auth/register` — POST /api/auth/register — apps/web/src/hooks/useAuth.ts
+- `/api/auth/session/bind` — POST /api/auth/session/bind — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings` — GET /api/auth/settings, PATCH /api/auth/settings — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings/archive` — DELETE /api/auth/settings/archive — apps/web/src/hooks/useAuth.ts
+- `/api/auth/settings/env-status` — GET /api/auth/settings/env-status — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/auth/settings/tools` — GET /api/auth/settings/tools, PATCH /api/auth/settings/tools — apps/web/src/components/manager/agents-page.tsx, apps/web/src/components/settings/ToolSettings.tsx
+- `/api/browser/screenshot` — GET /api/browser/screenshot — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/hooks/useGatewayImage.ts, apps/web/src/lib/chat-image-url.ts
+- `/api/calendar/accounts` — GET /api/calendar/accounts — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/accounts/{}` — DELETE /api/calendar/accounts/:id — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/calendars` — GET /api/calendar/calendars — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/config` — GET /api/calendar/config — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/config/google` — POST /api/calendar/config/google — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/connect/google` — GET /api/calendar/connect/google — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/device/sync` — POST /api/calendar/device/sync — apps/web/src/lib/calendar-api.ts
+- `/api/calendar/events` — GET /api/calendar/events — apps/web/src/lib/calendar-api.ts
+- `/api/channels` — GET /api/channels — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/config` — PATCH /api/channels/:id/config — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/pair` — POST /api/channels/:id/pair — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/setup` — GET /api/channels/:id/setup — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/start` — POST /api/channels/:id/start — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/status` — GET /api/channels/:id/status — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/channels/{}/stop` — POST /api/channels/:id/stop — apps/web/src/components/settings/ChannelSettings.tsx
+- `/api/chat` — POST /api/chat — apps/web/src/hooks/useChat.ts, apps/web/src/lib/chat-prewarm.ts, apps/web/src/lib/message-stream.ts, apps/web/src/repro/use-chat-resume-repro.tsx, packages/api-client/src/client.ts
+- `/api/chat/prewarm` — POST /api/chat/prewarm — apps/web/src/lib/chat-prewarm.ts
+- `/api/code-graph` — GET /api/code-graph — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/graphrag/prepare` — POST /api/code-graph/graphrag/prepare — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/index` — POST /api/code-graph/index — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/query` — POST /api/code-graph/query — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/code-graph/snapshot` — GET /api/code-graph/snapshot — apps/web/src/components/project/code-graph-panel.tsx
+- `/api/consent/{}/{}` — GET /api/consent/pending/:sessionId, POST /api/consent/:id/approve, POST /api/consent/:id/approve-all, POST /api/consent/:id/reject — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending` — GET /api/consent/:id, GET /api/consent/pending — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending/{}` — GET /api/consent/pending/:sessionId, POST /api/consent/:id/approve, POST /api/consent/:id/approve-all, POST /api/consent/:id/reject — apps/web/src/components/consent/action-card.tsx
+- `/api/consent/pending/{}/approve-all` — DELETE /api/consent/pending/:sessionId/approve-all, GET /api/consent/pending/:sessionId/approve-all, POST /api/consent/pending/:sessionId/approve-all — apps/web/src/App.tsx, apps/web/src/components/consent/action-card.tsx
+- `/api/consent/policy` — GET /api/consent/:id, GET /api/consent/policy — apps/web/src/components/consent/action-card.tsx
+- `/api/dev-file` — client-only row (see HTTP table) — apps/web/src/lib/version-watchdog.ts
+- `/api/dev-file/{}` — GET /api/dev-file/:encodedPath — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/dev-proxy` — client-only row (see HTTP table) — apps/web/src/lib/chat-image-url.ts, apps/web/src/lib/version-watchdog.ts
+- `/api/dev-proxy/{}` — ALL /api/dev-proxy/:port — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/email/accounts` — GET /api/email/accounts, POST /api/email/accounts — apps/web/src/lib/email-api.ts
+- `/api/email/accounts/{}` — DELETE /api/email/accounts/:id, PATCH /api/email/accounts/:id — apps/web/src/lib/email-api.ts
+- `/api/email/config` — GET /api/email/config — apps/web/src/lib/email-api.ts
+- `/api/email/config/{}` — POST /api/email/config/:provider — apps/web/src/lib/email-api.ts
+- `/api/email/connect/{}` — GET /api/email/connect/:provider — apps/web/src/lib/email-api.ts
+- `/api/email/discover` — GET /api/email/discover — apps/web/src/lib/email-api.ts
+- `/api/email/folders` — GET /api/email/folders — apps/web/src/lib/email-api.ts
+- `/api/email/images` — POST /api/email/images — apps/web/src/lib/email-api.ts
+- `/api/email/messages` — GET /api/email/messages — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}` — GET /api/email/messages/:id — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}/delete` — POST /api/email/messages/:id/delete — apps/web/src/lib/email-api.ts
+- `/api/email/messages/{}/tag` — POST /api/email/messages/:id/tag — apps/web/src/lib/email-api.ts
+- `/api/email/oauth/callback` — GET /api/email/oauth/callback — apps/web/src/components/settings/EmailSettings.tsx
+- `/api/email/send` — POST /api/email/send — apps/web/src/lib/email-api.ts
+- `/api/filesystem/browse` — GET /api/filesystem/browse — apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/filesystem/nodes` — GET /api/filesystem/nodes — apps/web/src/App.tsx, apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/filesystem/roots` — GET /api/filesystem/roots — apps/web/src/components/project/folder-picker-dialog.tsx
+- `/api/git` — client-only row (see HTTP table) — apps/web/src/lib/git-transport.ts
+- `/api/git/{}` — POST /api/git/branches, POST /api/git/checkout, POST /api/git/create-branch, POST /api/git/create-worktree, POST /api/git/diff, POST /api/git/diff-stats, POST /api/git/discard, POST /api/git/fetch, POST /api/git/file-diffs, POST /api/git/forge-auth, POST /api/git/forge-pr-checks, POST /api/git/forge-status, POST /api/git/generate-commit-message, POST /api/git/gh-auth, POST /api/git/gh-status, POST /api/git/identity, POST /api/git/init, POST /api/git/pr-checks, POST /api/git/pull, POST /api/git/remove-worktree, POST /api/git/run-commit-flow, POST /api/git/run-stacked-action, POST /api/git/stage, POST /api/git/status, POST /api/git/sync, POST /api/git/unstage — apps/web/src/lib/git-transport.ts
+- `/api/github-apps` — GET /api/github-apps — apps/web/src/lib/agents-api.ts
+- `/api/jait-todos/{}` — DELETE /api/jait-todos/:id, PATCH /api/jait-todos/:id — apps/web/src/lib/agents-api.ts
+- `/api/jobs` — GET /api/jobs, POST /api/jobs — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}` — DELETE /api/jobs/:id, GET /api/jobs/:id, PATCH /api/jobs/:id — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}/runs` — GET /api/jobs/:id/runs — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/{}/trigger` — POST /api/jobs/:id/trigger — apps/web/src/lib/jobs-api.ts
+- `/api/jobs/providers/available` — GET /api/jobs/providers/available — apps/web/src/lib/jobs-api.ts
+- `/api/messenger` — DELETE /api/messenger, GET /api/messenger, POST /api/messenger — apps/web/src/lib/messenger/gateway-store.ts
+- `/api/messenger/bridge-accounts/teams` — DELETE /api/messenger/bridge-accounts/teams — apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/bridge-reauth/teams` — DELETE /api/messenger/bridge-reauth/teams, GET /api/messenger/bridge-reauth/teams, POST /api/messenger/bridge-reauth/teams — apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/bridge-status` — GET /api/messenger/bridge-status, POST /api/messenger/bridge-status — apps/web/src/components/messenger/messenger-services-bar.tsx, apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/presence` — GET /api/messenger/presence, PUT /api/messenger/presence — apps/web/src/components/messenger/messenger-services-bar.tsx
+- `/api/mobile-update/check` — GET /api/mobile-update/check — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/mobile/devices/register` — POST /api/mobile/devices/register — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/network/deploy` — POST /api/network/deploy — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
+- `/api/network/interfaces` — GET /api/network/interfaces — apps/web/src/hooks/useNetwork.ts
+- `/api/network/nodes` — GET /api/network/nodes — apps/web/src/hooks/useNetwork.ts
+- `/api/network/scan` — POST /api/network/scan — apps/web/src/components/network/network-panel.tsx, apps/web/src/hooks/useNetwork.ts
+- `/api/network/scan/latest` — GET /api/network/scan/latest — apps/web/src/hooks/useNetwork.ts
+- `/api/network/ssh/enable` — POST /api/network/ssh/enable — apps/web/src/hooks/useNetwork.ts
+- `/api/network/ssh/test` — POST /api/network/ssh/test — apps/web/src/hooks/useNetwork.ts
+- `/api/network/topology` — GET /api/network/topology — apps/web/src/components/network/network-panel.tsx
+- `/api/persona-agents` — GET /api/persona-agents — apps/web/src/lib/agents-api.ts
+- `/api/persona-agents/{}` — DELETE /api/persona-agents/:id, PUT /api/persona-agents/:id — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}` — DELETE /api/plans/:id, GET /api/plans/:id, PATCH /api/plans/:id — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/generate` — POST /api/plans/:id/generate — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/start` — POST /api/plans/:id/start — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/tasks/{}/start` — POST /api/plans/:id/tasks/:taskId/start — apps/web/src/lib/agents-api.ts
+- `/api/plugins` — GET /api/plugins — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/{}` — DELETE /api/plugins/:id, GET /api/plugins/:id, POST /api/plugins/scan — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/{}/{}` — GET /api/plugins/:id/config, PATCH /api/plugins/:id/config, POST /api/plugins/:id/disable, POST /api/plugins/:id/enable — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/plugins/scan` — DELETE /api/plugins/:id, GET /api/plugins/:id, POST /api/plugins/scan — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/preview/{}` — POST /api/preview/access, POST /api/preview/devtools, POST /api/preview/history, POST /api/preview/navigate, POST /api/preview/reload, POST /api/preview/reopen, POST /api/preview/restart, POST /api/preview/share, POST /api/preview/start, POST /api/preview/stop — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/access` — POST /api/preview/access — apps/web/src/hooks/use-preview-access.ts
+- `/api/preview/devtools` — POST /api/preview/devtools — apps/web/src/components/remote/browser-tools-panel.tsx
+- `/api/preview/devtools/{}` — DELETE /api/preview/devtools/:grantId — apps/web/src/components/remote/browser-tools-panel.tsx
+- `/api/preview/history` — POST /api/preview/history — apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/inspect/{}` — GET /api/preview/inspect/:sessionId — apps/web/src/components/project/project-panel.tsx
+- `/api/preview/restart` — POST /api/preview/restart — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/screenshot/{}` — GET /api/preview/screenshot/:sessionId — apps/web/src/components/chat/dev-preview-panel.tsx
+- `/api/preview/session/{}` — GET /api/preview/session/:sessionId — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx, apps/web/src/components/remote/browser-address-bar.tsx
+- `/api/preview/share` — POST /api/preview/share — apps/web/src/components/chat/chat-browser-view.tsx, apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/start` — POST /api/preview/start — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/preview/stop` — POST /api/preview/stop — apps/web/src/components/chat/dev-preview-panel.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/project` — client-only row (see HTTP table) — apps/web/src/components/project/project-panel.tsx
+- `/api/project/{}` — GET /api/project/backup, GET /api/project/download, GET /api/project/info, GET /api/project/list, GET /api/project/read, GET /api/project/search, GET /api/project/stat, POST /api/project/apply-diff, POST /api/project/create-directory, POST /api/project/create-file, POST /api/project/delete, POST /api/project/move, POST /api/project/open, POST /api/project/rename, POST /api/project/reveal, POST /api/project/undo, POST /api/project/undo-all, POST /api/project/write — apps/web/src/components/project/project-panel.tsx
+- `/api/project/apply-diff` — POST /api/project/apply-diff — apps/web/src/hooks/useChat.ts, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/backup` — GET /api/project/backup — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/delete` — POST /api/project/delete — apps/web/src/components/project/project-panel.tsx
+- `/api/project/download` — GET /api/project/download — apps/web/src/components/ui/file-download-link.tsx, apps/web/src/e2e-fixtures/message-links.tsx
+- `/api/project/list` — GET /api/project/list — apps/web/src/App.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/project/move` — POST /api/project/move — apps/web/src/components/project/project-panel.tsx
+- `/api/project/open` — POST /api/project/open — apps/web/src/App.tsx
+- `/api/project/read` — GET /api/project/read — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/rename` — POST /api/project/rename — apps/web/src/components/project/project-panel.tsx
+- `/api/project/reveal` — POST /api/project/reveal — apps/web/src/components/project/project-panel.tsx
+- `/api/project/search` — GET /api/project/search — apps/web/src/components/project/project-panel.tsx, apps/web/src/hooks/useProjectFileActions.ts
+- `/api/project/stat` — GET /api/project/stat — apps/web/src/components/project/project-panel.tsx
+- `/api/project/undo` — POST /api/project/undo — apps/web/src/hooks/useChat.ts
+- `/api/project/undo-all` — POST /api/project/undo-all — apps/web/src/hooks/useChat.ts
+- `/api/project/write` — POST /api/project/write — apps/web/src/components/project/detached-tab-view.tsx, apps/web/src/components/project/project-panel.tsx
+- `/api/projects` — GET /api/projects, POST /api/projects — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/:id` — DELETE /api/projects/:id, GET /api/projects/:id, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}` — DELETE /api/projects/:id, DELETE /api/projects/archived, GET /api/projects/:id, GET /api/projects/archived, GET /api/projects/last-active, GET /api/projects/search, PATCH /api/projects/:id, POST /api/projects/select — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/move` — POST /api/projects/:id/move — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/repository` — POST /api/projects/:id/repository — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/restore` — POST /api/projects/:id/restore — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/sessions` — GET /api/projects/:id/sessions, POST /api/projects/:id/sessions — apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/subtree` — GET /api/projects/:id/subtree — apps/web/src/hooks/useProjects.ts
+- `/api/projects/archived` — DELETE /api/projects/:id, DELETE /api/projects/archived, GET /api/projects/:id, GET /api/projects/archived, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
+- `/api/projects/last-active` — DELETE /api/projects/:id, GET /api/projects/:id, GET /api/projects/last-active, PATCH /api/projects/:id — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/search` — DELETE /api/projects/:id, GET /api/projects/:id, GET /api/projects/search, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
+- `/api/projects/select` — DELETE /api/projects/:id, GET /api/projects/:id, PATCH /api/projects/:id, POST /api/projects/select — apps/web/src/hooks/useProjects.ts
+- `/api/provider-accounts` — GET /api/provider-accounts, POST /api/provider-accounts — apps/web/src/components/settings/UsageSettings.tsx, apps/web/src/lib/agents-api.ts
+- `/api/provider-accounts/{}` — DELETE /api/provider-accounts/:id, PATCH /api/provider-accounts/:id — apps/web/src/lib/agents-api.ts
+- `/api/provider-accounts/{}/opencode-go` — POST /api/provider-accounts/:id/opencode-go — apps/web/src/lib/agents-api.ts
+- `/api/provider-usage` — GET /api/provider-usage — apps/web/src/components/settings/UsageSettings.tsx
+- `/api/provider-usage/ollama/api-key` — POST /api/provider-usage/ollama/api-key — apps/web/src/components/app-shell/ollama-usage-setup.tsx
+- `/api/provider-usage/ollama/session` — POST /api/provider-usage/ollama/session — apps/web/src/components/app-shell/ollama-usage-setup.tsx
+- `/api/provider-usage/summary` — GET /api/provider-usage/summary — apps/web/src/lib/usage-summary-store.ts
+- `/api/providers` — GET /api/providers — apps/web/src/hooks/useProviders.ts, apps/web/src/lib/agents-api.ts, apps/web/src/lib/provider-store.ts
+- `/api/providers/{}/auth/login` — POST /api/providers/:id/auth/login — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/login/input` — POST /api/providers/:id/auth/login/input — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/logout` — POST /api/providers/:id/auth/logout — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/auth/status` — GET /api/providers/:id/auth/status — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/models` — GET /api/providers/:id/models — apps/web/src/lib/agents-api.ts
+- `/api/providers/{}/update` — POST /api/providers/:id/update — apps/web/src/lib/agents-api.ts
+- `/api/providers/backend/test` — POST /api/providers/backend/test — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/providers/models/reset` — POST /api/providers/models/reset — apps/web/src/components/settings/SettingsPage.tsx, apps/web/src/lib/agents-api.ts
+- `/api/providers/omniroute/test` — POST /api/providers/omniroute/test — apps/web/src/components/settings/SettingsPage.tsx
+- `/api/reminders` — GET /api/reminders, POST /api/reminders — apps/web/src/lib/agents-api.ts
+- `/api/reminders/{}` — DELETE /api/reminders/:id, GET /api/reminders/export.md, PATCH /api/reminders/:id — apps/web/src/lib/agents-api.ts
+- `/api/reminders/export.md` — DELETE /api/reminders/:id, GET /api/reminders/export.md, PATCH /api/reminders/:id — apps/web/src/lib/agents-api.ts
+- `/api/repos` — GET /api/repos, POST /api/repos — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}` — DELETE /api/repos/:id, PATCH /api/repos/:id — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/plans` — GET /api/repos/:repoId/plans, POST /api/repos/:repoId/plans — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/pull-requests` — GET /api/repos/:id/pull-requests — apps/web/src/lib/pull-requests-api.ts
+- `/api/repos/{}/strategy` — GET /api/repos/:id/strategy, PUT /api/repos/:id/strategy — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/strategy/generate` — POST /api/repos/:id/strategy/generate — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/todos` — GET /api/repos/:repoId/todos, POST /api/repos/:repoId/todos — apps/web/src/lib/agents-api.ts
+- `/api/repos/{}/todos/generate` — POST /api/repos/:repoId/todos/generate — apps/web/src/lib/agents-api.ts
+- `/api/screen-share/{}` — GET /api/screen-share/devices, GET /api/screen-share/state, POST /api/screen-share/approve, POST /api/screen-share/capture, POST /api/screen-share/handoff, POST /api/screen-share/join, POST /api/screen-share/leave, POST /api/screen-share/record, POST /api/screen-share/start, POST /api/screen-share/stop, POST /api/screen-share/transfer-control — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/approve` — POST /api/screen-share/approve — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/chat/{}` — GET /api/screen-share/chat/:chatId — apps/web/src/components/chat/chat-screen-share-view.tsx
+- `/api/screen-share/control/{}` — POST /api/screen-share/control/:operation — apps/web/src/hooks/useScreenShareControl.ts
+- `/api/screen-share/devices/register` — POST /api/screen-share/devices/register — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/handoff` — POST /api/screen-share/handoff — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/leave` — POST /api/screen-share/leave — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/start` — POST /api/screen-share/start — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/state` — GET /api/screen-share/state — apps/web/src/hooks/useScreenShare.ts
+- `/api/screen-share/stop` — POST /api/screen-share/stop — apps/web/src/components/chat/chat-screen-share-view.tsx, apps/web/src/hooks/useScreenShare.ts
+- `/api/secrets` — GET /api/secrets, POST /api/secrets — apps/web/src/lib/agents-api.ts
+- `/api/secrets/{}` — DELETE /api/secrets/:id, GET /api/secrets/requests — apps/web/src/lib/agents-api.ts
+- `/api/secrets/requests` — DELETE /api/secrets/:id, GET /api/secrets/requests — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/secrets/requests/{}/cancel` — POST /api/secrets/requests/:id/cancel — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/secrets/requests/{}/submit` — POST /api/secrets/requests/:id/submit — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/security/assessments` — GET /api/security/assessments, POST /api/security/assessments — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
+- `/api/security/checks` — POST /api/security/checks — packages/api-client/src/client.ts
+- `/api/security/comparisons` — POST /api/security/comparisons — packages/api-client/src/client.ts
+- `/api/security/engines` — GET /api/security/engines — packages/api-client/src/client.ts
+- `/api/security/findings` — client-only row (see HTTP table) — packages/api-client/src/client.ts
+- `/api/security/monitors` — POST /api/security/monitors — packages/api-client/src/client.ts
+- `/api/security/scopes` — POST /api/security/scopes — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
+- `/api/security/workbench` — GET /api/security/workbench — packages/api-client/src/client.ts
+- `/api/sessions` — GET /api/sessions, POST /api/sessions — apps/web/src/components/manager/agents-page.tsx, apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts, apps/web/src/repro/use-chat-resume-repro.tsx
+- `/api/sessions/:id/events` — GET /api/sessions/:sessionId/events — apps/web/src/lib/session-event-subscription.ts
+- `/api/sessions/:id/runtime` — GET /api/sessions/:sessionId/runtime — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
+- `/api/sessions/{}` — DELETE /api/sessions/:id, GET /api/sessions/:id, GET /api/sessions/last-active, GET /api/sessions/streaming, GET /api/sessions/unread-count, PATCH /api/sessions/:id — apps/web/src/App.tsx, apps/web/src/components/chat/prompt-input.tsx, apps/web/src/hooks/usePersonalChatNode.ts, apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/approve` — POST /api/sessions/:sessionId/approve — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/archive` — POST /api/sessions/:id/archive — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/cancel` — POST /api/sessions/:sessionId/cancel — apps/web/src/App.tsx, apps/web/src/hooks/useChat.ts, apps/web/src/lib/agents-api.ts
+- `/api/sessions/{}/events` — GET /api/sessions/:sessionId/events — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/fork` — POST /api/sessions/:sessionId/fork — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/generate-title` — POST /api/sessions/:id/generate-title — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/loop` — GET /api/sessions/:sessionId/loop, POST /api/sessions/:sessionId/loop — apps/web/src/components/chat/loop-goal-card.tsx
+- `/api/sessions/{}/messages` — GET /api/sessions/:sessionId/messages — apps/web/src/hooks/useChat.ts, packages/api-client/src/client.ts
+- `/api/sessions/{}/messages/{}/context-flow` — GET /api/sessions/:sessionId/messages/:messageIndex/context-flow — apps/web/src/lib/context-flow-cache.ts
+- `/api/sessions/{}/move` — POST /api/sessions/:id/move — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/{}/plan/execute` — POST /api/sessions/:sessionId/plan/execute — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/plan/reject` — POST /api/sessions/:sessionId/plan/reject — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/restart-from` — POST /api/sessions/:sessionId/restart-from — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/steer` — POST /api/sessions/:sessionId/steer — apps/web/src/App.tsx, apps/web/src/components/app-shell/parallel-chat-panel.tsx
+- `/api/sessions/{}/sub-agents/{}` — GET /api/sessions/:sessionId/sub-agents/:subAgentId — apps/web/src/components/chat/tool-call-card.tsx
+- `/api/sessions/{}/trajectory` — GET /api/sessions/:sessionId/trajectory — apps/web/src/components/debug/use-session-trajectory.ts
+- `/api/sessions/{}/viewed` — POST /api/sessions/:id/viewed — apps/web/src/hooks/useProjects.ts
+- `/api/sessions/completion-repro/events` — GET /api/sessions/:sessionId/events — apps/web/src/repro/chat-completion-repro.tsx
+- `/api/sessions/completion-repro/messages` — GET /api/sessions/:sessionId/messages — apps/web/src/repro/chat-completion-repro.tsx
+- `/api/sessions/latency-repro-session/events` — GET /api/sessions/:sessionId/events — apps/web/src/repro/chat-stream-latency-repro.tsx
+- `/api/sessions/latency-repro-session/messages` — GET /api/sessions/:sessionId/messages — apps/web/src/repro/chat-stream-latency-repro.tsx
+- `/api/sessions/unread-count` — DELETE /api/sessions/:id, GET /api/sessions/:id, GET /api/sessions/unread-count, PATCH /api/sessions/:id — apps/web/src/hooks/useUnreadChatCount.ts
+- `/api/skills` — GET /api/skills — apps/web/src/components/automation/ThreadSkillPicker.tsx, apps/web/src/components/settings/SkillSettings.tsx, apps/web/src/hooks/useSkills.ts
+- `/api/skills/{}` — PATCH /api/skills/:id — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/skills/{}/install-tool` — POST /api/skills/:id/install-tool — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/store/packages` — GET /api/store/packages — apps/web/src/components/settings/ExtensionSettings.tsx
+- `/api/store/skills` — GET /api/store/skills — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/store/skills/{}/install` — POST /api/store/skills/:slug/install — apps/web/src/components/settings/SkillSettings.tsx
+- `/api/team-rooms` — GET /api/team-rooms, POST /api/team-rooms — apps/web/src/lib/team-chat-api.ts
+- `/api/terminals` — GET /api/terminals, POST /api/terminals — apps/web/src/components/chat/tool-call-card.tsx, apps/web/src/components/terminal/terminal-view.tsx, apps/web/src/lib/terminal-snapshot.ts, apps/web/src/lib/tool-terminal-live.ts
+- `/api/terminals/{}` — DELETE /api/terminals/:id, GET /api/terminals/:id, GET /api/terminals/shells — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/terminals/{}/resize` — POST /api/terminals/:id/resize — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/terminals/shells` — DELETE /api/terminals/:id, GET /api/terminals/:id, GET /api/terminals/shells — apps/web/src/components/terminal/terminal-view.tsx
+- `/api/threads` — GET /api/threads, POST /api/threads — apps/web/src/lib/agents-api.ts
+- `/api/threads/:id/runtime` — GET /api/threads/:id/runtime — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
+- `/api/threads/{}` — DELETE /api/threads/:id, GET /api/threads/:id, PATCH /api/threads/:id — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/activities` — GET /api/threads/:id/activities — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/approve` — POST /api/threads/:id/approve — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/create-pr` — POST /api/threads/:id/create-pr — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/interrupt` — POST /api/threads/:id/interrupt — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/resume` — POST /api/threads/:id/resume — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/send` — POST /api/threads/:id/send — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/start` — POST /api/threads/:id/start — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/steer` — POST /api/threads/:id/steer — apps/web/src/lib/agents-api.ts
+- `/api/threads/{}/stop` — POST /api/threads/:id/stop — apps/web/src/lib/agents-api.ts
+- `/api/tools` — GET /api/tools — apps/web/src/components/app-shell/catalogue-graph.tsx
+- `/api/update/apply` — POST /api/update/apply — apps/web/src/components/network/jait-nodes-panel.tsx, apps/web/src/hooks/useUpdateChecker.ts
+- `/api/update/changelog` — GET /api/update/changelog — apps/web/src/hooks/useUpdateChecker.ts
+- `/api/update/check` — GET /api/update/check — apps/web/src/components/network/jait-nodes-panel.tsx, apps/web/src/hooks/useUpdateChecker.ts
+- `/api/update/nodes` — GET /api/update/nodes — apps/web/src/components/network/jait-nodes-panel.tsx
+- `/api/update/nodes/{}/apply` — POST /api/update/nodes/:nodeId/apply — apps/web/src/components/network/jait-nodes-panel.tsx
+- `/api/user-questions/requests` — GET /api/user-questions/requests — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/user-questions/requests/{}/cancel` — POST /api/user-questions/requests/:id/cancel — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/user-questions/requests/{}/submit` — POST /api/user-questions/requests/:id/submit — apps/web/src/components/prompts/input-prompts.tsx
+- `/api/voice/transcribe-audio` — POST /api/voice/transcribe-audio — apps/web/src/hooks/useVoiceRecording.ts
+- `/api/voice/wake-candidate` — POST /api/voice/wake-candidate — apps/web/src/hooks/useWakeWord.ts
 
 ## WS message candidates (heuristic)
 
