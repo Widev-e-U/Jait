@@ -3,7 +3,7 @@
 //!
 //!   * `packages/gateway/src/pty-broker-client.ts` (the client)
 //!   * `packages/gateway/src/pty-broker.mjs`        (the wire protocol)
-//!         -> `jait_gateway::pty_broker_client`
+//!     -> `jait_gateway::pty_broker_client`
 //!
 //! The broker speaks newline-delimited JSON: `{"id", "cmd", ...}` requests on
 //! stdin, `{id, ok, ...}` responses and `{event: "output" | "exit", ...}`

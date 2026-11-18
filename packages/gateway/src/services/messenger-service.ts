@@ -81,7 +81,7 @@ type Room = {
   events: Event[];
   states: Event[];
   previous?: string | null;
-  receipts: Record<string, Record<string, { ts?: number }>>;
+  receipts: Record<string, Record<string, { ts?: number; thread_id?: string }>>;
   typing?: { users: string[]; expires: number };
   /** Counterpart of a direct conversation, resolved from `m.direct`/member state. */
   peer?: { userId: string; name: string; avatarUrl?: string };
@@ -628,7 +628,7 @@ class Connection {
       const index = receiptIndex.get(eventId);
       if (index === undefined) continue;
       for (const [userId, receipt] of Object.entries(users)) {
-        if (userId === this.session?.userId || bridgeBots.has(userId)) continue;
+        if (userId === this.session?.userId || bridgeBots.has(userId) || (receipt?.thread_id && receipt.thread_id !== 'main')) continue;
         const timestamp = typeof receipt?.ts === 'number' ? receipt.ts : null;
         const current = furthestRead.get(userId);
         if (
@@ -647,7 +647,7 @@ class Connection {
     // Mautrix may acknowledge successful bridging with the bot's m.read receipt
     // instead of a status event. It acknowledges that exact event, not a person.
     for (const [eventId, users] of Object.entries(room?.receipts ?? {})) {
-      if (originals.get(eventId)?.sender === this.session?.userId && Object.keys(users).some(id => bridgeBots.has(id))) {
+      if (originals.get(eventId)?.sender === this.session?.userId && Object.entries(users).some(([id, receipt]) => bridgeBots.has(id) && (!receipt?.thread_id || receipt.thread_id === 'main'))) {
         bridgeStatuses.set(eventId, 'sent');
       }
     }
@@ -660,9 +660,12 @@ class Connection {
       const status = event.content?.status;
       if (status === 'SUCCESS') {
         const recipients = event.content?.delivered_to_users;
-        bridgeStatuses.set(relation.event_id, Array.isArray(recipients) && recipients.some((id: unknown) => typeof id === 'string' && /^@[^:\s]+:[^\s]+$/.test(id) && id !== this.session?.userId && !bridgeBots.has(id)) ? 'delivered' : 'sent');
+        const delivered = Array.isArray(recipients) && recipients.some((id: unknown) => typeof id === 'string' && /^@[^:\s]+:[^\s]+$/.test(id) && id !== this.session?.userId && !bridgeBots.has(id));
+        if (delivered || bridgeStatuses.get(relation.event_id) !== 'delivered') {
+          bridgeStatuses.set(relation.event_id, delivered ? 'delivered' : 'sent');
+        }
       } else if (status === 'PENDING' || status === 'FAIL_RETRIABLE') {
-        bridgeStatuses.set(relation.event_id, 'pending');
+        if (bridgeStatuses.get(relation.event_id) !== 'delivered') bridgeStatuses.set(relation.event_id, 'pending');
       } else if (status === 'FAIL_PERMANENT') {
         bridgeStatuses.set(relation.event_id, 'failed');
       }
@@ -773,8 +776,17 @@ class Connection {
         };
       });
   }
+  private clearTyping() {
+    for (const room of this.rooms.values()) room.typing = undefined;
+  }
+  private connectionInterrupted() {
+    this.clearTyping();
+    this.status = 'reconnecting';
+    this.error = 'Matrix connection interrupted. The gateway is retrying.';
+  }
   async start(session: MessengerSession) {
     clearTimeout(this.retryTimer);
+    this.clearTyping();
     const generation = ++this.generation;
     this.session = session;
     this.status = 'connecting';
@@ -810,8 +822,8 @@ class Connection {
       );
     }
     client.onFailure = () => {
-      this.status = 'reconnecting';
-      this.error = 'Matrix connection interrupted. The gateway is retrying.';
+      if (this.client !== client || generation !== this.generation) return;
+      this.connectionInterrupted();
     };
     client.onSync = async (raw) => {
       if (this.client !== client || generation !== this.generation) return;
@@ -839,6 +851,7 @@ class Connection {
     } catch {
       client.stop();
       if (generation === this.generation) {
+        this.clearTyping();
         this.status = 'reconnecting';
         this.error = 'Matrix gateway connection interrupted. Retrying.';
         this.retryTimer = setTimeout(() => {
@@ -990,6 +1003,13 @@ class Connection {
                   : {}),
               }
             : undefined;
+        // Some bridges initially name direct rooms with the remote user's UUID.
+        // Prefer the resolved participant name when it becomes available.
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(room.summary.name) &&
+            room.peer?.name && room.peer.name !== room.peer.userId &&
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(room.peer.name)) {
+          room.summary.name = room.peer.name;
+        }
         const roomAvatar = room.states.find(
           (e) => e.type === 'm.room.avatar',
         )?.content?.url;
@@ -1091,6 +1111,7 @@ class Connection {
         const latest = this.messages(id).at(-1);
         room.summary.timestamp = latest?.timestamp ?? 0;
         room.summary.latestSender = latest?.sender;
+        room.summary.latestSenderAvatarUrl = latest?.senderAvatarUrl;
         room.summary.latestEventId = latest?.id;
         room.summary.preview =
           latest?.body ??
@@ -1603,7 +1624,10 @@ export class MessengerService {
         ) as Saved;
         if (saved.owner !== owner) throw new Error('Owner mismatch');
         if (saved.ownPresence && ['online', 'unavailable', 'offline'].includes(saved.ownPresence.state) && typeof saved.ownPresence.keep === 'boolean') c.ownPresence = saved.ownPresence;
-        c.assistantAccess = saved.assistantAccess === true;
+        // Assistant access is an opt-in for the current run: it resets at gateway
+        // restart (contract: messenger.encrypted-shared-device-restart; Rust port
+        // does not restore it either). The saved value is intentionally ignored.
+        c.assistantAccess = false;
         await c.start(saved.session);
       } catch {
         if (!c.session) {
@@ -1741,6 +1765,21 @@ export class MessengerService {
   async media(owner: string, url: string, file?: Record<string, any>) {
     await this.resume(owner);
     return this.readMedia(this.connection(owner), url, file);
+  }
+  /** Resolve only the sender avatar for an event in the owner's visible joined room. */
+  async notificationAvatar(owner: string, roomId: string, eventId: string): Promise<Buffer> {
+    await this.resume(owner);
+    const c = this.connection(owner);
+    const room = c.snapshot().rooms.find((entry) => entry.id === roomId && entry.membership === 'join' && !entry.hidden);
+    const avatar = room && c.messages(roomId).find((message) => message.id === eventId)?.senderAvatarUrl;
+    if (!avatar) throw new Error('Avatar unavailable.');
+    const input = await this.readMedia(c, avatar);
+    const sharp = (await import('sharp')).default;
+    const result = await sharp(input, { limitInputPixels: 16_000_000, animated: false })
+      .rotate().resize(192, 192, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 65 }).toBuffer();
+    if (result.length > 256 * 1024) throw new Error('Avatar exceeds size limit.');
+    return result;
   }
   /** Resolve the image from the owner's joined room, keeping Matrix keys on the gateway. */
   async notificationImage(owner: string, roomId: string, eventId: string): Promise<Buffer> {

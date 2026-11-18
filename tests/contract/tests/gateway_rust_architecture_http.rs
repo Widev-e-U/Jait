@@ -60,6 +60,13 @@ async fn compare(mut call: Value) {
     normalize(&mut expected);
     fs::remove_dir_all(&project).unwrap();
     fs::create_dir_all(&project).unwrap();
+    // The native writer refuses group/world-writable project roots, so the fixture
+    // must not inherit the process umask (commonly 002, which yields 0775).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&project, fs::Permissions::from_mode(0o700)).unwrap();
+    }
     let db = db::open_database(Path::new(":memory:")).unwrap();
     db::migrate_database(&db).unwrap();
     db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at)VALUES('owner','alice','fixture','old','old'),('other','bob','fixture','old','old');").unwrap();
@@ -70,6 +77,7 @@ async fn compare(mut call: Value) {
     let gateway = Gateway::bind_authenticated(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         HealthState::default(),
         auth.clone(),

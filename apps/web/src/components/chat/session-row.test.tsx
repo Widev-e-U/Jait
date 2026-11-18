@@ -242,6 +242,17 @@ describe('goal loop sidebar status', () => {
     expect(renderRow({ session, isAwaitingAnswer: true })).not.toContain('data-testid="session-row-loop"')
     expect(renderRow({ session, isWaitingForApproval: true })).not.toContain('data-testid="session-row-loop"')
   })
+  it('keeps auto-continuing chats read until the loop stops', () => {
+    const session = { id: 'goal', lastActiveAt: '2026-10-23T00:00:00Z', viewedAt: '2026-10-22T00:00:00Z', metadata: metadata('running') }
+    expect(isSessionUnread(session)).toBe(false)
+    expect(renderRow({ session })).toContain('font-normal')
+    for (const status of ['waiting', 'paused', 'completed'] as const) {
+      const stopped = { ...session, metadata: metadata(status) }
+      expect(isSessionUnread(stopped)).toBe(true)
+      expect(renderRow({ session: stopped })).toContain('font-bold')
+    }
+    expect(isSessionUnread({ ...session, metadata: metadata('completed'), viewedAt: session.lastActiveAt })).toBe(false)
+  })
   it('stops spinning when paused or completed and shows waiting questions', () => {
     expect(renderRow({ session: { id: 'goal', metadata: metadata('paused') } })).not.toContain('data-testid="session-row-loop"')
     expect(renderRow({ session: { id: 'goal', metadata: metadata('completed') } })).not.toContain('data-testid="session-row-loop"')

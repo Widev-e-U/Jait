@@ -1,6 +1,6 @@
 # Plan orchestration (dependency-ordered runs)
 
-Status: core implemented in `packages/gateway/src/services/orchestration/`, covered by unit and service tests. Restart recovery and the halt switch are wired in `server.ts`. Not yet wired to HTTP routes, agent tools, the UI, or a sub-agent runner, so no task can run yet. See "Not yet built".
+The TypeScript gateway exposes authenticated plan-run routes when the in-process worker is configured and restart recovery succeeds. The worker uses the owner’s selected Jait model, accepts tasks with empty resource claims (`resources: {}`), and runs with no tools. Artifact gates verify that a regular file resolves inside the owner’s gateway-local repository.
 
 ## Model
 
@@ -83,11 +83,19 @@ Migration 79 (`plan_orchestration_runs`) adds three tables: `orchestration_runs`
 - `services/orchestration/store.ts`: transactional, fenced persistence.
 - `services/orchestration/orchestrator.ts`: `OrchestrationService` (create, dispatch, attempts, verification, resume, retry, cancel, halt, recovery).
 
+## HTTP controls
+
+- `POST /api/plans/:id/runs` starts the approved plan snapshot. Send `{}` for defaults or provide `maxWorkers`.
+- `GET /api/plan-runs/:runId` returns current task states, dependencies, and results.
+- `GET /api/plan-runs/:runId/tasks/:taskId/attempts` returns chronological attempts with worker IDs, results, and gate outcomes.
+- `POST /api/plan-runs/:runId/cancel` cancels the run.
+- `POST /api/plan-runs/:runId/resume` accepts `decisions` containing `taskId`, `decision` (`retry` or `fail`), and an inspection `note` for interrupted tasks.
+
 ## Not yet built
 
-- **Runner binding.** `SubAgentTaskExecutor` builds the prompt and parses the answer, but the `SubAgentRunner` that calls the existing `agent.spawn` / ACP path is not bound. The composition root must provide it, and until then no task can run. The runner must pass only the sub-agent's final answer, never its transcript.
-- **Verification runner.** The default fails closed. Command gates must go through the existing consent and terminal path. Agent-proposed commands must never run.
-- **Routes, agent tools and UI** (start, status, cancel, resume, inspect).
+- **Workspace-aware workers and ACP** are pending. The in-process adapter rejects these workloads before calling the provider.
+- **Command gates** require the existing consent and terminal path. Only commands from the approved plan snapshot are eligible.
+- **Agent tools and UI** for plan-run controls.
 - **Worktree isolation** for parallel writers, and integration of finished changes.
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
 - **Process-level limits** beyond the in-process caps. Zombie executors that ignore abort keep their slot until they settle; child-process termination is not confirmed.

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 for (const width of [390, 1280]) {
@@ -7,10 +8,18 @@ for (const width of [390, 1280]) {
     await page.evaluate(() => import('/src/e2e-fixtures/queued-attachments.tsx'))
     for (const surface of ['composer', 'queue', 'sent']) {
       const scope = page.getByTestId(surface)
-      if (surface === 'composer') await expect(scope.getByRole('textbox').getByRole('img', { name: 'photo.png' })).toBeVisible()
-      else await expect(scope.getByRole('button', { name: surface === 'sent' ? 'View image 1: photo.png' : 'Expand image photo.png' })).toBeVisible()
-      await expect(scope.locator('[data-attachment-list]')).toHaveCount(1)
-      await expect(scope.locator('[download]')).toHaveCount(1)
+      if (surface === 'composer') {
+        // Images and files both sit inline in the editor, with no separate attachment bar.
+        await expect(scope.getByRole('textbox').getByRole('img', { name: 'photo.png' })).toBeVisible()
+        await expect(scope.getByRole('textbox').locator('[data-segment-type="attachment"]')).toHaveCount(1)
+        await expect(scope.locator('[data-attachment-list]')).toHaveCount(0)
+        await expect(scope.locator('[download]')).toHaveCount(0)
+        await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `composer-inline-attachments-${width}.png`) })
+      } else {
+        await expect(scope.getByRole('button', { name: surface === 'sent' ? 'View image 1: photo.png' : 'Expand image photo.png' })).toBeVisible()
+        await expect(scope.locator('[data-attachment-list]')).toHaveCount(1)
+        await expect(scope.locator('[download]')).toHaveCount(1)
+      }
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     const queue = page.getByTestId('queue')
@@ -27,7 +36,7 @@ for (const width of [390, 1280]) {
       ;(element as HTMLElement).focus()
     })
     await page.keyboard.type('Edited queue text')
-    await expect(editing.locator('[data-attachment-list]')).toBeVisible()
+    await expect(editor.locator('[data-segment-type="attachment"]')).toHaveCount(1)
     await editing.getByRole('button', { name: 'Save changes', exact: true }).click()
     await expect(queue.getByText('Edited queue text', { exact: true })).toBeVisible()
     await queue.getByRole('button', { name: 'Expand image photo.png' }).click()

@@ -52,6 +52,36 @@ const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
 try {
 await (async()=>{
 
+    const browser = { id: "browser-1", sessionId: "owner", type: "browser", state: "running", getLiveViewInfo: () => null };
+    const service = new PreviewService({ getSurface: () => browser, stopSurface: async () => {} } as any);
+    service.attachAgentBrowser("owner", browser as any);
+    const listener = vi.fn();
+    const unsubscribe = service.onBrowserControlLost(listener);
+    service.setSharedWithAgent("owner", false);
+    __jait_capture(0, (listener.mock.calls));
+    service.setSharedWithAgent("owner", true);
+    await service.stop("owner");
+    __jait_capture(1, (listener.mock.calls));
+    unsubscribe();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_preview_test_ts_23_3": {
+
+
+const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const browser = {
       id: "browser-1", sessionId: "owner", type: "browser", state: "running",
       getDevToolsConnection: vi.fn().mockResolvedValue({ endpoint: "http://127.0.0.1:9222", targetId: "page-1" }),
@@ -87,7 +117,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_37_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_51_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -127,7 +157,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_61_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_75_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -164,7 +194,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_82_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_96_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -208,7 +238,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_110_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_124_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -248,7 +278,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_134_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_148_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -286,7 +316,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_170_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -336,7 +366,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_190_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_204_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -378,7 +408,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_216_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_230_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -440,7 +470,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_269_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_283_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -499,7 +529,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_312_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_326_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -600,7 +630,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_397_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_411_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -683,7 +713,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_467_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_481_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -737,7 +767,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_509_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_523_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");

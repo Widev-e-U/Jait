@@ -122,15 +122,8 @@ for (const width of [1280, 390, 320]) {
       const control = await stop.boundingBox()
       expect(control!.width).toBeLessThanOrEqual(64)
       expect(control!.height).toBeLessThanOrEqual(40)
-      await scope.getByRole('tab', { name: 'Developer', exact: true }).click()
-      await expect(scope.getByRole('tab', { name: 'Developer', exact: true })).toHaveAttribute('aria-selected', 'true')
-      await scope.getByRole('tab', { name: 'Manager', exact: true }).click()
-      await expect(scope.getByRole('tab', { name: 'Manager', exact: true })).toHaveAttribute('aria-selected', 'true')
-      const modes = await scope.getByRole('tablist', { name: 'View mode' }).boundingBox()
-      expect(Math.abs(modes!.x + modes!.width / 2 - (header!.x + header!.width / 2))).toBeLessThanOrEqual(1)
-      expect(control!.x + control!.width).toBeLessThanOrEqual(modes!.x - 4)
-      const account = (await scope.getByRole('button', { name: 'Account menu' }).boundingBox())!
-      expect(account.x).toBeGreaterThanOrEqual(modes!.x + modes!.width + 4)
+      const update = (await scope.getByRole('button', { name: /^Update to/ }).boundingBox())!
+      expect(update.x).toBeGreaterThanOrEqual(control!.x + control!.width)
       expect(control!.x).toBeGreaterThanOrEqual(header!.x)
       expect(control!.x + control!.width).toBeLessThanOrEqual(header!.x + header!.width)
     }
@@ -219,17 +212,17 @@ test.describe('mobile header spacing', () => {
       const updateBox = (await header.getByRole('button', { name: /^Update to/ }).boundingBox())!
       const avatar = (await account.locator(':scope > span').boundingBox())!
       const menuIcon = (await menu.locator('svg').boundingBox())!
-      const referenceGap = avatar.x - updateBox.x - updateBox.width
-      expect(referenceGap).toBe(8)
-      expect(menuIcon.x - avatar.x - avatar.width).toBeCloseTo(referenceGap, 0)
+      const notification = (await header.getByRole('button', { name: 'Notifications', exact: true }).boundingBox())!
+      expect(notification.x - updateBox.x - updateBox.width).toBe(8)
+      expect(avatar.x).toBeCloseTo(notification.x + notification.width, 0)
+      expect(menuIcon.x - avatar.x - avatar.width).toBeCloseTo(8, 0)
       const agentFaces = (await header.locator('[data-agent-control] > span').first().boundingBox())!
       const agentBox = (await header.locator('[data-agent-control]').boundingBox())!
       expect(agentBox.x).toBeGreaterThanOrEqual(voiceBox.x + voiceBox.width)
       expect(agentFaces.x).toBeGreaterThanOrEqual(agentBox.x)
       expect(agentFaces.x + agentFaces.width).toBeLessThanOrEqual(agentBox.x + agentBox.width)
-      const tabs = (await header.getByRole('tablist').boundingBox())!
-      expect(tabs.x).toBeGreaterThanOrEqual(agentBox.x + agentBox.width + 4)
-      expect(tabs.x + tabs.width + 4).toBeLessThanOrEqual(accountBox.x)
+      expect(updateBox.x).toBeGreaterThanOrEqual(agentBox.x + agentBox.width)
+      expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width)
       await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/mobile-header-spacing-${width}.png`) })
     })
   }

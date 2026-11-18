@@ -12,7 +12,7 @@
 //!    on an explicit user choice; or
 //! 2. the caller names a pair (a persona's saved selection, or the recorded
 //!    turn being resumed), which is again an explicit user choice.
-//! Anything else stops and asks.
+//!    Anything else stops and asks.
 
 use jait_gateway::{
     db,

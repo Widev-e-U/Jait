@@ -111,6 +111,19 @@ export interface OrchestrationTaskView {
   finishedAt: string | null;
 }
 
+export interface OrchestrationAttemptView {
+  id: string;
+  attemptNo: number;
+  state: Extract<OrchestrationTaskState, "running" | "verifying" | "passed" | "failed" | "interrupted" | "cancelled">;
+  agentRef: string | null;
+  worktreeRef: string | null;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  result: AgentTaskReport | null;
+  verification: VerificationOutcome[] | null;
+}
+
 export interface OrchestrationRunView {
   id: string;
   planId: string | null;

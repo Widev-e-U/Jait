@@ -82,6 +82,62 @@ await __jait_hook_567();
 try {
 await (async()=>{
 
+    const account = (service as unknown as { upsertAccount: (u: string, p: string, e: string) => { id: string } }).upsertAccount("u1", "gmail", "me@gmail.com");
+    (service as unknown as { storeTokens: (id: string, u: string, t: unknown) => void }).storeTokens(account.id, "u1", { accessToken: "a", refreshToken: "r", expiresAt: Date.now() + 1e6 });
+    const messages = [{ id: "one" }] as Awaited<ReturnType<GmailClient["listMessages"]>>;
+    vi.spyOn(GmailClient.prototype, "listMessages").mockResolvedValue(messages);
+    vi.spyOn(GmailClient.prototype, "deleteMessage").mockResolvedValue();
+    __jait_captureType(0, (service.cachedInbox("u1", account.id)));
+    await service.listMessages("u1", account.id, { folder: "inbox", limit: 30 });
+    __jait_capture(1, (service.cachedInbox("u1", account.id)), (messages));
+    __jait_thrown(2, () => service.cachedInbox("u2", account.id));
+    await service.deleteMessage("u1", account.id, "one");
+    __jait_captureType(3, (service.cachedInbox("u1", account.id)));
+  
+})();
+
+} finally {
+await __jait_hook_912();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_46_3": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+let secrets: UserSecretService;
+let service: EmailService;
+function seedMailbox(owner: string, address: string) {
+  const internal = service as unknown as {
+    upsertAccount(owner: string, provider: string, email: string): { id: string };
+    storeTokens(id: string, owner: string, tokens: unknown): void;
+  };
+  const account = internal.upsertAccount(owner, "gmail", address);
+  internal.storeTokens(account.id, owner, { accessToken: "test-access-token", refreshToken: "refresh-token", expiresAt: Date.now() + 1e6 });
+  return account;
+}
+const __jait_hook_567 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+  secrets = new UserSecretService(db, "test-secret");
+  service = new EmailService(db, secrets);
+  delete process.env["GMAIL_OAUTH_CLIENT_ID"];
+  delete process.env["GMAIL_OAUTH_CLIENT_SECRET"];
+};
+const __jait_hook_912 = () => {
+  vi.restoreAllMocks();
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+await __jait_hook_567();
+try {
+await (async()=>{
+
     __jait_capture(0, (service.configuredProviders("u1")));
     service.saveAppCredentials("u1", "gmail", { clientId: "cid", clientSecret: "secret" });
     __jait_capture(1, (service.configuredProviders("u1")));
@@ -95,7 +151,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_38_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_52_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -143,7 +199,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_44_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_58_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -189,7 +245,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_49_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_63_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -242,7 +298,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_60_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_74_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -288,7 +344,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_64_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_78_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -347,7 +403,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_81_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_95_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -396,7 +452,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_99_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_113_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -448,7 +504,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_108_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_122_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -502,7 +558,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_119_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_133_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -557,7 +613,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_131_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_145_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -609,7 +665,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_140_3": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_154_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -665,7 +721,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_155_1": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_169_1": {
 
 
 let sqlite: SqliteDatabase;
@@ -714,7 +770,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_163_1": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_177_1": {
 
 
 let sqlite: SqliteDatabase;
@@ -776,7 +832,7 @@ await __jait_hook_912();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_email_service_test_ts_184_1": {
+case "tailstatic_packages_gateway_src_services_email_service_test_ts_198_1": {
 
 
 let sqlite: SqliteDatabase;

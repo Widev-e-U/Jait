@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "latest": 77,
+  "latest": 79,
   "migrations": [
     {
       "id": 1,
@@ -309,16 +309,24 @@
     {
       "id": 77,
       "name": "github_intake_observation"
+    },
+    {
+      "id": 78,
+      "name": "user_settings_navigation_order"
+    },
+    {
+      "id": 79,
+      "name": "plan_orchestration_runs"
     }
   ],
   "sourceSha256": {
-    "packages/gateway/src/db/migrations.ts": "7292f264b29566edbe8dae1862fef4a93ba4b9d349a25ad7f86b94cb6158943d",
+    "packages/gateway/src/db/migrations.ts": "422caf229a4c4dacd059ae49850ddfa9080dfb0c5900ddd319fb79c4c5912f6d",
     "packages/gateway/src/db/connection.ts": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
     "packages/gateway/src/db/sqlite-shim.ts": "910cc9a8d0448693e9a5e147f3af3e0fb61f65db1e0f175709147320cad44ba3"
   },
   "prefixCoverage": {
     "first": 0,
-    "last": 77,
+    "last": 79,
     "classification": "synthetic current-definition prefixes, not archived released databases",
     "skippedPrefixes": []
   },
@@ -335,13 +343,20 @@
     "security_findings",
     "thread_recovery",
     "agent_control",
-    "message_context_metadata"
+    "message_context_metadata",
+    "orchestration_attempts",
+    "orchestration_runs",
+    "orchestration_task_runs"
   ],
   "requiredIndexes": [
     "idx_messages_session",
     "idx_memories_scope",
     "idx_scheduled_jobs_enabled",
-    "idx_agent_github_app_agent"
+    "idx_agent_github_app_agent",
+    "idx_orchestration_attempts_no",
+    "idx_orchestration_attempts_run",
+    "idx_orchestration_runs_owner",
+    "idx_orchestration_task_runs_state"
   ],
   "rollbackPolicy": {
     "supported": "quiesce all writers; restore a pre-upgrade SQLite snapshot to a fresh database path and run the matching old application version",
@@ -409,6 +424,9 @@
     "node_credentials": "structural-only",
     "node_permissions": "structural-only",
     "nodes": "structural-only",
+    "orchestration_attempts": "structural-only",
+    "orchestration_runs": "structural-only",
+    "orchestration_task_runs": "structural-only",
     "persona_agents": "structural-only",
     "plugins": "structural-only",
     "project_state": "structural-only",

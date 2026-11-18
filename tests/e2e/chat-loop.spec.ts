@@ -307,3 +307,56 @@ for (const width of [390, 1440]) {
     await expect(composer).toBeFocused()
   })
 }
+
+for (const mobile of [false, true]) {
+  test(`unread chat navigation updates and clears on ${mobile ? 'mobile' : 'desktop'}`, async ({ page }) => {
+    await page.setViewportSize({ width: mobile ? 390 : 1280, height: 850 })
+    let count = 0
+    let requests = 0
+    let holdNext = false
+    let releaseHeld!: () => void
+    let heldStarted!: () => void
+    const held = new Promise<void>(resolve => { releaseHeld = resolve })
+    const started = new Promise<void>(resolve => { heldStarted = resolve })
+    await page.route('**/api/sessions/unread-count', async route => {
+      const responseCount = count
+      requests++
+      if (holdNext) {
+        holdNext = false
+        heldStarted()
+        await held
+      }
+      await route.fulfill({ json: { count: responseCount } }).catch(() => {})
+    })
+    await page.goto(`/src/e2e-fixtures/unread-chat-badge.html${mobile ? '?mobile' : ''}`)
+    const chat = page.getByRole('button', { name: 'Chat', exact: true })
+    await expect.poll(() => requests).toBeGreaterThan(0)
+    await expect(chat).not.toHaveAttribute('aria-describedby', /./)
+
+    count = 2
+    await page.getByRole('button', { name: 'Chat event' }).click()
+    await expect(chat).toHaveAccessibleDescription('2 unread chats')
+    const badge = page.locator(mobile ? '#mobile-nav-badge-chat' : '#sidebar-badge-chat')
+    await expect(badge).toHaveText('2')
+
+    // A delayed count from before a newer update must never replace that update.
+    count = 11
+    holdNext = true
+    await page.getByRole('button', { name: 'Chat event' }).click()
+    await started
+    count = 1
+    await page.getByRole('button', { name: 'Reconnect' }).click()
+    await expect(chat).toHaveAccessibleDescription('1 unread chat')
+    releaseHeld()
+    await expect(badge).toHaveText('1')
+
+    count = 0
+    await page.getByRole('button', { name: 'Chat event' }).click()
+    await expect(badge).toHaveCount(0)
+    count = 3
+    await page.getByRole('button', { name: 'Reconnect' }).click()
+    await expect(badge).toHaveText('3')
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(badge).toHaveCount(0)
+  })
+}

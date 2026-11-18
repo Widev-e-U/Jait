@@ -2,6 +2,7 @@
  * Session service — CRUD for sessions in SQLite.
  */
 import { and, eq, desc, not, sql, isNull } from "drizzle-orm";
+import { isSessionUnread } from "@jait/shared";
 import type { JaitDB } from "../db/connection.js";
 import { messageContextMetadata, messages, sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -29,6 +30,17 @@ export interface ForkSessionParams {
 
 export class SessionService {
   constructor(private db: JaitDB) {}
+
+  /** Count all of this owner's active unread chats, including off-page projects. */
+  countUnread(userId: string): number {
+    return this.db.select({
+      lastActiveAt: sessions.lastActiveAt,
+      viewedAt: sessions.viewedAt,
+      createdAt: sessions.createdAt,
+      metadata: sessions.metadata,
+    }).from(sessions).where(and(eq(sessions.userId, userId), eq(sessions.status, "active")))
+      .all().filter(isSessionUnread).length;
+  }
 
   /** Create a new session. Returns the created session record. */
   create(params: CreateSessionParams = {}) {

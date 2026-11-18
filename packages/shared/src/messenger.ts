@@ -128,6 +128,8 @@ export interface MessengerRoom {
   latestEventId?: string
   /** Sender of the latest message, for notification display. */
   latestSender?: string
+  /** Avatar of the latest message sender (`mxc://`). */
+  latestSenderAvatarUrl?: string
   /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */
   status?: boolean
   /** Structural shape of the room. Absent means a plain chat. */
@@ -159,8 +161,12 @@ export interface MessengerSnapshot {
   typing?: string[]
 }
 
-/** Bound message previews across desktop and push notifications. */
-export function messengerNotificationPreview(text: string, limit = 200): string {
-  const chars = Array.from(text.replace(/\s+/g, ' ').trim())
-  return chars.length > limit ? chars.slice(0, Math.max(0, limit - 1)).join('') + '…' : chars.join('')
+/**
+ * Bound message previews across desktop and push notifications. The cut has no
+ * ellipsis: Android wraps the text itself when the notification is expanded. The
+ * cap keeps the FCM data payload (4 KB limit) well under its size even for
+ * multi-byte text: 500 code points is at most 2000 UTF-8 bytes.
+ */
+export function messengerNotificationPreview(text: string, limit = 500): string {
+  return Array.from(text.replace(/\s+/g, ' ').trim()).slice(0, Math.max(0, limit)).join('')
 }

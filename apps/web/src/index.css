@@ -234,6 +234,13 @@
     align-content: center;
   }
 
+  /* Text-only notifications do not need the actions row. */
+  [data-sonner-toast][data-styled='true']:not(:has([data-button], [data-cancel])) {
+    grid-template-rows: auto;
+    min-height: 0;
+    row-gap: 0;
+  }
+
   [data-sonner-toast] [data-icon] {
     grid-column: 1;
     grid-row: 1;

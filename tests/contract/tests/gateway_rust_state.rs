@@ -227,7 +227,7 @@ fn node_ownership_foreign_claims_credential_resolution_and_revocation_match_both
         json!({"op":"issue","node":"n2","user":"owner"}),
         json!({"op":"resolve","slot":3}),
     ];
-    let seed = "INSERT INTO nodes(node_id,first_seen_at,last_seen_at,created_at,updated_at) VALUES('n1','now','now','now','now'),('n2','now','now','now','now')";
+    let seed = "INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','owner','fixture','now','now'),('foreign','foreign','fixture','now','now'); INSERT INTO nodes(node_id,first_seen_at,last_seen_at,created_at,updated_at) VALUES('n1','now','now','now','now'),('n2','now','now','now','now')";
     for memory in [true, false] {
         credentials_scenario(memory, seed, steps.clone());
     }
@@ -236,7 +236,7 @@ fn node_ownership_foreign_claims_credential_resolution_and_revocation_match_both
 fn persisted_node_credentials_survive_reopen_and_recheck_current_ownership() {
     credentials_scenario(
         false,
-        "INSERT INTO nodes(node_id,user_id,first_seen_at,last_seen_at,created_at,updated_at) VALUES('n1','owner','now','now','now','now')",
+        "INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','owner','fixture','now','now'),('foreign','foreign','fixture','now','now'); INSERT INTO nodes(node_id,user_id,first_seen_at,last_seen_at,created_at,updated_at) VALUES('n1','owner','now','now','now','now')",
         vec![
             json!({"op":"issue","node":"n1","user":"owner"}),
             json!({"op":"reopen"}),

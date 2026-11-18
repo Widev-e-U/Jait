@@ -138,40 +138,45 @@ describe('PromptInput messenger composer row', () => {
     placeholder: 'Write a message…',
   }
 
-  it('renders attach, emoji and text input in one left-to-right row', () => {
+  it('renders emoji and text input on the left with attach on the right', () => {
     const markup = renderToStaticMarkup(<PromptInput {...messengerProps} value="" />)
-    const attach = markup.indexOf('aria-label="Attach files"')
     const emoji = markup.indexOf('aria-label="Emoji"')
     const input = markup.indexOf('role="textbox"')
-    expect(attach).toBeGreaterThan(-1)
-    expect(emoji).toBeGreaterThan(attach)
+    const attach = markup.indexOf('aria-label="Attach files"')
+    const mic = markup.indexOf('aria-label="Dictate"')
+    expect(emoji).toBeGreaterThan(-1)
     expect(input).toBeGreaterThan(emoji)
+    expect(attach).toBeGreaterThan(input)
+    expect(mic).toBeGreaterThan(attach)
     // Each control appears exactly once — the assistant footer must not double up.
     expect(markup.split('aria-label="Attach files"')).toHaveLength(2)
     expect(markup.split('aria-label="Emoji"')).toHaveLength(2)
   })
 
-  it('shows the microphone while empty and swaps to send once text is typed', () => {
+  it('shows only the microphone while empty and adds send beside it once text is typed', () => {
     const empty = renderToStaticMarkup(<PromptInput {...messengerProps} value="" />)
     expect(empty).toContain('aria-label="Dictate"')
     expect(empty).not.toContain('aria-label="Send message"')
 
     const typed = renderToStaticMarkup(<PromptInput {...messengerProps} value="hi" />)
+    expect(typed).toContain('aria-label="Dictate"')
     expect(typed).toContain('aria-label="Send message"')
-    expect(typed).not.toContain('aria-label="Dictate"')
+    // Send stays on the trailing edge, after the mic.
+    expect(typed.indexOf('aria-label="Send message"')).toBeGreaterThan(typed.indexOf('aria-label="Dictate"'))
   })
 })
 
 describe('PromptInput edit attachments', () => {
-  it('shows existing image and file attachments in the edit composer', () => {
+  it('never renders a separate attachment bar for images or files', () => {
     const markup = renderToStaticMarkup(
       <PromptInput {...baseProps} initialAttachments={[
         { name: 'screen.png', mimeType: 'image/png', data: 'abc123', preview: 'data:image/png;base64,abc123' },
         { name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
       ]} />,
     )
-    // Images hydrate as inline DOM nodes; file attachments retain the separate bar.
+    // Images and files hydrate as inline editor chips after mount, so the server markup has neither.
+    expect(markup).not.toContain('data-attachment-list')
     expect(markup).not.toContain('Remove screen.png')
-    expect(markup).toContain('Remove notes.txt')
+    expect(markup).not.toContain('Remove notes.txt')
   })
 })

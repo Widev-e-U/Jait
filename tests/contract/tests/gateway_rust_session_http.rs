@@ -206,6 +206,7 @@ async fn scenario(seed: &str, steps: Value, options: Value) -> Value {
     let gateway = Gateway::bind_authenticated(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         HealthState::default(),
         auth.clone(),

@@ -123,6 +123,67 @@ const __jait_hook_1121 = () => { for (const close of closers.splice(0)) close();
 try {
 await (async()=>{
 
+    const { service, execute } = await fixture(async (_name, input) =>
+      (input as { target?: string }).target === "Open Billing"
+        ? { ok: false, message: "Target was ambiguous" }
+        : { ok: true, message: "done" });
+    const steps = [
+      definition.steps[0]!,
+      { action: "click", label: "Settings", target: "Open Settings" },
+      { action: "click", label: "Billing", target: "Open Billing" },
+      { action: "click", label: "Confirm", target: "Click Confirm" },
+    ];
+    const saved = service.save({ ...definition, steps }, context);
+    const result = await service.run(saved.id, {}, context, saved.revision);
+    __jait_capture(0, (result));
+    __jait_capture(1, (execute.mock.calls.map(call => [call[0], call[1]])));
+    for (const invalid of [
+      { action: "click", label: "Missing" },
+      { action: "click", label: "Both", selector: "#settings", target: "Open Settings" },
+      { action: "click", label: "Blank", target: "  " },
+      { action: "click", label: "Too long", target: "x".repeat(501) },
+    ]) {
+      __jait_capture(2, (browserWorkflowSchema.safeParse({ ...definition, steps: [steps[0], invalid] }).success));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_1121();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_73_3": {
+
+const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
+const definition: BrowserWorkflowDefinition = {
+  formatVersion: 1, name: "Find invoices", description: "Repeat a browser task",
+  inputs: [{ name: "month", description: "Invoice month", default: "2026-10" }],
+  steps: [
+    { action: "open", label: "Open portal", url: "https://example.com/invoices" },
+    { action: "type", label: "Choose month", selector: "#month", text: "{{month}}" },
+    { action: "wait", label: "Check results", selector: "#results" },
+  ],
+};
+const closers: (() => void)[] = [];
+async function fixture(handler: (name: string, input: unknown, ctx: ToolContext) => Promise<ToolResult> = async () => ({ ok: true, message: "done" })) {
+  const execute = vi.fn(handler);
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const service = new BrowserWorkflowService(db, execute);
+  closers.push(() => { service.stop(); sqlite.close(); });
+  const saved = service.save(definition, context);
+  return { db, service, execute, saved };
+}
+const __jait_hook_1121 = () => { for (const close of closers.splice(0)) close(); };
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const { service, saved } = await fixture();
     __jait_capture(0, (service.get(saved.id, context)), (saved));
     __jait_capture(1, (service.list({ ...context, userId: "other" })));
@@ -140,7 +201,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_54_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_83_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -189,7 +250,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_67_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_96_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -239,7 +300,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_81_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_110_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -287,7 +348,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_93_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_122_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -332,7 +393,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_102_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_131_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -387,7 +448,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_121_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_150_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };
@@ -439,7 +500,7 @@ await __jait_hook_1121();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_137_3": {
+case "tailstatic_packages_gateway_src_services_browser_workflows_test_ts_166_3": {
 
 const { browserWorkflowSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", userId: "owner", requestedBy: "test" };

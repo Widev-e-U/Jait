@@ -98,7 +98,7 @@ const omnirouteCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt
 // In-flight guards so a stale-while-revalidate refresh never stampedes.
 let openRouterInflight: Promise<ProviderModelInfo[]> | null = null;
 const openaiInflight = new Map<string, Promise<ProviderModelInfo[]>>();
-const ollamaInflight = new Map<string, Promise<ProviderModelInfo[]>>();
+const ollamaInflight = new Map<string, { force: boolean; request: Promise<ProviderModelInfo[]> }>();
 const omnirouteInflight = new Map<string, Promise<ProviderModelInfo[]>>();
 
 /** Clear all cached model lists. Intended for tests. */
@@ -483,12 +483,10 @@ export async function fetchOllamaModels(
 
   let local: ProviderModelInfo[];
   if (force || !cached) {
-    local = await refreshOllamaModels(url);
+    local = await refreshOllamaModels(url, force);
   } else {
     if (Date.now() - cached.fetchedAt >= OLLAMA_CACHE_TTL && !ollamaInflight.has(url)) {
-      const refresh = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
-      ollamaInflight.set(url, refresh);
-      refresh.catch(() => {});
+      refreshOllamaModels(url, false).catch(() => {});
     }
     local = cached.models;
   }
@@ -498,19 +496,31 @@ export async function fetchOllamaModels(
   return mergeOllamaModels(local, cloud);
 }
 
-function refreshOllamaModels(url: string): Promise<ProviderModelInfo[]> {
+function refreshOllamaModels(url: string, force: boolean): Promise<ProviderModelInfo[]> {
   const inflight = ollamaInflight.get(url);
-  if (inflight) return inflight;
-  const request = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
-  ollamaInflight.set(url, request);
+  if (inflight && (!force || inflight.force)) return inflight.request;
+
+  // A pending background read may have captured the previous catalogue.
+  const isCurrent = (): boolean => ollamaInflight.get(url)?.request === request;
+  const request = doFetchOllamaModels(url, force, isCurrent).finally(() => {
+    if (isCurrent()) ollamaInflight.delete(url);
+  });
+  ollamaInflight.set(url, { force, request });
   return request;
 }
 
-async function doFetchOllamaModels(url: string): Promise<ProviderModelInfo[]> {
+async function doFetchOllamaModels(
+  url: string,
+  force: boolean,
+  isCurrent: () => boolean,
+): Promise<ProviderModelInfo[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(`${url}/api/tags`, { signal: controller.signal });
+    const res = await fetch(`${url}/api/tags`, {
+      signal: controller.signal,
+      ...(force ? { headers: { "Cache-Control": "no-cache" } } : {}),
+    });
     if (!res.ok) return ollamaCaches.get(url)?.models ?? [];
     const data = (await res.json()) as {
       models?: Array<{
@@ -524,7 +534,7 @@ async function doFetchOllamaModels(url: string): Promise<ProviderModelInfo[]> {
       name: m.name,
       description: [m.details?.family, m.details?.parameter_size].filter(Boolean).join(" · ") || undefined,
     }));
-    ollamaCaches.set(url, { models, fetchedAt: Date.now() });
+    if (isCurrent()) ollamaCaches.set(url, { models, fetchedAt: Date.now() });
     return models;
   } catch (err) {
     const cached = ollamaCaches.get(url);

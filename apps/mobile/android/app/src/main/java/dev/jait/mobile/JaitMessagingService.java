@@ -74,6 +74,8 @@ public class JaitMessagingService extends FirebaseMessagingService {
                     message.getData().get("title"), message.getData().get("body"),
                     replaceId, message.getData().get("link"),
                     NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true);
+                NotificationImage.fetchAvatarNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
+                    id, message.getData().get("roomId"), message.getData().get("eventId"));
                 if ("true".equals(message.getData().get("imageAvailable"))) {
                     NotificationImage.fetchNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
                         id, message.getData().get("roomId"), message.getData().get("eventId"));

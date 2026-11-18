@@ -1,10 +1,11 @@
 import { JAIT_PAGES, JAIT_PAGE_IDS } from '@jait/shared'
-import { useEffect } from 'react'
+import { useContext, useEffect } from 'react'
 import { Brain, Calendar, CalendarDays, GitPullRequest, ListChecks, Mail, MessageSquare, MessagesSquare, UsersRound, Wifi, Workflow, Settings, type LucideIcon } from 'lucide-react'
 
 import { ModeSidebar, type ModeSidebarItem, type SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { useMessengerBadge } from '@/components/messenger/messenger-provider'
+import { UnreadChatCountContext } from '@/hooks/useUnreadChatCount'
 import type { AppView } from '@/lib/app-view'
 
 const NAV_ORDER_CACHE_KEY = 'jait:navigation-order'
@@ -36,6 +37,7 @@ export function AppNavigationSidebar({
   onOpenSettings,
 }: AppNavigationSidebarProps) {
   const { count: messengerCount } = useMessengerBadge()
+  const unreadChatCount = useContext(UnreadChatCountContext)
   // The catalog is also the navigation registry. Adding a routable page requires
   // its explanation and an icon; missing page metadata cannot silently ship.
   const icons: Record<AppView, LucideIcon> = {
@@ -58,7 +60,8 @@ export function AppNavigationSidebar({
   const orderedIds = [...new Set([...saved, ...registryIds])]
   const navigationItems: ModeSidebarItem[] = orderedIds
     .map((id) => ({ id, label: JAIT_PAGES[id].title, icon: icons[id],
-      active: currentView === id, badge: id === 'messenger' ? messengerCount : undefined, onSelect: () => onNavigate(id) }))
+      active: currentView === id, badge: id === 'messenger' ? messengerCount : id === 'chat' ? unreadChatCount : undefined,
+      badgeLabel: id === 'chat' ? `${unreadChatCount} unread ${unreadChatCount === 1 ? 'chat' : 'chats'}` : id === 'messenger' ? `${messengerCount} unread ${messengerCount === 1 ? 'message' : 'messages'}` : undefined, onSelect: () => onNavigate(id) }))
 
   return (
     <ModeSidebar

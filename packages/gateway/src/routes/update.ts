@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { exec } from "node:child_process";
 import { createRequire } from "node:module";
 import type { AppConfig } from "../config.js";
+import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { prepareUpdate, discardUpdate, launchSystemdUpdate } from "../../bin/safe-update.mjs";
 import { describeUpdateFailure } from "./update-failure.js";
@@ -141,10 +142,22 @@ async function buildChangelog(from: string, to?: string, limit?: number): Promis
 export function registerUpdateRoutes(
   app: FastifyInstance,
   config: AppConfig,
-  deps: { shutdown: () => Promise<void>; port: number },
+  deps: { shutdown: () => Promise<void>; port: number; ws?: WsControlPlane },
 ): void {
   // Concurrent callers share one bounded subprocess, including failed checks.
   let latestVersionCheck: Promise<string> | undefined;
+
+  const getLatestVersion = () => {
+    latestVersionCheck ??= new Promise<string>((resolve, reject) => {
+      exec("npm view @jait/gateway version", {
+        encoding: "utf8", timeout: 15_000, windowsHide: true, maxBuffer: 64 * 1_024,
+      }, (error, stdout) => {
+        if (error) reject(error);
+        else resolve(stdout.trim());
+      });
+    }).finally(() => { latestVersionCheck = undefined; });
+    return latestVersionCheck;
+  };
 
   /** Check for a newer version on npm. */
   app.get("/api/update/check", async (request, reply) => {
@@ -152,18 +165,7 @@ export function registerUpdateRoutes(
     if (!user) return;
 
     try {
-      latestVersionCheck ??= new Promise<string>((resolve, reject) => {
-        exec("npm view @jait/gateway version", {
-          encoding: "utf8",
-          timeout: 15_000,
-          windowsHide: true,
-          maxBuffer: 64 * 1_024,
-        }, (error, stdout) => {
-          if (error) reject(error);
-          else resolve(stdout.trim());
-        });
-      }).finally(() => { latestVersionCheck = undefined; });
-      const latest = await latestVersionCheck;
+      const latest = await getLatestVersion();
 
       const hasUpdate = latest !== CURRENT_VERSION && compareVersions(latest, CURRENT_VERSION) > 0;
 
@@ -171,12 +173,43 @@ export function registerUpdateRoutes(
         currentVersion: CURRENT_VERSION,
         latestVersion: latest,
         hasUpdate,
+        canApply: Boolean(process.env.INVOCATION_ID),
       };
     } catch (err) {
       return reply.status(502).send({
         error: "Failed to check for updates",
         detail: err instanceof Error ? err.message : String(err),
       });
+    }
+  });
+
+  app.get("/api/update/nodes", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    return { nodes: deps.ws?.listUpdateNodes(user.id) ?? [] };
+  });
+
+  app.post<{ Params: { nodeId: string } }>("/api/update/nodes/:nodeId/apply", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const version = (request.body as { version?: unknown } | undefined)?.version;
+    if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) return reply.status(400).send({ error: "A valid release version is required" });
+    if (!deps.ws) return reply.status(503).send({ error: "Node control is unavailable" });
+    const node = deps.ws.listUpdateNodes(user.id).find((item) => item.id === request.params.nodeId);
+    if (!node || !node.online || !node.appVersion) return reply.status(409).send({ error: "Node is unavailable or does not support updates" });
+    if (!node.granted) return reply.status(403).send({ error: "permission_denied: update permission is not granted" });
+    try {
+      const latest = await getLatestVersion();
+      if (version !== latest || compareVersions(version, node.appVersion) <= 0) return reply.status(409).send({ error: "Update is no longer the latest newer release; check again" });
+      const result = await deps.ws.proxyNodeUpdate(request.params.nodeId, user.id, version);
+      if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true || (result as { newVersion?: unknown }).newVersion !== version) {
+        return reply.status(502).send({ error: "Update status is unknown: invalid node response. Check the node version before retrying." });
+      }
+      return { ok: true, newVersion: version, status: "started" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message.startsWith("permission_denied") ? 403 : message.includes("unavailable") ? 409 : 502;
+      return reply.status(status).send({ error: message });
     }
   });
 

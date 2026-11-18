@@ -16,6 +16,8 @@ import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import type { PlanService, PlanTask } from "../services/plans.js";
 import { newTaskId } from "../services/plans.js";
+import type { OrchestrationService } from "../services/orchestration/orchestrator.js";
+import { registerPlanRunRoutes } from "./plan-runs.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { ThreadService } from "../services/threads.js";
 import type { ProviderRegistry } from "../providers/registry.js";
@@ -31,6 +33,7 @@ import { join } from "node:path";
 
 export interface PlanRouteDeps {
   planService: PlanService;
+  orchestration?: OrchestrationService;
   repoService: RepositoryService;
   threadService?: ThreadService;
   providerRegistry?: ProviderRegistry;
@@ -44,6 +47,7 @@ export function registerPlanRoutes(
   deps: PlanRouteDeps,
 ): void {
   const { planService, repoService, userService, ws } = deps;
+  if (deps.orchestration) registerPlanRunRoutes(app, config, deps.orchestration);
 
   function findRemoteNodeForCwd(cwd: string, providerId: ProviderId): string | null {
     if (!ws) return null;

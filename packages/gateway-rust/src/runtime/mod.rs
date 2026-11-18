@@ -23,6 +23,7 @@ pub mod consent_mount;
 pub mod consent_ws;
 pub mod maintenance_mount;
 pub mod mobile_mount;
+pub mod terminal_ws;
 
 pub mod chat_turn;
 

@@ -163,6 +163,74 @@ await __jait_hook_1399();
 try {
 await (async()=>{
 
+    vi.stubEnv("JAIT_TEAM_DELIVERY_CONCURRENCY", "2");
+    const releases: Array<() => void> = [];
+    const dispatch = vi.fn((_delivery: unknown, _agent: unknown, _prompt: string) => new Promise<{ content: string }>(resolve => {
+      releases.push(() => resolve({ content: "Done" }));
+    }));
+    service.setDispatcher(dispatch);
+    try {
+      for (let i = 0; i < 4; i++) post(`Task ${i}`, `cap-${i}`, ["Developer"]);
+      __jait_capture(0, (dispatch.mock.calls));
+      __jait_capture(1, (service.deliveries(owner, room.id).filter(d => d.status === "running")));
+      __jait_capture(2, (service.deliveries(owner, room.id).filter(d => d.status === "queued")));
+      releases[0]!();
+      await vi.waitFor(() => __jait_capture(3, (dispatch.mock.calls)));
+      __jait_capture(4, (dispatch.mock.calls[2]?.[2]));
+      releases[1]!();
+      await vi.waitFor(() => __jait_capture(5, (dispatch.mock.calls)));
+      __jait_capture(6, (dispatch.mock.calls[3]?.[2]));
+    } finally {
+      service.close();
+      for (const release of releases) release();
+      await Promise.resolve();
+      vi.unstubAllEnvs();
+    }
+  
+})();
+
+} finally {
+await __jait_hook_1987();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_105_3": {
+
+const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const owner = "owner";
+const profile = (id: string, reportsToId: string | null = null) => personaAgentProfileSchema.parse({
+  id, name: id, reportsToId, persona: "Handle " + id + " work.", avatar: "Nova", providerId: "codex",
+  repositoryIds: [], skillIds: [], allowedTools: [], requiresApproval: true, paused: false,
+  schedule: { kind: "adaptive", rules: "" }, notificationChannels: [], notificationEvents: [],
+});
+const human: TeamSender = { kind: "user", id: owner, name: "Jakob", avatar: null };
+const sender = (id: string): TeamSender => ({ kind: "agent", id, name: id, avatar: "Nova" });
+/*__jait_scope_open__*/{
+let opened: Awaited<ReturnType<typeof openDatabase>>;
+let profiles: ThreadService;
+let sessions: SessionService;
+let service: TeamChatService;
+let room: TeamRoom;
+let databaseClosed = false;
+const post = (content: string, key: string, recipientIds?: string[]) => service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+const __jait_hook_1399 = async () => {
+    databaseClosed = false;
+    opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
+    profiles = new ThreadService(opened.db); sessions = new SessionService(opened.db);
+    profiles.savePersonaAgent(owner, profile("Scrum"));
+    profiles.savePersonaAgent(owner, profile("Developer", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("QA", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("Research"));
+    service = new TeamChatService(opened.db, sessions, profiles);
+    room = service.ensureRoom(owner, "Developer");
+  };
+const __jait_hook_1987 = () => { vi.restoreAllMocks(); service.close(); if (!databaseClosed) opened.sqlite.close(); };
+await __jait_hook_1399();
+try {
+await (async()=>{
+
     const dispatch = vi.fn(async () => { throw new Error("Execution blocked: Required executable unavailable persisted after two retries."); });
     service.setDispatcher(dispatch);
     post("Implement fix", "blocked-env", ["Developer"]);
@@ -184,7 +252,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_93_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_119_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -245,7 +313,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_112_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_138_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -305,7 +373,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_130_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_156_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -363,7 +431,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_146_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_172_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -418,7 +486,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_159_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_185_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -476,7 +544,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_175_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_201_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -530,7 +598,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_187_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_213_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -581,7 +649,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_196_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_222_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -642,7 +710,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_215_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_241_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -708,7 +776,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_239_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_265_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -770,7 +838,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_259_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_285_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -834,7 +902,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_281_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_307_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -896,7 +964,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each0": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each0": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -960,7 +1028,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each1": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each1": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1024,7 +1092,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_320_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_346_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1077,7 +1145,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_331_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_357_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1131,7 +1199,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_343_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_369_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1185,7 +1253,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_355_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_381_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1245,7 +1313,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_373_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_399_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1297,7 +1365,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_383_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_409_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1346,7 +1414,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_390_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_416_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1396,7 +1464,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_398_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_424_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1456,7 +1524,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_416_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_442_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1523,7 +1591,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_441_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_467_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1577,7 +1645,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_453_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_479_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1629,7 +1697,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_463_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_489_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1688,7 +1756,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_480_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_506_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1745,7 +1813,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_495_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_521_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1803,7 +1871,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_511_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_537_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1855,7 +1923,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_521_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_547_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1909,7 +1977,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_533_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_559_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -1963,7 +2031,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_545_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_571_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -2025,7 +2093,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_565_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -2078,7 +2146,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_576_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_602_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -2135,7 +2203,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each0": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each0": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -2200,7 +2268,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each1": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each1": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";
@@ -2265,7 +2333,7 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_614_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_640_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";

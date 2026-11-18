@@ -598,6 +598,130 @@ await __jait_hook_2163();
 try {
 await (async()=>{
 
+    const lock = join(tempRoot, "jait-vite-build.lock");
+    writeFileSync(lock, "");
+    const old = new Date(NOW.getTime() - 10 * DAY_MS);
+    utimesSync(lock, old, old);
+    const report = await janitor().run({ now: NOW });
+    __jait_capture(0, (existsSync(lock)));
+    __jait_capture(1, (report.tempScratch.some((entry) => entry.path === lock)));
+    __jait_capture(2, (report.blockedForeignOwned));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_198_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+await __jait_hook_2163();
+try {
+await (async()=>{
+
     const nested = join(root, "nested", "child");
     mkdirSync(nested, { recursive: true });
     const file = join(nested, "payload");
@@ -615,7 +739,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_197_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_208_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -747,7 +871,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_215_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_226_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -877,7 +1001,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_232_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_243_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1005,7 +1129,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_247_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_258_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1133,7 +1257,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_262_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_273_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1257,7 +1381,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_273_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_284_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1386,7 +1510,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_289_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_300_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1517,7 +1641,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_307_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_318_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1646,7 +1770,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_323_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_334_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1775,7 +1899,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_339_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_350_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1900,7 +2024,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_351_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_362_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2023,7 +2147,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_361_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_372_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2143,7 +2267,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_370_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_381_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2262,7 +2386,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_375_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_386_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2389,7 +2513,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_389_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_400_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2513,7 +2637,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_400_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_411_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -2642,7 +2766,7 @@ await __jait_hook_2897();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_416_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_427_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");

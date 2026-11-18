@@ -162,6 +162,7 @@ export type {
   AgentTaskReport,
   OrchestrationRunState,
   OrchestrationRunView,
+  OrchestrationAttemptView,
   OrchestrationTaskSpec,
   OrchestrationTaskState,
   OrchestrationTaskView,

@@ -12,6 +12,10 @@
 #   tests/contract/coverage.json                 behavior inventory (source hashes)
 #   tests/contract/source-reviews.json           source parity claims
 #
+# The audit reads the fresh reports the contract sequence writes (--evidence-dir,
+# the same invocation as contract.yml). Run the sequence in tests/contract/README.md
+# ("Run") before committing a claim change.
+#
 # Bypass for deliberate, reviewed exceptions:
 #   SKIP_COVERAGE_GATE=1 git commit -m "..."
 # CI runs the same gate on every push (.github/workflows/contract.yml), so a
@@ -32,9 +36,9 @@ hit=$(printf '%s\n' "$staged" | grep -E '^(packages/gateway-rust/native-coverage
 
 echo "pre-commit: coverage claim changed -" >&2
 printf '%s\n' "$hit" | sed 's/^/  /' >&2
-echo "pre-commit: running coverage gate (node tests/contract/run.mjs coverage)..." >&2
+echo "pre-commit: running coverage gate (node tests/contract/run.mjs coverage --evidence-dir .jait/artifacts/contracts)..." >&2
 
-if node tests/contract/run.mjs coverage; then
+if node tests/contract/run.mjs coverage --evidence-dir .jait/artifacts/contracts; then
 	echo "pre-commit: coverage gate passed - claim is backed by a green gate." >&2
 	exit 0
 fi

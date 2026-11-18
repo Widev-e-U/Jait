@@ -40,10 +40,10 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each0": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each0": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -60,7 +60,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -104,10 +108,10 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each1": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each1": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -124,7 +128,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -168,10 +176,10 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each2": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each2": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -188,7 +196,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -232,10 +244,10 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each3": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -252,7 +264,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -296,10 +312,10 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_53_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_57_3": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -316,7 +332,76 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
+        send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
+        send(pending, { stopReason: "end_turn" });
+      } else if (request.method === "session/cancel") {
+        if (pending !== undefined) send(pending, { stopReason: "cancelled" });
+      } else { send(request.id, {}); }
+    });
+  `;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const provider = new AcpProvider({ id: "codex", name: "Codex", description: "Test", command: process.execPath, args: ["-e", agentScript(true, "injected", true)] });
+    try {
+      const session = await provider.startSession({ threadId: "steering-image", workingDirectory: process.cwd() });
+      let ready!: () => void;
+      const started = new Promise<void>(resolve => { ready = resolve; });
+      const unsubscribe = provider.onEvent(event => { if (event.type === "token") ready(); });
+      const turn = provider.sendTurn(session.id, "original message");
+      try {
+        await started;
+        const accepted = await provider.steerTurn(session.id, "steer message", undefined, [
+          { name: "shot.png", mimeType: "image/png", data: "AAAA" },
+          "/tmp/ignored-path.png",
+        ]);
+        __jait_capture(0, (accepted));
+        await turn;
+      } finally { unsubscribe(); }
+    } finally { await provider.dispose(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_77_3": {
+
+
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
+  return `
+    const readline = require("node:readline");
+    const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
+    let pending;
+    readline.createInterface({ input: process.stdin }).on("line", line => {
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        send(request.id, { protocolVersion: 1, agentCapabilities: {}, authMethods: [], _meta: { steering: { supported: ${supported} } } });
+      } else if (request.method === "session/new") {
+        send(request.id, { sessionId: "fake-session" });
+      } else if (request.method === "session/prompt") {
+        pending = request.id;
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "fake-session", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ready" } } } }) + "\\n");
+      } else if (request.method === "_session/steering") {
+        const valid = request.params.sessionId === "fake-session"
+          && request.params.prompt[0].text === "steer message"
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {
@@ -345,10 +430,10 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_63_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_87_3": {
 
 
-function agentScript(supported: boolean, outcome: string): string {
+function agentScript(supported: boolean, outcome: string, expectImage = false): string {
   return `
     const readline = require("node:readline");
     const send = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -365,7 +450,11 @@ function agentScript(supported: boolean, outcome: string): string {
       } else if (request.method === "_session/steering") {
         const valid = request.params.sessionId === "fake-session"
           && request.params.prompt[0].text === "steer message"
-          && request.params._meta.steering.idleBehavior === "promptRequired";
+          && request.params._meta.steering.idleBehavior === "promptRequired"
+          && (${expectImage} ? request.params.prompt.length === 2
+            && request.params.prompt[1].type === "image"
+            && request.params.prompt[1].mimeType === "image/png"
+            && request.params.prompt[1].data === "AAAA" : request.params.prompt.length === 1);
         send(request.id, { outcome: valid ? ${JSON.stringify(outcome)} : "invalid-payload" });
         send(pending, { stopReason: "end_turn" });
       } else if (request.method === "session/cancel") {

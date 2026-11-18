@@ -10,8 +10,11 @@ export default defineConfig({
   ...base,
   globalSetup: undefined,
   testMatch: [
+    'network-jait-nodes.spec.ts',
+    'network-resources.spec.ts',
     'provider-selector-model-list.spec.ts',
     'notification-deck.spec.ts',
+    'notification-center.spec.ts',
     'message-links.spec.ts',
     'tool-results.spec.ts',
     'chat-loop.spec.ts',

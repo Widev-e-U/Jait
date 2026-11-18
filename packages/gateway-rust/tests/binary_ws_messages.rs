@@ -1,6 +1,6 @@
-//! WebSocket subscription messages through the production binary, and the fail-closed
-//! contract of the WebSocket terminal and consent controls that the composed runtime
-//! does not mount yet.
+//! WebSocket subscription messages through the production binary, the owner-scoped
+//! terminal controls the composed runtime mounts under supervision, and the fail-closed
+//! WebSocket consent controls it does not mount yet.
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader},
@@ -197,12 +197,6 @@ async fn consent_still_pending(
     pending.to_string().contains(id)
 }
 
-fn mentions(frames: &[Value], needle: &str) -> bool {
-    frames
-        .iter()
-        .any(|frame| frame.to_string().contains(needle))
-}
-
 /// Minimal WebSocket client over the gateway's own frame codec.
 struct WsClient(tokio::net::TcpStream);
 
@@ -359,15 +353,27 @@ async fn subscribe_and_resource_messages_are_scoped_through_the_binary() {
     assert_eq!(next["sessionId"], session_id.as_str(), "{next}");
 }
 
-/// The composed runtime does not mount WebSocket terminal controls (application.rs clears
-/// `config.terminals`), so terminal.input and terminal.resize have no effect and nothing is
-/// streamed to the subscriber. This pins that fail-closed contract. Re-point it once the
-/// controls are supervised and mounted, because the web terminal depends on them.
+/// Terminal output text that `surface.connected` frames carry for one terminal.
+fn terminal_output(frames: &[Value], terminal_id: &str) -> String {
+    frames
+        .iter()
+        .filter(|frame| {
+            frame["payload"]["type"] == "terminal.output"
+                && frame["payload"]["terminalId"] == terminal_id
+        })
+        .filter_map(|frame| frame["payload"]["data"].as_str())
+        .collect()
+}
+
+/// The composed runtime mounts WebSocket terminal controls under supervision. The owner's
+/// subscribed socket gets the output of its input and resize, while a second account can
+/// neither drive the terminal nor read what it prints.
 #[tokio::test]
-async fn terminal_controls_are_fail_closed_in_the_composed_runtime() {
+async fn terminal_controls_are_owner_scoped_through_the_binary() {
     let gateway = Gateway::start();
     let client = http_client();
     let owner = register(&client, &gateway.base, "owner", None).await;
+    let other = register_invited(&client, &gateway.base, &owner).await;
     let terminal = post_json(
         &client,
         &gateway.base,
@@ -378,26 +384,82 @@ async fn terminal_controls_are_fail_closed_in_the_composed_runtime() {
     .await;
     let terminal_id = terminal["id"].as_str().unwrap().to_owned();
 
-    let mut ws = WsClient::connect(&gateway.base, &owner).await;
-    ws.send(json!({"type": "terminal.subscribe", "terminalId": terminal_id}))
+    let mut owner_ws = WsClient::connect(&gateway.base, &owner).await;
+    owner_ws
+        .send(json!({"type": "terminal.subscribe", "terminalId": terminal_id}))
         .await;
-    ws.until("surface.connected", WAIT)
+    owner_ws
+        .until("surface.connected", WAIT)
         .await
         .expect("terminal subscribe is processed");
-    ws.send(json!({"type": "terminal.resize", "terminalId": terminal_id, "cols": 100, "rows": 30}))
+    owner_ws
+        .send(
+            json!({"type": "terminal.resize", "terminalId": terminal_id, "cols": 100, "rows": 30}),
+        )
         .await;
-    ws.send(
-        json!({"type": "terminal.input", "terminalId": terminal_id, "data": "echo ws-$((40+2))\n"}),
-    )
-    .await;
-    let frames = ws
-        .collect_until(QUIET * 3, |seen| mentions(seen, "ws-42"))
+    owner_ws
+        .send(json!({
+            "type": "terminal.input",
+            "terminalId": terminal_id,
+            "data": "echo ws-$((40+2)) dim-$(stty size | tr ' ' x)\n",
+        }))
+        .await;
+    let frames = owner_ws
+        .collect_until(WAIT, |seen| {
+            terminal_output(seen, &terminal_id).contains("ws-42 dim-30x100")
+        })
         .await;
     assert!(
-        !mentions(&frames, "ws-42"),
-        "unmounted terminal input executed: {frames:?}"
+        terminal_output(&frames, &terminal_id).contains("ws-42 dim-30x100"),
+        "owner input or resize did not reach the terminal: {frames:?}"
     );
-    ws.send(json!({"type": "terminal.unsubscribe", "terminalId": terminal_id}))
+
+    // The second account cannot drive the terminal, and nothing it types reaches the owner.
+    let mut other_ws = WsClient::connect(&gateway.base, &other).await;
+    other_ws
+        .send(json!({"type": "terminal.subscribe", "terminalId": terminal_id}))
+        .await;
+    other_ws
+        .until("surface.connected", WAIT)
+        .await
+        .expect("terminal subscribe is processed");
+    other_ws
+        .send(json!({
+            "type": "terminal.input",
+            "terminalId": terminal_id,
+            "data": "echo intruder-$((6*7))\n",
+        }))
+        .await;
+    tokio::time::sleep(QUIET).await;
+    owner_ws
+        .send(json!({"type": "terminal.input", "terminalId": terminal_id, "data": "echo owner-$((50+1))\n"}))
+        .await;
+    let owner_frames = owner_ws
+        .collect_until(WAIT, |seen| {
+            terminal_output(seen, &terminal_id).contains("owner-51")
+        })
+        .await;
+    let owner_text = terminal_output(&owner_frames, &terminal_id);
+    assert!(
+        owner_text.contains("owner-51"),
+        "owner input stalled: {owner_frames:?}"
+    );
+    // An executed intruder command would echo its text to the owner's shell first.
+    assert!(
+        !owner_text.contains("intruder"),
+        "another account drove the terminal: {owner_text}"
+    );
+    let other_frames = other_ws.collect_until(QUIET * 3, |_| false).await;
+    assert!(
+        terminal_output(&other_frames, &terminal_id).is_empty(),
+        "output reached an account that does not own the terminal: {other_frames:?}"
+    );
+
+    owner_ws
+        .send(json!({"type": "terminal.unsubscribe", "terminalId": terminal_id}))
+        .await;
+    other_ws
+        .send(json!({"type": "terminal.unsubscribe", "terminalId": terminal_id}))
         .await;
 }
 

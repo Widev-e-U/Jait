@@ -512,6 +512,72 @@ await __jait_hook_3117();
 
 break;
 }
+case "tailstatic_packages_gateway_src_services_team_chat_stopped_thread_test_ts_253_3": {
+
+const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+/*__jait_scope_open__*/{
+let opened: Awaited<ReturnType<typeof openDatabase>>;
+let profiles: ThreadService;
+let sessions: SessionService;
+let service: TeamChatService;
+let room: TeamRoom;
+let databaseClosed = false;
+const owner = "owner";
+const profile = (id: string, reportsToId: string | null = null) => personaAgentProfileSchema.parse({
+    id, name: id, reportsToId, persona: "Handle " + id + " work.", avatar: "Nova", providerId: "codex",
+    repositoryIds: [], skillIds: [], allowedTools: [], requiresApproval: true, paused: false,
+    schedule: { kind: "adaptive", rules: "" }, notificationChannels: [], notificationEvents: [],
+  });
+const human: TeamSender = { kind: "user", id: owner, name: "Jakob", avatar: null };
+const post = (content: string, key: string, recipientIds: string[]) =>
+    service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+const deliveryFor = (source: TeamChatService, content: string) => {
+    const messages = new Map(source.history(owner, room.id).map(message => [message.id, message]));
+    const found = source.deliveries(owner, room.id).find(delivery => messages.get(delivery.messageId)?.content === content);
+    if (!found) throw new Error("No delivery for: " + content);
+    return found;
+  };
+const __jait_hook_2520 = async () => {
+    databaseClosed = false;
+    opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
+    profiles = new ThreadService(opened.db); sessions = new SessionService(opened.db);
+    profiles.savePersonaAgent(owner, profile("Scrum"));
+    profiles.savePersonaAgent(owner, profile("Developer", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("QA", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("Research", "Scrum"));
+    service = new TeamChatService(opened.db, sessions, profiles);
+    room = service.ensureRoom(owner, "Developer");
+  };
+const __jait_hook_3117 = () => { service.close(); if (!databaseClosed) opened.sqlite.close(); };
+await __jait_hook_2520();
+try {
+await (async()=>{
+
+    let abortTurn: (error: Error) => void = () => {};
+    const dispatch = vi.fn(() => new Promise<never>((_resolve, reject) => { abortTurn = reject; }));
+    service.setDispatcher(dispatch);
+    post("Stopped mid-turn", "stop-mid-turn", ["Developer"]);
+    const active = deliveryFor(service, "Stopped mid-turn");
+    profiles.markRunning(active.sessionId, "stop-provider");
+    await vi.waitFor(() => __jait_capture(0, (dispatch.mock.calls)));
+    // The product stop lands while the provider turn is still in flight...
+    profiles.markInterrupted(active.sessionId);
+    // ...and the provider then reports the aborted turn as a failure.
+    abortTurn(new Error("Provider turn aborted."));
+    await vi.waitFor(() => __jait_capture(1, (deliveryFor(service, "Stopped mid-turn").status)));
+    // A user stop is not a failure: no blocker is posted and no manager recovery is queued.
+    __jait_capture(2, (service.history(owner, room.id).some(message => message.kind === "blocked")));
+    __jait_capture(3, (service.deliveries(owner, room.id)));
+  
+})();
+
+} finally {
+await __jait_hook_3117();
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

@@ -22,6 +22,7 @@ export interface ModeSidebarItem {
   active?: boolean
   disabled?: boolean
   badge?: number
+  badgeLabel?: string
   onSelect: () => void
 }
 
@@ -156,12 +157,13 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         onClick={item.onSelect}
         disabled={item.disabled}
         aria-label={item.label}
+        aria-describedby={item.badge ? `sidebar-badge-${item.id}` : undefined}
         aria-pressed={item.active}
       >
         <span className="relative shrink-0">
           <Icon className="h-4 w-4" />
           {!!item.badge && (
-            <span className="absolute -right-2 -top-1.5 z-10 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none tabular-nums text-primary-foreground">
+            <span id={`sidebar-badge-${item.id}`} aria-label={item.badgeLabel ?? String(item.badge)} className="absolute -right-2 -top-1.5 z-10 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none tabular-nums text-primary-foreground">
               {item.badge > 99 ? '99+' : item.badge}
             </span>
           )}

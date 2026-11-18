@@ -249,4 +249,22 @@ describe("team chat cancel semantics for a stopped thread", () => {
       await Promise.resolve();
     }
   });
+
+  it("finishes an in-flight turn that a stop aborts without a blocker or manager recovery", async () => {
+    let abortTurn: (error: Error) => void = () => {};
+    const dispatch = vi.fn(() => new Promise<never>((_resolve, reject) => { abortTurn = reject; }));
+    service.setDispatcher(dispatch);
+    post("Stopped mid-turn", "stop-mid-turn", ["Developer"]);
+    const active = deliveryFor(service, "Stopped mid-turn");
+    profiles.markRunning(active.sessionId, "stop-provider");
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+    // The product stop lands while the provider turn is still in flight...
+    profiles.markInterrupted(active.sessionId);
+    // ...and the provider then reports the aborted turn as a failure.
+    abortTurn(new Error("Provider turn aborted."));
+    await vi.waitFor(() => expect(deliveryFor(service, "Stopped mid-turn").status).toBe("interrupted"));
+    // A user stop is not a failure: no blocker is posted and no manager recovery is queued.
+    expect(service.history(owner, room.id).some(message => message.kind === "blocked")).toBe(false);
+    expect(service.deliveries(owner, room.id)).toHaveLength(1);
+  });
 });

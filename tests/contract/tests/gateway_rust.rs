@@ -53,6 +53,7 @@ impl LiveGateway {
             let _lease = port_lease().await;
             let config = GatewayConfig {
                 address: SocketAddr::from(([127, 0, 0, 1], 0)),
+                allow_non_loopback: false,
             };
             Gateway::bind(config, health).await.unwrap()
         };
@@ -107,12 +108,10 @@ fn bootstrap_config_is_isolated_strict_and_loopback_only() {
     let defaults = GatewayConfig::from_lookup(|_| None).unwrap();
     assert_eq!(defaults.address, "127.0.0.1:8220".parse().unwrap());
     let parse = |host: &str, port: &str| {
-        GatewayConfig::from_lookup(|key| {
-            Some(if key == "JAIT_RUST_HOST" {
-                host.into()
-            } else {
-                port.into()
-            })
+        GatewayConfig::from_lookup(|key| match key {
+            "JAIT_RUST_HOST" => Some(host.into()),
+            "JAIT_RUST_PORT" => Some(port.into()),
+            _ => None,
         })
     };
     assert_eq!(
@@ -156,6 +155,7 @@ fn bootstrap_config_is_isolated_strict_and_loopback_only() {
 async fn raw_config_cannot_bypass_loopback_and_bind_errors_are_reported() {
     let config = GatewayConfig {
         address: "0.0.0.0:0".parse().unwrap(),
+        allow_non_loopback: false,
     };
     assert!(Gateway::bind(config, HealthState::default()).await.is_err());
     let occupied = {
@@ -164,6 +164,7 @@ async fn raw_config_cannot_bypass_loopback_and_bind_errors_are_reported() {
     };
     let config = GatewayConfig {
         address: occupied.local_addr().unwrap(),
+        allow_non_loopback: false,
     };
     assert!(Gateway::bind(config, HealthState::default()).await.is_err());
 }

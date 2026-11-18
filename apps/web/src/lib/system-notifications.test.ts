@@ -14,11 +14,13 @@ const {
   toastSuccess,
   toastWarning,
   toastError,
+  toastDismiss,
 } = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastSuccess: vi.fn(),
   toastWarning: vi.fn(),
   toastError: vi.fn(),
+  toastDismiss: vi.fn(),
 }))
 
 vi.mock('sonner', () => ({
@@ -27,7 +29,7 @@ vi.mock('sonner', () => ({
     success: toastSuccess,
     warning: toastWarning,
     error: toastError,
-    dismiss: vi.fn(),
+    dismiss: toastDismiss,
   },
 }))
 
@@ -77,6 +79,12 @@ describe('normalizeSystemNotification', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('uses a sender image for browser notifications', async () => {
+    NotificationMock.permission = 'granted'
+    await triggerSystemNotification({ id: 'matrix:avatar', title: 'Alice', body: 'Hello', iconUrl: 'data:image/png;base64,iVBORw==' })
+    expect(NotificationMock.instances.at(-1)?.options.icon).toBe('data:image/png;base64,iVBORw==')
   })
 
   it('uses the installed Android bridge when LocalNotifications is absent', async () => {

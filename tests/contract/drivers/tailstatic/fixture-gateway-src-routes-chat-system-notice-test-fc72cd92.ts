@@ -6,6 +6,7 @@ import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
 import { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
+import { backgroundCommandMonitor } from "../../../../packages/gateway/src/services/background-command-monitor.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
 import {
   createServer as createHttpServer,
@@ -14,6 +15,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -54,7 +56,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_68_3": {
+case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_72_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -62,6 +64,7 @@ async function collectBody(req: IncomingMessage): Promise<string> {
   for await (const chunk of req) body += chunk;
   return body;
 }
+let holdResponse: (() => Promise<void>) | undefined;
 const receivedBodies: Array<Record<string, unknown>> = [];
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
@@ -72,6 +75,7 @@ function startMockOllama(): Promise<Server> {
         return;
       }
       receivedBodies.push(JSON.parse(await collectBody(req)) as Record<string, unknown>);
+      if (holdResponse) await holdResponse();
       res.writeHead(200, { "Content-Type": "application/x-ndjson" });
       res.write(JSON.stringify({ message: { role: "assistant", content: "acknowledged" }, done: false }) + "\n");
       res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
@@ -84,23 +88,116 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_1896 = async () => {
+const __jait_hook_2085 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2080 = async () => {
+const __jait_hook_2269 = async () => {
     await app?.close();
     app = null;
   };
-const __jait_hook_2153 = () => {
+const __jait_hook_2342 = () => {
     receivedBodies.length = 0;
+    holdResponse = undefined;
   };
-const __jait_hook_2212 = async () => {
+const __jait_hook_2431 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_1896();
-await __jait_hook_2153();
+await __jait_hook_2085();
+await __jait_hook_2342();
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queued-notice-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queued notice" });
+    new SessionStateService(db).set(session.id, { "chat.provider": "jait", "chat.cliModels": { jait: "llama3" } });
+    app = await createServer(config, { db, sqlite, sessionService, userService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    let release!: () => void;
+    holdResponse = () => new Promise<void>(resolve => { release = resolve; });
+    const first = app.inject({ method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "do the work", provider: "jait", model: "llama3" } });
+    await vi.waitFor(() => __jait_captureType(0, (release)));
+    let listener: ((data: string) => void) | undefined;
+    const surface = { addOutputListener: (fn: (data: string) => void) => { listener = fn; },
+      removeOutputListener: () => {} };
+    backgroundCommandMonitor.track({ sessionId: session.id, terminalId: "tty-test", command: "test-command", surface });
+    listener!("result-marker\r\n\x1b]633;D;0\x07");
+    await new Promise(resolve => setTimeout(resolve, 30));
+    holdResponse = undefined;
+    release();
+    await first;
+    await vi.waitFor(() => __jait_capture(1, (receivedBodies.length)));
+    const messages = receivedBodies[1]!["messages"] as Array<{ content: string }>;
+    __jait_capture(2, (messages.some(message => message.content.includes("result-marker"))));
+  
+})();
+
+} finally {
+await __jait_hook_2431();
+await __jait_hook_2269();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_103_3": {
+
+
+async function collectBody(req: IncomingMessage): Promise<string> {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+let holdResponse: (() => Promise<void>) | undefined;
+const receivedBodies: Array<Record<string, unknown>> = [];
+function startMockOllama(): Promise<Server> {
+  return new Promise((resolve) => {
+    const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
+      if (req.method !== "POST" || !req.url?.endsWith("/api/chat")) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      receivedBodies.push(JSON.parse(await collectBody(req)) as Record<string, unknown>);
+      if (holdResponse) await holdResponse();
+      res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+      res.write(JSON.stringify({ message: { role: "assistant", content: "acknowledged" }, done: false }) + "\n");
+      res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+      res.end();
+    });
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
+/*__jait_scope_open__*/{
+let mockOllama: Server;
+let ollamaUrl: string;
+let app: Awaited<ReturnType<typeof createServer>> | null = null;
+const __jait_hook_2085 = async () => {
+    mockOllama = await startMockOllama();
+    const address = mockOllama.address() as AddressInfo;
+    ollamaUrl = `http://127.0.0.1:${address.port}`;
+  };
+const __jait_hook_2269 = async () => {
+    await app?.close();
+    app = null;
+  };
+const __jait_hook_2342 = () => {
+    receivedBodies.length = 0;
+    holdResponse = undefined;
+  };
+const __jait_hook_2431 = async () => {
+    await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
+  };
+await __jait_hook_2085();
+await __jait_hook_2342();
 try {
 await (async()=>{
 
@@ -190,14 +287,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2212();
-await __jait_hook_2080();
+await __jait_hook_2431();
+await __jait_hook_2269();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_191_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -205,6 +302,7 @@ async function collectBody(req: IncomingMessage): Promise<string> {
   for await (const chunk of req) body += chunk;
   return body;
 }
+let holdResponse: (() => Promise<void>) | undefined;
 const receivedBodies: Array<Record<string, unknown>> = [];
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
@@ -215,6 +313,7 @@ function startMockOllama(): Promise<Server> {
         return;
       }
       receivedBodies.push(JSON.parse(await collectBody(req)) as Record<string, unknown>);
+      if (holdResponse) await holdResponse();
       res.writeHead(200, { "Content-Type": "application/x-ndjson" });
       res.write(JSON.stringify({ message: { role: "assistant", content: "acknowledged" }, done: false }) + "\n");
       res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
@@ -227,23 +326,24 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_1896 = async () => {
+const __jait_hook_2085 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2080 = async () => {
+const __jait_hook_2269 = async () => {
     await app?.close();
     app = null;
   };
-const __jait_hook_2153 = () => {
+const __jait_hook_2342 = () => {
     receivedBodies.length = 0;
+    holdResponse = undefined;
   };
-const __jait_hook_2212 = async () => {
+const __jait_hook_2431 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_1896();
-await __jait_hook_2153();
+await __jait_hook_2085();
+await __jait_hook_2342();
 try {
 await (async()=>{
 
@@ -298,8 +398,8 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2212();
-await __jait_hook_2080();
+await __jait_hook_2431();
+await __jait_hook_2269();
 }
 }
 

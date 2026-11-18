@@ -210,7 +210,7 @@
       { "op": "provider.thread", "userId": "user-1", "chatProvider": "claude-code" }
     ],
     "assertions": [
-      { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code" } }
+      { "path": "/0/result", "kind": "eq", "value": {} }
     ]
   },
   {
@@ -219,14 +219,14 @@
       { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex" }
     ],
     "assertions": [
-      { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } },
+      { "path": "/0/result", "kind": "eq", "value": {} },
       { "path": "/0/reads", "kind": "eq", "value": [] }
     ]
   },
   {
     "id": "internal.provider.thread.runtime-mode-supported",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.providerRuntimeMode": "supervised" } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.provider": "codex", "chat.providerRuntimeMode": "supervised" } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex", "runtimeMode": "supervised" } },
@@ -236,7 +236,7 @@
   {
     "id": "internal.provider.thread.runtime-mode-unrecognized",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.providerRuntimeMode": "yolo" } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.provider": "codex", "chat.providerRuntimeMode": "yolo" } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
@@ -245,7 +245,7 @@
   {
     "id": "internal.provider.thread.climodels-match",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.providerRuntimeMode": "full-access", "chat.cliModels": { "claude-code": "  claude-sonnet-4-6  ", "codex": "gpt-5-codex" } } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.provider": "claude-code", "chat.providerRuntimeMode": "full-access", "chat.cliModels": { "claude-code": "  claude-sonnet-4-6  ", "codex": "gpt-5-codex" } } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code", "model": "claude-sonnet-4-6", "runtimeMode": "full-access" } }
@@ -254,7 +254,7 @@
   {
     "id": "internal.provider.thread.climodels-empty",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.cliModels": { "codex": "   " } } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.provider": "codex", "chat.cliModels": { "codex": "   " } } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
@@ -263,7 +263,7 @@
   {
     "id": "internal.provider.thread.climodels-non-object",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.cliModels": ["codex", "gpt-5-codex"] } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "codex", "state": { "chat.provider": "codex", "chat.cliModels": ["codex", "gpt-5-codex"] } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "codex" } }
@@ -300,7 +300,7 @@
   {
     "id": "internal.provider.thread.reasoning-effort-malformed",
     "calls": [
-      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.reasoningEffort": "high; rm -rf /" } }
+      { "op": "provider.thread", "userId": "user-1", "sessionId": "session-1", "chatProvider": "claude-code", "state": { "chat.provider": "claude-code", "chat.reasoningEffort": "high; rm -rf /" } }
     ],
     "assertions": [
       { "path": "/0/result", "kind": "eq", "value": { "providerId": "claude-code" } }

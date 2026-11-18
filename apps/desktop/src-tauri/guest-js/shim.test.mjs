@@ -114,6 +114,14 @@ test('shim installs the full jaitDesktop contract', () => {
   }
 });
 
+test('notification forwards the avatar and read action to the shell', async () => {
+  const { window, log } = loadShim();
+  await window.jaitDesktop.notify({ title: 'Alice', iconUrl: 'data:image/png;base64,abc', markReadLink: '/messenger?x=1' });
+  const call = log.find((entry) => entry.args?.channel === 'desktop:notify');
+  assert.equal(call.args.args[0].iconUrl, 'data:image/png;base64,abc');
+  assert.equal(call.args.args[0].markReadLink, '/messenger?x=1');
+});
+
 test('shim is idempotent (double evaluation keeps one instance)', () => {
   const { window } = loadShim();
   const first = window.jaitDesktop;

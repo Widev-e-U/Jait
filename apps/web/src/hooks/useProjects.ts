@@ -158,6 +158,19 @@ export function getMissingSelectedProjectId(
     : null
 }
 
+/**
+ * True while a project's new-chat view is showing because the user picked it:
+ * the project is active and no chat is. The server still reports the previous
+ * chat as active, so a project-list response must not re-select that chat.
+ */
+export function isLocalProjectDraft(
+  draftProjectId: string | null,
+  activeProjectId: string | null,
+  activeSessionId: string | null,
+): boolean {
+  return draftProjectId !== null && draftProjectId === activeProjectId && activeSessionId === null
+}
+
 export function useProjects(token?: string | null, onLoginRequired?: () => void) {
   const cacheScope = getChatCacheScope(token, API_URL)
   const [projects, setProjects] = useState<ProjectRecord[]>([])
@@ -180,6 +193,12 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   activeProjectIdRef.current = activeProjectId
   const activeSessionIdRef = useRef<string | null>(null)
   activeSessionIdRef.current = activeSessionId
+  // Bumped whenever the user/app explicitly picks a selection. A project-list
+  // fetch that started before a pick must not re-derive the active chat from
+  // its (older) response when it resolves, or it can undo a just-created chat.
+  const selectionVersionRef = useRef(0)
+  // The project whose new-chat view the user picked. See isLocalProjectDraft.
+  const projectDraftRef = useRef<string | null>(null)
   const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null | undefined>(undefined)
   if (initialRouteSelectionRef.current === undefined) {
     initialRouteSelectionRef.current = null
@@ -267,6 +286,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
 
     const hasCachedProjectIndex = hydrateCachedProjectIndex()
     if (!hasCachedProjectIndex) setLoading(true)
+    const selectionVersionAtStart = selectionVersionRef.current
     try {
       const [projectsRes, sessionsRes, lastActiveRes] = await Promise.all([
         fetch(`${API_URL}/api/projects?status=active&limit=${visibleLimit}`, { headers: authHeaders(token) }),
@@ -335,22 +355,29 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
           : nextProjects.find((project) => project.sessions.some((session) => session.id === routeSelection?.sessionId))
         const routedProjectSession = routedProject?.sessions.find((session) => session.id === routeSelection?.sessionId) ?? null
 
-        setActiveProjectId((prevProjectId) => {
-          if (routedPersonalSession) return null
-          if (routedProjectSession) return routedProject?.id ?? null
-          if (prevProjectId && nextProjects.some((project) => project.id === prevProjectId)) return prevProjectId
-          if (data.session && !data.session.projectId) return null
-          return data.project?.id ?? nextProjects[0]?.id ?? null
-        })
-        setActiveSessionId((prevSessionId) => {
-          if (routedPersonalSession) return routedPersonalSession.id
-          if (routedProjectSession) return routedProjectSession.id
-          if (prevSessionId && nextProjects.some((project) => project.sessions.some((session) => session.id === prevSessionId))) {
-            return prevSessionId
-          }
-          if (prevSessionId && nextPersonalSessions.some((session) => session.id === prevSessionId)) return prevSessionId
-          return data.session?.id ?? nextPersonalSessions[0]?.id ?? getLatestProjectSessionId(nextProjects[0])
-        })
+        // A pick made while this fetch was in flight (e.g. a new chat just
+        // created) is newer than this response, so leave the selection alone.
+        // A new-chat view the user picked is not the server's to change either:
+        // the server still reports the previous chat as active.
+        const localDraftShowing = isLocalProjectDraft(projectDraftRef.current, activeProjectIdRef.current, activeSessionIdRef.current)
+        if (selectionVersionRef.current === selectionVersionAtStart && !localDraftShowing) {
+          setActiveProjectId((prevProjectId) => {
+            if (routedPersonalSession) return null
+            if (routedProjectSession) return routedProject?.id ?? null
+            if (prevProjectId && nextProjects.some((project) => project.id === prevProjectId)) return prevProjectId
+            if (data.session && !data.session.projectId) return null
+            return data.project?.id ?? nextProjects[0]?.id ?? null
+          })
+          setActiveSessionId((prevSessionId) => {
+            if (routedPersonalSession) return routedPersonalSession.id
+            if (routedProjectSession) return routedProjectSession.id
+            if (prevSessionId && nextProjects.some((project) => project.sessions.some((session) => session.id === prevSessionId))) {
+              return prevSessionId
+            }
+            if (prevSessionId && nextPersonalSessions.some((session) => session.id === prevSessionId)) return prevSessionId
+            return data.session?.id ?? nextPersonalSessions[0]?.id ?? getLatestProjectSessionId(nextProjects[0])
+          })
+        }
       }
       // Set this only after both lists have been applied. Otherwise the wizard
       // can briefly see an empty account while their JSON is still being read.
@@ -588,6 +615,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       } else {
         setPersonalSessions((prev) => [session, ...prev.filter((entry) => entry.id !== session.id)])
       }
+      selectionVersionRef.current++
+      projectDraftRef.current = null
       setActiveProjectId(targetProjectId ?? null)
       setActiveSessionId(session.id)
       persistSelection(targetProjectId ?? null, session.id)
@@ -652,6 +681,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const switchProject = useCallback((projectId: string) => {
     const project = projects.find((item) => item.id === projectId)
     const sessionId = project ? getLatestProjectSessionId(project) : null
+    selectionVersionRef.current++
+    projectDraftRef.current = sessionId ? null : projectId
     setActiveProjectId(projectId)
     setActiveSessionId(sessionId)
     persistSelection(projectId, sessionId)
@@ -666,6 +697,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
    */
   const startProjectDraft = useCallback((projectId: string) => {
     initialRouteSelectionRef.current = null
+    selectionVersionRef.current++
+    projectDraftRef.current = projectId
     setActiveProjectId(projectId)
     setActiveSessionId(null)
   }, [])
@@ -744,6 +777,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   }, [personalSessions, projects])
 
   const switchSession = useCallback((projectId: string | null, sessionId: string) => {
+    selectionVersionRef.current++
+    projectDraftRef.current = null
     setActiveProjectId(projectId)
     setActiveSessionId(sessionId)
     persistSelection(projectId, sessionId)

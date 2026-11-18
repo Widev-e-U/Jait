@@ -2,10 +2,10 @@
 //!
 //! PROVENANCE OF EXPECTATIONS
 //! * Defaults are taken from the REAL TypeScript implementation, re-read directly:
-//!     sed -n '55,63p' packages/gateway/src/services/maintenance.ts
+//!   sed -n '55,63p' packages/gateway/src/services/maintenance.ts
 //!   -> `DEFAULT_CHECKS = [Typecheck:"bun run typecheck", Tests:"bun run test", Lint:"bun run lint"]`
-//!      and `const DEFAULT_TIMEOUT_MS = 120_000;`  (TS: `config?.checks ?? DEFAULT_CHECKS`,
-//!      `config?.timeoutMs ?? DEFAULT_TIMEOUT_MS` — i.e. every field optional, camelCase wire shape).
+//!   and `const DEFAULT_TIMEOUT_MS = 120_000;`  (TS: `config?.checks ?? DEFAULT_CHECKS`,
+//!   `config?.timeoutMs ?? DEFAULT_TIMEOUT_MS` — i.e. every field optional, camelCase wire shape).
 //! * The HTTP/tool surfaces of this component are already covered by the existing contract tests
 //!   `gateway_rust_maintenance_http.rs` / `gateway_rust_maintenance_tool.rs` (drivers
 //!   `drivers/nativemaintenancehttp.ts`, `drivers/nativemaintenancetool.ts`). This file covers the
@@ -292,7 +292,7 @@ async fn maintenance_plan_reports_missing_repo_non_canonical_path_and_denial() {
     assert_eq!(err, "denied");
     assert_eq!(
         denying.leased.lock().unwrap().as_slice(),
-        [denied_id.clone()]
+        std::slice::from_ref(&denied_id)
     );
 
     // Relative stored path => non canonical.
@@ -387,7 +387,7 @@ async fn maintenance_plan_preserves_check_order_and_returns_repo_record() {
     );
     assert_eq!(
         authority.leased.lock().unwrap().as_slice(),
-        [repo_id.clone()],
+        std::slice::from_ref(&repo_id),
         "exactly one repo lease"
     );
     let _ = std::fs::remove_dir_all(&dir);

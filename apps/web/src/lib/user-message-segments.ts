@@ -140,7 +140,8 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       continue
     }
 
-    if (!segment.data.trim() || segment.mimeType.startsWith('image/')) continue
+    // A zero-byte file has empty base64 data but is still an attachment the user chose, so keep it.
+    if (typeof segment.data !== 'string' || segment.mimeType.startsWith('image/')) continue
     normalized.push({
       type: 'attachment',
       name: segment.name || 'Attachment',

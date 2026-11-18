@@ -9,6 +9,7 @@ describe('messenger notification image route', () => {
   it('requires authentication and resolves only the requested owner and message', async () => {
     const restore = vi.spyOn(MessengerService.prototype, 'restore').mockImplementation(() => {});
     const image = vi.spyOn(MessengerService.prototype, 'notificationImage').mockResolvedValue(Buffer.from('jpeg'));
+    const avatar = vi.spyOn(MessengerService.prototype, 'notificationAvatar').mockResolvedValue(Buffer.from('jpeg'));
     const config = { ...loadConfig(), jwtSecret: 'notification-image-test' };
     const app = Fastify();
     try {
@@ -24,10 +25,17 @@ describe('messenger notification image route', () => {
       expect(response.headers['content-type']).toContain('image/jpeg');
       expect(response.headers['cache-control']).toBe('no-store');
       expect(image).toHaveBeenCalledWith('owner', '!room:test', '$photo');
+      expect((await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', payload })).statusCode).toBe(401);
+      expect((await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', headers, payload: { ...payload, url: 'https://evil.test' } })).statusCode).toBe(400);
+      const avatarResponse = await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', headers, payload });
+      expect(avatarResponse.statusCode).toBe(200);
+      expect(avatarResponse.headers['cache-control']).toBe('no-store');
+      expect(avatar).toHaveBeenCalledWith('owner', '!room:test', '$photo');
     } finally {
       await app.close();
       restore.mockRestore();
       image.mockRestore();
+      avatar.mockRestore();
     }
   });
 });

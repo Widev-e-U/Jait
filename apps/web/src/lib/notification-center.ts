@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
+/** An unread notification. Reading or viewing it removes the entry from the list. */
 export interface NotificationEntry {
   id: string
   title: string
@@ -8,7 +9,6 @@ export interface NotificationEntry {
   link?: string
   markReadLink?: string
   createdAt: number
-  read: boolean
 }
 
 type ReadListener = (entry: NotificationEntry) => void
@@ -23,34 +23,30 @@ function publish(next: NotificationEntry[]): void {
   for (const listener of listeners) listener()
 }
 
-/** Records a notification; a repeated id replaces the older entry and is unread again. */
-export function recordNotification(entry: Omit<NotificationEntry, 'createdAt' | 'read'> & { createdAt?: number }): void {
+/** Records an unread notification; a repeated id replaces the older entry. */
+export function recordNotification(entry: Omit<NotificationEntry, 'createdAt'> & { createdAt?: number }): void {
   publish([
-    { ...entry, createdAt: entry.createdAt ?? Date.now(), read: false },
+    { ...entry, createdAt: entry.createdAt ?? Date.now() },
     ...entries.filter(item => item.id !== entry.id),
   ].slice(0, MAX_ENTRIES))
 }
 
 /**
- * Marks entries read. `notify` runs the read side effects (toast dismissal,
- * Matrix read receipts); it is off when another device already handled it.
+ * Reading or viewing a notification removes it, so the list holds only unread
+ * entries and needs no separate clear step. `notify` runs the read side effects
+ * (toast dismissal, Matrix read receipts); it is off when another device or the
+ * opened view already handled the read.
  */
 export function markNotificationsRead(ids: Iterable<string>, notify = true): void {
   const wanted = new Set(ids)
-  const changed: NotificationEntry[] = []
-  const next = entries.map(item => {
-    if (item.read || !wanted.has(item.id)) return item
-    const read = { ...item, read: true }
-    changed.push(read)
-    return read
-  })
-  if (!changed.length) return
-  publish(next)
-  if (notify) for (const entry of changed) for (const listener of readListeners) listener(entry)
+  const read = entries.filter(item => wanted.has(item.id))
+  if (!read.length) return
+  publish(entries.filter(item => !wanted.has(item.id)))
+  if (notify) for (const entry of read) for (const listener of readListeners) listener(entry)
 }
 
 export function markAllNotificationsRead(): void {
-  markNotificationsRead(entries.filter(item => !item.read).map(item => item.id))
+  markNotificationsRead(entries.map(item => item.id))
 }
 
 export function clearNotifications(): void {

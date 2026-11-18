@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 
 mod thread_router {
-    use super::*;
+
     use jait_gateway::services::thread_router::{
         RoutingPlan, RoutingSkill, classify_intent, format_routing_plan_for_prompt, match_skills,
         route_thread,
@@ -436,7 +436,7 @@ mod preview_runner {
 }
 
 mod database_retention {
-    use super::*;
+
     use chrono::{DateTime, Utc};
     use jait_gateway::db::worker::DatabaseWorker;
     use jait_gateway::services::database_retention::{
@@ -538,8 +538,10 @@ mod database_retention {
     // it reserves 10 batches so the table sweeps are never starved.
     #[test]
     fn plan_orders_steps_and_reserves_batches_for_search_cleanup() {
-        let mut policy = DatabaseRetentionPolicy::default();
-        policy.max_batches_per_run = 3;
+        let policy = DatabaseRetentionPolicy {
+            max_batches_per_run: 3,
+            ..Default::default()
+        };
         let plan = service(policy.clone())
             .plan(at("2024-04-01T12:00:00Z"), None)
             .unwrap();
@@ -591,9 +593,11 @@ mod database_retention {
     // disabling both yields a no-op plan; batch size is clamped to 1000.
     #[test]
     fn plan_respects_disabled_policy_and_clamps_batch_size() {
-        let mut policy = DatabaseRetentionPolicy::default();
-        policy.enabled = false;
-        policy.batch_size = 5_000;
+        let mut policy = DatabaseRetentionPolicy {
+            enabled: false,
+            batch_size: 5_000,
+            ..Default::default()
+        };
         let plan = service(policy.clone())
             .plan(at("2024-04-01T12:00:00Z"), None)
             .unwrap();
@@ -615,7 +619,7 @@ mod database_retention {
 }
 
 mod primary_link {
-    use super::*;
+
     use jait_gateway::services::primary_link::{
         FsPlatform, credential_path, detect_platform, encode_uri_component, redact_token, to_ws_url,
     };
@@ -700,7 +704,7 @@ mod primary_link {
 }
 
 mod disk_janitor {
-    use super::*;
+
     use jait_gateway::services::disk_janitor::DiskJanitorPolicy;
     use std::collections::BTreeMap;
 
@@ -770,7 +774,7 @@ mod disk_janitor {
 }
 
 mod mobile_push {
-    use super::*;
+
     use jait_gateway::services::mobile_push::{
         FirebaseServiceAccount, PushRegistration, attention_revoke_targets,
     };

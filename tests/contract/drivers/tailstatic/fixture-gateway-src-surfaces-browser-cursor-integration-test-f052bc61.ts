@@ -82,6 +82,84 @@ await (async()=>{
 
 break;
 }
+case "tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_31_3": {
+
+const { chromium } = await import((typeof Bun!=="undefined"?Bun.resolveSync("playwright", __jait_original_dir):__jait_require.resolve("playwright")));
+/*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setContent('<button id="save" onclick="this.textContent=\'Saved\'">Save</button>');
+      const guard = { documentUrl: page.url(), documentTimeOrigin: await page.evaluate(() => performance.timeOrigin), tagName: "button", name: "Save", text: "Save" };
+      await clickWithVisibleCursor(page as unknown as CursorPage, "#save", undefined, guard);
+      __jait_capture(0, (await page.locator("#save").textContent()));
+      await __jait_rejected(1, clickWithVisibleCursor(page as unknown as CursorPage, "#save", undefined, guard));
+      __jait_capture(2, (await page.locator("#save").textContent()));
+      await page.setContent('<button id="save">Save</button><button id="save">Save</button>');
+      await __jait_rejected(3, clickWithVisibleCursor(page as unknown as CursorPage, "#save", undefined, guard));
+      await page.setContent('<button id="save">Save</button>');
+      await __jait_rejected(4, clickWithVisibleCursor(page as unknown as CursorPage, "#save", undefined, { ...guard, documentUrl: "https://other.test/" }));
+    } finally {
+      await browser.close();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_50_3": {
+
+const { chromium } = await import((typeof Bun!=="undefined"?Bun.resolveSync("playwright", __jait_original_dir):__jait_require.resolve("playwright")));
+/*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setContent('<button id="save" onclick="window.clicked=true">Save</button>');
+      const guard = { documentUrl: page.url(), documentTimeOrigin: await page.evaluate(() => performance.timeOrigin), tagName: "button", name: "Save", text: "Save" };
+      const agentPage: CursorPage = {
+        locator: selector => page.locator(selector),
+        evaluate: (fn, ...args) => page.evaluate(fn, args[0]),
+        click: selector => page.click(selector),
+        mouse: { move: async (x, y) => {
+          await page.mouse.move(x, y);
+          await page.locator("#save").evaluate(el => { el.textContent = "Delete"; });
+        } },
+      };
+      await __jait_rejected(0, clickWithVisibleCursor(agentPage, "#save", undefined, guard));
+      __jait_captureType(1, (await page.evaluate(() => (window as unknown as { clicked?: boolean }).clicked)));
+      await page.locator("#save").evaluate(el => { el.textContent = "Save"; });
+      const controller = new AbortController();
+      agentPage.mouse!.move = async () => { controller.abort(); };
+      await __jait_rejected(2, clickWithVisibleCursor(agentPage, "#save", controller.signal, guard));
+      __jait_captureType(3, (await page.evaluate(() => (window as unknown as { clicked?: boolean }).clicked)));
+    } finally {
+      await browser.close();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

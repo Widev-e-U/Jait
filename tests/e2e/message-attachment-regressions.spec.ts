@@ -17,18 +17,40 @@ for (const action of ['click', 'enter', 'queue'] as const) {
       { name: 'upload.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF9sAAAAASUVORK5CYII=', 'base64') },
     ])
     await expect(composer.getByRole('button', { name: 'Remove upload.txt' })).toBeVisible()
+    await expect(composer.getByRole('textbox').locator('[data-segment-type="attachment"]')).toHaveCount(1)
     await expect(composer.getByRole('textbox').locator('[data-segment-type="image"]')).toHaveCount(1)
     if (action === 'enter') await composer.getByRole('textbox').press('Enter')
     else await composer.getByRole('button', { name: action === 'queue' ? 'Add to queue (Enter)' : 'Send message', exact: true }).click()
     await expect(page.getByTestId('sent').getByText('upload.txt', { exact: true })).toBeVisible()
-    await expect(composer.locator('[data-attachment-list]')).toHaveCount(0)
+    await expect(composer.getByRole('textbox').locator('[data-segment-type="attachment"]')).toHaveCount(0)
     await expect(composer.getByRole('textbox').locator('[data-segment-type="image"]')).toHaveCount(0)
     await page.getByRole('button', { name: 'Remount composer' }).click()
-    await expect(composer.locator('[data-attachment-list]')).toHaveCount(0)
+    await expect(composer.getByRole('textbox').locator('[data-segment-type="attachment"]')).toHaveCount(0)
     await expect(composer.getByRole('textbox')).toHaveText('')
     await expect(composer.getByRole('button', { name: action === 'queue' ? 'Sending' : 'Send message', exact: true })).toBeDisabled()
   })
 }
+
+test('long pasted text becomes an inline composer chip that sends with the message', async ({ page }) => {
+  await openFixture(page)
+  const composer = page.getByTestId('composer')
+  const editor = composer.getByRole('textbox')
+  const pasted = Array.from({ length: 12 }, (_, index) => `line ${index + 1}: ${'x'.repeat(1000)}`).join('\n')
+  await editor.evaluate((element, text) => {
+    const data = new DataTransfer()
+    data.setData('text/plain', text)
+    element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, pasted)
+  const chip = editor.locator('[data-segment-type="attachment"]')
+  await expect(chip).toHaveCount(1)
+  await expect(chip).toContainText('Pasted text #1.txt')
+  await expect(editor).not.toContainText('line 2:')
+  await expect(composer.locator('[data-attachment-list]')).toHaveCount(0)
+  await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', 'composer-inline-pasted-text.png') })
+  await composer.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByTestId('sent').getByText('Pasted text #1.txt', { exact: true })).toBeVisible()
+  await expect(editor.locator('[data-segment-type="attachment"]')).toHaveCount(0)
+})
 
 test('image viewport and portal controls never start message editing', async ({ page }) => {
   await openFixture(page)

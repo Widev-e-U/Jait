@@ -115,6 +115,25 @@ describe('AgentsApi.refreshProviderModels', () => {
     )
   })
 
+  it('requests a fresh Ollama catalogue and caches it for the picker', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ models: [{ id: 'old', name: 'Old' }] }))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(Response.json({ models: [{ id: 'new', name: 'New' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new AgentsApi()
+    await api.listProviderModels('jait')
+
+    const refreshed = await api.refreshProviderModels('jait')
+    expect(refreshed.models[0]?.id).toBe('new')
+    expect(await api.listProviderModels('jait')).toEqual(refreshed)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/providers/jait/models?refresh=true'),
+      expect.objectContaining({ cache: 'no-store' }),
+    )
+  })
+
   it('reports a reset failure instead of returning cached models as refreshed', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 503, statusText: 'Unavailable' }))
     vi.stubGlobal('fetch', fetchMock)

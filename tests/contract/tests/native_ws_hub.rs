@@ -159,15 +159,19 @@ fn authenticated_hub(token: &str, session: &str) -> Arc<WsHub> {
             expires_at: u64::MAX,
         },
     );
-    let mut config = WsHubConfig::default();
-    config.token_verifier = Arc::new(verifier);
+    let config = WsHubConfig {
+        token_verifier: Arc::new(verifier),
+        ..Default::default()
+    };
     Arc::new(WsHub::new(config))
 }
 
 fn fast_heartbeat_hub() -> Arc<WsHub> {
-    let mut config = WsHubConfig::default();
-    config.heartbeat_interval = Duration::from_millis(20);
-    config.heartbeat_timeout = Duration::from_millis(80);
+    let config = WsHubConfig {
+        heartbeat_interval: Duration::from_millis(20),
+        heartbeat_timeout: Duration::from_millis(80),
+        ..Default::default()
+    };
     Arc::new(WsHub::new(config))
 }
 
@@ -283,8 +287,10 @@ async fn bearer_header_token_is_accepted_and_bad_tokens_stay_unauthenticated() {
     assert!(envelope["payload"].get("userId").is_none(), "{envelope}");
     assert_eq!(envelope["payload"]["authenticated"], true);
 
-    let mut bad_config = WsHubConfig::default();
-    bad_config.token_verifier = Arc::new(StaticTokenVerifier::new());
+    let bad_config = WsHubConfig {
+        token_verifier: Arc::new(StaticTokenVerifier::new()),
+        ..Default::default()
+    };
     let bad_hub = Arc::new(WsHub::new(bad_config));
     // Reference `authenticateClient` failure path (`ws.ts` L401-407): one error frame
     // carrying code `UNAUTHORIZED`, immediately followed by `ws.close(4001)`. The
@@ -411,15 +417,17 @@ async fn message_authentication_then_subscribe_receives_session_fanout() {
 
 #[tokio::test]
 async fn authenticate_message_with_bad_token_closes_with_4001() {
-    let mut config = WsHubConfig::default();
-    config.token_verifier = Arc::new(StaticTokenVerifier::new().with_token(
-        "good",
-        WsIdentity {
-            user_id: "user-1".into(),
-            session_id: None,
-            expires_at: u64::MAX,
-        },
-    ));
+    let config = WsHubConfig {
+        token_verifier: Arc::new(StaticTokenVerifier::new().with_token(
+            "good",
+            WsIdentity {
+                user_id: "user-1".into(),
+                session_id: None,
+                expires_at: u64::MAX,
+            },
+        )),
+        ..Default::default()
+    };
     let hub = Arc::new(WsHub::new(config));
     let (mut client, _) = WsClient::open(&hub, "/ws").await;
     assert_eq!(client.recv_json().await["type"], "session.created");
@@ -525,8 +533,10 @@ async fn broadcasts_target_authenticated_clients_and_users() {
     let (mut first, _) = WsClient::open(&hub, "/ws?token=secret").await;
     assert_eq!(first.recv_json().await["type"], "session.created");
 
-    let mut guest_config = WsHubConfig::default();
-    guest_config.token_verifier = Arc::new(StaticTokenVerifier::new());
+    let guest_config = WsHubConfig {
+        token_verifier: Arc::new(StaticTokenVerifier::new()),
+        ..Default::default()
+    };
     let guest_hub = Arc::new(WsHub::new(guest_config));
     let (mut guest, _) = WsClient::open(&guest_hub, "/ws").await;
     assert_eq!(guest.recv_json().await["type"], "session.created");

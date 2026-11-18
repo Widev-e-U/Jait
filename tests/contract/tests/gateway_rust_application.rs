@@ -36,12 +36,14 @@ fn config(path: &Path) -> ApplicationConfig {
         jwt_secret: "application-fixture-secret".into(),
         cors_origin: String::new(),
         health: None,
+        web_root: None,
     }
 }
 async fn start(path: &Path) -> (String, oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
     let app = Application::bind(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         config(path),
     )
@@ -240,7 +242,8 @@ async fn invalid_configuration_cannot_create_state_or_bind_publicly() {
     assert!(
         Application::bind(
             GatewayConfig {
-                address: "0.0.0.0:0".parse().unwrap()
+                address: "0.0.0.0:0".parse().unwrap(),
+                allow_non_loopback: false,
             },
             settings
         )

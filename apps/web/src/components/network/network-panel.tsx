@@ -30,6 +30,7 @@ import {
   Layers,
 } from 'lucide-react'
 import { SecurityWorkbench } from './security-workbench'
+import { JaitNodesPanel } from './jait-nodes-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { TooltipHint } from '@/components/ui/tooltip'
 
@@ -642,6 +643,7 @@ interface NetworkPanelProps {
 
 export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
   const [showServiceChecks, setShowServiceChecks] = useState(false)
+  const [showJaitNodes, setShowJaitNodes] = useState(() => window.innerWidth >= 768)
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
@@ -672,6 +674,8 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
           setTopology(JSON.parse(text) as TopologyResponse)
         }
         setError(null)
+      } else {
+        setError(`Failed to fetch topology: ${res.status}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch topology')
@@ -968,6 +972,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
           <select aria-label="Inspect resource" value={selectedNode?.id ?? ''}
             onChange={event => {
               const id = event.target.value
+              if (id) setShowJaitNodes(false)
               setSelectedNode(graphData.nodes.find(node => node.id === id)?.data ?? topology?.resources?.find(resource => resource.id === id) ?? null)
             }} className="h-7 max-w-40 rounded border bg-background px-1 text-xs">
             <option value="">Inspect resource…</option>
@@ -978,6 +983,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
             <Button size="sm" variant="outline" onClick={() => { setSandboxesExpanded(value => !value); setSelectedNode(null) }}>
               {sandboxesExpanded ? 'Collapse sandboxes' : 'Expand sandboxes'}
             </Button>}
+          <Button size="sm" variant="outline" aria-pressed={showJaitNodes} onClick={() => { setShowJaitNodes(value => !value); setSelectedNode(null); setDeployIp(null) }}>Jait nodes</Button>
           <Button size="sm" variant="outline" onClick={() => setShowServiceChecks(true)}>Security checks</Button>
           <Button size="sm" variant="outline" className="h-7 px-2 text-xs sm:px-2.5" onClick={() => void fetchTopology()} aria-label="Refresh">
             <RefreshCw className="h-3 w-3 sm:mr-1" />
@@ -1059,7 +1065,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
               ctx.fill()
             }}
             linkCanvasObject={drawLink}
-            onNodeClick={(node: GraphNode) => setSelectedNode(node.data)}
+            onNodeClick={(node: GraphNode) => { setShowJaitNodes(false); setSelectedNode(node.data) }}
             onNodeHover={(node: GraphNode | null) => setHoveredNode(node?.id ?? null)}
             cooldownTicks={80}
             d3VelocityDecay={0.3}
@@ -1091,6 +1097,8 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
             </Button>
           </div>
         )}
+
+        {showJaitNodes && <JaitNodesPanel gateway={topology?.gateway ?? null} meshNodes={topology?.meshNodes ?? []} devices={topology?.devices ?? []} loadError={error} token={token} onClose={() => setShowJaitNodes(false)} />}
 
         {/* Node detail sidebar */}
         <NodeDetail node={selectedNode} resources={topology?.resources ?? []} onSelect={setSelectedNode}

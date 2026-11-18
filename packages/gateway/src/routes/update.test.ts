@@ -12,12 +12,13 @@ vi.mock("../../bin/safe-update.mjs", () => ({
   discardUpdate: updateMocks.discard,
 }));
 
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -371,7 +372,41 @@ describe("mobile update route", () => {
 });
 
 
+describe("remote update routes", () => {
+  it("only dispatches a newer version matching the trusted latest release", async () => {
+    const node = { id: "n1", name: "Node", appVersion: "1.0.0", online: true, granted: true };
+    const listUpdateNodes = vi.fn().mockReturnValue([node]);
+    const proxyNodeUpdate = vi.fn().mockResolvedValue({ ok: true, newVersion: "2.0.0" });
+    const ws = { listUpdateNodes, proxyNodeUpdate } as unknown as import("../ws.js").WsControlPlane;
+    updateMocks.exec.mockImplementation((_cmd, _options, callback) => callback(null, "2.0.0"));
+    const { app, headers } = await createUpdateServer(ws);
+    expect((await app.inject({ method: "GET", url: "/api/update/nodes", headers })).json()).toEqual({ nodes: [node] });
+    for (const version of ["1.0.0", "1.5.0", "9.0.0"]) {
+      expect((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version } })).statusCode).toBe(409);
+    }
+    expect(proxyNodeUpdate).not.toHaveBeenCalled();
+    const response = await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version: "2.0.0" } });
+    expect(response.json()).toEqual({ ok: true, newVersion: "2.0.0", status: "started" });
+    expect(proxyNodeUpdate).toHaveBeenCalledWith("n1", "android-owner", "2.0.0");
+    node.granted = false;
+    expect((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version: "2.0.0" } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", payload: { version: "2.0.0" } })).statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 describe("version checks", () => {
+  it("reports whether this gateway supports web updates", async () => {
+    updateMocks.exec.mockImplementation((_cmd, _options, callback) => callback(null, "99.0.0"));
+    const { app, headers } = await createUpdateServer();
+    vi.stubEnv("INVOCATION_ID", "");
+    expect((await app.inject({ method: "GET", url: "/api/update/check", headers })).json().canApply).toBe(false);
+    vi.stubEnv("INVOCATION_ID", "systemd-invocation");
+    expect((await app.inject({ method: "GET", url: "/api/update/check", headers })).json().canApply).toBe(true);
+    vi.unstubAllEnvs();
+    await app.close();
+  });
+
   it("shares a bounded async check while other requests remain responsive", async () => {
     let finish!: (error: Error | null, stdout: string) => void;
     updateMocks.exec.mockImplementation((_cmd, _options, callback) => { finish = callback; });

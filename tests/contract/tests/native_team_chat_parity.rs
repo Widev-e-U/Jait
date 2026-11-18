@@ -190,7 +190,7 @@ fn route_table_matches_typescript_registration() {
 fn route_get_missing_room_matches_typescript() {
     let v = vectors();
     let mut harness = Harness::new();
-    let mut service = harness.service();
+    let service = harness.service();
     let response = routes::get_room(&service, &user(), "no-such-room");
     check_response(
         "route.get.missing",

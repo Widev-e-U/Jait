@@ -31,6 +31,8 @@ export interface NodeCapabilities {
    * flag to fast-fail instead of hanging on the 30s op timeout.
    */
   interactiveTerminal?: boolean;
+  /** Supports the dedicated gateway update RPC. */
+  gatewayUpdate?: boolean;
 }
 
 export interface NodeHelloPayload {
@@ -39,6 +41,7 @@ export interface NodeHelloPayload {
   platform: NodePlatform;
   role?: NodeRole;
   protocolVersion?: number;
+  appVersion?: string;
   capabilities?: Partial<NodeCapabilities>;
 }
 
@@ -49,6 +52,7 @@ export interface NodeState {
   role: NodeRole;
   lifecycle: "ready" | "disconnected";
   protocolVersion: number;
+  appVersion?: string;
   capabilities: NodeCapabilities;
   connectedAt: string;
   lastSeenAt: string;
@@ -70,7 +74,8 @@ export type NodeCapability =
   | "browser"
   | "camera"
   | "network"
-  | "agent";
+  | "agent"
+  | "update";
 
 export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "terminal",
@@ -82,6 +87,7 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "camera",
   "network",
   "agent",
+  "update",
 ];
 
 /** Human-readable label per capability (shared by the settings tab and the onboarding gate). */
@@ -95,6 +101,7 @@ export const NODE_CAPABILITY_LABELS: Record<NodeCapability, string> = {
   camera: "Camera",
   network: "Network",
   agent: "Agent",
+  update: "Gateway update",
 };
 
 /** One-line description per capability (shared by the settings tab and the onboarding gate). */
@@ -108,6 +115,7 @@ export const NODE_CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
   camera: "Access this node’s camera",
   network: "Use this node’s network / HTTP",
   agent: "Run the agent / CLI sessions on this node",
+  update: "Update and restart the gateway on this node",
 };
 
 export interface NodePermissionRecord {

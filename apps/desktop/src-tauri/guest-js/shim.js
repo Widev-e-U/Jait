@@ -272,6 +272,7 @@
     return dispatch('desktop:notify', [{
       id: opts.id, title: String(opts.title || 'Jait'), body: String(opts.body || ''),
       urgency: opts.urgency || 'normal', link: opts.link, scope: opts.scope, replaceId: opts.replaceId,
+      iconUrl: opts.iconUrl, markReadLink: opts.markReadLink,
     }]);
   }
   function notify(opts) { return showNotification(opts || {}); }

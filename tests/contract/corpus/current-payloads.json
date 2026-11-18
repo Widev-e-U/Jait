@@ -551,7 +551,8 @@
       "last_selected_session_id": "user_settings:last_selected_session_id:α🙂",
       "last_selected_at": "user_settings:last_selected_at:α🙂",
       "chat_streaming_action": "user_settings:chat_streaming_action:α🙂",
-      "selected_model": "user_settings:selected_model:α🙂"
+      "selected_model": "user_settings:selected_model:α🙂",
+      "navigation_order": "[\"chat\",\"agents\"]"
     },
     "users": {
       "id": "users:id:α🙂",

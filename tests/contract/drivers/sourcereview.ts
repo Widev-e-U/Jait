@@ -36,7 +36,6 @@ export const sources: Record<string, string> = {
   reusedFilesystem: '../../../packages/gateway/src/surfaces/filesystem.ts',
   "maintenanceService": "../../../packages/gateway/src/services/maintenance.ts",
   "agentGithubTools": "../../../packages/gateway/src/tools/agent-github-tools.ts",
-  reusedElevatedTools: '../../../packages/gateway/src/tools/elevated-tools.ts',
   reusedPreviewRunner: '../../../packages/gateway/src/services/preview-runner.ts',
   reusedProjectMessage: '../../../packages/gateway/src/tools/project-message-tool.ts',
   reusedReminderRoutes: '../../../packages/gateway/src/routes/reminders.ts',
@@ -69,7 +68,6 @@ export const sources: Record<string, string> = {
   reusedCodexEventMapper: '../../../packages/gateway/src/providers/codex-event-mapper.ts',
   reusedUpdateRoutes: '../../../packages/gateway/src/routes/update.ts',
   reusedCalendarService: '../../../packages/gateway/src/services/calendar/service.ts',
-  reusedEmailService: '../../../packages/gateway/src/services/email/service.ts',
   reusedSkillTools: '../../../packages/gateway/src/tools/skill-tools.ts',
   reusedProviderUsage: '../../../packages/gateway/src/services/provider-usage.ts',
   reusedPullRequestRoutes: '../../../packages/gateway/src/routes/pull-requests.ts',
@@ -81,7 +79,6 @@ export const sources: Record<string, string> = {
   reusedEmailTools: '../../../packages/gateway/src/tools/email-tools.ts',
   reusedFileTools: '../../../packages/gateway/src/tools/file-tools.ts',
   homeassistant: '../../../packages/gateway/src/tools/homeassistant-tools.ts',
-  reusedTeamChatRoutes: '../../../packages/gateway/src/routes/team-chat.ts',
   reusedChannelTools: '../../../packages/gateway/src/tools/channel-tools.ts',
   reusedMemoryTools: '../../../packages/gateway/src/tools/memory-tools.ts',
   reusedRemoteExecutor: '../../../packages/gateway/src/tools/remote-executor.ts',
@@ -291,6 +288,9 @@ export async function dispatch(call: any): Promise<unknown> {
     class FakeMessenger {
       constructor(secret:string){record('construct',secret);}
       restore(){record('restore');}
+      // The route registers an incoming-message handler on the service; it does not
+      // change any HTTP response, so the fake accepts it without recording a request.
+      onIncoming(_handler?:unknown){}
       async stop(){record('stop');}
       async resume(owner:string){record('resume',owner);}
       snapshot(owner:string,room?:string|null){record('snapshot',owner,room??null);return{owner,room:room??null};}

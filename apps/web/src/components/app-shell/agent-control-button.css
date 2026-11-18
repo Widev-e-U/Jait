@@ -1,16 +1,16 @@
 /* Decorative motion follows the owner-wide switch, without claiming member activity. */
-[data-agent-control="ready"] .agent-control-avatars .agent-creature-eyes {
+[data-agent-control="ready"] .team-avatar.agent-control-avatars .agent-creature .agent-creature-eyes {
   animation: agent-blink 6s infinite;
 }
 
-[data-agent-control="ready"] .agent-control-avatars .agent-creature-body {
+[data-agent-control="ready"] .team-avatar.agent-control-avatars .agent-creature .agent-creature-body {
   animation: agent-work 2.8s ease-in-out infinite;
   animation-delay: inherit;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-agent-control="ready"] .agent-control-avatars .agent-creature-eyes,
-  [data-agent-control="ready"] .agent-control-avatars .agent-creature-body {
+  [data-agent-control="ready"] .team-avatar.agent-control-avatars .agent-creature .agent-creature-eyes,
+  [data-agent-control="ready"] .team-avatar.agent-control-avatars .agent-creature .agent-creature-body {
     animation: none;
   }
 }

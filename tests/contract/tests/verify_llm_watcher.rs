@@ -3,15 +3,15 @@
 //! PROVENANCE OF EXPECTATIONS
 //! * jait-llm: every literal below was produced by executing the REAL TypeScript module, not by
 //!   copying a fixture:
-//!       cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-llm.ts
-//!       cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-llm-completion.ts
+//!   cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-llm.ts
+//!   cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-llm-completion.ts
 //!   `ref-llm.ts` imports `normalizeOpenRouterModelId` from `packages/gateway/src/services/jait-llm.ts`
 //!   and `inferContextWindow` from `packages/gateway/src/config.ts`. `ref-llm-completion.ts` imports the
 //!   real exported `callJaitLlmCompletion` and stubs `fetch` to drive the response-parsing path that
 //!   `completion_text` implements.
 //! * project-watcher: coalescing/reference behaviour was observed from the REAL `ProjectWatcher`
 //!   (`packages/gateway/src/services/project-watcher.ts`) via a live inotify run:
-//!       cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-watcher.ts
+//!   cd /home/jakob/jait && bun .jait/artifacts/gateway-rust/verify-w1/ts/ref-watcher.ts
 //!   Observed there: create→delete inside one window disappears, create→update stays `created`,
 //!   `node_modules` writes never surface, distinct casing stays distinct, and emitted batches are
 //!   plain change arrays with no `rescanRequired` key.
@@ -166,8 +166,10 @@ fn watcher_rejects_invalid_bounds_and_generated_root() {
     let root = ProjectRoot::open(&std::fs::canonicalize(&dir).unwrap()).expect("project root");
 
     // Coalesce window of zero is rejected before any thread is created.
-    let mut options = ProjectWatcherOptions::default();
-    options.coalesce = Duration::ZERO;
+    let options = ProjectWatcherOptions {
+        coalesce: Duration::ZERO,
+        ..Default::default()
+    };
     assert!(
         WatcherSupervisor::new(1)
             .unwrap()
@@ -217,9 +219,11 @@ fn watcher_emits_created_events_and_skips_ignored_dirs() {
     std::fs::create_dir_all(&dir).expect("temp dir");
     let root = ProjectRoot::open(&std::fs::canonicalize(&dir).unwrap()).expect("project root");
     let supervisor = WatcherSupervisor::new(1).expect("supervisor");
-    let mut options = ProjectWatcherOptions::default();
     // Generated fixtures stay inside project artifacts; production defaults remain unchanged.
-    options.allow_generated_root = true;
+    let options = ProjectWatcherOptions {
+        allow_generated_root: true,
+        ..Default::default()
+    };
     let mut watcher = supervisor
         .watch(root, options, Cancellation::default())
         .expect("watch ok")

@@ -15,6 +15,7 @@ interface UpsertNodeInput {
   clientId: string;
   isGateway?: boolean;
   protocolVersion?: number;
+  appVersion?: string;
   capabilities?: Partial<NodeCapabilities>;
 }
 
@@ -27,6 +28,7 @@ function mergeCapabilities(capabilities?: Partial<NodeCapabilities>, previous?: 
     voice: capabilities?.voice ?? previous?.voice ?? false,
     preview: capabilities?.preview ?? previous?.preview ?? false,
     interactiveTerminal: capabilities?.interactiveTerminal ?? previous?.interactiveTerminal ?? false,
+    gatewayUpdate: capabilities?.gatewayUpdate ?? previous?.gatewayUpdate ?? false,
   };
 }
 
@@ -36,6 +38,7 @@ export class NodeStateManager {
   upsertNode(input: UpsertNodeInput): NodeState {
     const now = new Date().toISOString();
     const existing = this.records.get(input.id);
+    const previous = existing?.clientId === input.clientId ? existing.state : undefined;
     const state: NodeState = {
       id: input.id,
       name: input.name,
@@ -43,7 +46,8 @@ export class NodeStateManager {
       role: input.role,
       lifecycle: "ready",
       protocolVersion: input.protocolVersion ?? existing?.state.protocolVersion ?? NODE_PROTOCOL_VERSION,
-      capabilities: mergeCapabilities(input.capabilities, existing?.state.capabilities),
+      appVersion: input.appVersion ?? previous?.appVersion,
+      capabilities: mergeCapabilities(input.capabilities, previous?.capabilities),
       connectedAt: existing?.state.connectedAt ?? now,
       lastSeenAt: now,
     };

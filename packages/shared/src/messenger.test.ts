@@ -14,8 +14,10 @@ describe('messenger helpers', () => {
   })
 })
 
-it('bounds long notification previews and keeps emoji intact', () => {
+it('bounds notification previews without an ellipsis and keeps emoji intact', () => {
   expect(messengerNotificationPreview(' hello\n world ')).toBe('hello world')
-  expect(messengerNotificationPreview('😀😀😀😀', 3)).toBe('😀😀…')
+  expect(messengerNotificationPreview('😀😀😀😀', 3)).toBe('😀😀😀')
   expect(messengerNotificationPreview('abc', 3)).toBe('abc')
+  expect(messengerNotificationPreview('a'.repeat(300))).toBe('a'.repeat(300))
+  expect(messengerNotificationPreview('a'.repeat(600))).toBe('a'.repeat(500))
 })

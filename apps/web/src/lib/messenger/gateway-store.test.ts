@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearNotifications, getNotifications, recordNotification } from '@/lib/notification-center'
 import type { MessengerMessage, MessengerSnapshot } from './model'
 
 vi.mock('@/lib/gateway-url', () => ({ getApiUrl: () => 'http://gateway.test:8000' }))
 vi.mock('@/lib/auth-token', () => ({ getAuthToken: () => 'token' }))
-vi.mock('@/lib/system-notifications', () => ({ triggerSystemNotification: vi.fn(async () => {}) }))
+vi.mock('@/lib/system-notifications', () => ({
+  triggerSystemNotification: vi.fn(async () => {}),
+  revokeSystemNotification: vi.fn(async () => {}),
+}))
 
 const { GatewayMessengerStore } = await import('./gateway-store')
-const { triggerSystemNotification } = await import('@/lib/system-notifications')
+const { revokeSystemNotification, triggerSystemNotification } = await import('@/lib/system-notifications')
 
 const ROOM_ID = '!room:test'
 
@@ -160,6 +164,7 @@ describe('gateway Messenger notifications', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(triggerSystemNotification).mockClear()
+    vi.mocked(revokeSystemNotification).mockClear()
     const values = new Map<string, string>()
     storage = {
       get length() { return values.size },
@@ -179,6 +184,7 @@ describe('gateway Messenger notifications', () => {
 
   afterEach(() => {
     stores.forEach(store => store.dispose())
+    clearNotifications()
     vi.useRealTimers()
   })
 
@@ -262,6 +268,50 @@ describe('gateway Messenger notifications', () => {
     remote = { ...remote, rooms: remote.rooms.map(room => room.id === ROOM_ID ? { ...room, timestamp: 3_000, unread: 1 } : room) }
     await poll()
     expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the latest sender avatar after the media loads and falls back when it fails', async () => {
+    const store = await start()
+    let resolveAvatar!: (blob: Blob) => void
+    const avatar = vi.spyOn(store, 'avatarBlob').mockImplementationOnce(() => new Promise(resolve => { resolveAvatar = resolve }))
+      .mockRejectedValueOnce(new Error('unavailable'))
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1,
+      latestEventId: '$one', latestSenderAvatarUrl: 'mxc://matrix.test/alice' }] }
+    await poll()
+    expect(avatar).toHaveBeenCalledWith('mxc://matrix.test/alice')
+    expect(triggerSystemNotification).not.toHaveBeenCalled()
+    resolveAvatar(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1])]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(triggerSystemNotification).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'matrix-message:$one', iconUrl: 'data:image/jpeg;base64,/9j/AQ==',
+    }))
+
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 3_000, unread: 2,
+      latestEventId: '$two', latestSenderAvatarUrl: 'mxc://matrix.test/missing' }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'matrix-message:$two' }))
+    expect(vi.mocked(triggerSystemNotification).mock.calls.at(-1)?.[0].iconUrl).toBeUndefined()
+  })
+
+  it('removes a room notification as soon as the room is viewed in a focused window', async () => {
+    const store = await start()
+    recordNotification({ id: 'matrix-room:' + ROOM_ID, title: 'Alice', body: 'Hello', level: 'info' })
+    store.setVisibleRoom(ROOM_ID)
+    expect(revokeSystemNotification).toHaveBeenCalledWith('matrix-room:' + ROOM_ID)
+  })
+
+  it('keeps a room notification while the room is open in an unfocused window', async () => {
+    vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => false })
+    const store = await start()
+    recordNotification({ id: 'matrix-room:' + ROOM_ID, title: 'Alice', body: 'Hello', level: 'info' })
+    store.setVisibleRoom(ROOM_ID)
+    await poll()
+    expect(revokeSystemNotification).not.toHaveBeenCalled()
+    expect(getNotifications().map(item => item.id)).toEqual(['matrix-room:' + ROOM_ID])
+
+    vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
+    await poll()
+    expect(revokeSystemNotification).toHaveBeenCalledWith('matrix-room:' + ROOM_ID)
   })
 
   it('uses event IDs for deduplication and a room ID for replacement', async () => {

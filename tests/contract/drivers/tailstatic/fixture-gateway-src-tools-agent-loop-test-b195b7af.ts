@@ -2,6 +2,7 @@
 import {
   __testUtils,
   applyProviderPromptCaching,
+  buildSteeringUserContent,
   formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
@@ -67,7 +68,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_64_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_65_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -95,7 +96,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -103,14 +104,13 @@ const __jait_hook_1191 = () => {
 try {
 await (async()=>{
 
-    __jait_capture(0, (serializeMessages([
-      { role: "tool", content: "Found", tool_call_id: "c1", name: "file_read" },
-    ])));
+    __jait_capture(0, (buildSteeringUserContent("go left")));
+    __jait_capture(1, (buildSteeringUserContent("go left", [])));
   
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
@@ -144,7 +144,206 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const parts = buildSteeringUserContent("see this", [
+      { name: "a.png", mimeType: "image/png", data: "AAAA" },
+      { name: "b.png", mimeType: "image/png", data: "data:image/png;base64,BBBB" },
+      { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("hello").toString("base64") },
+    ]);
+    __jait_capture(0, (parts));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_84_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const parts = buildSteeringUserContent("  ", [{ name: "a.png", mimeType: "image/png", data: "AAAA" }]);
+    __jait_capture(0, (parts));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_89_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const queue = new SteeringController();
+    const attachments = [{ name: "a.png", mimeType: "image/png", data: "AAAA" }];
+    queue.steer("x", { attachments });
+    __jait_capture(0, (queue.drain()[0]?.attachments), (attachments));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_98_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (serializeMessages([
+      { role: "tool", content: "Found", tool_call_id: "c1", name: "file_read" },
+    ])));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_104_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -162,13 +361,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_79_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_113_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -196,7 +395,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -213,13 +412,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_87_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_121_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -247,7 +446,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -263,13 +462,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_99_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_133_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -297,7 +496,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -325,13 +524,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_118_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_152_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -359,7 +558,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -375,13 +574,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_125_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_159_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -409,7 +608,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -430,13 +629,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_141_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_175_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -464,7 +663,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -482,13 +681,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_190_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -516,7 +715,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -529,13 +728,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_161_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_195_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -563,7 +762,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -576,13 +775,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_168_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_202_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -610,7 +809,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -637,13 +836,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_188_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_222_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -671,7 +870,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -690,13 +889,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_198_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_232_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -724,7 +923,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -746,13 +945,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_211_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_245_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -780,7 +979,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -799,13 +998,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_221_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_255_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -833,7 +1032,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -850,13 +1049,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_229_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_263_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -884,7 +1083,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -901,13 +1100,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_237_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_271_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -935,7 +1134,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -953,13 +1152,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_246_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_280_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -987,7 +1186,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1022,13 +1221,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_274_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_308_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1056,7 +1255,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1078,13 +1277,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_287_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_321_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1112,7 +1311,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1151,13 +1350,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_322_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_356_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1185,7 +1384,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1203,13 +1402,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_331_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_365_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1237,7 +1436,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1281,13 +1480,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_366_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_400_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1315,7 +1514,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1332,13 +1531,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_376_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_410_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1366,7 +1565,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1408,13 +1607,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_409_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_443_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1442,7 +1641,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1485,170 +1684,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_445_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    const queue = new ToolCallQueue();
-    queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
-    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
-
-    const batch = queue.dequeueBatch(true);
-
-    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
-    __jait_capture(1, (queue.isEmpty));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_456_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    const queue = new ToolCallQueue();
-    queue.enqueue(toolCall("a", "terminal_exec"), ToolCallPriority.Normal, false);
-    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
-
-    const batch = queue.dequeueBatch(true);
-
-    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
-    __jait_capture(1, (queue.length));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_467_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    const queue = new ToolCallQueue();
-    queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
-    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
-    queue.enqueue(toolCall("c"), ToolCallPriority.Normal, true);
-
-    const batch = queue.dequeueBatch(true);
-
-    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
-    __jait_capture(1, (queue.isEmpty));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
@@ -1682,7 +1718,115 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const queue = new ToolCallQueue();
+    queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
+    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
+
+    const batch = queue.dequeueBatch(true);
+
+    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
+    __jait_capture(1, (queue.isEmpty));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_490_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const queue = new ToolCallQueue();
+    queue.enqueue(toolCall("a", "terminal_exec"), ToolCallPriority.Normal, false);
+    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
+
+    const batch = queue.dequeueBatch(true);
+
+    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
+    __jait_capture(1, (queue.length));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_501_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1694,120 +1838,16 @@ await (async()=>{
     queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
     queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
     queue.enqueue(toolCall("c"), ToolCallPriority.Normal, true);
-    queue.enqueue(toolCall("d", "terminal_exec"), ToolCallPriority.Normal, false);
 
     const batch = queue.dequeueBatch(true);
 
     __jait_capture(0, (batch.map((item) => item.toolCall.id)));
-    __jait_capture(1, (queue.length));
-    __jait_capture(2, (queue.dequeueBatch(true).map((item) => item.toolCall.id)));
+    __jait_capture(1, (queue.isEmpty));
   
 })();
 
 } finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_495_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    __jait_capture(0, (JSON.parse(serializeToolResultForModel({
-      ok: true,
-      message: "command output",
-      data: { output: "command output", exitCode: 0 },
-    }))));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_503_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    __jait_capture(0, (JSON.parse(serializeToolResultForModel({
-      ok: true,
-      message: "2 results",
-      data: { items: ["a", "b"] },
-    }))));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
@@ -1841,7 +1881,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1849,24 +1889,28 @@ const __jait_hook_1191 = () => {
 try {
 await (async()=>{
 
-    const openAI: Record<string, unknown> = {};
-    applyProviderPromptCaching(openAI, { backend: "openai" });
-    __jait_capture(0, (openAI.prompt_cache_key));
+    const queue = new ToolCallQueue();
+    queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
+    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
+    queue.enqueue(toolCall("c"), ToolCallPriority.Normal, true);
+    queue.enqueue(toolCall("d", "terminal_exec"), ToolCallPriority.Normal, false);
 
-    const compatible: Record<string, unknown> = {};
-    applyProviderPromptCaching(compatible, { backend: "openrouter" });
-    __jait_capture(1, (compatible));
+    const batch = queue.dequeueBatch(true);
+
+    __jait_capture(0, (batch.map((item) => item.toolCall.id)));
+    __jait_capture(1, (queue.length));
+    __jait_capture(2, (queue.dequeueBatch(true).map((item) => item.toolCall.id)));
   
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_525_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_529_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1894,7 +1938,162 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (JSON.parse(serializeToolResultForModel({
+      ok: true,
+      message: "command output",
+      data: { output: "command output", exitCode: 0 },
+    }))));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_537_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (JSON.parse(serializeToolResultForModel({
+      ok: true,
+      message: "2 results",
+      data: { items: ["a", "b"] },
+    }))));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_547_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const openAI: Record<string, unknown> = {};
+    applyProviderPromptCaching(openAI, { backend: "openai" });
+    __jait_capture(0, (openAI.prompt_cache_key));
+
+    const compatible: Record<string, unknown> = {};
+    applyProviderPromptCaching(compatible, { backend: "openrouter" });
+    __jait_capture(1, (compatible));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_559_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1914,13 +2113,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_540_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_574_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -1948,7 +2147,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -1966,13 +2165,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_554_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_588_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2000,7 +2199,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2018,13 +2217,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_572_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_606_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2052,7 +2251,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2074,13 +2273,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_585_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_619_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2108,7 +2307,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2130,13 +2329,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_598_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_632_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2164,7 +2363,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2185,13 +2384,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_610_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_644_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2219,7 +2418,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2238,13 +2437,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_620_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_654_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2272,7 +2471,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2294,13 +2493,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_633_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_667_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2328,7 +2527,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2349,13 +2548,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_645_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_679_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2383,7 +2582,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2398,13 +2597,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_651_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_685_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2432,7 +2631,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2449,13 +2648,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_665_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_699_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2483,7 +2682,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2498,13 +2697,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_671_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_705_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2532,7 +2731,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2545,13 +2744,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_675_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_709_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2579,7 +2778,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2597,170 +2796,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_684_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    // 20k characters of loop — more than the 16k window the scan inspects.
-    const copies = Math.ceil(20_000 / LOOP_UNIT.length);
-    const repetition = __testUtils.findDegenerateRepetition(LOOP_UNIT.repeat(copies));
-
-    __jait_capture(0, (repetition!.copies), (copies));
-    __jait_capture(1, (repetition!.startIndex));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_693_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    const trimmed = __testUtils.trimDegenerateRepetition("Preamble.\n" + LOOP_UNIT.repeat(40));
-
-    __jait_capture(0, (trimmed.startsWith("Preamble.\n" + LOOP_UNIT.repeat(2))));
-    __jait_capture(1, (trimmed));
-    __jait_capture(2, (trimmed.length), (LOOP_UNIT.length * 5));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_701_3": {
-
-
-toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
-  name, description: name, parameters: { type: "object", properties: {} },
-})));
-function toolCall(id: string, name = "file_read"): OpenAIToolCall {
-  return {
-    id,
-    type: "function",
-    function: {
-      name,
-      arguments: "{}",
-    },
-  };
-}
-function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  }).getReader();
-}
-const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
-  vi.restoreAllMocks();
-};
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    // Observed in chat 01a04cbe: same short sentence re-emitted with drifting
-    // tab/space runs. Space runs grow monotonically, so no exact period can
-    // match and only the near-verbatim (pooled) detector can catch it.
-    const sentence = "what went wrong here then";
-    let churned = "the assistant starts answering normally. ";
-    for (let i = 0; i < 40; i++) {
-      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3))) + (i % 3 === 0 ? "\n" : "\t");
-    }
-    __jait_capture(0, (churned.length), (MIN_REPETITION_SPAN_CHARS));
-
-    const repetition = __testUtils.findDegenerateRepetition(churned);
-    __jait_captureType(1, (repetition));
-    __jait_capture(2, (repetition!.approximate));
-    __jait_capture(3, (repetition!.copies));
-  
-})();
-
-} finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
@@ -2794,7 +2830,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2802,25 +2838,68 @@ const __jait_hook_1191 = () => {
 try {
 await (async()=>{
 
-    const honest = [
-      "- Checked anthropic selector: pinned via JAIT_PROVIDER in config.",
-      "- Inspected gateway logs: no 5xx bursts, stream throttling only.",
-      "- Traced session 01a04cbe: provider loop repeated after restart.",
-      "- Compared normalized payloads: identical up to whitespace drift.",
-      "- Verified round budget: three recovery resamples were available.",
-      "- Reviewed strategy prompt: instructs a different tool structure.",
-      "- Measured window density: seed occurrences stayed under floor.",
-      "- Confirmed tail bounds: final phrase sat near the raw end only.",
-      "- Recomputed pooled span: cohort gaps exceeded cohesion bound.",
-      "- Re-read moderation skip: unrelated to the repetition mistake.",
-    ].join("\n");
-    __jait_capture(0, (honest.length), (MIN_REPETITION_SPAN_CHARS));
-    __jait_captureType(1, (__testUtils.findDegenerateRepetition(honest)));
+    // 20k characters of loop — more than the 16k window the scan inspects.
+    const copies = Math.ceil(20_000 / LOOP_UNIT.length);
+    const repetition = __testUtils.findDegenerateRepetition(LOOP_UNIT.repeat(copies));
+
+    __jait_capture(0, (repetition!.copies), (copies));
+    __jait_capture(1, (repetition!.startIndex));
   
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_727_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const trimmed = __testUtils.trimDegenerateRepetition("Preamble.\n" + LOOP_UNIT.repeat(40));
+
+    __jait_capture(0, (trimmed.startsWith("Preamble.\n" + LOOP_UNIT.repeat(2))));
+    __jait_capture(1, (trimmed));
+    __jait_capture(2, (trimmed.length), (LOOP_UNIT.length * 5));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
 }
 }
 
@@ -2854,7 +2933,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2862,27 +2941,31 @@ const __jait_hook_1191 = () => {
 try {
 await (async()=>{
 
-    const sentence = "let me check the output now";
-    let churned = "Preamble kept for context.\n";
+    // Observed in chat 01a04cbe: same short sentence re-emitted with drifting
+    // tab/space runs. Space runs grow monotonically, so no exact period can
+    // match and only the near-verbatim (pooled) detector can catch it.
+    const sentence = "what went wrong here then";
+    let churned = "the assistant starts answering normally. ";
     for (let i = 0; i < 40; i++) {
-      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3)));
+      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3))) + (i % 3 === 0 ? "\n" : "\t");
     }
+    __jait_capture(0, (churned.length), (MIN_REPETITION_SPAN_CHARS));
 
-    const trimmed = __testUtils.trimDegenerateRepetition(churned);
-    __jait_capture(0, (trimmed.startsWith("Preamble kept for context.\n")));
-    __jait_capture(1, (trimmed));
-    __jait_capture(2, (trimmed.length), (churned.length));
+    const repetition = __testUtils.findDegenerateRepetition(churned);
+    __jait_captureType(1, (repetition));
+    __jait_capture(2, (repetition!.approximate));
+    __jait_capture(3, (repetition!.copies));
   
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_750_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_752_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2910,7 +2993,123 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const honest = [
+      "- Checked anthropic selector: pinned via JAIT_PROVIDER in config.",
+      "- Inspected gateway logs: no 5xx bursts, stream throttling only.",
+      "- Traced session 01a04cbe: provider loop repeated after restart.",
+      "- Compared normalized payloads: identical up to whitespace drift.",
+      "- Verified round budget: three recovery resamples were available.",
+      "- Reviewed strategy prompt: instructs a different tool structure.",
+      "- Measured window density: seed occurrences stayed under floor.",
+      "- Confirmed tail bounds: final phrase sat near the raw end only.",
+      "- Recomputed pooled span: cohort gaps exceeded cohesion bound.",
+      "- Re-read moderation skip: unrelated to the repetition mistake.",
+    ].join("\n");
+    __jait_capture(0, (honest.length), (MIN_REPETITION_SPAN_CHARS));
+    __jait_captureType(1, (__testUtils.findDegenerateRepetition(honest)));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_769_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const sentence = "let me check the output now";
+    let churned = "Preamble kept for context.\n";
+    for (let i = 0; i < 40; i++) {
+      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3)));
+    }
+
+    const trimmed = __testUtils.trimDegenerateRepetition(churned);
+    __jait_capture(0, (trimmed.startsWith("Preamble kept for context.\n")));
+    __jait_capture(1, (trimmed));
+    __jait_capture(2, (trimmed.length), (churned.length));
+  
+})();
+
+} finally {
+await __jait_hook_1219();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_784_3": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2937,13 +3136,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_768_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_802_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -2971,7 +3170,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -2995,13 +3194,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_783_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_817_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3029,7 +3228,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3064,13 +3263,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_809_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_843_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3098,7 +3297,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3117,13 +3316,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_832_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_866_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3151,7 +3350,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3231,13 +3430,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_893_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_927_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3265,7 +3464,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3347,13 +3546,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_956_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_990_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3381,7 +3580,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3451,13 +3650,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1007_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1041_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3485,7 +3684,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3548,13 +3747,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1051_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1085_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3582,7 +3781,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3651,13 +3850,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1103_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1137_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3685,7 +3884,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3707,13 +3906,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1120_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1154_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3741,7 +3940,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3768,13 +3967,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1138_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1172_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3802,7 +4001,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3823,13 +4022,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1155_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1189_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3857,7 +4056,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3914,13 +4113,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1203_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1237_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -3948,7 +4147,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -3994,13 +4193,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1240_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1274_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4028,7 +4227,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4063,13 +4262,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1266_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1300_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4097,7 +4296,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4129,13 +4328,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1294_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1328_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4163,7 +4362,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4187,13 +4386,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1309_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1343_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4221,7 +4420,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4246,13 +4445,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1327_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1361_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4280,7 +4479,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4309,13 +4508,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1347_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1381_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4343,7 +4542,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4370,13 +4569,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1365_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1399_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4404,7 +4603,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4426,13 +4625,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1378_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1412_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4460,7 +4659,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4491,13 +4690,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1402_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1436_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4525,7 +4724,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4549,13 +4748,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1417_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1451_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4583,7 +4782,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4604,13 +4803,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1429_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1463_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4638,7 +4837,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4652,13 +4851,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1434_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1468_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4686,7 +4885,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4700,13 +4899,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1441_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1475_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4734,7 +4933,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4811,13 +5010,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1511_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1545_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4845,7 +5044,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -4922,13 +5121,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1582_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1616_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -4956,7 +5155,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5044,13 +5243,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1661_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1695_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5078,7 +5277,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5152,13 +5351,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each0": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5186,7 +5385,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5243,14 +5442,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each1": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5278,7 +5477,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5335,14 +5534,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1814_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5370,7 +5569,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5425,13 +5624,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1862_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5459,7 +5658,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5514,13 +5713,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1908_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5548,7 +5747,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5629,13 +5828,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1980_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5663,7 +5862,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5738,13 +5937,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2046_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5772,7 +5971,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -5907,13 +6106,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2172_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5941,7 +6140,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6033,13 +6232,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2274_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6067,7 +6266,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6137,13 +6336,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2423_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6171,7 +6370,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6334,13 +6533,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2488_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6368,7 +6567,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6531,13 +6730,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2553_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6565,7 +6764,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6717,13 +6916,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2607_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6751,7 +6950,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -6906,13 +7105,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2664_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6940,7 +7139,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -7088,13 +7287,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2714_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7122,7 +7321,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -7289,13 +7488,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2783_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7323,7 +7522,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -7484,13 +7683,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2846_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7518,7 +7717,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -7674,13 +7873,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2904_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7708,7 +7907,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -7897,13 +8096,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2995_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7931,7 +8130,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -8097,13 +8296,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3063_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8131,7 +8330,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -8339,13 +8538,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3175_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8373,7 +8572,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -8574,13 +8773,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3282_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8608,7 +8807,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -8765,13 +8964,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3341_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8799,7 +8998,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -8970,13 +9169,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3414_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9004,7 +9203,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -9154,13 +9353,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3466_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9188,7 +9387,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -9372,13 +9571,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3552_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9406,7 +9605,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -9594,13 +9793,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3644_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9628,7 +9827,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -9798,13 +9997,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3716_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9832,7 +10031,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -9973,13 +10172,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3759_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10007,7 +10206,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -10177,13 +10376,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3831_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10211,7 +10410,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -10327,13 +10526,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3849_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10361,7 +10560,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -10530,13 +10729,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3920_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10564,7 +10763,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -10723,13 +10922,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3981_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10757,7 +10956,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -10915,13 +11114,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4041_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10949,7 +11148,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11107,13 +11306,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4153_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11141,7 +11340,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11298,14 +11497,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4162_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11333,7 +11532,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11493,14 +11692,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4174_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11528,7 +11727,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11687,14 +11886,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4185_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11722,7 +11921,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11883,14 +12082,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4201_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11918,7 +12117,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -11967,13 +12166,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4246_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -12001,7 +12200,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -12022,13 +12221,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4261_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -12056,7 +12255,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 /*__jait_scope_open__*/{
@@ -12073,13 +12272,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4272_1": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -12107,7 +12306,7 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
   }).getReader();
 }
 const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
-const __jait_hook_1191 = () => {
+const __jait_hook_1219 = () => {
   vi.restoreAllMocks();
 };
 
@@ -12124,7 +12323,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1191();
+await __jait_hook_1219();
 }
 
 

@@ -203,8 +203,10 @@ public class AgentOverlayPlugin extends Plugin {
             call.getString("body", ""), call.getString("replaceId", id),
             call.getString("link", "/chat"), call.getString("scope", NotificationNavigation.scope(getContext())),
             call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")), call.getString("markReadLink", null));
+        String cardId = call.getString("replaceId", id);
+        NotificationAvatar.attach(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
+            id, call.getString("iconUrl", ""));
         if (Boolean.TRUE.equals(call.getBoolean("imageAvailable", false))) {
-            String cardId = call.getString("replaceId", id);
             NotificationImage.fetch(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
                 id, call.getString("roomId", ""), call.getString("eventId", ""));
         }

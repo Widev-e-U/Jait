@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import {
   Boxes,
   Calendar,
@@ -16,6 +16,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { useMessengerBadge } from '@/components/messenger/messenger-provider'
+import { UnreadChatCountContext } from '@/hooks/useUnreadChatCount'
 import type { AppView } from '@/lib/app-view'
 
 interface NavItem {
@@ -58,6 +59,7 @@ export function MobileNavDrawer({
   sessionSelector,
 }: MobileNavDrawerProps) {
   const { count: messengerCount } = useMessengerBadge()
+  const unreadChatCount = useContext(UnreadChatCountContext)
   const managerMode = currentView === 'threads' || currentView === 'agents'
   return (
     <>
@@ -92,8 +94,9 @@ export function MobileNavDrawer({
           {/* Nav items */}
           <nav className="shrink-0 border-b p-1.5">
             <div className="grid grid-cols-3 gap-0.5">
-              {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
-                <button
+              {NAV_ITEMS.map(({ view, label, icon: Icon }) => {
+                const count = view === 'messenger' ? messengerCount : view === 'chat' ? unreadChatCount : 0
+                return <button
                   key={view}
                   onClick={() => { onNavigate(view); onClose() }}
                   className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-2xs transition-colors ${
@@ -102,12 +105,13 @@ export function MobileNavDrawer({
                       : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                   }`}
                   aria-label={label}
+                  aria-describedby={count > 0 ? `mobile-nav-badge-${view}` : undefined}
                   aria-current={currentView === view ? 'page' : undefined}
                 >
-                  <span className="relative"><Icon className="h-4 w-4" />{view === 'messenger' && messengerCount > 0 && <span className="absolute -right-2 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">{messengerCount > 99 ? '99+' : messengerCount}</span>}</span>
+                  <span className="relative"><Icon className="h-4 w-4" />{count > 0 && <span id={`mobile-nav-badge-${view}`} aria-label={`${count} unread ${view === 'chat' ? (count === 1 ? 'chat' : 'chats') : (count === 1 ? 'message' : 'messages')}`} className="absolute -right-2 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">{count > 99 ? '99+' : count}</span>}</span>
                   <span>{label}</span>
                 </button>
-              ))}
+              })}
             </div>
           </nav>
 

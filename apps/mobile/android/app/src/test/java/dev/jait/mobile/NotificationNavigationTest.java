@@ -55,6 +55,22 @@ public class NotificationNavigationTest {
             }
         }
     }
+    @Test public void avatarIsAttachedOnlyToTheLatestEventAndSurvivesRebuild() {
+        show("alpha:1", "alpha", "First");
+        show("alpha:2", "alpha", "Second");
+        android.graphics.Bitmap avatar = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888);
+        ChatNotifications.attachAvatar(context, "chat:alpha", "alpha:1", avatar);
+        assertNull(manager.getActiveNotifications()[0].getNotification().getLargeIcon());
+        ChatNotifications.attachAvatar(context, "chat:alpha", "alpha:2", avatar);
+        assertNotNull(manager.getActiveNotifications()[0].getNotification().getLargeIcon());
+        ChatNotifications.clear(context, "chat:alpha", "alpha:1");
+        assertNotNull(manager.getActiveNotifications()[0].getNotification().getLargeIcon());
+    }
+    @Test public void avatarRejectsExternalAndInvalidData() {
+        assertNull(NotificationAvatar.decode("https://example.com/avatar.png"));
+        assertNull(NotificationAvatar.decode("data:image/svg+xml;base64,PHN2Zz4="));
+        assertNull(NotificationAvatar.decode("data:image/png;base64,"));
+    }
     @Test public void visibleChatDoesNotAlertButDifferentChatDoes() {
         NotificationNavigation.resumed = true;
         NotificationNavigation.visibleSession = "alpha";
@@ -121,6 +137,16 @@ public class NotificationNavigationTest {
         ChatNotifications.cancel(context, "chat:alpha");
         ChatNotifications.attachImage(context, "chat:alpha", "alpha:2", bitmap);
         assertEquals(0, manager.getActiveNotifications().length);
+    }
+    @Test public void stackedCardWrapsEveryMessageInsteadOfEllipsizingInboxRows() {
+        show("alpha:1", "alpha", "First");
+        show("alpha:2", "alpha", "Second");
+        StatusBarNotification alpha = null;
+        for (StatusBarNotification card : manager.getActiveNotifications())
+            if ("chat:alpha".equals(card.getTag())) alpha = card;
+        assertNotNull(alpha);
+        assertNull(alpha.getNotification().extras.getCharSequenceArray("android.textLines"));
+        assertEquals("First\nSecond", alpha.getNotification().extras.getCharSequence("android.bigText").toString());
     }
     private void show(String event, String session, String body) {
         ChatNotifications.show(context, event, "Response ready", body, "chat:" + session,

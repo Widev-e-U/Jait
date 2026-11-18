@@ -3,7 +3,7 @@
 //!
 //!   * `packages/gateway/scripts/smoke-process.mjs`
 //!   * `packages/gateway/scripts/smoke-desktop.mjs`
-//!         -> `jait_gateway::execution::smoke_process`
+//!     -> `jait_gateway::execution::smoke_process`
 //!
 //! The scripts observe only two things about a spawned gateway: whether the
 //! child has exited (Node leaves `exitCode` null on signal exits) and the

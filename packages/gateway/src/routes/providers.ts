@@ -957,6 +957,8 @@ export function registerProviderRoutes(
 
       // For jait provider, return models from ALL configured backends, grouped
       if (id === "jait" && deps.userService) {
+        reply.header("Cache-Control", "no-store");
+        const { refresh } = request.query as { refresh?: string };
         const settings = deps.userService.getSettings(authUser.id);
         const userApiKeys = settings.apiKeys ?? {};
         const jaitBackend = settings.jaitBackend || "openai";
@@ -966,6 +968,7 @@ export function registerProviderRoutes(
           apiKeys: userApiKeys,
           fallbackModels: models,
           includeCloud: true,
+          refreshOllama: refresh === "true",
         });
 
         // Prepend recent models (if they exist in the full list)

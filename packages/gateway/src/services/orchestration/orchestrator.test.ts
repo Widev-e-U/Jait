@@ -10,6 +10,7 @@ import {
   type TaskExecutor,
   type VerificationRunner,
 } from "./orchestrator.js";
+import { OrchestrationStore } from "./store.js";
 
 const USER = "user-1";
 
@@ -57,6 +58,29 @@ function stateOf(view: { tasks: Array<{ taskId: string; state: string }> }, task
 function makeService(executor: TaskExecutor, verifier: VerificationRunner = passingVerifier): OrchestrationService {
   return new OrchestrationService({ db, executor, verifier });
 }
+
+it("keeps the trusted worker identity on an attempt after cancellation and rejects late updates", async () => {
+  let active!: TaskExecutionInput;
+  let complete!: () => void;
+  const service = makeService({
+    async execute(input) {
+      active = input;
+      input.recordAgentRef!("worker-from-runner");
+      await new Promise<void>((resolve) => { complete = resolve; });
+      return report(input);
+    },
+  });
+  const run = service.createRun(USER, { title: "worker identity", tasks: [task("A")] });
+  await vi.waitFor(() => expect(complete).toBeTypeOf("function"));
+  const view = service.cancelRun(USER, run.id);
+  expect(view.tasks[0]).toMatchObject({ state: "cancelled", agentRef: "worker-from-runner" });
+  expect(new OrchestrationStore(db).getAttempts(run.id)[0]).toMatchObject({
+    state: "cancelled", agentRef: "worker-from-runner",
+  });
+  expect(() => active.recordAgentRef!("late-worker")).toThrow("no longer owns");
+  complete();
+  await service.settle();
+});
 
 describe("dependency ordering", () => {
   it("starts a join only after both branches pass", async () => {

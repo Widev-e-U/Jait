@@ -99,6 +99,16 @@ pub struct TerminalRunOutcome {
     pub timed_out: bool,
 }
 
+/// One read of a terminal's byte stream: the bytes at or after the requested offset, the
+/// offset to resume from, and whether the process has ended (with its exit code when known).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TerminalOutput {
+    pub next: usize,
+    pub bytes: Vec<u8>,
+    pub closed: bool,
+    pub exit_code: Option<i32>,
+}
+
 /// Attached, writable terminal.
 pub trait TerminalHandle: Send + Sync {
     fn write(&self, data: &str) -> Result<(), String>;
@@ -107,6 +117,14 @@ pub trait TerminalHandle: Send + Sync {
         &self,
         request: TerminalRun<'_>,
     ) -> ControlFuture<'_, Result<TerminalRunOutcome, String>>;
+    /// Output at or after the absolute byte offset `from`. A handle without an output
+    /// source reports no bytes and stays open.
+    fn output_since(&self, from: usize) -> TerminalOutput {
+        TerminalOutput {
+            next: from,
+            ..TerminalOutput::default()
+        }
+    }
 }
 
 /// Process-control plane. Implementations are expected to register a
@@ -216,6 +234,24 @@ impl TerminalRoutes {
 
     pub fn registry(&self) -> &SurfaceRegistry {
         &self.registry
+    }
+
+    /// Whether `user_id` owns the terminal `terminal_id` in the trusted registry right now.
+    pub fn owns_terminal(&self, user_id: &str, terminal_id: &str) -> bool {
+        matches!(self.lookup_for(user_id, terminal_id), Lookup::Found(_))
+    }
+
+    /// Attached terminal handles by registry id, for the output pump.
+    pub fn terminal_handles(&self) -> Vec<(String, Arc<dyn TerminalHandle>)> {
+        self.registry
+            .list()
+            .into_iter()
+            .filter(|surface| surface.kind() == TERMINAL_KIND)
+            .filter_map(|surface| {
+                let handle = self.control.handle_for_surface(&surface)?;
+                Some((surface.id().to_owned(), handle))
+            })
+            .collect()
     }
 
     pub fn router(self) -> Router {

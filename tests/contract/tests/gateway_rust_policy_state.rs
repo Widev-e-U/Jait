@@ -107,7 +107,7 @@ fn scenario(seed: &str, steps: Vec<Value>, no_db: bool) -> Value {
                     nodes.ensure_node_seen(
                         &serde_json::from_value(step["hello"].clone()).unwrap(),
                         step["now"].as_str(),
-                    );
+                    )?;
                     Value::Null
                 }
                 "granted" => json!(nodes.is_granted(node, capability())),

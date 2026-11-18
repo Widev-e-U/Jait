@@ -26,7 +26,7 @@ function setup() {
 }
 
 describe('Messenger assistant access persistence', () => {
-  it('restores enabled and disabled access across gateway restarts', async () => {
+  it('resets assistant access at gateway restart, matching the encrypted-shared-device-restart contract', async () => {
     const directory = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-access-${randomUUID()}`, import.meta.url));
     try {
       const service = new MessengerService('test-secret', directory);
@@ -37,8 +37,9 @@ describe('Messenger assistant access persistence', () => {
       const restored = (restarted as any).connection('owner');
       restored.start = vi.fn(async (session: unknown) => { restored.session = session; });
       await restarted.resume('owner');
+      expect(restored.assistantAccess).toBe(false);
+      await restored.command({ action: 'assistantAccess', enabled: true });
       expect(restored.assistantAccess).toBe(true);
-      await restored.command({ action: 'assistantAccess', enabled: false });
       const next = new MessengerService('test-secret', directory);
       const nextConnection = (next as any).connection('owner');
       nextConnection.start = vi.fn(async (session: unknown) => { nextConnection.session = session; });
@@ -51,6 +52,22 @@ describe('Messenger assistant access persistence', () => {
 });
 
 describe('Notification image retrieval', () => {
+  it('resolves only an event sender avatar in the owner’s visible joined room', async () => {
+    const { service, c, room, message } = setup();
+    const sharp = (await import('sharp')).default;
+    c.client.doRequest.mockResolvedValue(await sharp({ create: { width: 300, height: 300, channels: 3, background: '#3388aa' } }).png().toBuffer());
+    room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { avatar_url: 'mxc://test/bob' } }] as any;
+    room.events.push(message('$avatar', '@bob:test'));
+    const avatar = await service.notificationAvatar('test', '!room:test', '$avatar');
+    expect(await sharp(avatar).metadata()).toMatchObject({ format: 'jpeg', width: 192, height: 192 });
+    await expect(service.notificationAvatar('other', '!room:test', '$avatar')).rejects.toThrow();
+    await expect(service.notificationAvatar('test', '!room:test', '$missing')).rejects.toThrow();
+    room.summary.hidden = true;
+    await expect(service.notificationAvatar('test', '!room:test', '$avatar')).rejects.toThrow();
+    room.summary.hidden = false;
+    room.summary.membership = 'leave';
+    await expect(service.notificationAvatar('test', '!room:test', '$avatar')).rejects.toThrow();
+  });
   it('returns a bounded JPEG only for an image in the owner’s visible joined room', async () => {
     const { service, c, room, message } = setup();
     const sharp = (await import('sharp')).default;
@@ -80,6 +97,9 @@ describe('Messenger message actions and history', () => {
       await update(['@alice:test', '@bob:test']);
       expect(c.snapshot('!room:test').typing).toEqual(['Bob']);
       await update([]);
+      expect(c.snapshot('!room:test').typing).toEqual([]);
+      await update(['@bob:test']);
+      c.connectionInterrupted();
       expect(c.snapshot('!room:test').typing).toEqual([]);
       await update(['@bob:test']);
       vi.advanceTimersByTime(15001);
@@ -124,6 +144,17 @@ describe('Messenger message actions and history', () => {
     const messages = c.messages('!room:test');
     expect(messages[0]).toMatchObject({ sender: 'Bob', senderAvatarUrl: 'mxc://test/bob' });
     expect(messages[1]).not.toHaveProperty('senderAvatarUrl');
+  });
+  it('tracks the latest sender avatar in room summaries and clears it when absent', async () => {
+    const { c, room, message } = setup();
+    room.states = [
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', avatar_url: 'mxc://test/bob' } },
+      { type: 'm.room.member', state_key: '@eve:test', content: { displayname: 'Eve' } },
+    ] as any;
+    await c.sync({ rooms: { join: { '!room:test': { timeline: { events: [message('$bob', '@bob:test')] } } } } });
+    expect(c.snapshot().rooms[0].latestSenderAvatarUrl).toBe('mxc://test/bob');
+    await c.sync({ rooms: { join: { '!room:test': { timeline: { events: [message('$eve', '@eve:test')] } } } } });
+    expect(c.snapshot().rooms[0].latestSenderAvatarUrl).toBeUndefined();
   });
   it('projects reply references after a message is sent, including edits', () => {
     const { c, room, message } = setup();
@@ -194,8 +225,20 @@ describe('Messenger message actions and history', () => {
     expect(c.messages('!room:test')[0].bridgeStatus).toBe('sent');
     await sync(status('$delivered', '@teamsbot:test', 'SUCCESS', ['@bob:test']));
     expect(c.messages('!room:test')[0].bridgeStatus).toBe('delivered');
+    await sync(status('$later-sent', '@teamsbot:test', 'SUCCESS'));
+    await sync(status('$retrying', '@teamsbot:test', 'FAIL_RETRIABLE'));
+    expect(c.messages('!room:test')[0].bridgeStatus).toBe('delivered');
     await sync(status('$failed', '@teamsbot:test', 'FAIL_PERMANENT'));
     expect(c.messages('!room:test')[0].bridgeStatus).toBe('failed');
+  });
+  it('does not project threaded receipts as room-wide reads or bridge acknowledgements', () => {
+    const { c, room, message } = setup();
+    room.states = [{ type: 'm.bridge', state_key: 'teams', content: { bridgebot: '@teamsbot:test' } }] as any;
+    room.events = [message('$one'), message('$two')];
+    room.receipts = { '$two': { '@bob:test': { ts: 123, thread_id: '$thread' }, '@teamsbot:test': { ts: 124, thread_id: '$thread' } } } as any;
+    expect(c.messages('!room:test').map((m: any) => [m.readBy, m.bridgeStatus])).toEqual([[[], undefined], [[], undefined]]);
+    room.receipts['$two']['@bob:test'].thread_id = 'main';
+    expect(c.messages('!room:test')[0].readBy).toHaveLength(1);
   });
   it('keeps receipt positions stable when an earlier message is redacted', () => {
     const { c, room, message } = setup();
@@ -310,6 +353,14 @@ describe('Messenger status broadcasts', () => {
 });
 
 describe('Messenger bridged service detection', () => {
+  it('uses the resolved peer name for a UUID direct room title', async () => {
+    const { c } = setup();
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'f847f7fa-2799-4dde-b3d1-f73019ebc1f0' } },
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Alice', membership: 'join' } },
+    ] }, timeline: { events: [] } } } } });
+    expect(c.snapshot().rooms.find((r: any) => r.id === '!teams:test').name).toBe('Alice');
+  });
   it.each(['go.mau.fi/mautrix-teams', 'msteams', 'teams', 'microsoft-teams'])('recognizes Teams metadata after joining an invitation (%s)', async protocol => {
     const { c } = setup();
     await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [

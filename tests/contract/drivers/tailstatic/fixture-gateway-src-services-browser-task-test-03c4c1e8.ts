@@ -1,17 +1,12 @@
-// Translated fixture from packages/gateway/src/__scratch-pr.test.ts; expected literals are in tail_static.rs.
-import { loadConfig } from "../../../../packages/gateway/src/config.js";
-import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/db/index.js";
-import { ProviderRegistry } from "../../../../packages/gateway/src/providers/registry.js";
-import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
-import { createServer } from "../../../../packages/gateway/src/server.js";
-import { ThreadService } from "../../../../packages/gateway/src/services/threads.js";
-import type { CliProviderAdapter, ProviderEvent, ProviderInfo, ProviderSession, StartSessionOptions } from "../../../../packages/gateway/src/providers/contracts.js";
-import { EventEmitter } from "node:events";
+// Translated fixture from packages/gateway/src/services/browser-task.test.ts; expected literals are in tail_static.rs.
+
+
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
 import { fileURLToPath as __jait_fileURLToPath } from 'node:url';
-const __jait_original_url=new URL("../../../../packages/gateway/src/__scratch-pr.test.ts",import.meta.url).href;
+const __jait_original_url=new URL("../../../../packages/gateway/src/services/browser-task.test.ts",import.meta.url).href;
 const __jait_require=__jait_createRequire(__jait_original_url);
 const __jait_original_dir=__jait_fileURLToPath(new URL('.',__jait_original_url));
 const __jait_fixture_dir=__jait_fileURLToPath(new URL('../../../../.jait/artifacts/gateway-rust-readiness/tailstatic-fixtures/',import.meta.url));
@@ -47,74 +42,112 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1": {
-
-
-class StubProvider implements CliProviderAdapter {
-  readonly id = "codex" as const;
-  readonly info: ProviderInfo = { id: "codex", name: "Stub", description: "", available: true, modes: ["full-access"] };
-  private emitter = new EventEmitter();
-  async checkAvailability() { return true; }
-  async listModels() { return []; }
-  async startSession(o: StartSessionOptions): Promise<ProviderSession> {
-    return { id: "stub-1", providerId: this.id, threadId: o.threadId, status: "running", runtimeMode: o.mode, startedAt: new Date().toISOString() };
-  }
-  async sendTurn() {}
-  async interruptTurn() {}
-  async respondToApproval() {}
-  async stopSession(sid: string) { this.emitter.emit("e", { type: "session.completed", sessionId: sid } satisfies ProviderEvent); }
-  onEvent(h: (e: ProviderEvent) => void) { this.emitter.on("e", h); return () => { this.emitter.off("e", h); }; }
+case "tailstatic_packages_gateway_src_services_browser_task_test_ts_19_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
+const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
+const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const context = { sessionId: "chat", projectRoot: "/project", actionId: "task", requestedBy: "test", apiKeys: {} };
+const plan = { task: "Open settings then save", actions: [
+  { when: "settings is closed", step: { action: "click", label: "Open settings", target: "Settings" } },
+  { when: "settings is open", step: { action: "click", label: "Save", target: "Save" } },
+] };
+function fixture() {
+  const db = { select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) };
+  const execute = vi.fn(async (name: string) => name === "browser.snapshot"
+    ? { ok: true, message: "captured", data: { textPreview: `page ${execute.mock.calls.length}` } }
+    : { ok: true, message: "clicked", data: { textPreview: `page ${execute.mock.calls.length}` } });
+  return { service: new BrowserWorkflowService(db as never, execute), execute };
 }
+/*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
-  const { db, sqlite } = await openDatabase(":memory:");
-  migrateDatabase(sqlite);
-  const provider = new StubProvider();
-  const registry = new ProviderRegistry();
-  registry.register(provider);
-  const threadService = new ThreadService(db);
-  const app = await createServer({ ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test" }, {
-    db, sqlite, threadService, providerRegistry: registry,
-  });
-  const token = await signAuthToken({ id: "u", username: "u" }, (loadConfig()).jwtSecret);
-  const res = await app.inject({
-    method: "POST", url: "/api/threads",
-    headers: { authorization: `Bearer ${token}` },
-    payload: { title: "PR Test", providerId: "codex", workingDirectory: process.cwd() },
-  });
-  const thread = JSON.parse(res.body) as { id: string };
-  console.error("thread row:", res.body.slice(0, 600));
-  const origPrepare = sqlite.prepare.bind(sqlite);
-  (sqlite as { prepare(sql: string): unknown }).prepare = (sql: string) => {
-    const stmt = origPrepare(sql);
-    const origRun = (stmt as { run(...p: unknown[]): unknown }).run.bind(stmt);
-    const wrapped: Record<string, unknown> = {
-      run(...p: unknown[]) {
-        console.error("SQL:", sql);
-        console.error("PARAMS:", JSON.stringify(p));
-        return origRun(...p);
-      },
-    };
-    for (const k of Object.keys(stmt as unknown as object)) wrapped[k] = (stmt as unknown as Record<string, unknown>)[k];
-    for (const k of Object.getOwnPropertyNames(stmt)) wrapped[k] = Object.getOwnPropertyDescriptor(stmt, k)?.value;
-    return wrapped as unknown as typeof stmt;
-  };
-  try {
-    threadService.markCompleted(thread.id);
-    console.error("markCompleted OK");
-  } catch (e) {
-    console.error("markCompleted FAILED:", (e as Error).message);
-  }
-  await app.close();
-
+    const { service, execute } = fixture();
+    vi.mocked(evaluateDecision).mockReset().mockResolvedValueOnce({ model: "test", answers: { next: { type: "choice", choice: "a0", confidence: 0.2 } } })
+      .mockResolvedValueOnce({ model: "test", answers: { next: { type: "choice", choice: "a1", confidence: 1 } } });
+    const result = await service.runTask(plan, context);
+    __jait_capture(0, (result));
+    __jait_capture(1, (execute.mock.calls.map(call => call[0])));
+    __jait_capture(2, (vi.mocked(evaluateDecision).mock.calls[1]?.[1]));
+  
 })();
-__jait_record({slot:0,completed:true});
+
 } finally {
 
 }
+}
 
+break;
+}
+case "tailstatic_packages_gateway_src_services_browser_task_test_ts_28_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
+const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
+const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const context = { sessionId: "chat", projectRoot: "/project", actionId: "task", requestedBy: "test", apiKeys: {} };
+const plan = { task: "Open settings then save", actions: [
+  { when: "settings is closed", step: { action: "click", label: "Open settings", target: "Settings" } },
+  { when: "settings is open", step: { action: "click", label: "Save", target: "Save" } },
+] };
+function fixture() {
+  const db = { select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) };
+  const execute = vi.fn(async (name: string) => name === "browser.snapshot"
+    ? { ok: true, message: "captured", data: { textPreview: `page ${execute.mock.calls.length}` } }
+    : { ok: true, message: "clicked", data: { textPreview: `page ${execute.mock.calls.length}` } });
+  return { service: new BrowserWorkflowService(db as never, execute), execute };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, execute } = fixture();
+    vi.mocked(evaluateDecision).mockReset().mockResolvedValue({ model: "test", answers: { next: { type: "choice", choice: "stop" } } });
+    __jait_capture(0, (await service.runTask(plan, context)));
+    __jait_capture(1, (execute.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_browser_task_test_ts_34_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
+const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
+const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const context = { sessionId: "chat", projectRoot: "/project", actionId: "task", requestedBy: "test", apiKeys: {} };
+const plan = { task: "Open settings then save", actions: [
+  { when: "settings is closed", step: { action: "click", label: "Open settings", target: "Settings" } },
+  { when: "settings is open", step: { action: "click", label: "Save", target: "Save" } },
+] };
+function fixture() {
+  const db = { select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) };
+  const execute = vi.fn(async (name: string) => name === "browser.snapshot"
+    ? { ok: true, message: "captured", data: { textPreview: `page ${execute.mock.calls.length}` } }
+    : { ok: true, message: "clicked", data: { textPreview: `page ${execute.mock.calls.length}` } });
+  return { service: new BrowserWorkflowService(db as never, execute), execute };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, execute } = fixture();
+    execute.mockResolvedValueOnce({ ok: true, message: "suppressed", data: { textPreview: "" } });
+    vi.mocked(evaluateDecision).mockClear();
+    __jait_capture(0, (await service.runTask(plan, context)));
+    __jait_capture(1, (evaluateDecision.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
 
 break;
 }

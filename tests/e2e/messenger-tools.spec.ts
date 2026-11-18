@@ -5,9 +5,9 @@ test.use({ screenshot: 'off' })
 test('Matrix search links restore room, service, and query, and preserve parameters', async ({ page }) => {
   await page.goto('/src/e2e-fixtures/messenger-tools.html?q=firewall&service=WhatsApp&roomId=%21lab%3Atest', { waitUntil: 'domcontentloaded' })
   const searchBox = page.getByLabel('Search conversations and messages')
-  const serviceFilter = page.getByLabel('Filter by service')
+  const serviceChip = (name: string) => page.getByRole('group', { name: 'Filter conversations' }).getByRole('button', { name, exact: true })
   await expect(searchBox).toHaveValue('firewall')
-  await expect(serviceFilter).toHaveText('WhatsApp')
+  await expect(serviceChip('WhatsApp')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('log', { name: 'Messages' })).toContainText('Firewall ready')
   await expect(page.getByRole('log', { name: 'Messages' })).not.toContainText('Hello')
   await searchBox.fill('missing')
@@ -20,19 +20,18 @@ test('Matrix search links restore room, service, and query, and preserve paramet
     window.dispatchEvent(new PopStateEvent('popstate'))
   })
   await expect(searchBox).toHaveValue('Team')
-  await expect(serviceFilter).toHaveText('Telegram')
+  await expect(serviceChip('Telegram')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('button', { name: /Team Telegram/ })).toBeVisible()
   // The same field also drives loaded-message results; they follow the service filter.
-  await serviceFilter.click()
-  await page.getByRole('option', { name: 'All', exact: true }).click()
-  await expect(serviceFilter).toHaveText('All')
+  // Clicking the active service chip clears it back to All.
+  await serviceChip('Telegram').click()
+  await expect(page.getByRole('button', { name: 'All chats', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await searchBox.fill('Hello')
   await expect(page.getByLabel('Message search results')).toContainText('Hello')
-  // The service select is a listbox trigger, not a native select.
+  // Service chips are toggle buttons in the filter row.
   await searchBox.fill('')
-  await serviceFilter.click()
-  await page.getByRole('option', { name: 'WhatsApp', exact: true }).click()
-  await expect(serviceFilter).toHaveText('WhatsApp')
+  await serviceChip('WhatsApp').click()
+  await expect(serviceChip('WhatsApp')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('group', { name: 'Conversation Homelab' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Conversation Team' })).toHaveCount(0)
   expect(new URL(page.url()).searchParams.get('service')).toBe('WhatsApp')
@@ -44,18 +43,21 @@ test('Legacy messageQ links still restore the search field', async ({ page }) =>
   await expect(page.getByRole('log', { name: 'Messages' })).toContainText('Firewall ready')
 })
 
-test('Conversations header keeps search and service filter on one row', async ({ page }) => {
+test('Conversations header keeps search and provider controls on one row', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 850 })
   await page.goto('/src/e2e-fixtures/messenger-tools.html', { waitUntil: 'domcontentloaded' })
-  const searchBox = page.getByLabel('Search conversations and messages')
-  const serviceFilter = page.getByLabel('Filter by service')
-  const search = await searchBox.boundingBox()
-  const filter = await serviceFilter.boundingBox()
-  expect(search).not.toBeNull()
-  expect(filter).not.toBeNull()
-  // Same row: vertical centers align and the filter sits to the right of the field.
-  expect(Math.abs((search!.y + search!.height / 2) - (filter!.y + filter!.height / 2))).toBeLessThan(4)
-  expect(filter!.x).toBeGreaterThan(search!.x + search!.width - 1)
+  const searchToggle = await page.getByRole('button', { name: 'Search', exact: true }).boundingBox()
+  const provider = await page.getByRole('group', { name: 'Provider settings' }).getByRole('button').first().boundingBox()
+  const connections = await page.getByRole('button', { name: 'Connections', exact: true }).boundingBox()
+  expect(searchToggle).not.toBeNull()
+  expect(provider).not.toBeNull()
+  expect(connections).not.toBeNull()
+  // Same row: vertical centers align, and the search toggle, provider icons, and Connections run left to right.
+  const middle = (box: { y: number; height: number }) => box.y + box.height / 2
+  expect(Math.abs(middle(searchToggle!) - middle(provider!))).toBeLessThan(4)
+  expect(Math.abs(middle(searchToggle!) - middle(connections!))).toBeLessThan(4)
+  expect(provider!.x).toBeGreaterThan(searchToggle!.x + searchToggle!.width - 1)
+  expect(connections!.x).toBeGreaterThan(provider!.x + provider!.width - 1)
   await expect(page.getByRole('textbox', { name: 'Search loaded messages' })).toHaveCount(0)
 })
 

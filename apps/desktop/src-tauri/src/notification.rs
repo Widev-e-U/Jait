@@ -39,7 +39,46 @@ pub fn toast_xml(payload: &Value) -> String {
             let action_uri = xml_escape(&activation_uri(&action_payload));
             format!(r#"<action content="Mark as read" activationType="protocol" arguments="{action_uri}"/>"#)
         }).unwrap_or_default();
-    format!(r#"<toast activationType="protocol" launch="{uri}"><visual><binding template="ToastGeneric"><text>{title}</text><text>{body}</text></binding></visual><actions><action content="Open in Jait" activationType="protocol" arguments="{uri}"/>{read_action}</actions></toast>"#)
+    let image = payload.get("localIconUrl").and_then(Value::as_str)
+        .filter(|url| url.starts_with("file:///"))
+        .map(|url| format!(r#"<image placement="appLogoOverride" hint-crop="circle" src="{}"/>"#, xml_escape(url)))
+        .unwrap_or_default();
+    format!(r#"<toast activationType="protocol" launch="{uri}"><visual><binding template="ToastGeneric">{image}<text>{title}</text><text>{body}</text></binding></visual><actions><action content="Open in Jait" activationType="protocol" arguments="{uri}"/>{read_action}</actions></toast>"#)
+}
+
+
+/// Save a bounded, validated avatar in the application cache for the Windows toast API.
+/// Only data URLs are accepted; never make a network request or expose an arbitrary local file.
+pub fn cache_avatar(data_url: &str, cache_dir: &std::path::Path) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use std::hash::{Hash, Hasher};
+    const MAX_BYTES: usize = 256 * 1024;
+    let (header, encoded) = data_url.split_once(',')?;
+    if encoded.len() > (MAX_BYTES + 2) / 3 * 4 { return None; }
+    let bytes = STANDARD.decode(encoded).ok()?;
+    if bytes.is_empty() || bytes.len() > MAX_BYTES { return None; }
+    let ext = match header {
+        "data:image/png;base64" if bytes.starts_with(b"\x89PNG\r\n\x1a\n") => "png",
+        "data:image/jpeg;base64" if bytes.starts_with(b"\xff\xd8\xff") => "jpg",
+        _ => return None,
+    };
+    std::fs::create_dir_all(cache_dir).ok()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let path = cache_dir.join(format!("{:016x}.{ext}", hasher.finish()));
+    if !path.exists() { std::fs::write(&path, bytes).ok()?; }
+    // Bound disk use while allowing recent notifications to retain their images.
+    if let Ok(entries) = std::fs::read_dir(cache_dir) {
+        let mut files: Vec<_> = entries.flatten().filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_file() { return None; }
+            Some((metadata.modified().ok()?, entry.path()))
+        }).collect();
+        files.sort_by_key(|(modified, _)| *modified);
+        let excess = files.len().saturating_sub(64);
+        for (_, old) in files.into_iter().filter(|(_, old)| *old != path).take(excess) { let _ = std::fs::remove_file(old); }
+    }
+    url::Url::from_file_path(path).ok().map(|url| url.to_string())
 }
 
 /// Windows tags are limited to 16 characters. Stable across process restarts.
@@ -96,6 +135,19 @@ mod tests {
         assert_eq!(activation["id"], "matrix:$old");
         assert_eq!(activation["scope"], "https://gateway.test");
         assert!(!toast_xml(&json!({"markReadLink":"https://evil.test"})).contains("Mark as read"));
+    }
+    #[test]
+    fn avatar_accepts_only_bounded_image_data_and_escapes_xml() {
+        let artifacts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.jait/artifacts");
+        std::fs::create_dir_all(&artifacts).unwrap();
+        let dir = tempfile::Builder::new().prefix("avatar-test-").tempdir_in(artifacts).unwrap();
+        let icon = cache_avatar("data:image/png;base64,iVBORw0KGgo=", dir.path()).unwrap();
+        assert!(icon.starts_with("file:///"));
+        assert!(toast_xml(&json!({"localIconUrl": icon})).contains("placement=\"appLogoOverride\""));
+        assert!(!toast_xml(&json!({"localIconUrl":"https://evil.test/x"})).contains("appLogoOverride"));
+        assert!(cache_avatar("data:image/png;base64,SGVsbG8=", dir.path()).is_none());
+        assert!(cache_avatar("data:image/svg+xml;base64,PHN2Zz4=", dir.path()).is_none());
+        assert!(cache_avatar(&format!("data:image/png;base64,{}", "A".repeat(400_000)), dir.path()).is_none());
     }
     #[test]
     fn rejects_untrusted_activation_and_escapes_text() {

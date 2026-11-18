@@ -88,6 +88,8 @@ async fn compare(call: Value) {
     let routes = ConsentRoutes {
         auth: auth.clone(),
         manager: manager.clone(),
+        claim: None,
+        batch_claim: None,
         lane: BlockingLane::new(NonZeroU16::new(1).unwrap()),
         owns_session: Arc::new(move |s, u| {
             if ownership["accessError"] == true {
@@ -290,6 +292,8 @@ async fn native_origin_deleted_user_and_closed_lane_deny_before_consent_effects(
     let routes = ConsentRoutes {
         auth: auth.clone(),
         manager: manager.clone(),
+        claim: None,
+        batch_claim: None,
         lane,
         owns_session: Arc::new(move |_, _| {
             reads.fetch_add(1, Ordering::SeqCst);

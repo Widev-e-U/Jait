@@ -8,6 +8,7 @@
 import { ORCHESTRATION_LIMITS } from "@jait/shared";
 import type {
   AgentTaskReport,
+  OrchestrationAttemptView,
   OrchestrationRunView,
   OrchestrationTaskState,
   OrchestrationTaskView,
@@ -47,6 +48,7 @@ export interface TaskExecutionInput {
   /** Failure context from the previous attempt, for repair attempts. */
   previousAttempt: { error: string; verification: VerificationOutcome[] | null } | null;
   timeoutSeconds: number;
+  recordAgentRef?: (agentRef: string) => void;
   signal: AbortSignal;
 }
 
@@ -56,6 +58,8 @@ export interface TaskExecutor {
 }
 
 export interface VerificationRunInput {
+  userId: string;
+  repoId: string | null;
   check: VerificationCheck;
   runId: string;
   taskId: string;
@@ -257,6 +261,22 @@ export class OrchestrationService {
 
   getRun(userId: string, runId: string): OrchestrationRunView {
     return this.toView(this.requireRunRow(userId, runId));
+  }
+
+  getTaskAttempts(userId: string, runId: string, taskId: string): OrchestrationAttemptView[] {
+    this.requireRunRow(userId, runId);
+    if (!this.store.getTasks(runId).some((task) => task.taskId === taskId)) {
+      throw new OrchestrationNotFoundError("task not found");
+    }
+    return this.store.getTaskAttempts(runId, taskId).map(({ outcome, state, runId: _runId, taskId: _taskId, ...attempt }) => {
+      const stored = parseStored<{ report?: AgentTaskReport; verification?: VerificationOutcome[] }>(outcome);
+      return {
+        ...attempt,
+        state: state as OrchestrationAttemptView["state"],
+        result: stored?.report ?? null,
+        verification: stored?.verification ?? null,
+      };
+    });
   }
 
   listRuns(userId: string): OrchestrationRunView[] {
@@ -567,7 +587,10 @@ export class OrchestrationService {
 
   private async runGate(attempt: ActiveAttempt, gate: VerificationGate): Promise<{ passed: boolean; detail: string }> {
     try {
+      const run = this.requireRunRow(attempt.userId, attempt.runId);
       const verdict = await this.verifier.run({
+        userId: run.userId,
+        repoId: run.repoId,
         check: gate.check,
         runId: attempt.runId,
         taskId: attempt.taskId,
@@ -666,6 +689,9 @@ export class OrchestrationService {
       previousAttempt,
       timeoutSeconds: def.timeoutSeconds,
       signal: attempt.controller.signal,
+      recordAgentRef: (agentRef) => {
+        if (!this.store.recordAgentRef(attempt, agentRef)) throw new Error("workflow attempt no longer owns its task");
+      },
     };
   }
 

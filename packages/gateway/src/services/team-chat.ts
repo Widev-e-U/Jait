@@ -561,6 +561,12 @@ export class TeamChatService {
         this.db.update(teamDeliveries).set({ status: "interrupted", error: "Autonomous work halted by user." }).where(eq(teamDeliveries.id, delivery.id)).run();
         return;
       }
+      // A thread stop is the user's decision, not a delivery failure: finish the
+      // turn without posting a blocker or enqueuing manager recovery.
+      if (this.abandonedByStop(delivery.sessionId)) {
+        this.db.update(teamDeliveries).set({ status: "interrupted", error: "Thread was stopped by user." }).where(eq(teamDeliveries.id, delivery.id)).run();
+        return;
+      }
       const reason = error instanceof Error ? error.message : "Delivery failed.";
       this.db.update(teamDeliveries).set({ status: reason.startsWith("Execution blocked:") ? "blocked" : "failed", error: reason }).where(eq(teamDeliveries.id, delivery.id)).run();
       // Provider failures cannot rely on another model turn to report a blocker.

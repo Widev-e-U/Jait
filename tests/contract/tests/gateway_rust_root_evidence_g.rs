@@ -182,9 +182,10 @@ mod server_ts {
     fn bind(address: &str) -> std::io::Result<Gateway> {
         let config = GatewayConfig {
             address: address.parse::<SocketAddr>().unwrap(),
+            allow_non_loopback: false,
         };
         let health = HealthState::new(None, HealthSnapshot::default());
-        Arc::new(&()).clone();
+        let _ = Arc::new(&()).clone();
         futures_block_on(Gateway::bind(config, health))
     }
 

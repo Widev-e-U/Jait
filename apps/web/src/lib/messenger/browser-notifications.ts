@@ -1,6 +1,6 @@
 /** Service-worker notifications provide action buttons that Notification() cannot expose. */
 export async function showMessengerBrowserNotification(input: {
-  id: string; title: string; body: string; link: string; markReadLink: string; scope?: string
+  id: string; title: string; body: string; link: string; markReadLink: string; scope?: string; iconUrl?: string
 }): Promise<boolean> {
   if (!navigator.serviceWorker || !('Notification' in window) || Notification.permission !== 'granted') return false
   const registration = await navigator.serviceWorker.register('/messenger-notifications-sw.js', { scope: '/messenger' })
@@ -20,8 +20,8 @@ export async function showMessengerBrowserNotification(input: {
     worker.postMessage({ type: 'jait-identify-notification-client' }, [channel.port2])
   })
   await registration.showNotification(input.title, {
-    body: input.body, tag: input.id, icon: '/apple-touch-icon.png', badge: '/favicon-32x32.png',
-    data: { ...input, title: undefined, body: undefined, clientId },
+    body: input.body, tag: input.id, icon: input.iconUrl || '/apple-touch-icon.png', badge: '/favicon-32x32.png',
+    data: { ...input, title: undefined, body: undefined, iconUrl: undefined, clientId },
     actions: [{ action: 'mark-read', title: 'Mark as read' }],
   } as NotificationOptions)
   return true

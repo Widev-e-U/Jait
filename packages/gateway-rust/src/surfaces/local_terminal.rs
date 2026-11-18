@@ -16,7 +16,7 @@ use super::registry::{
 };
 use crate::routes::terminals::{
     ControlFuture, DEFAULT_COLS, DEFAULT_ROWS, EXIT_MARKER_PREFIX, TERMINAL_KIND, TerminalControl,
-    TerminalHandle, TerminalRun, TerminalRunOutcome, TerminalShell, TerminalSpawn,
+    TerminalHandle, TerminalOutput, TerminalRun, TerminalRunOutcome, TerminalShell, TerminalSpawn,
 };
 use serde_json::{Map, json};
 use std::collections::HashMap;
@@ -167,6 +167,33 @@ impl TerminalHandle for LocalTerminalHandle {
         }
         if let Ok(mut size) = self.size.lock() {
             *size = (cols, rows);
+        }
+    }
+
+    fn output_since(&self, from: usize) -> TerminalOutput {
+        let (bytes, next, closed) = {
+            let output = self.output.lock().expect("pty output");
+            let start = from.min(output.bytes.len());
+            (
+                output.bytes[start..].to_vec(),
+                output.bytes.len(),
+                output.closed,
+            )
+        };
+        // Reaped only once the stream has closed; a shell still running has no status yet.
+        let exit_code = if closed {
+            self.child
+                .lock()
+                .ok()
+                .and_then(|mut guard| guard.as_mut()?.try_wait().ok().flatten()?.code())
+        } else {
+            None
+        };
+        TerminalOutput {
+            next,
+            bytes,
+            closed,
+            exit_code,
         }
     }
 

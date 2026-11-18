@@ -1,4 +1,4 @@
-import { AttachmentList, collectAttachments } from './attachment-list'
+import { collectAttachments } from './attachment-list'
 import { createInlineImageNode, createInlineNodeRef, readInlineImageNode } from './prompt-input-image'
 import { EmojiPickerPanel } from '../messenger/messenger-emoji-picker'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
@@ -52,6 +52,7 @@ import {
   type UserSkillReference,
   type UserChatReference,
   type UserImageAttachment,
+  type UserFileAttachment,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { COMPOSER_BULLET, bulletsToMarkdown, resolveListLineBreak, shouldAutoBullet } from '@/lib/prompt-list-format'
@@ -213,8 +214,56 @@ function hashString(value: string): string {
   return (hash >>> 0).toString(36)
 }
 
-function createChipNode(file: PromptChipReference | ({ type: 'image' } & UserImageAttachment), onRemove?: (refKey: string) => void): HTMLSpanElement {
+/** Noneditable file chip. Like an inline image, it sits in the text flow and carries its own remove button. */
+function createInlineAttachmentNode(attachment: UserFileAttachment, onRemove: (refKey: string) => void): HTMLSpanElement {
+  const chip = document.createElement('span')
+  const refKey = createInlineNodeRef('attachment')
+  chip.contentEditable = 'false'
+  chip.dataset.chipRef = refKey
+  chip.dataset.segmentType = 'attachment'
+  chip.dataset.chipName = attachment.name
+  chip.dataset.attachmentMime = attachment.mimeType
+  chip.dataset.attachmentData = attachment.data
+  chip.dataset.tooltip = attachment.name
+  chip.className = 'mx-0.5 inline-flex max-w-full items-center gap-1 rounded border border-border bg-muted/45 px-1 py-0.5 align-middle select-none text-sm'
+
+  const icon = document.createElement('img')
+  icon.src = `${ICON_CDN}${getVsIconName(attachment.name)}`
+  icon.alt = ''
+  icon.draggable = false
+  icon.className = 'h-[1em] w-[1em] shrink-0'
+  chip.appendChild(icon)
+
+  const label = document.createElement('span')
+  label.className = 'min-w-0 max-w-[min(200px,40vw)] truncate'
+  label.textContent = attachment.name
+  chip.appendChild(label)
+
+  const remove = document.createElement('button')
+  remove.type = 'button'
+  remove.setAttribute('aria-label', `Remove ${attachment.name}`)
+  remove.className = 'rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+  remove.textContent = '×'
+  remove.addEventListener('mousedown', (event) => event.preventDefault())
+  remove.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onRemove(refKey)
+  })
+  chip.appendChild(remove)
+  return chip
+}
+
+/** Reads a file chip back into a segment. An empty file has empty data, but it must still be sent. */
+function readInlineAttachmentNode(node: HTMLElement): ({ type: 'attachment' } & UserFileAttachment) | null {
+  const { attachmentMime, attachmentData, chipName } = node.dataset
+  if (attachmentData === undefined) return null
+  return { type: 'attachment', name: chipName || 'Attachment', mimeType: attachmentMime || 'application/octet-stream', data: attachmentData }
+}
+
+function createChipNode(file: PromptChipReference | ({ type: 'image' } & UserImageAttachment) | ({ type: 'attachment' } & UserFileAttachment), onRemove?: (refKey: string) => void): HTMLSpanElement {
   if ('type' in file && file.type === 'image') return createInlineImageNode(file, onRemove ?? (() => {}))
+  if ('type' in file && file.type === 'attachment') return createInlineAttachmentNode(file, onRemove ?? (() => {}))
   const chip = document.createElement('span')
   chip.contentEditable = 'false'
   const refKey = getChipRefKey(file)
@@ -493,6 +542,11 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
         if (image) segments.push(image)
         return
       }
+      if (segmentType === 'attachment') {
+        const attachment = readInlineAttachmentNode(node)
+        if (attachment) segments.push(attachment)
+        return
+      }
       if (segmentType === 'project') {
         const path = node.getAttribute('data-project-path')
         if (!path) return
@@ -639,7 +693,7 @@ function appendSegmentNode(
     parent.appendChild(document.createTextNode(segment.text))
     return
   }
-  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'skill' || segment.type === 'chat' || segment.type === 'image') {
+  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'skill' || segment.type === 'chat' || segment.type === 'image' || segment.type === 'attachment') {
     parent.appendChild(createChipNode(segment, onRemove))
     return
   }
@@ -796,8 +850,7 @@ function appendSegmentNodes(
       if (segment.text) el.appendChild(document.createTextNode(segment.text))
       continue
     }
-    if (segment.type === 'attachment') continue
-    if (segment.type !== 'image' && el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(segment))}"]`)) continue
+    if (segment.type !== 'image' && segment.type !== 'attachment' && el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(segment))}"]`)) continue
     el.appendChild(createChipNode(segment, onRemoveChip))
     el.appendChild(document.createTextNode(' '))
   }
@@ -814,7 +867,7 @@ export interface PromptInputHandle {
   getSegments: () => UserMessageSegment[]
   /** Focus the editor and move the caret to the end. */
   focus: () => void
-  /** Append a file attachment (binary/text) directly to the attachments list. */
+  /** Append an image or file as an inline chip at the end of the composer. */
   addAttachment: (attachment: import('@/hooks/useChat').ChatAttachment) => void
 }
 
@@ -1206,7 +1259,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   const syncComposerSegments = useCallback((el: HTMLElement) => {
     const nextSegments = getComposerSegments(el)
-    const nextAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments.filter(segment => segment.type === 'image'))
+    // Images and files both live in the editor now, so the editor is the source of truth.
+    const nextAttachments = collectAttachments(undefined, nextSegments)
     const previous = attachmentsRef.current
     if (previous.length !== nextAttachments.length || previous.some((item, index) => item.name !== nextAttachments[index]?.name || item.data !== nextAttachments[index]?.data || item.mimeType !== nextAttachments[index]?.mimeType)) {
       attachmentsRef.current = nextAttachments
@@ -1333,16 +1387,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     },
     addAttachment: (attachment) => {
       const el = editableRef.current
-      if (el && attachment.mimeType.startsWith('image/')) {
-        pushUndoRef.current(true)
-        el.appendChild(createInlineImageNode(attachment, handleRemoveChip))
-        draftSegmentsRef.current = syncComposerSegments(el)
-        isSyncing.current = true
-        onChangeRef.current(getTextFromEditable(el))
-        isSyncing.current = false
-      } else {
-        setAttachments(prev => [...prev, attachment])
-      }
+      if (!el) return
+      pushUndoRef.current(true)
+      const { name, mimeType, data } = attachment
+      appendSegmentNode(el, mimeType.startsWith('image/')
+        ? { type: 'image', name, mimeType, data }
+        : { type: 'attachment', name, mimeType, data }, handleRemoveChip)
+      draftSegmentsRef.current = syncComposerSegments(el)
+      isSyncing.current = true
+      onChangeRef.current(getTextFromEditable(el))
+      isSyncing.current = false
       setIsEmpty(false)
     },
   }), [handleRemoveChip, segments, syncComposerSegments, resetComposer])
@@ -1444,9 +1498,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
 
     isSyncing.current = true
-    const restoredSegments = lastAppliedDraftSignatureRef.current === null
-      ? mergeAttachmentsIntoSegments(segments?.length ? segments : [{ type: 'text', text: value }], attachmentsRef.current.filter(item => item.mimeType.startsWith('image/')))
-      : segments
+    // Attachments are editor content, so a rebuild keeps any the segments do not already place.
+    const restoredSegments = mergeAttachmentsIntoSegments(segments?.length ? segments : [{ type: 'text', text: value }], attachmentsRef.current)
     buildEditableContent(el, restoredSegments, value, handleRemoveChip)
     draftSegmentsRef.current = syncComposerSegments(el)
     setIsEmpty(isTextEmpty(value) && !hasChipRefs(editableRef.current))
@@ -1846,12 +1899,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           : action === 'thread' ? onThreadSubmit
             : onAskInParallel
     if (!handler || readingAttachments > 0) return false
-    const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), payload.segments)
+    const submittedAttachments = collectAttachments(undefined, payload.segments)
     clearSubmittedAttachments()
     handler(payload.chips, submittedAttachments, payload.segments)
     resetComposer()
     return true
-  }, [attachments, onQueue, onSteer, onThreadSubmit, onAskInParallel, resetComposer, clearSubmittedAttachments, readingAttachments])
+  }, [onQueue, onSteer, onThreadSubmit, onAskInParallel, resetComposer, clearSubmittedAttachments, readingAttachments])
 
   /** Send whatever is in the composer right now through one streaming action. */
   const handleSendAction = useCallback((action: ComposerSendAction) => {
@@ -2026,7 +2079,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       }
       if (action === 'submit') {
         if (!isLoading || sendTarget === 'thread') {
-          const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
+          const submittedAttachments = collectAttachments(undefined, nextSegments)
           if (clearOnSubmit) clearSubmittedAttachments()
           onSubmit(chips, submittedAttachments, nextSegments)
           if (clearOnSubmit) resetComposer()
@@ -2089,7 +2142,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     try {
       const results = await Promise.all(Array.from(files).map(readFileAsAttachment))
       if (!el.contains(marker)) return // Draft changed or placeholder was deleted.
-      const names = new Set(collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), getComposerSegments(el)).map(item => item.name))
+      const names = new Set(collectAttachments(undefined, getComposerSegments(el)).map(item => item.name))
       const added = results.map((attachment) => {
         const original = attachment.name || 'attachment'
         const dot = original.lastIndexOf('.')
@@ -2101,13 +2154,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         names.add(name)
         return { ...attachment, name }
       })
-      for (const image of added.filter(item => item.mimeType.startsWith('image/'))) {
-        marker.before(createInlineImageNode(image, handleRemoveChip))
+      for (const attachment of added) {
+        marker.before(attachment.mimeType.startsWith('image/')
+          ? createInlineImageNode(attachment, handleRemoveChip)
+          : createInlineAttachmentNode(attachment, handleRemoveChip))
       }
       marker.remove()
-      const next = [...attachmentsRef.current, ...added.filter(item => !item.mimeType.startsWith('image/'))]
-      attachmentsRef.current = next
-      setAttachments(next)
       draftSegmentsRef.current = syncComposerSegments(el)
       isSyncing.current = true
       onChangeRef.current(getTextFromEditable(el))
@@ -2123,17 +2175,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (el.isConnected) setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
     }
   }, [readFileAsAttachment, handleRemoveChip, pushUndoSnapshot, syncComposerSegments, onFilesSelected, composerDisabled])
-
-  const removeAttachment = useCallback((name: string) => {
-    setAttachments((prev) => {
-      const next = prev.filter((a) => a.name !== name)
-      const el = editableRef.current
-      if (next.length === 0 && el && isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el)) {
-        setIsEmpty(true)
-      }
-      return next
-    })
-  }, [])
 
   const handleCopy = useCallback((e: React.ClipboardEvent) => {
     const el = editableRef.current
@@ -2181,7 +2222,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const hasStructuredReferences = structured.some(segment => segment.type !== 'text')
     if (variant === 'assistant' && !hasStructuredReferences && isLongPaste(pastedText)) {
       e.preventDefault()
-      setAttachments(previous => [...previous, createPastedTextAttachment(pastedText, previous)])
+      pushUndoSnapshot(true)
+      const pasted = createPastedTextAttachment(pastedText, collectAttachments(undefined, getComposerSegments(el)))
+      insertSegmentsAtCursor(el, [{ type: 'attachment', name: pasted.name, mimeType: pasted.mimeType, data: pasted.data }], handleRemoveChip)
+      draftSegmentsRef.current = syncComposerSegments(el)
+      isSyncing.current = true
+      onChange(getTextFromEditable(el))
+      isSyncing.current = false
+      setIsEmpty(false)
+      scrollCaretIntoView(el)
       return
     }
     const markdownSegments = variant === 'messenger' ? [] : hasStructuredReferences ? structured : parseUserMessageMarkdown(pastedText)
@@ -2444,7 +2493,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           const el = editableRef.current
           const chips = el ? getChipFiles(el) : []
           const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-          const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
+          const submittedAttachments = collectAttachments(undefined, nextSegments)
           if (clearOnSubmit) clearSubmittedAttachments()
           onSubmit(chips, submittedAttachments, nextSegments)
           if (clearOnSubmit) resetComposer()
@@ -2468,9 +2517,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     </TooltipHint>
   )
 
-  // Mic and send share one slot: WhatsApp-style mic while the composer is empty,
-  // send as soon as there is text, a chip reference, or an attachment.
-  const showComposerMic = isMessenger && submitEmpty && Boolean(onVoiceInput) && !voiceRecording && !voiceTranscribing && !isLoading
+  // Messenger: the mic stays in the trailing controls. While nothing is typed it takes
+  // the send slot; send appears beside it once there is text, a chip reference, or an attachment.
+  const showComposerMic = isMessenger && Boolean(onVoiceInput) && !voiceRecording && !voiceTranscribing && !isLoading
+  const showComposerSend = !(showComposerMic && submitEmpty)
 
   const composerTrailingControls = (
     <>
@@ -2511,7 +2561,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </Button>
         </TooltipHint>
       )}
-      {showComposerMic ? dictateButton : sendRegion}
+      {/* Messenger attach sits on the trailing edge, just ahead of the mic and send. */}
+      {isMessenger && attachButton}
+      {showComposerMic && dictateButton}
+      {showComposerSend && sendRegion}
     </>
   )
 
@@ -2573,7 +2626,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
         </TooltipHint>
       )}
-      {attachments.some(item => !item.mimeType.startsWith('image/')) && <AttachmentList attachments={attachments.filter(item => !item.mimeType.startsWith('image/'))} onRemove={removeAttachment} className="border-b border-border px-3 py-2" />}
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -2591,7 +2643,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         }}
       />
       {attachmentError && <p role="alert" className="px-3 pt-2 text-xs text-destructive">{attachmentError}</p>}
-      {/* Editable area with inline references and images */}
+      {/* Editable area with inline references, images and files */}
       <div
         className={cn(
           'relative',
@@ -2602,7 +2654,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       >
         {isMessenger && (
           <div className="flex shrink-0 items-center pb-0.5">
-            {attachButton}
             {emojiButton}
           </div>
         )}

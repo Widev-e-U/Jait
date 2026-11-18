@@ -4,6 +4,7 @@ import {
   applyPersonalSessionMove,
   applyProjectSessionMove,
   getMissingSelectedProjectId,
+  isLocalProjectDraft,
   prependProjectSession,
   type ProjectRecord,
   type ProjectSession,
@@ -33,6 +34,15 @@ describe('getLatestProjectSessionId', () => {
   it('returns null for projects without chats', () => {
     expect(getLatestProjectSessionId(projectWithSessions([]))).toBeNull()
     expect(getLatestProjectSessionId(null)).toBeNull()
+  })
+})
+
+describe('isLocalProjectDraft', () => {
+  it('is true only while the picked project is active with no chat selected', () => {
+    expect(isLocalProjectDraft('project-a', 'project-a', null)).toBe(true)
+    expect(isLocalProjectDraft('project-a', 'project-a', 'chat-1')).toBe(false)
+    expect(isLocalProjectDraft('project-a', 'project-b', null)).toBe(false)
+    expect(isLocalProjectDraft(null, 'project-a', null)).toBe(false)
   })
 })
 

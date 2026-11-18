@@ -1,8 +1,19 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { MobileNavDrawer } from './mobile-nav-drawer'
+import { UnreadChatCountContext } from '@/hooks/useUnreadChatCount'
 
 describe('MobileNavDrawer', () => {
+  it('shows the chat count in mobile navigation', () => {
+    const markup = renderToStaticMarkup(
+      <UnreadChatCountContext.Provider value={3}>
+        <MobileNavDrawer open onClose={() => {}} currentView="messenger" onNavigate={() => {}} sessionSelector={null} />
+      </UnreadChatCountContext.Provider>,
+    )
+    expect(markup).toContain('aria-describedby="mobile-nav-badge-chat"')
+    expect(markup).toContain('aria-label="3 unread chats"')
+    expect(markup).toContain('>3</span>')
+  })
   it('keeps project tools out of the drawer because they live in the mobile footer', () => {
     const markup = renderToStaticMarkup(
       <MobileNavDrawer

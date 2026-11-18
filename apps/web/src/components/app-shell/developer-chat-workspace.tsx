@@ -1,3 +1,4 @@
+import { getChatComposerDraftKey } from '@/lib/chat-composer-draft'
 import { latestUserTurnId } from '@/lib/conversation-turn'
 import { readChatLoop } from '@jait/shared'
 import { ChatLoopGoal } from '@/components/chat/loop-goal-card'
@@ -547,7 +548,7 @@ export function DeveloperChatWorkspace({
               <PromptInput
                 ref={promptInputRef}
                 availableSkills={availableSkills}
-                draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                draftStateKey={getChatComposerDraftKey(activeSessionId)}
                 value={inputValueRef.current}
                 syncKey={inputVersion}
                 segments={inputSegments}
@@ -897,7 +898,7 @@ export function DeveloperChatWorkspace({
                 <PromptInput
                   ref={promptInputRef}
                   availableSkills={availableSkills}
-                  draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                  draftStateKey={getChatComposerDraftKey(activeSessionId)}
                   value={inputValueRef.current}
                   syncKey={inputVersion}
                   segments={inputSegments}

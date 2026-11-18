@@ -128,7 +128,7 @@ impl Api {
 
     pub async fn stop(self) {
         self.task.abort();
-        self.auth.shutdown().await;
+        let _ = self.auth.shutdown().await;
     }
 }
 
@@ -1870,8 +1870,8 @@ mod providers {
     }
 
     #[tokio::test]
-    async fn account_creation_and_provider_entries_are_shaped_and_redacted() -> Result<(), Response>
-    {
+    async fn account_creation_and_provider_entries_are_shaped_and_redacted()
+    -> Result<(), Box<Response>> {
         let body = json!({"providerType": " anthropic ", "label": null});
         let (provider_type, label) = valid_account_create(body.as_object().unwrap())?;
         assert_eq!(provider_type, "anthropic");
@@ -1942,10 +1942,9 @@ mod providers {
 mod mobile {
     use super::*;
     use jait_gateway::routes::mobile::{
-        ConsentStore, ControlAccessView, DEFAULT_TEST_MESSAGE, DEVICE_NOT_FOUND,
-        DeviceRegistration, DeviceStore, INVALID_PAYLOAD, INVALID_ROUTINE_KIND, INVALID_TIME,
-        MobileRoutes, PUSH_DEVICE_NOT_FOUND, PUSH_UNAVAILABLE, PushDevices, RoutineStore,
-        SCHEDULER_UNAVAILABLE, SessionList,
+        ConsentStore, ControlAccessView, DEVICE_NOT_FOUND, DeviceRegistration, DeviceStore,
+        INVALID_PAYLOAD, INVALID_ROUTINE_KIND, INVALID_TIME, MobileRoutes, PUSH_DEVICE_NOT_FOUND,
+        PUSH_UNAVAILABLE, PushDevices, RoutineStore, SessionList,
     };
     use std::sync::{Arc, Mutex};
 
@@ -2058,14 +2057,11 @@ mod mobile {
         fn list_pending(&self) -> Vec<Value> {
             self.0.lock().unwrap().clone()
         }
-        fn approve(&self, id: &str, _method: &str, _actor: &str) -> bool {
+        fn decide(&self, id: &str, _user_id: &str, _approve: bool) -> bool {
             let mut pending = self.0.lock().unwrap();
             let before = pending.len();
             pending.retain(|entry| entry["id"] != json!(id));
             pending.len() != before
-        }
-        fn reject(&self, id: &str, _method: &str, _actor: &str) -> bool {
-            self.approve(id, "", "")
         }
     }
 
@@ -2911,9 +2907,10 @@ mod git {
         program.to_string()
     }
 
-    async fn api_for(root: &PathBuf) -> Api {
+    async fn api_for(root: &std::path::Path) -> Api {
         let auth = auth();
-        let routes = GitRoutes::new(auth.clone()).with_authority(authority_for(root.clone(), None));
+        let routes =
+            GitRoutes::new(auth.clone()).with_authority(authority_for(root.to_path_buf(), None));
         Api::start(routes.router(), auth).await
     }
 
@@ -3484,7 +3481,7 @@ mod email {
     use jait_gateway::services::email::imap::{
         ImapSession, MailProtocolHost, ParsedMime, ProtocolLimits, SmtpMessage,
     };
-    use jait_gateway::services::email::remote_images::{ImageRequest, ImageResponse};
+    use jait_gateway::services::email::remote_images::ImageRequest;
     use jait_gateway::services::user_secrets::UserSecretService;
     use std::num::NonZeroU16;
     use std::sync::Arc;

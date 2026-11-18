@@ -18,6 +18,8 @@ export interface VoiceHeaderControlsBaseProps {
   canStartVoice: boolean
   isDesktop: boolean
   compactWithAgents?: boolean
+  /** Auth is still resolving, so the final mobile layout isn't known yet. */
+  layoutPending?: boolean
 }
 
 const noDragStyle = (isDesktop: boolean) =>
@@ -32,8 +34,17 @@ function wakeLabel(wakeWord: WakeWord, enabled: boolean): string {
 }
 
 /** On mobile, start a call directly or opt in to the wake-word listener. */
-export function VoiceMicButtonMobile({ voiceOverlayOpen, wakeWord, wakeWordEnabled, toggleWakeWord, startVoiceSession, canStartVoice, compactWithAgents = false }: VoiceHeaderControlsBaseProps) {
+export function VoiceMicButtonMobile({ voiceOverlayOpen, wakeWord, wakeWordEnabled, toggleWakeWord, startVoiceSession, canStartVoice, compactWithAgents = false, layoutPending = false }: VoiceHeaderControlsBaseProps) {
   if (voiceOverlayOpen) return null
+  if (layoutPending) {
+    // Auth decides whether the agent control and compact Voice menu mount.
+    // Hold the compact width rather than flash the inline Mic + Ear pair.
+    return (
+      <div aria-hidden="true" data-voice-pending className="flex h-10 w-10 shrink-0 items-center justify-center md:hidden min-[410px]:w-12">
+        <span className="h-8 w-8 rounded-lg bg-muted motion-safe:animate-pulse" />
+      </div>
+    )
+  }
   const wakeLabelText = wakeWordEnabled ? 'Disable wake word' : 'Enable wake word'
   return (
     <div className="shrink-0 md:hidden">

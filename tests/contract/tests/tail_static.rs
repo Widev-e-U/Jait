@@ -43,16 +43,6 @@ fn tailstatic_packages_gateway_scripts_smoke_process_test_mjs_44_1() {
     );
 }
 
-// packages/gateway/src/__scratch-pr.test.ts:27:1: scratch: replicate pr-state flow
-#[test]
-fn tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1() {
-    tail_assertions::check(
-        r#"gateway-src-scratch-pr-test-1de735f7"#,
-        r#"tailstatic_packages_gateway_src___scratch_pr_test_ts_27_1"#,
-        r#"[{"matcher":"toComplete","negate":false}]"#,
-    );
-}
-
 // packages/gateway/src/build-retry.test.ts:16:3: covers CI and all three release retry loops
 #[test]
 fn tailstatic_packages_gateway_src_build_retry_test_ts_16_3() {
@@ -4226,62 +4216,72 @@ fn tailstatic_packages_gateway_src_providers_acp_provider_startup_test_ts_8_1() 
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+// packages/gateway/src/providers/acp-provider-steering.test.ts:37:3: handles %s while retaining prompt ownership
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each0() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each0() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each0"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+// packages/gateway/src/providers/acp-provider-steering.test.ts:37:3: handles %s while retaining prompt ownership
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each1() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each1() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each1"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+// packages/gateway/src/providers/acp-provider-steering.test.ts:37:3: handles %s while retaining prompt ownership
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each2() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each2() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each2"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+// packages/gateway/src/providers/acp-provider-steering.test.ts:37:3: handles %s while retaining prompt ownership
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_37_3_each3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:53:3: does not send steering when the provider did not negotiate it
+// packages/gateway/src/providers/acp-provider-steering.test.ts:57:3: sends image attachments as ACP image prompt parts and skips path-only attachments
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_53_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_57_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_53_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_57_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:77:3: does not send steering when the provider did not negotiate it
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_77_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_77_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-steering.test.ts:63:3: preserves stdio environment and remote headers across the SDK boundary
+// packages/gateway/src/providers/acp-provider-steering.test.ts:87:3: preserves stdio environment and remote headers across the SDK boundary
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_63_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_87_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_63_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_87_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
@@ -6427,42 +6427,52 @@ fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_13_3() 
     );
 }
 
-// packages/gateway/src/providers/steering-dispatcher.test.ts:36:3: retains rejected messages for FIFO fallback (%s)
+// packages/gateway/src/providers/steering-dispatcher.test.ts:36:3: hands the pending message, including its attachments, to the delivery callback
 #[test]
-fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each0() {
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3() {
     tail_assertions::check(
         r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
-        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each0"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["[STEERING] look at this",{"__jait_matcher":"objectContaining","value":{"attachments":{"__jait_observed":0}}}],"hybrid":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:48:3: retains rejected messages for FIFO fallback (%s)
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each0"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["first","second"]}]"#,
     );
 }
 
-// packages/gateway/src/providers/steering-dispatcher.test.ts:36:3: retains rejected messages for FIFO fallback (%s)
+// packages/gateway/src/providers/steering-dispatcher.test.ts:48:3: retains rejected messages for FIFO fallback (%s)
 #[test]
-fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each1() {
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each1() {
     tail_assertions::check(
         r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
-        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each1"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each1"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["first","second"]}]"#,
     );
 }
 
-// packages/gateway/src/providers/steering-dispatcher.test.ts:54:3: settles the current ack at the turn boundary and leaves later arrivals queued
+// packages/gateway/src/providers/steering-dispatcher.test.ts:66:3: settles the current ack at the turn boundary and leaves later arrivals queued
 #[test]
-fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_54_3() {
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_66_3() {
     tail_assertions::check(
         r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
-        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_54_3"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_66_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["after turn end"]}]"#,
     );
 }
 
-// packages/gateway/src/providers/steering-dispatcher.test.ts:73:3: detaches on cancellation without emitting a late transcript marker
+// packages/gateway/src/providers/steering-dispatcher.test.ts:85:3: detaches on cancellation without emitting a late transcript marker
 #[test]
-fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_73_3() {
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_85_3() {
     tail_assertions::check(
         r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
-        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_73_3"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_85_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["after cancellation"]}]"#,
     );
 }
@@ -7127,122 +7137,122 @@ fn tailstatic_packages_gateway_src_routes_chat_image_test_ts_82_3() {
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:94:3: runs hidden self-messages, checks progress and stops without completion notifications
+// packages/gateway/src/routes/chat-loops.test.ts:103:3: continues after verified completion until an actual Q&A request
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_94_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_103_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_94_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":2}},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Run the regression test"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_103_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"waiting","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toContain","negate":false,"expected":"Run the regression test"},{"matcher":"toContain","negate":false,"expected":"Do not invent additional work"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:110:3: restores a running loop after gateway startup without an open browser
+// packages/gateway/src/routes/chat-loops.test.ts:124:3: restores a running loop after gateway startup without an open browser
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_110_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_124_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_110_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_124_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"waiting"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:121:3: uses the chat's selected model and never lets saved UI state retarget a continuation
-#[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_121_3() {
-    tail_assertions::check(
-        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_121_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"fixture-model"},{"matcher":"toContain","negate":false,"expected":"Fix the authorized target"},{"matcher":"toContain","negate":true,"expected":"Wrong hidden task"}]"#,
-    );
-}
-
-// packages/gateway/src/routes/chat-loops.test.ts:135:3: restores ordinary notifications for new turns after goal completion
+// packages/gateway/src/routes/chat-loops.test.ts:135:3: uses the chat's selected model and never lets saved UI state retarget a continuation
 #[test]
 fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_135_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
         r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_135_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"completion","title":"Response ready · Fix goal"}},{"matcher":"toBe","negate":false,"expected":1}]"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"waiting"},{"matcher":"toBe","negate":false,"expected":"fixture-model"},{"matcher":"toContain","negate":false,"expected":"Fix the authorized target"},{"matcher":"toContain","negate":true,"expected":"Wrong hidden task"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:149:3: cancel during the gap pauses continuation, and controls require ownership
+// packages/gateway/src/routes/chat-loops.test.ts:149:3: restores ordinary notifications for new turns after an explicit user pause
 #[test]
 fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_149_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
         r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_149_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"completion","title":"Response ready · Fix goal"}},{"matcher":"toBe","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:165:3: cancel during the gap pauses continuation, and controls require ownership
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_165_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_165_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:160:3: blocks on pending human input and wakes when the wait is cleared
-#[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_160_3() {
-    tail_assertions::check(
-        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_160_3"#,
-        r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
-    );
-}
-
-// packages/gateway/src/routes/chat-loops.test.ts:171:3: stops on provider errors and resumes only on request
-#[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_171_3() {
-    tail_assertions::check(
-        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_171_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop stopped"}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
-    );
-}
-
-// packages/gateway/src/routes/chat-loops.test.ts:180:3: exposes a stopped goal on a manual retry and continues automatically after resume
+// packages/gateway/src/routes/chat-loops.test.ts:180:3: blocks on pending human input and wakes when the wait is cleared
 #[test]
 fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_180_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
         r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_180_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Finish the saved migration"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Run the remaining regression"},{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3}]"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"optional":true,"expected":"waiting"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:205:3: continues a goal created mid-turn even when the model omits its check
+// packages/gateway/src/routes/chat-loops.test.ts:191:3: stops on provider errors and resumes only on request
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_205_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_191_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_205_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toContain","negate":false,"expected":"Verify completed work before repeating actions"}]"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_191_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop stopped"}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:216:3: a direct answer resumes a waiting goal and validates owner access
+// packages/gateway/src/routes/chat-loops.test.ts:200:3: exposes a stopped goal on a manual retry and continues automatically after resume
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_216_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_200_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_216_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"optional":true,"expected":"running"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_200_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Finish the saved migration"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Run the remaining regression"},{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"waiting","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:232:3: waits for a user answer and sends attention instead of a completion notification
+// packages/gateway/src/routes/chat-loops.test.ts:225:3: continues a goal created mid-turn even when the model omits its check
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_232_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_225_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_232_3"#,
-        r#"[{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop needs your answer"}},{"matcher":"toBe","negate":false,"expected":"waiting"}]"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_225_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"waiting","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toContain","negate":false,"expected":"Verify completed work before repeating actions"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-loops.test.ts:241:3: stops and asks the user instead of choosing a provider and model by itself
+// packages/gateway/src/routes/chat-loops.test.ts:236:3: a direct answer resumes a waiting goal and validates owner access
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_241_3() {
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_236_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_241_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_236_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"optional":true,"expected":"running"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:253:3: waits for Q&A without duplicating the question notification
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_253_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_253_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"waiting"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:262:3: stops and asks the user instead of choosing a provider and model by itself
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_262_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_262_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop needs a provider and model"}},{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
@@ -7840,22 +7850,32 @@ fn tailstatic_packages_gateway_src_routes_chat_swarm_live_prose_test_ts_55_3() {
     );
 }
 
-// packages/gateway/src/routes/chat-system-notice.test.ts:68:3: persists and surfaces a hidden system-notification turn as a visible gray system-notice
+// packages/gateway/src/routes/chat-system-notice.test.ts:72:3: delivers a completed command after an unsteerable active turn
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_68_3() {
+fn tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_72_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-system-notice-test-fc72cd92"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_68_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_72_3"#,
+        r#"[{"matcher":"toBeDefined","negate":false,"optional":true},{"matcher":"toBe","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-system-notice.test.ts:103:3: persists and surfaces a hidden system-notification turn as a visible gray system-notice
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_103_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-system-notice-test-fc72cd92"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_103_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"role":"user","content":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}}},"hybrid":true},{"matcher":"toContain","negate":false,"expected":"Always produce a user-visible final response"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-system-notice.test.ts:156:3: does not surface a visible system notice when only a system notification is sent without a notice line
+// packages/gateway/src/routes/chat-system-notice.test.ts:191:3: does not surface a visible system notice when only a system notification is sent without a notice line
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_191_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-system-notice-test-fc72cd92"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_191_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
@@ -8570,213 +8590,263 @@ fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_132_3() {
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:191:3: exposes only non-core builtin tools and allowlisted core tools over MCP
+// packages/gateway/src/routes/mcp-server.test.ts:current:191: exposes non-core builtin, plugin and bridged MCP server tools plus allowlisted core tools over MCP
 #[test]
 fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_191_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
         r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_191_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["jait.todos","user.ask","cron.add"]},{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"jait_todos","description":"Manage global Jait todo items","inputSchema":{"type":"object","properties":{"action":{"type":"string","enum":["list","add","update","remove"]},"todoId":{"type":"string"}},"required":["action"]},"annotations":{"destructiveHint":true,"readOnlyHint":true,"idempotentHint":true}},{"name":"user_ask","description":"Ask the user one or more structured questions","inputSchema":{"type":"object","properties":{"questions":{"type":"array"}},"required":["questions"]},"annotations":{"readOnlyHint":true,"idempotentHint":true}},{"name":"cron_add","description":"Create a cron job","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},"annotations":{"destructiveHint":true}}]}}}]"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["jait.todos","user.ask","cron.add","mcp.github.create_issue"]},{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"jait_todos","description":"Manage global Jait todo items","inputSchema":{"type":"object","properties":{"action":{"type":"string","enum":["list","add","update","remove"]},"todoId":{"type":"string"}},"required":["action"]},"annotations":{"destructiveHint":true,"readOnlyHint":true,"idempotentHint":true}},{"name":"user_ask","description":"Ask the user one or more structured questions","inputSchema":{"type":"object","properties":{"questions":{"type":"array"}},"required":["questions"]},"annotations":{"readOnlyHint":true,"idempotentHint":true}},{"name":"cron_add","description":"Create a cron job","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},"annotations":{"destructiveHint":true}},{"name":"mcp_github_create_issue","description":"External MCP tool","inputSchema":{"type":"object","properties":{}},"annotations":{"destructiveHint":true}}]}}}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:current:346: calls tools by the provider-safe name clients are shown, even when the real name contains underscores
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_346_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_346_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":true,"expected":"core.hidden_tool"},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true,"content":[{"text":"Unknown tool: core.hidden.tool"}]}}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:current:398: refuses to guess between tools that share a provider-safe name
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_398_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_398_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true}}},{"matcher":"toContain","negate":false,"expected":"Ambiguous tool name team_chat_room"},{"matcher":"toContain","negate":false,"expected":"team.chat_room"},{"matcher":"toContain","negate":false,"expected":"team_chat.room"},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":false}}},{"matcher":"toEqual","negate":false,"expected":["team.chat_room"]}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:current:435: serves bridged MCP server tools in the deferred catalog and runs them through the tool executor under their real name
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_435_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_435_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["mcp_opengym_get_workout_history"]},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"content":[{"text":"gated execution"}],"isError":false}}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mcp.opengym.get_workout_history",{"days":7},{"__jait_matcher":"objectContaining","value":{"sessionId":"chat-1","requestedBy":"mcp-client"}}]},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:333:3: advertises human-friendly tool titles to MCP clients
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_333_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_496_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_333_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_496_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"name":"todo","title":"Todo"}},{"__jait_matcher":"objectContaining","value":{"name":"jait_terminal","title":"Terminal"}}]}}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:361:3: builds the MCP callback base URL from forwarded headers
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_361_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_524_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_361_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_524_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"https://gateway.example.com"}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:373:3: falls back to the incoming host header before config defaults
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_373_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_536_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_373_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_536_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"http://127.0.0.1:4111"}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:383:3: serves initialize over streamable HTTP MCP
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_383_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_546_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_383_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_546_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"2025-03-26"},{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"jait-gateway","version":"1.0.0"},"instructions":{"__jait_matcher":"stringContaining","value":"Use tools_search"}}}}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:431:3: serves streamable HTTP initialize on legacy /mcp/sse POST configs
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_431_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_594_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_431_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_594_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","serverInfo":{"name":"jait-gateway"}}}}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:473:3: streams MCP tool progress over the streamable HTTP response
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_473_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_636_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_473_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_636_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"text/event-stream"},{"matcher":"toContain","negate":false,"expected":"\"method\":\"notifications/progress\""},{"matcher":"toContain","negate":false,"expected":"\"message\":\"first\\n\""},{"matcher":"toContain","negate":false,"expected":"\"message\":\"second\\n\""},{"matcher":"toContain","negate":false,"expected":"\"id\":1"}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:522:3: routes MCP terminal calls through the configured tool executor
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_522_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_685_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_522_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_685_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"content":[{"text":"remote execution"}],"isError":false}}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["jait.terminal",{"command":"pwd"},{"__jait_matcher":"objectContaining","value":{"sessionId":"remote-session","projectRoot":{"__jait_observed":0},"requestedBy":"mcp-client"}}],"hybrid":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:573:3: accepts initialized notifications over streamable HTTP MCP
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_573_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_736_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_573_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_736_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":202},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:602:3: passes session, project, and provider overrides into MCP tool context
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_602_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_765_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_602_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_765_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok"}],"isError":false}}},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"web-session-123","projectRoot":"/tmp/project","userId":{"__jait_type":"undefined"},"providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:672:3: forwards MCP tool output chunks to the request progress callback
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_672_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_835_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_672_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_835_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["first\n","second\n"]}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:706:3: rejects tool calls when no session can be resolved
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_706_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_869_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_706_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_869_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Tool execution requires a sessionId. Authenticate with an active session or provide x-jait-session-id."}],"isError":true}}}]"#,
     );
 }
 
 // packages/gateway/src/routes/mcp-server.test.ts:748:3: uses the authenticated user's last active session for MCP tool calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_748_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_911_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_748_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_911_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:823:3: uses the global last active session for unauthenticated local MCP tool calls
+// packages/gateway/src/routes/mcp-server.test.ts:823:3: passes the authenticated user's saved API keys into MCP tool context
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_823_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_986_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_823_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_986_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"JEV_API_KEY":"secret-key"}}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:851:3: uses the global last active session for unauthenticated local MCP tool calls
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1014_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1014_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:898:3: passes the authenticated user into MCP tool context when a session override is provided
+// packages/gateway/src/routes/mcp-server.test.ts:926:3: passes the authenticated user into MCP tool context when a session override is provided
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_898_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1089_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_898_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1089_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"query-session","projectRoot":"/tmp/query-project","userId":"user-456"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:957:3: uses MCP URL query params as tool context overrides
+// packages/gateway/src/routes/mcp-server.test.ts:985:3: uses MCP URL query params as tool context overrides
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_957_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1148_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_957_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1148_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"query-session","projectRoot":"/tmp/query-project","userId":{"__jait_type":"undefined"},"providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1027:3: uses MCP tool arguments as context overrides
+// packages/gateway/src/routes/mcp-server.test.ts:1055:3: uses MCP tool arguments as context overrides
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1027_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1218_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1027_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1218_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"argument-session","projectRoot":"/tmp/argument-project","providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1112:3: infers provider, model, and runtime mode from the referenced session state
+// packages/gateway/src/routes/mcp-server.test.ts:1140:3: infers provider, model, and runtime mode from the referenced session state
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1112_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1303_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1112_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1303_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1209:3: resolves a worker's owner and execution context through %s
+// packages/gateway/src/routes/mcp-server.test.ts:1237:3: resolves a worker's owner and execution context through %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each0() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1400_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1400_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"isError":false}},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"isError":false,"content":[{"text":{"__jait_matcher":"stringContaining","value":"Persistent team rooms."}}]}},{"matcher":"toBe","negate":false,"expected":"other-user"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"/project/worker"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1209:3: resolves a worker's owner and execution context through %s
+// packages/gateway/src/routes/mcp-server.test.ts:1237:3: resolves a worker's owner and execution context through %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each1() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1400_3_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1400_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"isError":false}},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"isError":false,"content":[{"text":{"__jait_matcher":"stringContaining","value":"Persistent team rooms."}}]}},{"matcher":"toBe","negate":false,"expected":"other-user"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"/project/worker"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1297:3: persists and broadcasts todo_list updates for MCP todo calls
+// packages/gateway/src/routes/mcp-server.test.ts:1325:3: persists and broadcasts todo_list updates for MCP todo calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1297_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1488_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1297_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1488_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"todo_list":[{"id":1,"title":"Trace MCP sync","status":"in-progress"},{"id":2,"title":"Verify todo render","status":"not-started"}]}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/messenger-notification-image.test.ts:9:3: requires authentication and resolves only the requested owner and message
+#[test]
+fn tailstatic_packages_gateway_src_routes_messenger_notification_image_test_ts_9_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-messenger-notification-image-test-3c4d4887"#,
+        r#"tailstatic_packages_gateway_src_routes_messenger_notification_image_test_ts_9_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"image/jpeg"},{"matcher":"toBe","negate":false,"expected":"no-store"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["owner","!room:test","$photo"]}]"#,
     );
 }
 
@@ -10310,112 +10380,122 @@ fn tailstatic_packages_gateway_src_routes_skills_test_ts_62_3() {
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:83:3: creates named chats, validates owned members, and returns only selected agents
+// packages/gateway/src/routes/team-chat.test.ts:84:3: paginates messages in insertion order and limits historical deliveries
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_84_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_84_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":11},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":["message-0","message-1","message-2"]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":23}]"#,
+    );
+}
+
+// packages/gateway/src/routes/team-chat.test.ts:106:3: creates named chats, validates owned members, and returns only selected agents
+#[test]
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_106_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-team-chat-test-7e419143"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_106_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":401}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:96:3: automatically addresses role-matched team messages with shared-composer attachments
+// packages/gateway/src/routes/team-chat.test.ts:119:3: automatically addresses role-matched team messages with shared-composer attachments
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_119_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_119_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toBe","negate":false,"expected":"notes.txt"}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:104:3: selects an owned persona per ordinary-chat turn and snapshots attribution across edits and switches
+// packages/gateway/src/routes/team-chat.test.ts:127:3: selects an owned persona per ordinary-chat turn and snapshots attribution across edits and switches
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_104_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_127_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_104_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_127_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"persona\":{\"id\":\"Developer\""},{"matcher":"toMatchObject","negate":false,"expected":{"model":"saved-model","mode":"supervised"}},{"matcher":"toContain","negate":false,"expected":"Persona for Developer"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Persona for QA"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":3},{"matcher":"toContain","negate":false,"expected":"New QA instructions"},{"matcher":"toEqual","negate":false,"expected":["Developer","Developer","QA","Renamed QA"]},{"matcher":"toEqual","negate":false,"expected":["Developer","Developer","QA","Renamed QA"]},{"matcher":"toEqual","negate":false,"expected":{"count":0,"state":"idle"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":4},{"matcher":"toContain","negate":true,"expected":"New QA instructions"},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:137:3: rejects foreign, missing and paused personas before starting execution
+// packages/gateway/src/routes/team-chat.test.ts:160:3: rejects foreign, missing and paused personas before starting execution
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_137_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_160_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_137_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_160_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:153:3: keeps otherwise identical queued requests addressed to different personas separate
+// packages/gateway/src/routes/team-chat.test.ts:176:3: keeps otherwise identical queued requests addressed to different personas separate
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_153_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_176_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_153_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_176_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":202},{"matcher":"toEqual","negate":false,"expected":["Developer","QA"]}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:170:3: resumes the selected persona after restart and attributes owned live runtime
+// packages/gateway/src/routes/team-chat.test.ts:193:3: resumes the selected persona after restart and attributes owned live runtime
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_170_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_193_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_170_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_193_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toEqual","negate":false,"optional":true,"expected":{"count":1,"state":"running"}},{"matcher":"toEqual","negate":false,"optional":true,"expected":{"count":0,"state":"idle"}},{"matcher":"toEqual","negate":false,"optional":true,"expected":{"count":0,"state":"idle"}},{"matcher":"toBe","negate":false,"optional":true,"expected":"QA"},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toHaveBeenCalledOnce","negate":false,"optional":true},{"matcher":"toEqual","negate":false,"optional":true,"expected":{"count":0,"state":"idle"}},{"matcher":"toMatchObject","negate":false,"expected":{"model":"saved-model","mode":"supervised"}},{"matcher":"toContain","negate":false,"expected":"Persona for QA"},{"matcher":"toEqual","negate":false,"expected":["QA"]}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:191:3: dispatches through thread routes with identity and supervised settings without creating empty chats
+// packages/gateway/src/routes/team-chat.test.ts:214:3: dispatches through thread routes with identity and supervised settings without creating empty chats
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_191_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_214_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_191_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_214_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toMatchObject","negate":false,"expected":{"model":"saved-model","mode":"supervised"}},{"matcher":"toContain","negate":false,"expected":"Persona for Developer"},{"matcher":"toContain","negate":false,"expected":"team.chat"},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"result","content":"Work checked and ready.","sender":{"kind":"agent","id":"Developer"}}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBeUndefined","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:216:3: runs independent tasks for a busy member and stops only the selected thread's queued work
+// packages/gateway/src/routes/team-chat.test.ts:239:3: runs independent tasks for a busy member and stops only the selected thread's queued work
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_216_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_239_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_216_3"#,
-        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":3},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":4},{"matcher":"toBeDefined","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeDefined","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":4},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":"cancelled"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_239_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":3},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":4},{"matcher":"toBeDefined","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeDefined","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":4},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":"cancelled"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:243:3: reports the latest answer after opening progress and fails empty completions
+// packages/gateway/src/routes/team-chat.test.ts:274:3: reports the latest answer after opening progress and fails empty completions
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_243_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_274_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_243_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_274_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"Work checked and ready."},{"matcher":"toContain","negate":false,"optional":true,"expected":"without an answer"},{"matcher":"toBe","negate":false,"optional":true,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:261:3: relays as the actual named normal chat and rejects empty or foreign-chat messages
+// packages/gateway/src/routes/team-chat.test.ts:292:3: relays as the actual named normal chat and rejects empty or foreign-chat messages
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_292_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_292_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-chat.test.ts:273:3: requires authentication and enforces room ownership and recipients
+// packages/gateway/src/routes/team-chat.test.ts:304:3: requires authentication and enforces room ownership and recipients
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3() {
+fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_304_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-chat-test-7e419143"#,
-        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_chat_test_ts_304_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
@@ -14055,6 +14135,386 @@ fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_4
     );
 }
 
+// packages/gateway/src/services/bridge-reauth.test.ts:15:3: returns the refresh token of the Teams web client
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_15_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_15_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:18:3: waits for a response for the selected tenant instead of accepting the home tenant
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_18_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_18_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:32:3: ignores other clients, failures and short tokens
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_32_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_32_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:41:3: derives the remove script next to the apply script
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_41_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_41_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"ssh a@b /x/teams-remove-login.sh"},{"matcher":"toBe","negate":false,"expected":"rm-it"},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:49:3: derives the apply script from the reauth command
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_49_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_49_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"ssh a@b /x/teams-apply-token.sh"},{"matcher":"toBe","negate":false,"expected":"foo"},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:69:3: retries an unexpected DuckDuckGo page before showing the sign-in view
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_69_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_69_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"waiting_login"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveBeenNthCalledWith","negate":false,"expected":[1,"https://teams.microsoft.com/"]},{"matcher":"toHaveBeenNthCalledWith","negate":false,"expected":[2,"https://teams.microsoft.com/"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:79:3: stops and reports an error if the search page persists
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_79_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_79_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["teams-reauth-user","teams-reauth-finished"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:88:3: allows external identity providers reached from Teams
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_88_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_88_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"waiting_login"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:97:3: uses only a dedicated tenant importer
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_97_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_97_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"ssh a@b /x/teams-apply-tenant.sh"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":"tenant-import"}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-reauth.test.ts:102:3: rejects malformed tenant IDs without starting a browser
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_102_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-reauth-test-d9e2af01"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_reauth_test_ts_102_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"error"}]"#,
+    );
+}
+
+// packages/gateway/src/services/bridge-status.test.ts:5:3: preserves the per-tenant probe result and does not turn unknown into connected
+#[test]
+fn tailstatic_packages_gateway_src_services_bridge_status_test_ts_5_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-bridge-status-test-c1927d2b"#,
+        r#"tailstatic_packages_gateway_src_services_bridge_status_test_ts_5_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[["expired",false],["unknown",false],["disconnected",false],[{"__jait_type":"undefined"},true]]}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:17:3: passes visual content presence to reasoning without capturing by default
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_17_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_17_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"\"visualContent\":{\"canvas\":true,\"iframe\":true}"},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:26:3: reports the attempted action and underlying failure without recording it as completed
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_26_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_26_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"action_failed","history":[],"attemptedAction":{"action":"click","target":"Menu","selector":"#menu"},"result":{"message":"The verified target could not be clicked."}}}}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:33:3: reobserves a rejected stale click and asks for a new decision
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_33_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_33_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"history":[{"selector":"#new"}]}}},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot","browser.click","browser.snapshot","browser.click","browser.snapshot"]}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:47:3: stops when a resumed typing target is rejected before dispatch
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_47_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_47_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"action_failed","history":[],"result":{"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:61:3: bounds stale target retries without recording an action
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_61_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_61_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"action_failed","history":[]}}},{"matcher":"toHaveLength","negate":false,"expected":4}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:70:3: discovers new controls after each click and reports model completion
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_70_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_70_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete","history":[{"selector":"#menu"},{"selector":"#save"}]}}},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot","browser.click","browser.snapshot","browser.click","browser.snapshot"]}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:80:3: carries task state and observations forward to guide later decisions
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_80_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_80_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"Menu opened; save remains"},{"matcher":"toContain","negate":false,"expected":"Save"},{"matcher":"toContain","negate":false,"expected":"Save is visible"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:92:3: resolves a missing target after choosing an action
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_92_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_92_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"history":[{"selector":"#menu"}]}}},{"matcher":"toBe","negate":false,"expected":"browser.click"},{"matcher":"toMatchObject","negate":false,"expected":{"selector":"#menu","expected":{"__jait_matcher":"any","type":"String"}}}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:103:3: stops when the follow-up target remains uncertain
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_103_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_103_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"needs_review"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:111:3: reuses fresh action feedback and checks suppression before inference
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_111_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_111_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":"Browser feedback unavailable; task stopped."}},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot","browser.click"]},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:120:3: offers controls beyond ten and binds clicks to their observed identity
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_120_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_120_3"#,
+        r##"[{"matcher":"toEqual","negate":false,"expected":["browser.snapshot",{"maxElements":30},{"__jait_matcher":"anything"}]},{"matcher":"toBe","negate":false,"expected":"#c15"},{"matcher":"toEqual","negate":false,"expected":{"documentUrl":"https://example.test/","documentTimeOrigin":123,"tagName":"button","name":"Button 15","text":""}}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:133:3: refuses to click when page identity is unavailable
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_133_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_133_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"needs_review"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:140:3: batches targets and executes only the selected operation
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_140_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_140_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text"}}},{"matcher":"toBe","negate":false,"expected":"browser.type"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveProperty","negate":false,"expected":"selectTarget"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:154:3: binds selected option to the observed value and label
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_154_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_154_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"b"},{"matcher":"toEqual","negate":false,"expected":{"value":"b","label":"B"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:163:3: executes bounded %s actions
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:163:3: executes bounded %s actions
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:163:3: executes bounded %s actions
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each2() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each2"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:170:3: does not type into password controls
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_170_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_170_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"needs_review"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:177:3: does not treat uncertainty as completion
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_177_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_177_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"needs_review","reason":"model_stopped","decision":{"choice":"stop"}}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:183:3: executes low-confidence action and target choices without confirmation
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_183_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_183_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete","history":[{"selector":"#menu"}]}}},{"matcher":"toMatchObject","negate":false,"expected":{"selector":"#menu","expected":{"__jait_matcher":"any","type":"String"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:193:3: stops before inference when feedback is suppressed
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_193_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_193_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:200:3: continues safely when advisory reasoning fails during %s
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"reason":"model_stopped"}}},{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toContain","negate":true,"expected":"secret"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:200:3: continues safely when advisory reasoning fails during %s
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"reason":"model_stopped"}}},{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toContain","negate":true,"expected":"secret"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:211:3: hands off text to the calling model for the Jait provider
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_211_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_211_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","resumeToken":{"__jait_matcher":"any","type":"String"},"pendingAction":{"action":"type","actionDispatched":false,"field":"Answer"}}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:222:3: hands off CLI provider text without sending the selected model to an HTTP backend
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_222_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_222_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","resumeToken":{"__jait_matcher":"any","type":"String"},"pendingAction":{"action":"type","actionDispatched":false,"field":"#answer","descriptor":{"selector":"#answer","tagName":"textarea"}}}}},{"matcher":"toContain","negate":true,"expected":"sensitive existing value"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot"]}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:235:3: reports cancellation instead of handing off text
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_235_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_235_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":{"__jait_matcher":"stringContaining","value":"cancelled or timed out"}}},{"matcher":"toBe","negate":true,"expected":"needs_text"},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-adaptive-task.test.ts:246:3: reports the failed stage and safe decision error code without leaking messages
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_246_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-adaptive-task-test-d6beb51d"#,
+        r#"tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_246_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"error":{"stage":"System One decision","code":"timeout"}}}},{"matcher":"toContain","negate":true,"expected":"secret"}]"#,
+    );
+}
+
 // packages/gateway/src/services/browser-intelligence.test.ts:9:3: converts replayable selectors without changing their meaning
 #[test]
 fn tailstatic_packages_gateway_src_services_browser_intelligence_test_ts_9_3() {
@@ -14085,6 +14545,186 @@ fn tailstatic_packages_gateway_src_services_browser_intelligence_test_ts_20_3() 
     );
 }
 
+// packages/gateway/src/services/browser-task-continuation.test.ts:21:3: fills several explicitly mapped fields in one call without passing values to decisions or nested events
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_21_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_21_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete","history":[{"label":"type: #name"},{"label":"type: #city"}]}}},{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"selector":"#name","text":"Ada","expected":{"__jait_matcher":"any","type":"String"}}},{"__jait_matcher":"objectContaining","value":{"selector":"#city","text":"Paris","expected":{"__jait_matcher":"any","type":"String"}}}]},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"alt","nodes":[{"id":3,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"A"},{"id":1,"kind":"char","value":"d"},{"id":2,"kind":"char","value":"a"}]},{"id":9,"kind":"seq","nodes":[{"id":4,"kind":"char","value":"P"},{"id":5,"kind":"char","value":"a"},{"id":6,"kind":"char","value":"r"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"s"}]}]},"flags":""}}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:38:3: hands off when supplied mappings or observed targets are ambiguous or do not match
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_38_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_38_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","pendingAction":{"actionDispatched":false}}}},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:50:3: accepts an unnamed textarea when its observed document and selector match
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_50_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_50_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete"}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:61:3: stops if a mapped field becomes stale before typing
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_61_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_61_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"action_failed","result":{"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:70:3: hands off twice and resumes the same task with verified identities and history
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_70_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_70_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","pendingAction":{"field":"#name","actionDispatched":false}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","completedActions":1,"pendingAction":{"field":"#city"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete","history":[{"label":"type: #name"},{"label":"type: #city"}]}}},{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"selector":"#name","text":"Ada","expected":{"__jait_matcher":"any","type":"String"}}},{"__jait_matcher":"objectContaining","value":{"selector":"#city","text":"Paris","expected":{"__jait_matcher":"any","type":"String"}}}]}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:87:3: offers the next unfilled field after a successful continuation
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_87_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_87_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text","completedActions":1,"pendingAction":{"field":"Email","descriptor":{"selector":"#email"}}}}},{"matcher":"toContain","negate":true,"expected":"Full Name"}]"##,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:102:3: allows the same selector in a new document and can complete with no remaining field
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_102_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_102_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"needs_text"}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"model_reports_complete"}}},{"matcher":"toHaveProperty","negate":true,"expected":"type"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:117:3: rejects another scope, concurrent use and replay without dispatching twice
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_117_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_117_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:130:3: expires at the original deadline and rejects a stale target without retrying
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_130_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_130_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"action_failed","history":[],"result":{"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:145:3: preserves the action budget and respects cancellation before dispatch
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_145_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_145_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"limit","history":[{"label":"type: #name"}]}}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":{"__jait_matcher":"stringContaining","value":"cancelled or timed out"}}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:157:3: invalidates a pending continuation when its originating turn is cancelled
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_157_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_157_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"invalid_continuation"}}},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:166:3: advertises the resume protocol in the browser task tool schema
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_166_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_166_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"immediately call browser.task again"},{"matcher":"toMatchObject","negate":false,"expected":{"resumeToken":{"type":"string"},"text":{"type":"string"}}},{"matcher":"toContain","negate":true,"expected":"task"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-continuation.test.ts:174:3: keeps the resume token visible in projected MCP evidence for oversized page feedback
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_174_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-continuation-test-fe9e3fb3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_continuation_test_ts_174_3"#,
+        r#"[{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"needs_text"},{"matcher":"toContain","negate":true,"expected":"pagepage"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-visual.test.ts:21:3: sends fresh screenshots before actions and after the last click
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_visual_test_ts_21_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-visual-test-bf1863f0"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_visual_test_ts_21_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"completed":[0,1]}}},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot","browser.screenshot","browser.click","browser.screenshot","browser.click","browser.screenshot"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task-visual.test.ts:31:3: stops without sending an image if capture is suppressed
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_visual_test_ts_31_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-visual-test-bf1863f0"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_visual_test_ts_31_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"completed":[]}}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task.test.ts:19:3: selects multiple permitted actions against fresh feedback and verifies final state
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_test_ts_19_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-test-03c4c1e8"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_test_ts_19_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"completed":[0,1]}}},{"matcher":"toEqual","negate":false,"expected":["browser.snapshot","browser.click","browser.click"]},{"matcher":"toContain","negate":false,"expected":"page 2"}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task.test.ts:28:3: stops on uncertainty and never executes unlisted actions
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_test_ts_28_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-test-03c4c1e8"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_test_ts_28_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"completed":[]}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-task.test.ts:34:3: does not send suppressed browser feedback to the model
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_task_test_ts_34_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-task-test-03c4c1e8"#,
+        r#"tailstatic_packages_gateway_src_services_browser_task_test_ts_34_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
 // packages/gateway/src/services/browser-workflows.test.ts:32:3: validates references, action arguments and version
 #[test]
 fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_32_3() {
@@ -14095,82 +14735,92 @@ fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_32_3() {
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:44:3: persists definitions and enforces owner/project and revision checks
+// packages/gateway/src/services/browser-workflows.test.ts:44:3: executes descriptive click steps through the normal executor and stops on failure
 #[test]
 fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_44_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
         r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_44_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"failed","nextStep":2}}},{"matcher":"toEqual","negate":false,"expected":[["browser.open",{"url":"https://example.com/invoices"}],["browser.click",{"target":"Open Settings"}],["browser.click",{"target":"Open Billing"}]]},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/browser-workflows.test.ts:73:3: persists definitions and enforces owner/project and revision checks
+#[test]
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_73_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-browser-workflows-test-48c324af"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_73_3"#,
         r#"[{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toThrow","negate":false,"expected":"not found"},{"matcher":"toThrow","negate":false,"expected":"changed"},{"matcher":"toBe","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:54:3: uses the gateway executor sequentially and preserves session context and progress events
+// packages/gateway/src/services/browser-workflows.test.ts:83:3: uses the gateway executor sequentially and preserves session context and progress events
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_54_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_83_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_54_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_83_3"#,
         r##"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":["browser.open","browser.type","browser.wait"]},{"matcher":"toEqual","negate":false,"expected":{"selector":"#month","text":"literal {{month}} $()"}},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":6},{"matcher":"toMatchObject","negate":false,"expected":{"status":"succeeded","nextStep":3,"revision":1}},{"matcher":"toContain","negate":true,"expected":"literal {{month}}"}]"##,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:67:3: rejects invalid inputs, changed revisions and unsafe URL schemes before effects
+// packages/gateway/src/services/browser-workflows.test.ts:96:3: rejects invalid inputs, changed revisions and unsafe URL schemes before effects
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_67_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_96_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_67_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_96_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Unknown input"},{"matcher":"toThrow","negate":false,"expected":"revision"},{"matcher":"toThrow","negate":false,"expected":"Provide input"},{"matcher":"toThrow","negate":false,"expected":"HTTP(S)"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:81:3: stops on failed actions and never retries or stores raw errors
+// packages/gateway/src/services/browser-workflows.test.ts:110:3: stops on failed actions and never retries or stores raw errors
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_81_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_110_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_81_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_110_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"secret page text"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"status":"failed","nextStep":1}}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:93:3: continues a checkpoint only after browser handoff reports explicit Done
+// packages/gateway/src/services/browser-workflows.test.ts:122:3: continues a checkpoint only after browser handoff reports explicit Done
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_93_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_122_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_93_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_122_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:102:3: cancels and prevents overlapping runs in the same browser chat
+// packages/gateway/src/services/browser-workflows.test.ts:131:3: cancels and prevents overlapping runs in the same browser chat
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_102_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_131_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_102_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_131_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"already has"},{"matcher":"toThrow","negate":false,"expected":"not found"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"status":"cancelled","nextStep":0}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:121:3: validates through the public save tool and returns extraction outputs without storing page data
+// packages/gateway/src/services/browser-workflows.test.ts:150:3: validates through the public save tool and returns extraction outputs without storing page data
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_121_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_150_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_121_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_150_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"outputs":[{"step":4,"data":{"values":{"result":"page-data"}}}]}}},{"matcher":"toMatchObject","negate":false,"expected":{"instruction":"Read results for November","fields":[{"description":"Result for November"}]}},{"matcher":"toContain","negate":true,"expected":"page-data"},{"matcher":"toThrow","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/browser-workflows.test.ts:137:3: marks crash recovery interrupted without replaying an uncertain effect
+// packages/gateway/src/services/browser-workflows.test.ts:166:3: marks crash recovery interrupted without replaying an uncertain effect
 #[test]
-fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_137_3() {
+fn tailstatic_packages_gateway_src_services_browser_workflows_test_ts_166_3() {
     tail_assertions::check(
         r#"gateway-src-services-browser-workflows-test-48c324af"#,
-        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_137_3"#,
+        r#"tailstatic_packages_gateway_src_services_browser_workflows_test_ts_166_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"interrupted","steps":[{"status":"interrupted"}]}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
@@ -14285,232 +14935,342 @@ fn tailstatic_packages_gateway_src_services_calendar_service_test_ts_156_1() {
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:24:3: checks cited execution status within the chat before accepting completion
+// packages/gateway/src/services/chat-loops.test.ts:25:3: checks cited execution status within the chat before accepting completion
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_24_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_25_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_24_3"#,
-        r#"[{"matcher":"toThrow","negate":false,"expected":"unavailable or belongs to another chat"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"failed"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toEqual","negate":false,"expected":[{"criterion":0,"terminalId":"terminal","executionId":"run","status":"completed","exitCode":0}]},{"matcher":"toBe","negate":false,"expected":"completed"}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_25_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"unavailable or belongs to another chat"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"failed"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toEqual","negate":false,"expected":[{"criterion":0,"terminalId":"terminal","executionId":"run","status":"completed","exitCode":0}]},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:41:3: requires execution references for designated criteria
+// packages/gateway/src/services/chat-loops.test.ts:42:3: persists the measured turn duration
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_41_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_42_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_41_3"#,
-        r#"[{"matcher":"toThrow","negate":false,"expected":"requires a tracked execution"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toThrow","negate":false,"expected":"Invalid execution criteria"}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_42_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":1250}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:48:3: rejects malformed execution references
+// packages/gateway/src/services/chat-loops.test.ts:48:3: rejects waiting without a real blocking Q&A in the same chat
 #[test]
 fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_48_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
         r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_48_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"pending user.ask"},{"matcher":"toThrow","negate":false,"expected":"pending user.ask"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:59:3: waits for actual Q&A even when the model omits its checkpoint
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_59_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_59_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:67:3: continues beyond 50 turns and respects questions
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_67_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_67_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:76:3: reviews unchecked turns and schedules a bounded automatic wait
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_76_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_76_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"iteration":1,"decision":"wait"}},{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"brief wait"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:89:3: redacts review input and falls back if System One fails
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_89_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_89_3"#,
+        r#"[{"matcher":"toContain","negate":true,"expected":"abc123"},{"matcher":"toContain","negate":true,"expected":"secret-key"},{"matcher":"toBe","negate":false,"expected":"fallback"},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:103:3: does not override a pause while the reviewer is running
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_103_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_103_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:115:3: requires execution references for designated criteria
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_115_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_115_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"requires a tracked execution"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toThrow","negate":false,"expected":"Invalid execution criteria"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:122:3: rejects malformed execution references
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_122_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_122_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Invalid execution reference"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:54:3: persists checkpoints, uses the next self-message once and keeps unrelated metadata
+// packages/gateway/src/services/chat-loops.test.ts:128:3: persists checkpoints, uses the next self-message once and keeps unrelated metadata
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_54_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_128_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_54_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_128_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","iteration":1,"nextMessage":"Implement the fix and rerun the test"}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"goal":"Fix the issue","iteration":1,"summary":"Reproduced"}},{"matcher":"toBe","negate":false,"expected":"saved"},{"matcher":"toContain","negate":false,"expected":"Verify completed work before repeating actions"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:68:3: rejects empty goals and false completion without verification for every criterion
+// packages/gateway/src/services/chat-loops.test.ts:142:3: rejects empty goals and false completion without verification for every criterion
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_68_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_142_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_68_3"#,
-        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":24,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"a"},{"id":5,"kind":"char","value":"c"},{"id":6,"kind":"char","value":"c"},{"id":7,"kind":"char","value":"e"},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"a"},{"id":11,"kind":"char","value":"n"},{"id":12,"kind":"char","value":"c"},{"id":13,"kind":"char","value":"e"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"c"},{"id":16,"kind":"char","value":"r"},{"id":17,"kind":"char","value":"i"},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"i"},{"id":22,"kind":"char","value":"o"},{"id":23,"kind":"char","value":"n"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":8,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"w"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"o"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"l"}]},"flags":""}}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_142_3"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":24,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"a"},{"id":5,"kind":"char","value":"c"},{"id":6,"kind":"char","value":"c"},{"id":7,"kind":"char","value":"e"},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"a"},{"id":11,"kind":"char","value":"n"},{"id":12,"kind":"char","value":"c"},{"id":13,"kind":"char","value":"e"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"c"},{"id":16,"kind":"char","value":"r"},{"id":17,"kind":"char","value":"i"},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"i"},{"id":22,"kind":"char","value":"o"},{"id":23,"kind":"char","value":"n"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"user.ask"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:78:3: pause, replacement and resume invalidate stale agent checks
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_78_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_78_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:90:3: pauses on cancellation and errors and preserves an explicit waiting checkpoint
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_90_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_90_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toContain","negate":false,"expected":"Loop status: waiting"}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:101:3: keeps stopped goals visible without granting permission to resume
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_101_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_101_3"#,
-        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toContain","negate":false,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"expected":"Workspace is out of credits"},{"matcher":"toContain","negate":false,"expected":"All components verified"},{"matcher":"toContain","negate":false,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"expected":"Background notifications and unrelated messages do not authorize resumption"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"Loop status: paused"},{"matcher":"toContain","negate":false,"expected":"Before ending this turn"},{"matcher":"toBeUndefined","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:120:3: collects submitted structured answers before continuing and preserves explicit pauses
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_120_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_120_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","checkedIteration":-1}},{"matcher":"toContain","negate":false,"expected":"requestId=\"question-1\""},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:129:3: does not copy autorun into question branches
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_129_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_129_3"#,
-        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:137:3: tools reject unauthenticated and worker contexts
-#[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_137_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_137_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/services/chat-loops.test.ts:152:3: requires configured System One to accept completion and records its review
+// packages/gateway/src/services/chat-loops.test.ts:152:3: pause, replacement and resume invalidate stale agent checks
 #[test]
 fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_152_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
         r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_152_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"criteria 1"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"completed","monitor":{"status":"accepted","model":"monitor-test"}}},{"matcher":"toContain","negate":false,"expected":"Regression test exit 0"},{"matcher":"toContain","negate":true,"expected":"test-key"}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:166:3: rejects uncertain or missing criterion decisions
+// packages/gateway/src/services/chat-loops.test.ts:164:3: pauses on cancellation and errors and preserves an explicit waiting checkpoint
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_166_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_164_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_166_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_164_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toContain","negate":false,"expected":"Loop status: waiting"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:176:3: keeps stopped goals visible without granting permission to resume
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_176_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_176_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toContain","negate":false,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"expected":"Workspace is out of credits"},{"matcher":"toContain","negate":false,"expected":"All components verified"},{"matcher":"toContain","negate":false,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"expected":"Background notifications and unrelated messages do not authorize resumption"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"Loop status: paused"},{"matcher":"toContain","negate":false,"expected":"Before ending this turn"},{"matcher":"toContain","negate":false,"expected":"user.ask"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:195:3: collects submitted structured answers before continuing and preserves explicit pauses
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_195_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_195_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","checkedIteration":-1}},{"matcher":"toContain","negate":false,"expected":"requestId=\"question-1\""},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:205:3: does not copy autorun into question branches
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_205_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_205_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:213:3: does not expose a model-facing pause tool while preserving user controls
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_213_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_213_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:219:3: tools reject unauthenticated and worker contexts
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_219_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_219_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:234:3: requires configured System One to accept completion and records its review
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_234_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_234_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"criteria 1"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"status":"accepted","model":"monitor-test"}}},{"matcher":"toContain","negate":false,"expected":"Regression test exit 0"},{"matcher":"toContain","negate":true,"expected":"test-key"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:248:3: rejects uncertain or missing criterion decisions
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_248_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_248_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"status":"rejected"}}}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:175:3: pauses on monitor failure without leaking errors or accepting completion
+// packages/gateway/src/services/chat-loops.test.ts:257:3: keeps running on monitor failure without leaking errors or accepting completion
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_175_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_257_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_175_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","monitor":{"status":"unavailable"}}},{"matcher":"toContain","negate":true,"expected":"private endpoint"}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_257_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":1,"monitor":{"status":"unavailable"}}},{"matcher":"toContain","negate":false,"expected":"completion is not confirmed"},{"matcher":"toContain","negate":true,"expected":"private endpoint"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:183:3: does not overwrite pauses or replacement goals during model evaluation
+// packages/gateway/src/services/chat-loops.test.ts:266:3: logs the review failure cause server-side and records only the error class
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_183_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_266_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_183_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_266_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"TypeError: fetch failed: private endpoint"],"hybrid":true},{"matcher":"toContain","negate":false,"expected":"TypeError"},{"matcher":"toContain","negate":true,"expected":"private endpoint"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:276:3: does not pause continue checkpoints when System One is unavailable
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_276_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_276_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":0,"monitor":{"status":"unavailable"}}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:287:3: keeps running when completion cannot be reviewed repeatedly
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_287_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_287_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":3}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:298:3: does not overwrite pauses or replacement goals during model evaluation
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_298_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_298_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"changed"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:198:3: pauses after three stalled checkpoints and renews budgets only on explicit resume
+// packages/gateway/src/services/chat-loops.test.ts:313:3: keeps running after stalled checkpoints and renews budgets only on explicit resume
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_198_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_313_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_198_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","stalledChecks":3}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":0,"budgetStartIteration":3}}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_313_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":3}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":0,"budgetStartIteration":3}}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:210:3: bounds unchecked turns and total turns even without System One
+// packages/gateway/src/services/chat-loops.test.ts:325:3: tracks unchecked turns and continues without System One
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_210_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_325_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_210_3"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"three turns without a checkpoint"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","iteration":53}},{"matcher":"toContain","negate":false,"expected":"50 turns since the last resume"},{"matcher":"toContain","negate":false,"expected":"Progress 49"}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_325_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","uncheckedTurns":3}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","iteration":53}},{"matcher":"toContain","negate":false,"expected":"Progress 49"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:225:3: awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints
+// packages/gateway/src/services/chat-loops.test.ts:339:3: awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_225_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_339_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_225_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"completed","monitor":{"status":"disabled"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"waiting"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_339_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"running","monitor":{"status":"disabled"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"waiting"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:238:3: scrubs configured credentials and authorization text from review state
+// packages/gateway/src/services/chat-loops.test.ts:353:3: scrubs configured credentials and authorization text from review state
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_238_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_353_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_238_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_353_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"test-key"},{"matcher":"toContain","negate":true,"expected":"other-secret"},{"matcher":"toContain","negate":true,"expected":"user:password"},{"matcher":"toContain","negate":false,"expected":"[REDACTED]"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:251:3: pauses oversized review state without sending incomplete criteria
+// packages/gateway/src/services/chat-loops.test.ts:366:3: does not accept oversized review state without sending incomplete criteria
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_251_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_366_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_251_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","monitor":{"status":"unavailable"}}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_366_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"status":"unavailable"}}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:260:3: allows verified completion after previous stalled checkpoints
+// packages/gateway/src/services/chat-loops.test.ts:375:3: allows verified completion after previous stalled checkpoints
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_260_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_375_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_260_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"completed"}]"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_375_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:275:3: routes configured tool checks through System One and waits for the verdict
+// packages/gateway/src/services/chat-loops.test.ts:390:3: routes configured tool checks through System One and waits for the verdict
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_275_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_390_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_275_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_390_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"running","monitor":{"status":"rejected"}}}},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/chat-loops.test.ts:286:3: requires a separate supported verdict for every acceptance criterion
+// packages/gateway/src/services/chat-loops.test.ts:401:3: requires a separate supported verdict for every acceptance criterion
 #[test]
-fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_286_3() {
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_401_3() {
     tail_assertions::check(
         r#"gateway-src-services-chat-loops-test-de9f4589"#,
-        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_286_3"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_401_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"criteriaPassed":[true,false]}}},{"matcher":"toHaveProperty","negate":false,"expected":"criterion_1"}]"#,
     );
 }
@@ -14856,184 +15616,194 @@ fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_164_3() {
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:187:3: measures nested trees, individual files, and missing paths
+// packages/gateway/src/services/disk-janitor.test.ts:187:3: preserves the shared build lock even when it is old
 #[test]
 fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_187_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
         r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_187_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/disk-janitor.test.ts:198:3: measures nested trees, individual files, and missing paths
+#[test]
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_198_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_198_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":5},{"matcher":"toBe","negate":false,"expected":5},{"matcher":"toEqual","negate":false,"expected":{"bytes":0,"newestMtimeMs":0}}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:197:3: reports foreign-owned scratch in a sticky directory once
+// packages/gateway/src/services/disk-janitor.test.ts:208:3: reports foreign-owned scratch in a sticky directory once
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_197_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_208_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_197_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_208_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["Disk cleanup blocked",{"__jait_matcher":"stringContaining","value":"belong to another user"}]}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:215:3: reaps a worktree whose thread finished outside the grace period
+// packages/gateway/src/services/disk-janitor.test.ts:226:3: reaps a worktree whose thread finished outside the grace period
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_215_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_226_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_215_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_226_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"thread completed"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:232:3: never reaps a worktree belonging to a running thread
+// packages/gateway/src/services/disk-janitor.test.ts:243:3: never reaps a worktree belonging to a running thread
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_232_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_243_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_232_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_243_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:247:3: keeps a finished worktree until the grace period elapses
+// packages/gateway/src/services/disk-janitor.test.ts:258:3: keeps a finished worktree until the grace period elapses
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_247_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_258_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_247_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_258_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:262:3: reaps an orphaned worktree that has no thread row
-#[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_262_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_262_3"#,
-        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"orphaned: no owning thread"},{"matcher":"toBe","negate":false,"expected":false}]"#,
-    );
-}
-
-// packages/gateway/src/services/disk-janitor.test.ts:273:3: reaps an empty per-repo container once its worktrees are gone
+// packages/gateway/src/services/disk-janitor.test.ts:273:3: reaps an orphaned worktree that has no thread row
 #[test]
 fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_273_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
         r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_273_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"orphaned: no owning thread"},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/disk-janitor.test.ts:284:3: reaps an empty per-repo container once its worktrees are gone
+#[test]
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_284_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_284_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"empty worktree container"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:289:3: keeps a container that still holds a worktree
+// packages/gateway/src/services/disk-janitor.test.ts:300:3: keeps a container that still holds a worktree
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_289_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_300_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_289_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_300_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:307:3: preserves the git branch so committed work stays recoverable
+// packages/gateway/src/services/disk-janitor.test.ts:318:3: preserves the git branch so committed work stays recoverable
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_307_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_318_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_307_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_318_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"jait/branch"}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:323:3: matches worktrees recorded with a foreign-platform path
+// packages/gateway/src/services/disk-janitor.test.ts:334:3: matches worktrees recorded with a foreign-platform path
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_323_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_334_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_323_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_334_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"thread completed"}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:339:3: reports bytes without deleting anything on a dry run
+// packages/gateway/src/services/disk-janitor.test.ts:350:3: reports bytes without deleting anything on a dry run
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_339_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_350_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_339_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_350_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":4096},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:351:3: skips the run entirely when disabled
+// packages/gateway/src/services/disk-janitor.test.ts:362:3: skips the run entirely when disabled
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_351_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_362_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_351_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_362_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"disabled"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:361:3: refuses to treat a path outside the managed root as reapable
+// packages/gateway/src/services/disk-janitor.test.ts:372:3: refuses to treat a path outside the managed root as reapable
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_361_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_372_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_361_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_372_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:370:3: enables the janitor by default so shipped installs self-clean
+// packages/gateway/src/services/disk-janitor.test.ts:381:3: enables the janitor by default so shipped installs self-clean
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_370_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_381_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_370_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_381_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:375:3: reaps only Jait scratch entries inside its configured temp root
+// packages/gateway/src/services/disk-janitor.test.ts:386:3: reaps only Jait scratch entries inside its configured temp root
 #[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_375_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_386_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_375_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_386_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:389:3: reaps stale sandbox storage only inside its configured root
-#[test]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_389_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_389_3"#,
-        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
-    );
-}
-
-// packages/gateway/src/services/disk-janitor.test.ts:400:3: keeps an old scratch directory whose contents are still being written
+// packages/gateway/src/services/disk-janitor.test.ts:400:3: reaps stale sandbox storage only inside its configured root
 #[test]
 fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_400_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
         r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_400_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/disk-janitor.test.ts:411:3: keeps an old scratch directory whose contents are still being written
+#[test]
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_411_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_411_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/services/disk-janitor.test.ts:416:3: notifies once about scratch it cannot unlink instead of failing silently
+// packages/gateway/src/services/disk-janitor.test.ts:427:3: notifies once about scratch it cannot unlink instead of failing silently
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_416_3() {
+fn tailstatic_packages_gateway_src_services_disk_janitor_test_ts_427_3() {
     tail_assertions::check(
         r#"gateway-src-services-disk-janitor-test-16a7a2e0"#,
-        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_416_3"#,
+        r#"tailstatic_packages_gateway_src_services_disk_janitor_test_ts_427_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"Disk cleanup blocked"},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":29,"kind":"alt","nodes":[{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":"m"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"s"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"n"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"d"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"n"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"}]},{"id":28,"kind":"seq","nodes":[{"id":18,"kind":"char","value":"s"},{"id":19,"kind":"char","value":"t"},{"id":20,"kind":"char","value":"i"},{"id":21,"kind":"char","value":"c"},{"id":22,"kind":"char","value":"k"},{"id":23,"kind":"char","value":"y"},{"id":24,"kind":"char","value":" "},{"id":25,"kind":"char","value":"b"},{"id":26,"kind":"char","value":"i"},{"id":27,"kind":"char","value":"t"}]}]},"flags":"i"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
@@ -15448,152 +16218,162 @@ fn tailstatic_packages_gateway_src_services_email_remote_images_test_ts_46_3() {
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:32:3: reports providers as unconfigured until credentials are saved
+// packages/gateway/src/services/email/service.test.ts:32:3: caches inbox summaries per owner and invalidates them after changes
 #[test]
 fn tailstatic_packages_gateway_src_services_email_service_test_ts_32_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
         r#"tailstatic_packages_gateway_src_services_email_service_test_ts_32_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/email/service.test.ts:46:3: reports providers as unconfigured until credentials are saved
+#[test]
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_46_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-email-service-test-c73809a4"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_46_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"gmail":false,"outlook":false}},{"matcher":"toEqual","negate":false,"expected":{"gmail":true,"outlook":false}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:38:3: resolves env credentials as a fallback
+// packages/gateway/src/services/email/service.test.ts:52:3: resolves env credentials as a fallback
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_38_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_52_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_38_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_52_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"clientId":"env-id","clientSecret":"env-secret"}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:44:3: startConnect throws a helpful error when unconfigured
+// packages/gateway/src/services/email/service.test.ts:58:3: startConnect throws a helpful error when unconfigured
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_44_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_58_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_44_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_58_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":14,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"c"},{"id":5,"kind":"char","value":"o"},{"id":6,"kind":"char","value":"n"},{"id":7,"kind":"char","value":"f"},{"id":8,"kind":"char","value":"i"},{"id":9,"kind":"char","value":"g"},{"id":10,"kind":"char","value":"u"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:49:3: builds an authorize URL with PKCE + state when configured
+// packages/gateway/src/services/email/service.test.ts:63:3: builds an authorize URL with PKCE + state when configured
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_49_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_63_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_49_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_63_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"https://accounts.google.com/o/oauth2/v2/auth"},{"matcher":"toBe","negate":false,"expected":"cid"},{"matcher":"toBe","negate":false,"expected":"S256"},{"matcher":"toBe","negate":false,"expected":"http://x/cb"},{"matcher":"toBeTruthy","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:60:3: rejects an unknown OAuth state on callback
+// packages/gateway/src/services/email/service.test.ts:74:3: rejects an unknown OAuth state on callback
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_60_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_74_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_60_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_74_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:64:3: disconnecting an account removes it and its stored tokens
+// packages/gateway/src/services/email/service.test.ts:78:3: disconnecting an account removes it and its stored tokens
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_64_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_78_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_64_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_78_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:81:3: scopes accounts to the owning user
+// packages/gateway/src/services/email/service.test.ts:95:3: scopes accounts to the owning user
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_81_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_95_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_81_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_95_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["a@gmail.com"]},{"matcher":"toEqual","negate":false,"expected":["b@gmail.com"]}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:99:3: keeps accounts distinct and requires an explicit id when there is more than one
+// packages/gateway/src/services/email/service.test.ts:113:3: keeps accounts distinct and requires an explicit id when there is more than one
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_99_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_113_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_99_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_113_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"personal@gmail.com"},{"matcher":"toBe","negate":false,"expected":"work@gmail.com"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"p"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"f"},{"id":6,"kind":"char","value":"y"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"a"},{"id":9,"kind":"char","value":"c"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"o"},{"id":12,"kind":"char","value":"u"},{"id":13,"kind":"char","value":"n"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"I"},{"id":16,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"f"},{"id":5,"kind":"char","value":"o"},{"id":6,"kind":"char","value":"u"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:108:3: appends each account's signature once to new messages and replies
+// packages/gateway/src/services/email/service.test.ts:122:3: appends each account's signature once to new messages and replies
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_108_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_122_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_108_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_122_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hello\n\n-- \nAlice\nPersonal"},{"matcher":"toMatchObject","negate":false,"expected":{"replyToMessageId":"original","body":"Reply\n\n-- \nAlice\nWork"}}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:119:3: escapes signatures for HTML and supports both per-send and per-account opt out
+// packages/gateway/src/services/email/service.test.ts:133:3: escapes signatures for HTML and supports both per-send and per-account opt out
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_119_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_133_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_119_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_133_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"&lt;img src=x onerror=&quot;bad()&quot;&gt; &amp; team"},{"matcher":"toBe","negate":false,"expected":"Hello"},{"matcher":"toBe","negate":false,"expected":"Hello"}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:131:3: scopes signature changes and deletes settings on disconnect
+// packages/gateway/src/services/email/service.test.ts:145:3: scopes signature changes and deletes settings on disconnect
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_131_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_145_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_131_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_145_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"f"},{"id":5,"kind":"char","value":"o"},{"id":6,"kind":"char","value":"u"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"Private signature"},{"matcher":"toContain","negate":true,"expected":"Private signature"},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:140:3: verifies IMAP/SMTP before storing encrypted credentials and never exposes them in account metadata
+// packages/gateway/src/services/email/service.test.ts:154:3: verifies IMAP/SMTP before storing encrypted credentials and never exposes them in account metadata
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_140_3() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_154_3() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_140_3"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_154_3"#,
         r#"[{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toBe","negate":false,"expected":"imap"},{"matcher":"toContain","negate":true,"expected":"private-mail-password"},{"matcher":"toContain","negate":true,"expected":"private-mail-password"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"C"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"n"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"c"},{"id":6,"kind":"char","value":"t"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"n"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"f"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"i"},{"id":14,"kind":"char","value":"l"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:155:1: rejects header injection and malformed send flags before provider access
+// packages/gateway/src/services/email/service.test.ts:169:1: rejects header injection and malformed send flags before provider access
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_155_1() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_169_1() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_155_1"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_169_1"#,
         r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:163:1: rejects expired OAuth state before exchanging tokens and consumes it
+// packages/gateway/src/services/email/service.test.ts:177:1: rejects expired OAuth state before exchanging tokens and consumes it
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_163_1() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_177_1() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_163_1"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_177_1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/email/service.test.ts:184:1: preserves the OAuth expiry boundary and rejects a repeated callback
+// packages/gateway/src/services/email/service.test.ts:198:1: preserves the OAuth expiry boundary and rejects a repeated callback
 #[test]
-fn tailstatic_packages_gateway_src_services_email_service_test_ts_184_1() {
+fn tailstatic_packages_gateway_src_services_email_service_test_ts_198_1() {
     tail_assertions::check(
         r#"gateway-src-services-email-service-test-c73809a4"#,
-        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_184_1"#,
+        r#"tailstatic_packages_gateway_src_services_email_service_test_ts_198_1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"OAuth token request failed: synthetic_boundary_fixture"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
@@ -16124,26 +16904,26 @@ fn tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_101_3() {
     tail_assertions::check(
         r#"gateway-src-services-git-worktree-base-test-e1b8d984"#,
         r#"tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_101_3"#,
-        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"jait/cccc3333"},{"matcher":"toBe","negate":false,"expected":true}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"false"},{"matcher":"toBe","negate":false,"expected":"2"},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"jait/cccc3333"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"false"},{"matcher":"toBe","negate":false,"expected":"2"},{"matcher":"toThrow","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/git-worktree-base.test.ts:118:3: still uses the local branch when it exists
+// packages/gateway/src/services/git-worktree-base.test.ts:126:3: still uses the local branch when it exists
 #[test]
-fn tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_118_3() {
+fn tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_126_3() {
     tail_assertions::check(
         r#"gateway-src-services-git-worktree-base-test-e1b8d984"#,
-        r#"tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_118_3"#,
+        r#"tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_126_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"jait/dddd4444"},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/git-worktree-base.test.ts:132:3: reports an actionable error when the base branch cannot be resolved
+// packages/gateway/src/services/git-worktree-base.test.ts:140:3: reports an actionable error when the base branch cannot be resolved
 #[test]
-fn tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_132_3() {
+fn tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_140_3() {
     tail_assertions::check(
         r#"gateway-src-services-git-worktree-base-test-e1b8d984"#,
-        r#"tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_132_3"#,
+        r#"tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_140_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":52,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"C"},{"id":1,"kind":"char","value":"a"},{"id":2,"kind":"char","value":"n"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"t"},{"id":6,"kind":"char","value":" "},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"s"},{"id":10,"kind":"char","value":"o"},{"id":11,"kind":"char","value":"l"},{"id":12,"kind":"char","value":"v"},{"id":13,"kind":"char","value":"e"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"w"},{"id":16,"kind":"char","value":"o"},{"id":17,"kind":"char","value":"r"},{"id":18,"kind":"char","value":"k"},{"id":19,"kind":"char","value":"t"},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"e"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":" "},{"id":24,"kind":"char","value":"b"},{"id":25,"kind":"char","value":"a"},{"id":26,"kind":"char","value":"s"},{"id":27,"kind":"char","value":"e"},{"id":28,"kind":"char","value":" "},{"id":29,"kind":"char","value":"b"},{"id":30,"kind":"char","value":"r"},{"id":31,"kind":"char","value":"a"},{"id":32,"kind":"char","value":"n"},{"id":33,"kind":"char","value":"c"},{"id":34,"kind":"char","value":"h"},{"id":35,"kind":"char","value":" "},{"id":36,"kind":"char","value":"\""},{"id":37,"kind":"char","value":"d"},{"id":38,"kind":"char","value":"o"},{"id":39,"kind":"char","value":"e"},{"id":40,"kind":"char","value":"s"},{"id":41,"kind":"char","value":"-"},{"id":42,"kind":"char","value":"n"},{"id":43,"kind":"char","value":"o"},{"id":44,"kind":"char","value":"t"},{"id":45,"kind":"char","value":"-"},{"id":46,"kind":"char","value":"e"},{"id":47,"kind":"char","value":"x"},{"id":48,"kind":"char","value":"i"},{"id":49,"kind":"char","value":"s"},{"id":50,"kind":"char","value":"t"},{"id":51,"kind":"char","value":"\""}]},"flags":""}}]"#,
     );
 }
@@ -16538,203 +17318,333 @@ fn tailstatic_packages_gateway_src_services_messenger_bridge_test_ts_36_3() {
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:18:3: projects edits and reactions onto their original message
+// packages/gateway/src/services/messenger-service.test.ts:current:29: resets assistant access at gateway restart, matching the encrypted-shared-device-restart contract
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_18_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_29_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_18_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_29_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:54:3: returns a bounded JPEG only for an image in the owner’s visible joined room
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_55_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_55_3"#,
+        r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"format":"jpeg","width":384,"height":256}},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:74:3: tracks other people typing and clears stale or stopped indicators
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_75_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_75_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["Bob"]},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:90:3: uses sender names for direct alerts and prefixes group messages
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3"#,
+        r#"[{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":["test",{"__jait_matcher":"objectContaining","value":{"title":"Bob","body":"Hello"}}]},{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":["test",{"__jait_matcher":"objectContaining","value":{"title":"Team-Chat","body":"Bob: Hello"}}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:111:3: projects edits and reactions onto their original message
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_112_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_112_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":[{"body":"changed","edited":true,"reactions":[{"key":"👍","count":1,"own":true}]}]}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:24:3: ignores forged edits and redacted reactions
+// packages/gateway/src/services/messenger-service.test.ts:117:3: projects each group sender’s Matrix avatar and rejects external URLs
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_24_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_118_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_24_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_118_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"sender":"Bob","senderAvatarUrl":"mxc://test/bob"}},{"matcher":"toHaveProperty","negate":true,"expected":"senderAvatarUrl"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:128:3: projects reply references after a message is sent, including edits
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_129_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_129_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:134:3: ignores forged edits and redacted reactions
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_135_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_135_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"body":"original","reactions":[]}}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:31:3: retains newly fetched history when more than 2000 events are loaded
+// packages/gateway/src/services/messenger-service.test.ts:141:3: retains newly fetched history when more than 2000 events are loaded
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_31_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_142_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_31_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_142_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"$older"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:38:3: records exhausted history even after subsequent syncs
+// packages/gateway/src/services/messenger-service.test.ts:148:3: records exhausted history even after subsequent syncs
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_38_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_149_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_38_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_149_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:47:3: rejects edits of another sender and toggles own reactions
+// packages/gateway/src/services/messenger-service.test.ts:157:3: rejects edits of another sender and toggles own reactions
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_47_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_158_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_47_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_158_3"#,
         r#"[{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["!room:test","m.reaction",{"m.relates_to":{"rel_type":"m.annotation","event_id":"$one","key":"👍"}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["!room:test","$reaction"]}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:56:3: lists each reader once no matter how many messages they acknowledged
+// packages/gateway/src/services/messenger-service.test.ts:166:3: lists each reader once no matter how many messages they acknowledged
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_56_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_167_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_56_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_167_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":[{"userId":"@bob:test","name":"@bob:test","timestamp":300,"exact":true}]}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:68:3: keeps receipt positions stable when an earlier message is redacted
+// packages/gateway/src/services/messenger-service.test.ts:178:3: projects only bridge-authored message status and distinguishes sent from delivered
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_68_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_68_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"readBy":[],"bridgeStatus":"sent"}},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":"sent"},{"matcher":"toBe","negate":false,"expected":"sent"},{"matcher":"toBe","negate":false,"expected":"delivered"},{"matcher":"toBe","negate":false,"expected":"failed"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:200:3: keeps receipt positions stable when an earlier message is redacted
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_201_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_201_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["$two","$three"]},{"matcher":"toEqual","negate":false,"expected":[{"userId":"@bob:test","name":"@bob:test","timestamp":300,"exact":false}]}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:77:3: removes a conversation after leaving and forgetting
+// packages/gateway/src/services/messenger-service.test.ts:209:3: removes a conversation after leaving and forgetting
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_77_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_210_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_77_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_210_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["!room:test"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["POST","/_matrix/client/v3/rooms/!room%3Atest/forget",{"__jait_type":"undefined"},{}]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:87:3: normalises an https homeserver to its origin
+// packages/gateway/src/services/messenger-service.test.ts:219:3: persists and refreshes the requested status, then stops refreshing
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_220_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_220_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"ownPresence":{"state":"online","keep":true}}}]},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":3}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:234:3: does not save a status rejected by the homeserver
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_235_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_235_3"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:245:3: normalises an https homeserver to its origin
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_246_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_246_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org"},{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org"},{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org:8448"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:93:3: rejects credentials in the url
+// packages/gateway/src/services/messenger-service.test.ts:251:3: rejects credentials in the url
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:98:3: rejects query strings and fragments
+// packages/gateway/src/services/messenger-service.test.ts:256:3: rejects query strings and fragments
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_257_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_257_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:103:3: rejects any path beyond the server root
+// packages/gateway/src/services/messenger-service.test.ts:261:3: rejects any path beyond the server root
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:107:3: rejects plaintext http unless it is loopback
+// packages/gateway/src/services/messenger-service.test.ts:265:3: rejects plaintext http unless it is loopback
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_266_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_266_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toBe","negate":false,"expected":"http://localhost:8008"},{"matcher":"toBe","negate":false,"expected":"http://127.0.0.1:8008"},{"matcher":"toBe","negate":false,"expected":"http://[::1]:8008"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:114:3: rejects schemes other than http and https
+// packages/gateway/src/services/messenger-service.test.ts:272:3: rejects schemes other than http and https
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_273_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_273_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:122:3: projects status room metadata and preserves sender IDs and captions (%s)
+// packages/gateway/src/services/messenger-service.test.ts:280:3: projects status room metadata and preserves sender IDs and captions (%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":[{"sender":"Bob","senderId":"@bob:test","body":"Evening sky","attachment":{"name":"sky.png","image":true}}]},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"status"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:122:3: projects status room metadata and preserves sender IDs and captions (%s)
+// packages/gateway/src/services/messenger-service.test.ts:280:3: projects status room metadata and preserves sender IDs and captions (%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":[{"sender":"Bob","senderId":"@bob:test","body":"Evening sky","attachment":{"name":"sky.png","image":true}}]},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"status"}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+// packages/gateway/src/services/messenger-service.test.ts:current:314: uses the resolved peer name for a UUID direct room title
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_314_3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_314_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"Alice"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:313:3: recognizes Teams metadata after joining an invitation (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+// packages/gateway/src/services/messenger-service.test.ts:313:3: recognizes Teams metadata after joining an invitation (%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+// packages/gateway/src/services/messenger-service.test.ts:313:3: recognizes Teams metadata after joining an invitation (%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each2() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
     );
 }
 
-// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+// packages/gateway/src/services/messenger-service.test.ts:313:3: recognizes Teams metadata after joining an invitation (%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3() {
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each3() {
     tail_assertions::check(
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
-        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:328:3: lists safe metadata and saves an encrypted image that the model can view
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_337_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_337_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"$picture"},{"matcher":"toContain","negate":false,"expected":"escape.png"},{"matcher":"toContain","negate":true,"expected":"mxc://"},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["$picture"]},{"matcher":"toContain","negate":false,"expected":"$picture"},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toContainEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toContain","negate":true,"expected":"modelImage"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:381:3: rejects disabled access, wrong rooms, missing messages, and oversized media
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_390_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_390_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"20 MiB"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:394:3: does not save through a project artifact symlink
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
@@ -16768,42 +17678,52 @@ fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_20_3() {
     );
 }
 
-// packages/gateway/src/services/mobile-push.test.ts:41:3: clears the exact completion on only the owner's devices, even if one push fails
+// packages/gateway/src/services/mobile-push.test.ts:41:3: sends only a gateway image reference, never attachment contents or encryption keys
 #[test]
 fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_41_3() {
     tail_assertions::check(
         r#"gateway-src-services-mobile-push-test-8607c4d0"#,
         r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_41_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"id":"matrix-message:$photo","replaceId":"matrix-room:!room:test","roomId":"!room:test","eventId":"$photo","imageAvailable":"true","timestamp":"1234"}},{"matcher":"toContain","negate":true,"expected":"secret"},{"matcher":"toContain","negate":true,"expected":"mxc://"}]"#,
+    );
+}
+
+// packages/gateway/src/services/mobile-push.test.ts:57:3: clears the exact completion on only the owner's devices, even if one push fails
+#[test]
+fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_57_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-mobile-push-test-8607c4d0"#,
+        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_57_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":["bad-token","token-a"]},{"matcher":"toEqual","negate":false,"expected":{"token":"token-a","data":{"type":"chat.notification-read","id":"completion-1","sessionId":"s","replaceId":"chat-complete:s"},"android":{"priority":"high","ttl":"3600s"}}},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/mobile-push.test.ts:70:3: sends questions without an expiry or push TTL override
+// packages/gateway/src/services/mobile-push.test.ts:86:3: sends questions without an expiry or push TTL override
 #[test]
-fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_70_3() {
+fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_86_3() {
     tail_assertions::check(
         r#"gateway-src-services-mobile-push-test-8607c4d0"#,
-        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_70_3"#,
+        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_86_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"priority":"high"}},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/mobile-push.test.ts:89:3: persists registrations across service instances
+// packages/gateway/src/services/mobile-push.test.ts:105:3: persists registrations across service instances
 #[test]
-fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_105_3() {
     tail_assertions::check(
         r#"gateway-src-services-mobile-push-test-8607c4d0"#,
-        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_105_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"deviceId":"android-primary","userId":"user-a","token":"token-a"}]}]"#,
     );
 }
 
-// packages/gateway/src/services/mobile-push.test.ts:99:3: rotates tokens and isolates user revocation
+// packages/gateway/src/services/mobile-push.test.ts:115:3: rotates tokens and isolates user revocation
 #[test]
-fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_99_3() {
+fn tailstatic_packages_gateway_src_services_mobile_push_test_ts_115_3() {
     tail_assertions::check(
         r#"gateway-src-services-mobile-push-test-8607c4d0"#,
-        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_99_3"#,
+        r#"tailstatic_packages_gateway_src_services_mobile_push_test_ts_115_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"deviceId":"android-primary","userId":"user-a","token":"new-token"}]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
@@ -17398,142 +18318,152 @@ fn tailstatic_packages_gateway_src_services_preview_runner_test_ts_121_3() {
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:9:3: revokes DevTools grants across handoff, restart and pending attachment
+// packages/gateway/src/services/preview.test.ts:9:3: notifies capture listeners when control is taken or the preview stops
 #[test]
 fn tailstatic_packages_gateway_src_services_preview_test_ts_9_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
         r#"tailstatic_packages_gateway_src_services_preview_test_ts_9_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser-1"]},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/services/preview.test.ts:23:3: revokes DevTools grants across handoff, restart and pending attachment
+#[test]
+fn tailstatic_packages_gateway_src_services_preview_test_ts_23_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-preview-test-47671301"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_23_3"#,
         r#"[{"matcher":"toBeNull","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:37:3: reloads the current page without recreating the browser or granting control
+// packages/gateway/src/services/preview.test.ts:51:3: reloads the current page without recreating the browser or granting control
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_37_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_51_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_37_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_51_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toThrow","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:61:3: moves through history without replacing the browser or changing control
+// packages/gateway/src/services/preview.test.ts:75:3: moves through history without replacing the browser or changing control
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_61_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_75_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_61_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_75_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"browserId":"browser-1","sharedWithAgent":false}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["back"]},{"matcher":"toMatchObject","negate":false,"expected":{"browserId":"browser-1","sharedWithAgent":true}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["forward"]},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:82:3: navigates the owner's browser without recreating it or granting agent control
+// packages/gateway/src/services/preview.test.ts:96:3: navigates the owner's browser without recreating it or granting agent control
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_82_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_96_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_82_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_96_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"credentials"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/"]},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toThrow","negate":true},{"matcher":"toThrow","negate":false,"expected":"HTTP"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:110:3: cleans up a managed server when the preview browser fails
+// packages/gateway/src/services/preview.test.ts:124:3: cleans up a managed server when the preview browser fails
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_110_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_124_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_110_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_124_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"browser unavailable"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["preview-browser-broken-browser","preview-failed"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:134:3: reuses an unchanged healthy preview and only recreates it on restart
+// packages/gateway/src/services/preview.test.ts:148:3: reuses an unchanged healthy preview and only recreates it on restart
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_134_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_148_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_134_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_148_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:156:3: gates agent browser control by the preview sharing state and preserves it on restart
+// packages/gateway/src/services/preview.test.ts:170:3: gates agent browser control by the preview sharing state and preserves it on restart
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_170_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_170_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toThrow","negate":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":25,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"w"},{"id":12,"kind":"char","value":"i"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"h"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"h"},{"id":18,"kind":"char","value":"e"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"a"},{"id":21,"kind":"char","value":"g"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"t"}]},"flags":"i"}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toThrow","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":25,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"w"},{"id":12,"kind":"char","value":"i"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"h"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"h"},{"id":18,"kind":"char","value":"e"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"a"},{"id":21,"kind":"char","value":"g"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"t"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:190:3: does not revive a preview stopped while its browser is starting
+// packages/gateway/src/services/preview.test.ts:204:3: does not revive a preview stopped while its browser is starting
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_190_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_204_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_190_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_204_3"#,
         r#"[{"matcher":"toHaveBeenCalledOnce","negate":false,"optional":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"stopped"},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["preview-browser-closing-session","preview-stop"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:216:3: attaches to an existing localhost target instead of spawning a managed preview
+// packages/gateway/src/services/preview.test.ts:230:3: attaches to an existing localhost target instead of spawning a managed preview
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_216_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_230_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_216_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_230_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"url"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toBe","negate":false,"expected":"/noVNC/vnc_lite.html?path=api/live-view/6080/websockify"},{"matcher":"toMatchObject","negate":false,"expected":{"containerName":"live-view","novncUrl":"/noVNC/vnc_lite.html?path=api/live-view/6080/websockify"}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser","preview-browser-session-1",{"sessionId":"session-1","projectRoot":"/project/app","requireLiveView":true}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["http://127.0.0.1:4173/"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:269:3: attaches to an existing private-network target URL instead of spawning a managed preview
+// packages/gateway/src/services/preview.test.ts:283:3: attaches to an existing private-network target URL instead of spawning a managed preview
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_269_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_283_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_269_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_283_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"url"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["http://172.17.0.1:4174/"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:312:3: returns the browser page snapshot in preview inspection results
+// packages/gateway/src/services/preview.test.ts:326:3: returns the browser page snapshot in preview inspection results
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_312_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_326_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_312_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_326_3"#,
         r#"[{"matcher":"toBeNull","negate":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Title: Preview App"},{"matcher":"toContain","negate":false,"expected":"Active element: textbox - Search - input[name=\"q\"]"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:397:3: passes selector diagnostics through preview inspection results
+// packages/gateway/src/services/preview.test.ts:411:3: passes selector diagnostics through preview inspection results
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_397_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_411_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_397_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_411_3"#,
         r##"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["#submit"]},{"matcher":"toMatchObject","negate":false,"expected":{"selector":"#submit","obscured":true}}]"##,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:467:3: requires live view for preview browser sessions
+// packages/gateway/src/services/preview.test.ts:481:3: requires live view for preview browser sessions
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_467_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_481_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_467_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_481_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser","preview-browser-session-1",{"sessionId":"session-1","projectRoot":"/project/app","requireLiveView":true}]},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"/api/dev-proxy/4173/"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"Preview browser did not expose a live VNC session"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:509:3: coalesces duplicate start requests for the same chat session
+// packages/gateway/src/services/preview.test.ts:523:3: coalesces duplicate start requests for the same chat session
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_509_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_523_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_509_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_523_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
@@ -18638,242 +19568,202 @@ fn tailstatic_packages_gateway_src_services_provider_updates_test_ts_76_3() {
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:28:3: removes absent quotas when a fresh balance replaces previous limits
+// packages/gateway/src/services/provider-usage.test.ts:22:3: removes absent quotas when a fresh balance replaces previous limits
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_28_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_22_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_28_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_22_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["monthly"]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:35:3: stores Go windows and provider-reported Ollama resets
+// packages/gateway/src/services/provider-usage.test.ts:29:3: stores Go windows and provider-reported Ollama resets
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_35_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_29_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_35_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_29_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"providerType":"opencode-go","rateLimitType":"five_hour","utilization":0.2,"resetsAt":{"__jait_observed":0},"resetSource":"provider-reported"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.9,"status":"allowed_warning"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"monthly","utilization":1,"status":"rejected"}}]},"hybrid":true},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","resetsAt":{"__jait_observed":0},"resetSource":"provider-reported"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","resetsAt":null,"resetSource":null}}]},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:52:3: preserves session usage when refresh temporarily returns request activity
+// packages/gateway/src/services/provider-usage.test.ts:46:3: preserves session usage when refresh temporarily returns request activity
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_52_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_46_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_52_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_46_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.42,"updatedAt":"2026-10-07T10:00:00.000Z","quotaRefreshMissing":true}}]}},{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.5,"quotaRefreshMissing":false}}]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:65:3: prioritizes quota limits when response also contains request totals
+// packages/gateway/src/services/provider-usage.test.ts:59:3: prioritizes quota limits when response also contains request totals
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_65_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_59_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_65_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_59_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.42}}]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:70:3: stores request activity separately without inventing quota or resetting cached limits
+// packages/gateway/src/services/provider-usage.test.ts:64:3: stores request activity separately without inventing quota or resetting cached limits
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_70_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_64_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_70_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_64_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.8,"quotaRefreshMissing":true}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"request_activity","utilization":null,"resetsAt":null,"status":null,"requestCount":10388,"planType":"pro","accountLabel":"test@example.com","usagePeriod":{"from":{"__jait_observed":0},"until":{"__jait_observed":1},"range":"7d"}}}]},"hybrid":true},{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.2,"requestCount":null}}]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:89:3: inserts a new snapshot and lists it back for the owning account
+// packages/gateway/src/services/provider-usage.test.ts:83:3: inserts a new snapshot and lists it back for the owning account
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_83_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_83_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"accountId":"account-1","rateLimitType":"five_hour","providerType":"claude","status":"allowed","utilization":0.4,"isUsingOverage":false}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:111:3: upserts an existing row instead of duplicating it
+// packages/gateway/src/services/provider-usage.test.ts:105:3: upserts an existing row instead of duplicating it
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_111_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_105_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_111_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_105_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"allowed_warning"},{"matcher":"toBe","negate":false,"expected":0.95}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:130:3: filters snapshots by the requested account ids
+// packages/gateway/src/services/provider-usage.test.ts:124:3: filters snapshots by the requested account ids
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_130_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_124_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_130_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_124_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:146:3: warns once when utilization crosses the threshold and does not re-notify
+// packages/gateway/src/services/provider-usage.test.ts:140:3: stores Codex session and weekly subscription windows
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_146_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_140_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_146_3"#,
-        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["Approaching usage limit","Claude Code's session limit is at 95%.","/settings?tab=usage"]}]"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_140_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.12,"planType":"plus","resetsAt":{"__jait_observed":0},"resetSource":"provider-reported"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.34,"credits":{"hasCredits":true,"balance":"7.50"},"resetSource":"provider-reported"}}]},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:166:3: warns on allowed_warning status even without a utilization number
-#[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_166_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_166_3"#,
-        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["Approaching usage limit","Claude Code's weekly limit is near its limit.","/settings?tab=usage"]}]"#,
-    );
-}
-
-// packages/gateway/src/services/provider-usage.test.ts:180:3: clears the warned state once utilization drops back below the threshold
+// packages/gateway/src/services/provider-usage.test.ts:180:3: keeps Codex reset credits available to spend on every window row
 #[test]
 fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_180_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
         r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_180_3"#,
-        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
-    );
-}
-
-// packages/gateway/src/services/provider-usage.test.ts:205:3: does not warn while utilization stays below the threshold
-#[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_205_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_205_3"#,
-        r#"[{"matcher":"toHaveBeenCalled","negate":true}]"#,
-    );
-}
-
-// packages/gateway/src/services/provider-usage.test.ts:219:3: stores Codex session and weekly subscription windows
-#[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_219_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_219_3"#,
-        r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.12,"planType":"plus","resetsAt":{"__jait_observed":0},"resetSource":"provider-reported"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.34,"credits":{"hasCredits":true,"balance":"7.50"},"resetSource":"provider-reported"}}]},"hybrid":true}]"#,
-    );
-}
-
-// packages/gateway/src/services/provider-usage.test.ts:259:3: keeps Codex reset credits available to spend on every window row
-#[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_259_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_259_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":{"availableCount":2,"credits":[{"__jait_matcher":"objectContaining","value":{"title":"Full reset (Weekly + 5 hr)","status":"available"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:290:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
+// packages/gateway/src/services/provider-usage.test.ts:211:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each0() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each0"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.15,"status":"allowed"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.18,"status":"allowed"}}]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:290:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
+// packages/gateway/src/services/provider-usage.test.ts:211:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each1() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each1"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.15,"status":"allowed"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.18,"status":"allowed"}}]}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:308:3: honors explicit Codex account blocks below the window limit: %j
+// packages/gateway/src/services/provider-usage.test.ts:229:3: honors explicit Codex account blocks below the window limit: %j
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each0() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:308:3: honors explicit Codex account blocks below the window limit: %j
+// packages/gateway/src/services/provider-usage.test.ts:229:3: honors explicit Codex account blocks below the window limit: %j
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each1() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:308:3: honors explicit Codex account blocks below the window limit: %j
+// packages/gateway/src/services/provider-usage.test.ts:229:3: honors explicit Codex account blocks below the window limit: %j
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each2() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each2() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each2"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:324:3: updates Codex window status after a fresh quota report
+// packages/gateway/src/services/provider-usage.test.ts:245:3: updates Codex window status after a fresh quota report
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_324_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_245_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_324_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_245_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:337:3: marks every Codex window as full when workspace credits are depleted
+// packages/gateway/src/services/provider-usage.test.ts:258:3: marks every Codex window as full when workspace credits are depleted
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_337_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_258_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_337_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_258_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":1,"status":"rejected","planType":"team"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.63,"status":"rejected"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:380:3: stores Ollama session, weekly and monthly usage metadata
+// packages/gateway/src/services/provider-usage.test.ts:301:3: stores Ollama session, weekly and monthly usage metadata
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_380_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_380_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toEqual","negate":false,"expected":["2026-03-11T10:00:00.000Z","2026-03-16T00:00:00.000Z","2026-04-01T00:00:00.000Z"]},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","providerType":"ollama","utilization":0.25,"planType":"pro","models":[{"name":"gpt-oss","requestCount":4}]}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"monthly","utilization":0.6,"activityCost":"3.20"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:435:3: keeps an observed Ollama rollover instead of re-guessing the next reset
+// packages/gateway/src/services/provider-usage.test.ts:356:3: keeps an observed Ollama rollover instead of re-guessing the next reset
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_435_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_356_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_435_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_356_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"2026-03-11T15:00:00.000Z"}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:472:3: exposes the stored quota reset date for cached Ollama snapshots
+// packages/gateway/src/services/provider-usage.test.ts:393:3: exposes the stored quota reset date for cached Ollama snapshots
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_472_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_393_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_472_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_393_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"resetsAt":"2026-09-20T13:45:00.000Z","updatedAt":"2026-09-20T13:45:00.000Z","utilization":0.25}}]"#,
     );
 }
@@ -20968,6 +21858,36 @@ fn tailstatic_packages_gateway_src_services_subscription_usage_fetchers_test_ts_
     );
 }
 
+// packages/gateway/src/services/system-one-vision.test.ts:7:3: sends TypeSafe images using assets and the required experimental header
+#[test]
+fn tailstatic_packages_gateway_src_services_system_one_vision_test_ts_7_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-system-one-vision-test-95113a88"#,
+        r#"tailstatic_packages_gateway_src_services_system_one_vision_test_ts_7_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"true"},{"matcher":"toBe","negate":false,"expected":"png"},{"matcher":"toMatchObject","negate":false,"expected":{"width":829,"height":1568}}]"#,
+    );
+}
+
+// packages/gateway/src/services/system-one-vision.test.ts:19:3: pads narrow images without cropping them
+#[test]
+fn tailstatic_packages_gateway_src_services_system_one_vision_test_ts_19_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-system-one-vision-test-95113a88"#,
+        r#"tailstatic_packages_gateway_src_services_system_one_vision_test_ts_19_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"width":280,"height":1000}}]"#,
+    );
+}
+
+// packages/gateway/src/services/system-one-vision.test.ts:27:3: rejects malformed images before making a provider request
+#[test]
+fn tailstatic_packages_gateway_src_services_system_one_vision_test_ts_27_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-system-one-vision-test-95113a88"#,
+        r#"tailstatic_packages_gateway_src_services_system_one_vision_test_ts_27_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"rejects":true,"expected":{"code":"invalid_input"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
 // packages/gateway/src/services/system-one.test.ts:25:3: makes no calls and preserves exact selection when no key is configured
 #[test]
 fn tailstatic_packages_gateway_src_services_system_one_test_ts_25_3() {
@@ -21178,6 +22098,16 @@ fn tailstatic_packages_gateway_src_services_team_chat_stopped_thread_test_ts_218
     );
 }
 
+// packages/gateway/src/services/team-chat-stopped-thread.test.ts:253:3: finishes an in-flight turn that a stop aborts without a blocker or manager recovery
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_stopped_thread_test_ts_253_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-stopped-thread-test-0854756a"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_stopped_thread_test_ts_253_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"optional":true,"expected":"interrupted"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
 // packages/gateway/src/services/team-chat.test.ts:41:3: runs independent tasks for the same agent concurrently while queuing same-thread follow-ups
 #[test]
 fn tailstatic_packages_gateway_src_services_team_chat_test_ts_41_3() {
@@ -21188,382 +22118,392 @@ fn tailstatic_packages_gateway_src_services_team_chat_test_ts_41_3() {
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:79:3: parks infrastructure blockers without sending the same broken environment to a manager
+// packages/gateway/src/services/team-chat.test.ts:79:3: bounds each agent's independent deliveries and dispatches queued work in FIFO order
 #[test]
 fn tailstatic_packages_gateway_src_services_team_chat_test_ts_79_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
         r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_79_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":3},{"matcher":"toBe","negate":false,"expected":"Task 2"},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":4},{"matcher":"toBe","negate":false,"expected":"Task 3"}]"#,
+    );
+}
+
+// packages/gateway/src/services/team-chat.test.ts:105:3: parks infrastructure blockers without sending the same broken environment to a manager
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_105_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_105_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"blocked"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"blocked"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:93:3: persists multiple chats with independent selected membership and histories
+// packages/gateway/src/services/team-chat.test.ts:119:3: persists multiple chats with independent selected membership and histories
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_93_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_119_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_93_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_119_3"#,
         r#"[{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_observed":0},{"__jait_observed":1},{"__jait_observed":2}]},"hybrid":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["Developer","Research"]},{"matcher":"toEqual","negate":false,"expected":["Investigate"]},{"matcher":"toEqual","negate":false,"expected":["Review"]},{"matcher":"toContain","negate":false,"expected":"Research"},{"matcher":"toContain","negate":true,"expected":"Research"},{"matcher":"toEqual","negate":false,"expected":["Developer","Research"]}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:112:3: rejects foreign members and handoffs outside a room's selected membership
+// packages/gateway/src/services/team-chat.test.ts:138:3: rejects foreign members and handoffs outside a room's selected membership
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_112_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_138_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_112_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_138_3"#,
         r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toEqual","negate":false,"expected":["Developer","Research"]},{"matcher":"toThrow","negate":false},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"m"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"m"},{"id":3,"kind":"char","value":"b"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"s"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":6,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"m"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"m"},{"id":3,"kind":"char","value":"b"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"r"}]},"flags":""}},{"matcher":"toEqual","negate":false,"expected":["Research"]},{"matcher":"toContain","negate":true,"expected":"Your manager: Scrum"},{"matcher":"toContain","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:130:3: keeps manager handoffs conversational while delivering the full review instructions
+// packages/gateway/src/services/team-chat.test.ts:156:3: keeps manager handoffs conversational while delivering the full review instructions
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_130_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_156_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_130_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_156_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"expected":"Hey @Scrum, could you check my task update?"},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Verify the reported outcome"},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"active"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:146:3: keeps detailed final reports in the task thread without claiming success in the room
+// packages/gateway/src/services/team-chat.test.ts:172:3: keeps detailed final reports in the task thread without claiming success in the room
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_146_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_172_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_146_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_172_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"I've left a detailed update in my task thread. Please check it for the outcome and next steps."},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":true,"expected":"Findings"},{"matcher":"toContain","negate":true,"expected":"done"},{"matcher":"toContain","negate":true,"expected":"pass"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:159:3: keeps recovery evidence in the receiving thread rather than the team request
+// packages/gateway/src/services/team-chat.test.ts:185:3: keeps recovery evidence in the receiving thread rather than the team request
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_159_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_185_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_159_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_185_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"expected":"Hey @Scrum, I'm blocked on this task. Can you help me unblock it?"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Runtime missing: bun"},{"matcher":"toContain","negate":false,"expected":"Run the checks"},{"matcher":"toContain","negate":false,"expected":"Inspect the existing thread before reassigning"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:175:3: requires root coordinators and intermediate managers to verify completion
+// packages/gateway/src/services/team-chat.test.ts:201:3: requires root coordinators and intermediate managers to verify completion
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_175_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_201_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_175_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_201_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"Leadership completion check:"},{"matcher":"toContain","negate":false,"expected":"Leadership completion check:"},{"matcher":"toContain","negate":false,"expected":"met, not-yet-met or blocked"},{"matcher":"toContain","negate":false,"expected":"Only the room coordinator"},{"matcher":"toContain","negate":true,"expected":"Leadership completion check:"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:187:3: derives leadership from current reporting lines rather than names or personas
+// packages/gateway/src/services/team-chat.test.ts:213:3: derives leadership from current reporting lines rather than names or personas
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_187_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_213_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_187_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_213_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"Leadership completion check:"},{"matcher":"toContain","negate":false,"expected":"Leadership completion check:"},{"matcher":"toContain","negate":true,"expected":"Leadership completion check:"},{"matcher":"toContain","negate":false,"expected":"Leadership completion check:"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:196:3: queues one completion review for a worker outcome and reuses the manager thread
+// packages/gateway/src/services/team-chat.test.ts:222:3: queues one completion review for a worker outcome and reuses the manager thread
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_196_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_222_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_196_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_222_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["Scrum"]},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"active"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:215:3: checks deep outcomes once per delivery without bypassing ordinary handoff limits
+// packages/gateway/src/services/team-chat.test.ts:241:3: checks deep outcomes once per delivery without bypassing ordinary handoff limits
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_215_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_241_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_215_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_241_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"Handoff limit"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:239:3: reconciles an outcome committed before its completion event after restart
+// packages/gateway/src/services/team-chat.test.ts:265:3: reconciles an outcome committed before its completion event after restart
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_239_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_265_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_239_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_265_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"active"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:259:3: recovers a deep failed delivery once after restart without replaying the worker
+// packages/gateway/src/services/team-chat.test.ts:285:3: recovers a deep failed delivery once after restart without replaying the worker
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_259_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_285_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_259_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_285_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:281:3: does not associate an older outcome with a later turn in a reused thread
+// packages/gateway/src/services/team-chat.test.ts:307:3: does not associate an older outcome with a later turn in a reused thread
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_281_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_307_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_281_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_307_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:301:3: does not overwrite a stopped delivery after late %s
+// packages/gateway/src/services/team-chat.test.ts:327:3: does not overwrite a stopped delivery after late %s
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each0() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"cancelled","error":"Stopped by user"}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:301:3: does not overwrite a stopped delivery after late %s
+// packages/gateway/src/services/team-chat.test.ts:327:3: does not overwrite a stopped delivery after late %s
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each1() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_301_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_327_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"cancelled","error":"Stopped by user"}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:320:3: routes outcome verification to an intermediate manager before the root coordinator
+// packages/gateway/src/services/team-chat.test.ts:346:3: routes outcome verification to an intermediate manager before the root coordinator
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_320_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_346_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_320_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_346_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":"Hey @Developer, could you check my task update?"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:331:3: checks final dispatcher results even when the worker does not explicitly post
+// packages/gateway/src/services/team-chat.test.ts:357:3: checks final dispatcher results even when the worker does not explicitly post
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_331_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_357_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_331_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_357_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":"active"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:343:3: does not route outcome checks outside selected room membership
+// packages/gateway/src/services/team-chat.test.ts:369:3: does not route outcome checks outside selected room membership
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_343_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_369_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_343_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_369_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:355:3: does not wake leaders for untracked claims, paused managers or completed goals
+// packages/gateway/src/services/team-chat.test.ts:381:3: does not wake leaders for untracked claims, paused managers or completed goals
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_355_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_381_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_355_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_381_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:373:3: runs assignments in persona threads without creating ordinary chats
+// packages/gateway/src/services/team-chat.test.ts:399:3: runs assignments in persona threads without creating ordinary chats
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_373_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_399_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_373_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_399_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"personaAgentId":"Developer","providerId":"codex","runtimeMode":"supervised"}},{"matcher":"toBeUndefined","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"agent","id":"Developer"}},{"matcher":"toContain","negate":false,"expected":"Handle Developer work."}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:383:3: keeps addressed agent status updates passive
+// packages/gateway/src/services/team-chat.test.ts:409:3: keeps addressed agent status updates passive
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_383_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_409_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_383_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_409_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toEqual","negate":false,"expected":["Scrum"]}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:390:3: ranks expertise and explicit names, excluding paused members
-#[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_390_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_390_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":"QA"},{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":false}]"#,
-    );
-}
-
-// packages/gateway/src/services/team-chat.test.ts:398:3: routes user messages, persists the chosen recipient and deduplicates retries
-#[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_398_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_398_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"Your manager: Scrum"},{"matcher":"toContain","negate":false,"expected":"\"reportsToId\":\"Scrum\""},{"matcher":"toContain","negate":false,"expected":"Escalate blockers"},{"matcher":"toContain","negate":false,"expected":"evidence.txt"},{"matcher":"toContain","negate":true,"expected":"ZXZpZGVuY2U="},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
-    );
-}
-
-// packages/gateway/src/services/team-chat.test.ts:416:3: uses configured System One and falls back on failure or invalid recipients
+// packages/gateway/src/services/team-chat.test.ts:416:3: ranks expertise and explicit names, excluding paused members
 #[test]
 fn tailstatic_packages_gateway_src_services_team_chat_test_ts_416_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
         r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_416_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":"QA"},{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/team-chat.test.ts:424:3: routes user messages, persists the chosen recipient and deduplicates retries
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_424_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_424_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"Your manager: Scrum"},{"matcher":"toContain","negate":false,"expected":"\"reportsToId\":\"Scrum\""},{"matcher":"toContain","negate":false,"expected":"Escalate blockers"},{"matcher":"toContain","negate":false,"expected":"evidence.txt"},{"matcher":"toContain","negate":true,"expected":"ZXZpZGVuY2U="},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/team-chat.test.ts:442:3: uses configured System One and falls back on failure or invalid recipients
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_442_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_442_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["QA"]},{"matcher":"toMatchObject","negate":false,"expected":{"source":"system-one","model":"test","recipientId":"QA","confidence":0.92,"reason":"Role, skills, or persona expertise best match the request."}},{"matcher":"toMatchObject","negate":false,"expected":{"persona":"Handle Developer work."}},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"persona":"Handle Developer work.","reportsToId":"Scrum"}},{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toEqual","negate":false,"expected":["Developer"]},{"matcher":"toMatchObject","negate":false,"expected":{"source":"fallback","recipientId":"Developer"}},{"matcher":"toContain","negate":false,"expected":"unavailable"},{"matcher":"toEqual","negate":false,"expected":["Scrum"]},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":3}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:441:3: does not write to a closed database when an in-flight delivery finishes
+// packages/gateway/src/services/team-chat.test.ts:467:3: does not write to a closed database when an in-flight delivery finishes
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_441_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_467_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_441_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_467_3"#,
         r#"[{"matcher":"toComplete","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:453:3: reuses one room for the connected hierarchy and follows membership changes
+// packages/gateway/src/services/team-chat.test.ts:479:3: reuses one room for the connected hierarchy and follows membership changes
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_453_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_479_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_453_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_479_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["Developer","QA","Scrum"]},{"matcher":"toContain","negate":true,"expected":"QA"},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"not found"},{"matcher":"toThrow","negate":false,"expected":"Recipients"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:463:3: persists the neutral source-chat persona and deduplicates retry handoffs
+// packages/gateway/src/services/team-chat.test.ts:489:3: persists the neutral source-chat persona and deduplicates retry handoffs
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_463_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_489_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_463_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_489_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Use the Scrum board first."},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"/tmp/repo"},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"agent","id":"Scrum"}}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:480:3: delivers relay bodies without chat-title or username wrappers
+// packages/gateway/src/services/team-chat.test.ts:506:3: delivers relay bodies without chat-title or username wrappers
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_480_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_506_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_480_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_506_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"anything"},{"__jait_matcher":"objectContaining","value":{"id":"QA"}},{"__jait_observed":0}],"hybrid":true},{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:495:3: runs independent threads for the same agent without duplicate execution
-#[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_495_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_495_3"#,
-        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
-    );
-}
-
-// packages/gateway/src/services/team-chat.test.ts:511:3: targets existing work without impersonating another agent or crossing rooms
-#[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_511_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_511_3"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"Target"},{"matcher":"toThrow","negate":false,"expected":"Source chat"}]"#,
-    );
-}
-
-// packages/gateway/src/services/team-chat.test.ts:521:3: requires independent verification for the current goal and evidence for all criteria
+// packages/gateway/src/services/team-chat.test.ts:521:3: runs independent threads for the same agent without duplicate execution
 #[test]
 fn tailstatic_packages_gateway_src_services_team_chat_test_ts_521_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
         r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_521_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/services/team-chat.test.ts:537:3: targets existing work without impersonating another agent or crossing rooms
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_537_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_537_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":"Target"},{"matcher":"toThrow","negate":false,"expected":"Source chat"}]"#,
+    );
+}
+
+// packages/gateway/src/services/team-chat.test.ts:547:3: requires independent verification for the current goal and evidence for all criteria
+#[test]
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_547_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-team-chat-test-6bf5a02b"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_547_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"every"},{"matcher":"toThrow","negate":false,"expected":"independent"},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toThrow","negate":false,"expected":"independent"},{"matcher":"toThrow","negate":false,"expected":"coordinator"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:533:3: recovers queued work and surfaces interrupted work without replaying it
+// packages/gateway/src/services/team-chat.test.ts:559:3: recovers queued work and surfaces interrupted work without replaying it
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_533_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_559_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_533_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_559_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"interrupted"}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:545:3: treats explicit blockers as failed and asks the manager to recover once
+// packages/gateway/src/services/team-chat.test.ts:571:3: treats explicit blockers as failed and asks the manager to recover once
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_545_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_571_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_545_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_571_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"failed"},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toContain","negate":false,"expected":"Bun is unavailable"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"recipientIds":["Scrum"]}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:565:3: escalates provider failures once and stops when the coordinator also fails
+// packages/gateway/src/services/team-chat.test.ts:591:3: escalates provider failures once and stops when the coordinator also fails
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_565_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_565_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:576:3: does not wake paused managers or recover a closed goal
+// packages/gateway/src/services/team-chat.test.ts:602:3: does not wake paused managers or recover a closed goal
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_576_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_602_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_576_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_602_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"failed"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"optional":true,"expected":"failed"},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:591:3: uses persisted order for same-millisecond outcomes: $status
+// packages/gateway/src/services/team-chat.test.ts:617:3: uses persisted order for same-millisecond outcomes: $status
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each0() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"conditional":true,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:591:3: uses persisted order for same-millisecond outcomes: $status
+// packages/gateway/src/services/team-chat.test.ts:617:3: uses persisted order for same-millisecond outcomes: $status
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each1() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_591_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_617_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"failed"},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"conditional":true,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/team-chat.test.ts:614:3: bounds handoff loops and makes paused-recipient failures visible
+// packages/gateway/src/services/team-chat.test.ts:640:3: bounds handoff loops and makes paused-recipient failures visible
 #[test]
-fn tailstatic_packages_gateway_src_services_team_chat_test_ts_614_3() {
+fn tailstatic_packages_gateway_src_services_team_chat_test_ts_640_3() {
     tail_assertions::check(
         r#"gateway-src-services-team-chat-test-6bf5a02b"#,
-        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_614_3"#,
+        r#"tailstatic_packages_gateway_src_services_team_chat_test_ts_640_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Handoff limit"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"failed","error":"Agent is paused."}}]"#,
     );
 }
@@ -24319,6 +25259,28 @@ fn tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_6
     );
 }
 
+// packages/gateway/src/surfaces/browser-cursor.integration.test.ts:31:3: clicks only the unique unchanged control on the original document
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_31_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-browser-cursor-integration-test-f052bc61"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_31_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"Saved"},{"matcher":"toThrow","negate":false,"expected":"GUARDED_CLICK_IDENTITY_MISMATCH"},{"matcher":"toBe","negate":false,"expected":"Saved"},{"matcher":"toThrow","negate":false,"expected":"GUARDED_CLICK_TARGET_COUNT"},{"matcher":"toThrow","negate":false,"expected":"GUARDED_CLICK_IDENTITY_MISMATCH"}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/browser-cursor.integration.test.ts:50:3: stops before the click if the control changes or the action is cancelled while moving
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_50_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-browser-cursor-integration-test-f052bc61"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_cursor_integration_test_ts_50_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"GUARDED_CLICK_IDENTITY_MISMATCH"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toThrow","negate":false,"expected":"Cancelled"},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
 // packages/gateway/src/surfaces/browser-runtime.test.ts:55:3: keeps auto mode on Bun for Windows unless explicitly overridden
 #[test]
 fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_55_3() {
@@ -25669,6 +26631,26 @@ fn tailstatic_packages_gateway_src_tools_agent_loop_connection_error_test_ts_118
     );
 }
 
+// packages/gateway/src/tools/agent-loop-image.test.ts:8:3: delivers visual bytes after all tool responses without retaining them in diagnostic context
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_image_test_ts_8_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-image-test-2df13a5b"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_image_test_ts_8_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"Done"},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":["tool","tool","user"]},{"matcher":"toContain","negate":false,"expected":"SU1BR0Ux"},{"matcher":"toContain","negate":false,"expected":"SU1BR0Uy"},{"matcher":"toContain","negate":true,"expected":"SU1BR0U"},{"matcher":"toContain","negate":true,"expected":"SU1BR0U"},{"matcher":"toContain","negate":false,"expected":"image content omitted"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-image.test.ts:42:3: never retries a project chat creation after an uncertain or failed submission
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_image_test_ts_42_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-image-test-2df13a5b"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_image_test_ts_42_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":1}]"#,
+    );
+}
+
 // packages/gateway/src/tools/agent-loop-rate-limit.test.ts:20:3: retries a plain 429 — the provider just wants the request later
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_20_3() {
@@ -25809,1232 +26791,1272 @@ fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_96_3() {
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:64:3: omits unsupported tool-result names while preserving call correlation
+// packages/gateway/src/tools/agent-loop.test.ts:65:3: returns plain text when there are no attachments
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_64_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_65_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_64_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"tool","content":"Found","tool_call_id":"c1"}]}]"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_65_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"go left"},{"matcher":"toBe","negate":false,"expected":"go left"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:70:3: replays assistant reasoning in the OpenAI-compatible field
+// packages/gateway/src/tools/agent-loop.test.ts:70:3: builds multimodal parts for images and inlines text files
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_70_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_70_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"type":"text","text":"see this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA","detail":"auto"}},{"type":"image_url","image_url":{"url":"data:image/png;base64,BBBB","detail":"auto"}},{"type":"text","text":"[File: notes.txt]\nhello"}]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:84:3: omits the text part for attachment-only steers
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_84_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_84_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:89:3: carries attachments through the SteeringController
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_89_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_89_3"#,
         r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:79:3: replays explicitly empty reasoning and tool responses without reasoning
+// packages/gateway/src/tools/agent-loop.test.ts:98:3: omits unsupported tool-result names while preserving call correlation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_79_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_98_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_79_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_98_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"tool","content":"Found","tool_call_id":"c1"}]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:104:3: replays assistant reasoning in the OpenAI-compatible field
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_104_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_104_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:113:3: replays explicitly empty reasoning and tool responses without reasoning
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_113_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_113_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["",""]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:87:3: keeps non-tool names and omits reasoning on other roles
+// packages/gateway/src/tools/agent-loop.test.ts:121:3: keeps non-tool names and omits reasoning on other roles
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_87_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_121_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_87_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_121_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"user","content":"Review","name":"reviewer"},{"role":"assistant","content":"Done"}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:99:3: converts OpenAI tool history to ollama-native format
+// packages/gateway/src/tools/agent-loop.test.ts:133:3: converts OpenAI tool history to ollama-native format
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_99_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_133_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_99_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_133_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"function":{"name":"get_weather","arguments":{"city":"Vienna"}}}]},{"matcher":"toBeUndefined","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"role":"tool","content":"{\"temp_c\":24}","tool_name":"get_weather"}},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:118:3: defaults unparseable arguments to an empty object
+// packages/gateway/src/tools/agent-loop.test.ts:152:3: defaults unparseable arguments to an empty object
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_118_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_152_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_118_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_152_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:125:3: converts OpenAI image parts to Ollama's message-level images
+// packages/gateway/src/tools/agent-loop.test.ts:159:3: converts OpenAI image parts to Ollama's message-level images
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_125_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_159_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_125_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_159_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"user","content":"What color is this?","images":["aGVsbG8="]}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:141:3: preserves bare base64 image values
+// packages/gateway/src/tools/agent-loop.test.ts:175:3: preserves bare base64 image values
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_141_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_175_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_141_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_175_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"user","content":"","images":["aGVsbG8="]}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:156:3: includes Ollama's bare error string
+// packages/gateway/src/tools/agent-loop.test.ts:190:3: includes Ollama's bare error string
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_190_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_190_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Request failed (400): model does not support images"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:161:3: includes OpenAI-compatible nested error messages
+// packages/gateway/src/tools/agent-loop.test.ts:195:3: includes OpenAI-compatible nested error messages
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_161_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_195_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_161_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_195_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Request failed (400): invalid image"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:168:3: parses native NDJSON: thinking, content, tool calls, usage
+// packages/gateway/src/tools/agent-loop.test.ts:202:3: parses native NDJSON: thinking, content, tool calls, usage
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_168_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_202_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_168_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_202_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"let me think"},{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toEqual","negate":false,"expected":[{"id":"t1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Vienna\"}"}}]},{"matcher":"toBe","negate":false,"expected":"tool_calls"},{"matcher":"toEqual","negate":false,"expected":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:188:3: preserves a length finish_reason for truncation recovery
+// packages/gateway/src/tools/agent-loop.test.ts:222:3: preserves a length finish_reason for truncation recovery
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_188_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_222_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_188_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_222_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"partial"},{"matcher":"toBe","negate":false,"expected":"length"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:198:3: extracts leading <thinking> blocks from message.content
+// packages/gateway/src/tools/agent-loop.test.ts:232:3: extracts leading <thinking> blocks from message.content
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_198_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_232_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_198_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_232_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hi"},{"matcher":"toBe","negate":false,"expected":"pondering"},{"matcher":"toEqual","negate":false,"expected":["pondering"]},{"matcher":"toEqual","negate":false,"expected":["Hi"]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:211:3: keeps <thinking> tags as visible content once text has started
+// packages/gateway/src/tools/agent-loop.test.ts:245:3: keeps <thinking> tags as visible content once text has started
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_211_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_245_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_211_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_245_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Use <thinking>this</thinking> tags"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:221:3: rejects provider error chunks instead of treating them as empty success
+// packages/gateway/src/tools/agent-loop.test.ts:255:3: rejects provider error chunks instead of treating them as empty success
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_221_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_255_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_221_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_255_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"model runner disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:229:3: rejects a stream that closes before Ollama's terminal done chunk
+// packages/gateway/src/tools/agent-loop.test.ts:263:3: rejects a stream that closes before Ollama's terminal done chunk
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_229_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_263_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_229_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_263_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":12,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"b"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"f"},{"id":3,"kind":"char","value":"o"},{"id":4,"kind":"char","value":"r"},{"id":5,"kind":"char","value":"e"},{"id":7,"kind":"repeat","node":{"id":6,"kind":"any"},"min":0,"max":null},{"id":8,"kind":"char","value":"d"},{"id":9,"kind":"char","value":"o"},{"id":10,"kind":"char","value":"n"},{"id":11,"kind":"char","value":"e"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:237:3: propagates reader failures instead of returning a partial response
+// packages/gateway/src/tools/agent-loop.test.ts:271:3: propagates reader failures instead of returning a partial response
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_237_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_271_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_237_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_271_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"socket reset"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:246:3: returns streamed partials when the user aborts before the done chunk
+// packages/gateway/src/tools/agent-loop.test.ts:280:3: returns streamed partials when the user aborts before the done chunk
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_246_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_280_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_246_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_280_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"partial"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:274:3: maps multi-segment tool names while preserving leaf underscores
+// packages/gateway/src/tools/agent-loop.test.ts:308:3: maps multi-segment tool names while preserving leaf underscores
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_274_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_308_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_274_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_308_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"ssh.session.start"},{"matcher":"toBe","negate":false,"expected":"ssh.session.run"},{"matcher":"toBe","negate":false,"expected":"ssh.session.close"},{"matcher":"toBe","negate":false,"expected":"browser.sandbox.start"},{"matcher":"toBe","negate":false,"expected":"windows.sandbox.start"},{"matcher":"toBe","negate":false,"expected":"windows.sandbox.stop"},{"matcher":"toBe","negate":false,"expected":"linux.desktop.sandbox.start"},{"matcher":"toBe","negate":false,"expected":"linux.desktop.sandbox.stop"},{"matcher":"toBe","negate":false,"expected":"project.create"},{"matcher":"toBe","negate":false,"expected":"project.assign_repository"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:287:3: round-trips advertised two-plus-dot tool names without an allowlist entry
+// packages/gateway/src/tools/agent-loop.test.ts:321:3: round-trips advertised two-plus-dot tool names without an allowlist entry
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_287_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_321_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_287_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_321_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"agent_github_token"},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":["agent.github.token","security.assessments.list","os.sandbox.list","mobile.alarm.schedule"]}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:322:3: round-trips dynamically injected tool schemas
+// packages/gateway/src/tools/agent-loop.test.ts:356:3: round-trips dynamically injected tool schemas
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_322_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_356_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_322_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_356_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["security_findings_list"]},{"matcher":"toBe","negate":false,"expected":"security.findings.list"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:331:3: does not let an ambiguous name poison unambiguous ones
+// packages/gateway/src/tools/agent-loop.test.ts:365:3: does not let an ambiguous name poison unambiguous ones
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_331_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_365_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_331_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_365_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"preview_open"},{"matcher":"toBe","negate":false,"expected":"preview.open"},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:366:3: never invents a dotted name for an unadvertised alias
+// packages/gateway/src/tools/agent-loop.test.ts:400:3: never invents a dotted name for an unadvertised alias
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_366_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_400_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_366_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_400_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"never_advertised_tool"},{"matcher":"toBe","negate":false,"expected":"totally_unknown_tool"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:376:3: keeps core discovery tools for Ollama-backed models
+// packages/gateway/src/tools/agent-loop.test.ts:410:3: keeps core discovery tools for Ollama-backed models
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_376_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_410_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_376_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_410_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"read"},{"matcher":"toContain","negate":false,"expected":"edit"},{"matcher":"toContain","negate":false,"expected":"todo"},{"matcher":"toContain","negate":false,"expected":"user.ask"},{"matcher":"toContain","negate":false,"expected":"tools.list"},{"matcher":"toContain","negate":false,"expected":"tools.search"},{"matcher":"toContain","negate":true,"expected":"file.read"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:409:3: preloads request-relevant deferred tools and preserves activated tools
+// packages/gateway/src/tools/agent-loop.test.ts:443:3: preloads request-relevant deferred tools and preserves activated tools
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_409_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_443_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_409_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_443_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["todo","user.ask","tools.search","preview.open"]},{"matcher":"toContain","negate":false,"expected":"preview.open"},{"matcher":"toContain","negate":true,"expected":"preview.open"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:445:3: batches two consecutive independent calls together (parallel by default)
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_445_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_445_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:456:3: runs a sequential (non-parallel-safe) call on its own
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_456_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_456_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["a"]},{"matcher":"toBe","negate":false,"expected":1}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:467:3: batches three consecutive parallel-safe calls
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_467_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_467_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b","c"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:479:3: only batches the leading contiguous parallel-safe calls
+// packages/gateway/src/tools/agent-loop.test.ts:479:3: batches two consecutive independent calls together (parallel by default)
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_479_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_479_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b","c"]},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["d"]}]"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:495:3: omits structured fields that exactly repeat the result message
+// packages/gateway/src/tools/agent-loop.test.ts:490:3: runs a sequential (non-parallel-safe) call on its own
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_495_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_490_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_495_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"command output","data":{"exitCode":0}}}]"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_490_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["a"]},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:503:3: keeps distinct structured data
+// packages/gateway/src/tools/agent-loop.test.ts:501:3: batches three consecutive parallel-safe calls
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_503_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_501_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_503_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"2 results","data":{"items":["a","b"]}}}]"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_501_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b","c"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:513:3: adds a non-identifying application cache key only for OpenAI
+// packages/gateway/src/tools/agent-loop.test.ts:513:3: only batches the leading contiguous parallel-safe calls
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_513_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_513_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["a","b","c"]},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["d"]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:529:3: omits structured fields that exactly repeat the result message
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_529_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_529_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"command output","data":{"exitCode":0}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:537:3: keeps distinct structured data
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_537_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_537_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"2 results","data":{"items":["a","b"]}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:547:3: adds a non-identifying application cache key only for OpenAI
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_547_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_547_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"jait-agent"},{"matcher":"toHaveProperty","negate":true,"expected":"prompt_cache_key"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:525:3: processes the final buffered SSE event without a trailing newline
+// packages/gateway/src/tools/agent-loop.test.ts:559:3: processes the final buffered SSE event without a trailing newline
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_525_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_559_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_525_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_559_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"tail"},{"matcher":"toBe","negate":false,"expected":"stop"},{"matcher":"toEqual","negate":false,"expected":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:540:3: captures cached usage from OpenAI's empty final choices chunk
+// packages/gateway/src/tools/agent-loop.test.ts:574:3: captures cached usage from OpenAI's empty final choices chunk
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_540_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_574_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_540_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_574_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"prompt_tokens":120,"completion_tokens":8,"total_tokens":128,"cached_tokens":96}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:554:3: reassembles streamed tool call fragments in order
+// packages/gateway/src/tools/agent-loop.test.ts:588:3: reassembles streamed tool call fragments in order
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_554_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_588_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_554_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_588_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"id":"call-1","type":"function","function":{"name":"file.read","arguments":"{\"path\":\"a.ts\"}"}}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:572:3: extracts leading <thinking> blocks into thinking events and strips them from content
+// packages/gateway/src/tools/agent-loop.test.ts:606:3: extracts leading <thinking> blocks into thinking events and strips them from content
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_572_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_606_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_572_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_606_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":"step one reasoning"},{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":"step one reasoning"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:585:3: handles fragmented leading <thinking> tags across chunks
+// packages/gateway/src/tools/agent-loop.test.ts:619:3: handles fragmented leading <thinking> tags across chunks
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_585_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_619_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_585_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_619_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"answer"},{"matcher":"toBe","negate":false,"expected":"reasoning"},{"matcher":"toBe","negate":false,"expected":"answer"},{"matcher":"toBe","negate":false,"expected":"reasoning"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:598:3: does not strip <thinking> tags that appear after visible content has started
+// packages/gateway/src/tools/agent-loop.test.ts:632:3: does not strip <thinking> tags that appear after visible content has started
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_598_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_632_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_598_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_632_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Use `<thinking>` tags like <thinking>this</thinking>` in HTML."},{"matcher":"toBe","negate":false,"expected":""},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:610:3: extracts leading  utes. utes.` blocks too
+// packages/gateway/src/tools/agent-loop.test.ts:644:3: extracts leading  utes. utes.` blocks too
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_610_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_644_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_610_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_644_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBe","negate":false,"expected":"quick check"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:620:3: extracts leading `<reasoning>` blocks into thinking events
+// packages/gateway/src/tools/agent-loop.test.ts:654:3: extracts leading `<reasoning>` blocks into thinking events
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_620_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_654_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_620_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_654_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":"step one reasoning"},{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":"step one reasoning"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:633:3: does not strip `<reasoning>` tags that appear after visible content has started
+// packages/gateway/src/tools/agent-loop.test.ts:667:3: does not strip `<reasoning>` tags that appear after visible content has started
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_633_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_667_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_633_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_667_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Use `<reasoning>` tags like <reasoning>this</reasoning>` in HTML."},{"matcher":"toBe","negate":false,"expected":""},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:645:3: rejects OpenAI-compatible error chunks
+// packages/gateway/src/tools/agent-loop.test.ts:679:3: rejects OpenAI-compatible error chunks
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_645_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_679_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_645_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_679_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"upstream overloaded"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:651:3: propagates OpenAI-compatible reader failures
+// packages/gateway/src/tools/agent-loop.test.ts:685:3: propagates OpenAI-compatible reader failures
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_651_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_685_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_651_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_685_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"connection closed"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:665:3: ignores text that merely reuses a phrase
+// packages/gateway/src/tools/agent-loop.test.ts:699:3: ignores text that merely reuses a phrase
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_665_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_699_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_665_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_699_3"#,
         r#"[{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:671:3: ignores a short answer even when it is entirely repetitive
+// packages/gateway/src/tools/agent-loop.test.ts:705:3: ignores a short answer even when it is entirely repetitive
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_671_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_705_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_671_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_705_3"#,
         r#"[{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:675:3: reports the unit and full copy count of a runaway loop
+// packages/gateway/src/tools/agent-loop.test.ts:709:3: reports the unit and full copy count of a runaway loop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_675_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_709_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_675_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_709_3"#,
         r#"[{"matcher":"toBeNull","negate":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":40},{"matcher":"toBe","negate":false,"expected":19}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:684:3: counts copies beyond the trailing scan window
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_684_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_684_3"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:693:3: collapses the repeated run when trimming
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_693_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_693_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"38 further identical repetitions removed"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:701:3: catches a whitespace-churning loop with no stable period
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_701_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_701_3"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":40}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:718:3: leaves whitespace-heavy but distinct content alone
+// packages/gateway/src/tools/agent-loop.test.ts:718:3: counts copies beyond the trailing scan window
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_718_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_718_3"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":false}]"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:735:3: cut-trims a near-verbatim loop instead of echoing a unit
+// packages/gateway/src/tools/agent-loop.test.ts:727:3: collapses the repeated run when trimming
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_727_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_727_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"38 further identical repetitions removed"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:735:3: catches a whitespace-churning loop with no stable period
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_735_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_735_3"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":40}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:752:3: leaves whitespace-heavy but distinct content alone
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_752_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_752_3"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:769:3: cut-trims a near-verbatim loop instead of echoing a unit
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_769_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_769_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"near-identical repetitions removed"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:750:3: cuts an OpenAI stream short once the model loops
+// packages/gateway/src/tools/agent-loop.test.ts:784:3: cuts an OpenAI stream short once the model loops
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_750_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_784_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_750_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_784_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"content"},{"matcher":"toBe","negate":false,"expected":"repetition"},{"matcher":"toContain","negate":true,"expected":"NEVER-REACHED"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:768:3: cuts an ollama stream short on a reasoning loop
+// packages/gateway/src/tools/agent-loop.test.ts:802:3: cuts an ollama stream short on a reasoning loop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_768_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_802_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_768_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_802_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"thinking"},{"matcher":"toBe","negate":false,"expected":"repetition"},{"matcher":"toContain","negate":true,"expected":"NEVER-REACHED"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:783:3: catches a line loop whose periodic tail falls between throttled scans
+// packages/gateway/src/tools/agent-loop.test.ts:817:3: catches a line loop whose periodic tail falls between throttled scans
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_783_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_817_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_783_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_817_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"content"},{"matcher":"toBe","negate":false,"expected":"repetition"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:809:3: leaves a normal ollama stream alone
+// packages/gateway/src/tools/agent-loop.test.ts:843:3: leaves a normal ollama stream alone
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_809_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_843_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_809_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_843_3"#,
         r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":"stop"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:832:3: silently discards a looping generation and resamples a clean response
+// packages/gateway/src/tools/agent-loop.test.ts:866:3: silently discards a looping generation and resamples a clean response
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_832_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_866_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_832_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_866_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Provider selector fixed."},{"matcher":"toContain","negate":true,"expected":"Stopped:"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"assistant"},{"matcher":"toBe","negate":false,"expected":"Provider selector fixed."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:893:3: emits content_rollback when a generation is discarded so live accumulators drop the garbage
+// packages/gateway/src/tools/agent-loop.test.ts:927:3: emits content_rollback when a generation is discarded so live accumulators drop the garbage
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_893_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_927_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_893_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_927_3"#,
         r#"[{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"Provider selector fixed."},{"matcher":"toContain","negate":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:956:3: drops the run-up into the loop instead of replaying it to the resample
+// packages/gateway/src/tools/agent-loop.test.ts:990:3: drops the run-up into the loop instead of replaying it to the resample
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_956_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_990_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_956_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_990_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"Provider selector fixed."},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1007:3: stops continuing a truncated turn once the reasoning loops across rounds
+// packages/gateway/src/tools/agent-loop.test.ts:1041:3: stops continuing a truncated turn once the reasoning loops across rounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1007_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1041_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1007_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1041_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"AB"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1051:3: varies ollama sampling on the resample so the retry can't replay the loop
+// packages/gateway/src/tools/agent-loop.test.ts:1085:3: varies ollama sampling on the resample so the retry can't replay the loop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1051_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1085_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1051_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1085_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeGreaterThan","negate":false,"expected":0.8},{"matcher":"toBe","negate":false,"expected":"number"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1103:3: inserts synthetic tool results before a user turn when a tool call was interrupted
+// packages/gateway/src/tools/agent-loop.test.ts:1137:3: inserts synthetic tool results before a user turn when a tool call was interrupted
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1103_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1137_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1103_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1137_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["system","assistant","tool","user"]},{"matcher":"toMatchObject","negate":false,"expected":{"role":"tool","tool_call_id":"call-1","name":"execute"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1120:3: preserves a completed tool call and result at the history tail
+// packages/gateway/src/tools/agent-loop.test.ts:1154:3: preserves a completed tool call and result at the history tail
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1120_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1154_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1120_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1154_3"#,
         r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1138:3: drops orphaned tool results left behind by context pruning
+// packages/gateway/src/tools/agent-loop.test.ts:1172:3: drops orphaned tool results left behind by context pruning
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1138_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1172_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1138_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1172_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"role":"system","content":"system"},{"role":"user","content":"next"}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1155:3: replaces pruned turns with a structured summary
+// packages/gateway/src/tools/agent-loop.test.ts:1189:3: replaces pruned turns with a structured summary
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1155_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1189_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1155_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1189_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"[conversation-summary]"},{"matcher":"toContain","negate":false,"expected":"Goal:"},{"matcher":"toContain","negate":false,"expected":"Constraints:"},{"matcher":"toContain","negate":false,"expected":"Decisions:"},{"matcher":"toContain","negate":false,"expected":"Files:"},{"matcher":"toContain","negate":false,"expected":"Progress:"},{"matcher":"toContain","negate":false,"expected":"Next steps:"},{"matcher":"toContain","negate":false,"expected":"Keep implementation minimal"},{"matcher":"toContain","negate":false,"expected":"deterministic structured summaries"},{"matcher":"toContain","negate":false,"expected":"packages/gateway/src/tools/agent-loop.ts"},{"matcher":"toContain","negate":false,"expected":"Tool file.read"},{"matcher":"toContain","negate":false,"expected":"Run the focused agent-loop tests next"},{"matcher":"toMatchObject","negate":false,"expected":{"role":"user","content":"Please continue with the current implementation."}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1203:3: re-injects the latest substantive user task when the tail is a bare continuation
+// packages/gateway/src/tools/agent-loop.test.ts:1237:3: re-injects the latest substantive user task when the tail is a bare continuation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1203_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1237_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1203_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1237_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"[conversation-summary]"},{"matcher":"toMatchObject","negate":false,"expected":{"role":"user","content":"continue?"}},{"matcher":"toBeDefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1240:3: keeps oversized tool results verbatim — compaction only fires at the high trigger
+// packages/gateway/src/tools/agent-loop.test.ts:1274:3: keeps oversized tool results verbatim — compaction only fires at the high trigger
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1240_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1274_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1240_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1274_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1266:3: does not re-inject when the tail user message is already substantive
+// packages/gateway/src/tools/agent-loop.test.ts:1300:3: does not re-inject when the tail user message is already substantive
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1266_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1300_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1266_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1300_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"role":"user","content":"now run the focused tests and report the results please"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1294:3: tracks only actual retries when transient failures exhaust the budget
+// packages/gateway/src/tools/agent-loop.test.ts:1328:3: tracks only actual retries when transient failures exhaust the budget
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1294_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1328_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1294_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1328_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"503 service unavailable"}},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1309:3: does not retry non-transient failures
+// packages/gateway/src/tools/agent-loop.test.ts:1343:3: does not retry non-transient failures
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1309_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1343_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1309_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1343_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1327:3: turns a thrown tool error into a failed result instead of rejecting
+// packages/gateway/src/tools/agent-loop.test.ts:1361:3: turns a thrown tool error into a failed result instead of rejecting
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1327_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1361_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1327_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1361_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"ENOENT: no such file or directory"},{"matcher":"toMatchObject","negate":false,"expected":{"role":"tool","tool_call_id":"throwing-case"}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1347:3: retries a thrown transient error and succeeds on a later attempt
+// packages/gateway/src/tools/agent-loop.test.ts:1381:3: retries a thrown transient error and succeeds on a later attempt
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1347_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1381_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1347_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1381_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"message":"recovered"}},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1365:3: normalizes a malformed tool result rather than throwing on it
+// packages/gateway/src/tools/agent-loop.test.ts:1399:3: normalizes a malformed tool result rather than throwing on it
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1365_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1399_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1365_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1399_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"message":""}},{"matcher":"toThrow","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1378:3: stops retrying promptly once the signal aborts
+// packages/gateway/src/tools/agent-loop.test.ts:1412:3: stops retrying promptly once the signal aborts
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1378_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1412_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1378_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1412_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toBeLessThan","negate":false,"expected":400}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1402:3: matches genuine transient errors
+// packages/gateway/src/tools/agent-loop.test.ts:1436:3: matches genuine transient errors
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1402_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1436_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1402_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1436_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1417:3: ignores digits and prose that merely look transient
+// packages/gateway/src/tools/agent-loop.test.ts:1451:3: ignores digits and prose that merely look transient
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1417_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1451_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1417_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1451_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1429:3: does not retry on transient-looking text buried deep in captured output
+// packages/gateway/src/tools/agent-loop.test.ts:1463:3: does not retry on transient-looking text buried deep in captured output
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1429_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1463_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1429_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1463_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1434:3: treats a missing message as non-transient
+// packages/gateway/src/tools/agent-loop.test.ts:1468:3: treats a missing message as non-transient
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1434_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1468_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1434_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1468_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1441:3: keeps sibling tool results when one parallel call throws
+// packages/gateway/src/tools/agent-loop.test.ts:1475:3: keeps sibling tool results when one parallel call throws
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1441_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1475_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1441_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1475_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toEqual","negate":false,"expected":["call-a","call-b"]},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"provider exploded"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1511:3: recovers when the provider returns an empty completion after a successful tool
+// packages/gateway/src/tools/agent-loop.test.ts:1545:3: recovers when the provider returns an empty completion after a successful tool
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1511_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1545_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1511_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1545_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"Deployment finished and verified."},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant","content":"Deployment finished and verified."}},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1582:3: gracefully falls back with a persisted answer when empty post-tool completions exhaust recovery
+// packages/gateway/src/tools/agent-loop.test.ts:1616:3: gracefully falls back with a persisted answer when empty post-tool completions exhaust recovery
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1582_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1616_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1582_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1616_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":4},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"session-empty-exhausted"},{"matcher":"toBe","negate":false,"expected":"assistant"},{"matcher":"toContain","negate":false,"expected":"the last tool step did finish"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"file.read"},{"matcher":"toContain","negate":false,"expected":"Tool completed"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant"}},{"matcher":"toContain","negate":false,"expected":"last tool step did finish"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1661:3: continues with a follow-up round when steering arrives during a final text response
+// packages/gateway/src/tools/agent-loop.test.ts:1695:3: continues with a follow-up round when steering arrives during a final text response
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1661_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1695_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1661_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1695_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"Initial answer. Steered follow-up."},{"matcher":"toEqual","negate":false,"expected":[{"type":"text","content":"Initial answer."},{"type":"steering","content":"Adjust the answer now"},{"type":"text","content":" Steered follow-up."}]},{"matcher":"toContainEqual","negate":false,"expected":{"type":"steering","message":"Adjust the answer now","deferred":true}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1734:3: keeps internal steering hidden when received %s
+// packages/gateway/src/tools/agent-loop.test.ts:1768:3: keeps internal steering hidden when received %s
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each0"#,
         r#"[{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"private command output"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"hidden":true}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1734:3: keeps internal steering hidden when received %s
+// packages/gateway/src/tools/agent-loop.test.ts:1768:3: keeps internal steering hidden when received %s
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1768_3_each1"#,
         r#"[{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"private command output"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"hidden":true}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1780:3: calls onPersist exactly once and reports persisted=true on normal completion
+// packages/gateway/src/tools/agent-loop.test.ts:1814:3: calls onPersist exactly once and reports persisted=true on normal completion
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1814_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1814_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant","content":"Hello world"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1828:3: emits a swarm mode notice without forcing any tool call
+// packages/gateway/src/tools/agent-loop.test.ts:1862:3: emits a swarm mode notice without forcing any tool call
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1862_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1862_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"type":"mode_notice","mode":"swarm"}},{"matcher":"toBe","negate":false,"expected":"No specialists needed for this."},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1874:3: runs specialist agent.spawn calls the model recommends concurrently
+// packages/gateway/src/tools/agent-loop.test.ts:1908:3: runs specialist agent.spawn calls the model recommends concurrently
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1908_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1908_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"type":"mode_notice","mode":"swarm"}},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Swarm complete."},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"tool":"agent.spawn","ok":true}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1946:3: blocks implementation tools the coordinator tries to use directly, forcing delegation
+// packages/gateway/src/tools/agent-loop.test.ts:1980:3: blocks implementation tools the coordinator tries to use directly, forcing delegation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1980_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1980_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"tool":"edit","ok":false}},{"matcher":"toContain","negate":false,"expected":"not available to the Swarm coordinator"},{"matcher":"toContain","negate":false,"expected":"agent tool"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2012:3: gives concurrent agent.spawn calls a shared swarm round id, but not a solo call
+// packages/gateway/src/tools/agent-loop.test.ts:2046:3: gives concurrent agent.spawn calls a shared swarm round id, but not a solo call
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2046_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2046_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBeTruthy","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2138:3: forces delegation once the coordinator has made several direct reads without ever calling agent
+// packages/gateway/src/tools/agent-loop.test.ts:2172:3: forces delegation once the coordinator has made several direct reads without ever calling agent
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2172_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2172_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Investigation done."},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2240:3: auto-continues when a text response is cut off by finish_reason=length
+// packages/gateway/src/tools/agent-loop.test.ts:2274:3: auto-continues when a text response is cut off by finish_reason=length
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2274_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2274_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"Part one and part two."},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2389:3: quarantines a ping-pong loop and lets the provider recover
+// packages/gateway/src/tools/agent-loop.test.ts:2423:3: quarantines a ping-pong loop and lets the provider recover
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2423_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2423_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeLessThan","negate":false,"expected":40},{"matcher":"toBe","negate":false,"expected":"Recovered from the ping-pong loop."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2454:3: stops re-running a call that keeps returning the identical error
+// packages/gateway/src/tools/agent-loop.test.ts:2488:3: stops re-running a call that keeps returning the identical error
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2488_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2488_3"#,
         r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":3},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"ripgrep is unavailable"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2519:3: bounds total repeats of one call even when the model ignores every nudge
+// packages/gateway/src/tools/agent-loop.test.ts:2553:3: bounds total repeats of one call even when the model ignores every nudge
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2553_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2553_3"#,
         r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":10}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2573:3: without maxRounds, ends normally when the model answers before the safety backstop
+// packages/gateway/src/tools/agent-loop.test.ts:2607:3: without maxRounds, ends normally when the model answers before the safety backstop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2607_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2607_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"All done."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2630:3: does not flag a legitimate multi-file read sequence
+// packages/gateway/src/tools/agent-loop.test.ts:2664:3: does not flag a legitimate multi-file read sequence
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2664_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2664_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Read all files."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2680:3: redirects a range-jitter read loop before it can consume the turn
+// packages/gateway/src/tools/agent-loop.test.ts:2714:3: redirects a range-jitter read loop before it can consume the turn
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2714_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2714_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeLessThan","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Recovered after the redundant reads were blocked."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2749:3: tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)
+// packages/gateway/src/tools/agent-loop.test.ts:2783:3: tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2783_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2783_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"Verified both handlers are patched."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2812:3: does not flag sequential non-overlapping reads that grow through a file
+// packages/gateway/src/tools/agent-loop.test.ts:2846:3: does not flag sequential non-overlapping reads that grow through a file
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2846_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2846_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Read the whole file."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2870:3: quarantines an ignored duplicate call, continues with another tool, then restores it
+// packages/gateway/src/tools/agent-loop.test.ts:2904:3: quarantines an ignored duplicate call, continues with another tool, then restores it
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2904_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2904_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered with a different approach."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":["read","read","read","search"]},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2961:3: keeps quarantining and recovers when a provider calls an unavailable tool
+// packages/gateway/src/tools/agent-loop.test.ts:2995:3: keeps quarantining and recovers when a provider calls an unavailable tool
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2995_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2995_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":7},{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered after the unavailable call was rejected."},{"matcher":"toContain","negate":true,"expected":"Stopped:"},{"matcher":"toContain","negate":true,"expected":"DSML"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3029:3: steers a turn that replays the same thinking + same rejected tool call every round, then stops as a backstop
+// packages/gateway/src/tools/agent-loop.test.ts:3063:3: steers a turn that replays the same thinking + same rejected tool call every round, then stops as a backstop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3063_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3063_3"#,
         r#"[{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":5},{"matcher":"toBeLessThan","negate":false,"expected":12},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":2},{"matcher":"toBeLessThan","negate":false,"expected":12},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":4,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"p"},{"id":3,"kind":"char","value":"e"}]},"flags":""}},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":13,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"r"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"s"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"e"},{"id":12,"kind":"alt","nodes":[{"id":9,"kind":"seq","nodes":[{"id":8,"kind":"class","items":[{"category":"W"}],"negate":false}]},{"id":11,"kind":"seq","nodes":[{"id":10,"kind":"end"}]}]}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3141:3: lets the model recover after being steered out of a replay loop instead of stopping
+// packages/gateway/src/tools/agent-loop.test.ts:3175:3: lets the model recover after being steered out of a replay loop instead of stopping
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3175_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3175_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Fixed the streaming issue"},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":4}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3248:3: executes an identical tool call only once when the provider repeats it within one round
+// packages/gateway/src/tools/agent-loop.test.ts:3282:3: executes an identical tool call only once when the provider repeats it within one round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3282_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3282_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3307:3: quarantines a repeated call hidden inside otherwise changing tool batches
+// packages/gateway/src/tools/agent-loop.test.ts:3341:3: quarantines a repeated call hidden inside otherwise changing tool batches
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3341_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3341_3"#,
         r#"[{"matcher":"toBeLessThan","negate":false,"expected":40},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered from the changing batch loop."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3380:3: continues through an invisible checkpoint when the caller omits maxRounds
+// packages/gateway/src/tools/agent-loop.test.ts:3414:3: continues through an invisible checkpoint when the caller omits maxRounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3414_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3414_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Finished too late."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":12,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"P"},{"id":1,"kind":"char","value":"a"},{"id":2,"kind":"char","value":"u"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"d"},{"id":6,"kind":"char","value":" "},{"id":7,"kind":"char","value":"a"},{"id":8,"kind":"char","value":"f"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"r"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":81},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3432:3: compacts completed work inside the active turn before context pressure causes a duplicate-call loop
+// packages/gateway/src/tools/agent-loop.test.ts:3466:3: compacts completed work inside the active turn before context pressure causes a duplicate-call loop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3466_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3466_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Recovered from the long investigation."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3518:3: does not quarantine a re-read whose earlier result compaction erased
+// packages/gateway/src/tools/agent-loop.test.ts:3552:3: does not quarantine a re-read whose earlier result compaction erased
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3552_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3552_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBe","negate":false,"expected":6},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3610:3: keeps tool results verbatim below the Codex-style trigger — no lossy truncation
+// packages/gateway/src/tools/agent-loop.test.ts:3644:3: keeps tool results verbatim below the Codex-style trigger — no lossy truncation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3644_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3644_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeGreaterThan","negate":false,"expected":1},{"matcher":"toContain","negate":true,"expected":"compacted for context"},{"matcher":"toContain","negate":true,"expected":"[active-turn-summary]"},{"matcher":"toContain","negate":true,"expected":"[conversation-summary]"},{"matcher":"toHaveLength","negate":false,"expected":8},{"matcher":"toContain","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3682:3: keeps explicit round budgets bounded for specialist runs
+// packages/gateway/src/tools/agent-loop.test.ts:3716:3: keeps explicit round budgets bounded for specialist runs
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3716_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3716_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":26,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"P"},{"id":1,"kind":"char","value":"a"},{"id":2,"kind":"char","value":"u"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"d"},{"id":6,"kind":"char","value":" "},{"id":7,"kind":"char","value":"a"},{"id":8,"kind":"char","value":"f"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":" "},{"id":13,"kind":"char","value":"2"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":"o"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"l"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"o"},{"id":22,"kind":"char","value":"u"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"d"},{"id":25,"kind":"char","value":"s"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3725:3: caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly
+// packages/gateway/src/tools/agent-loop.test.ts:3759:3: caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3759_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3759_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeGreaterThan","negate":false,"expected":4000},{"matcher":"toBe","negate":false,"expected":4001},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3797:3: preserves DeepSeek reasoning during a text-only length continuation
+// packages/gateway/src/tools/agent-loop.test.ts:3831:3: preserves DeepSeek reasoning during a text-only length continuation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3831_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3831_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3815:3: replays DeepSeek reasoning verbatim through a real tool round
+// packages/gateway/src/tools/agent-loop.test.ts:3849:3: replays DeepSeek reasoning verbatim through a real tool round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3849_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3849_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeGreaterThan","negate":false,"expected":4000},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3886:3: recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim
+// packages/gateway/src/tools/agent-loop.test.ts:3920:3: recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3920_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3920_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"Recovered after the repeated reasoning was rejected."},{"matcher":"toContain","negate":true,"expected":"Stopped:"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3947:3: finishes with a persisted fallback answer when a round streams only timing-noise reasoning like 25.0s
+// packages/gateway/src/tools/agent-loop.test.ts:3981:3: finishes with a persisted fallback answer when a round streams only timing-noise reasoning like 25.0s
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3981_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3981_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"assistant"},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant"}},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4007:3: feeds answer-less reasoning back as an assistant turn so the retry request differs
+// packages/gateway/src/tools/agent-loop.test.ts:4041:3: feeds answer-less reasoning back as an assistant turn so the retry request differs
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4041_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4041_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Here is the answer."},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"produced reasoning but no answer"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4119:5: adds configured recovery advice without bypassing the forced-answer guard
+// packages/gateway/src/tools/agent-loop.test.ts:4153:5: adds configured recovery advice without bypassing the forced-answer guard
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4153_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4153_5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Here is what I found."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4128:5: withholds tools to force an answer when nothing changes for many rounds
+// packages/gateway/src/tools/agent-loop.test.ts:4162:5: withholds tools to force an answer when nothing changes for many rounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4162_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4162_5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Here is what I found."},{"matcher":"toBeLessThan","negate":false,"expected":30}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4140:5: re-anchors on the goal once, not once per round
+// packages/gateway/src/tools/agent-loop.test.ts:4174:5: re-anchors on the goal once, not once per round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4174_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4174_5"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4151:5: keeps a single live copy of the periodic reminder instead of stacking one every 4 rounds
+// packages/gateway/src/tools/agent-loop.test.ts:4185:5: keeps a single live copy of the periodic reminder instead of stacking one every 4 rounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4185_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4185_5"#,
         r#"[{"matcher":"toBeTruthy","negate":false},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4167:3: re-executes the original tool and replaces its history entry
+// packages/gateway/src/tools/agent-loop.test.ts:4201:3: re-executes the original tool and replaces its history entry
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4201_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4201_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"ok","data":{"stdout":"test"}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"message":"ok","data":{"stdout":"test"},"retryCount":1}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4212:3: returns a not found error for unknown call ids
+// packages/gateway/src/tools/agent-loop.test.ts:4246:3: returns a not found error for unknown call ids
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4246_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4246_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Tool call missing-call not found"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4227:3: prefers the exact registered identity and records sorted collision claimants
+// packages/gateway/src/tools/agent-loop.test.ts:4261:3: prefers the exact registered identity and records sorted collision claimants
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4261_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4261_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"coverage_identity_tool"},{"matcher":"toBe","negate":false,"expected":"coverage_identity_tool"},{"matcher":"toContainEqual","negate":false,"expected":{"providerName":"coverage_identity_tool","internalNames":["coverage.identity.tool","coverage.identity_tool","coverage_identity_tool"]}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4238:1: preserves queued steering metadata when draining a tool-round boundary
+// packages/gateway/src/tools/agent-loop.test.ts:4272:1: preserves queued steering metadata when draining a tool-round boundary
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4272_1() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4272_1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[{"message":"provider text","displayContent":"visible text","queuedMessageId":"queued-coverage"}]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
@@ -27329,23 +28351,387 @@ fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_175_3() {
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:187:3: preserves user takeover when opening a suspended browser
+// packages/gateway/src/tools/browser-chat.test.ts:187:3: reopens a stopped blank browser and navigates to the requested URL
 #[test]
 fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_187_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
         r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_187_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-chat.test.ts:199:3: reopens a stopped blank browser for inspection and respects takeover
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_199_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_199_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-chat.test.ts:214:3: preserves user takeover when opening a suspended browser
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_214_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_214_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:197:3: restarts an agent browser without creating a project server or dropping takeover
+// packages/gateway/src/tools/browser-chat.test.ts:224:3: restarts an agent browser without creating a project server or dropping takeover
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_197_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_224_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_197_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_224_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"origin":"agent","sharedWithAgent":false,"processId":null}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com"]},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:80:5: selects and clicks a real control in one tool call
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_80_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_80_5_each0"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"actionResult":{"selector":"#save","resolvedBy":"system-one"},"textPreview":{"__jait_matcher":"stringContaining","value":"Saved"}}}},{"matcher":"toContain","negate":false,"expected":"Save"},{"matcher":"toContain","negate":true,"expected":"Private text"},{"matcher":"toContain","negate":true,"dynamic":true}]"##,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:88:5: finds targets beyond the normal snapshot limit and rejects duplicates
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_88_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_88_5_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toContain","negate":false,"expected":"Saved"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"a"},{"id":1,"kind":"char","value":"m"},{"id":2,"kind":"char","value":"b"},{"id":3,"kind":"char","value":"i"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"u"},{"id":6,"kind":"char","value":"o"},{"id":7,"kind":"char","value":"u"},{"id":8,"kind":"char","value":"s"}]},"flags":"i"}},{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:99:5: guards field actions against reload and accepts an unchanged target
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_99_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_99_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:112:5: uses actionable textarea selectors for guarded typing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_112_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_112_5_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"textbox"},{"matcher":"toBeTruthy","negate":false},{"matcher":"toContain","negate":false,"expected":"Address entered"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:126:5: rejects a changed option and an input changed to password
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_126_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_126_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:136:5: rejects a guarded selector after same-URL reload
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_136_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_136_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:145:5: reports a pre-dispatch stale target to the adaptive task
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_145_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_145_5_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:154:5: reports a stale field before any text input to the adaptive task
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_154_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_154_5_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:164:5: rejects a navigation while the model is choosing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_164_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_164_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:176:5: rejects a reload at the same URL while the model is choosing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_176_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_176_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:188:5: cancels an in-flight guarded click before dispatch
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_188_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_188_5_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"cancelled"},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:241:5: cancels inference without clicking
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_241_5_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_241_5_each0"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:80:5: selects and clicks a real control in one tool call
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_80_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_80_5_each1"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"actionResult":{"selector":"#save","resolvedBy":"system-one"},"textPreview":{"__jait_matcher":"stringContaining","value":"Saved"}}}},{"matcher":"toContain","negate":false,"expected":"Save"},{"matcher":"toContain","negate":true,"expected":"Private text"},{"matcher":"toContain","negate":true,"dynamic":true}]"##,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:88:5: finds targets beyond the normal snapshot limit and rejects duplicates
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_88_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_88_5_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toContain","negate":false,"expected":"Saved"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"a"},{"id":1,"kind":"char","value":"m"},{"id":2,"kind":"char","value":"b"},{"id":3,"kind":"char","value":"i"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"u"},{"id":6,"kind":"char","value":"o"},{"id":7,"kind":"char","value":"u"},{"id":8,"kind":"char","value":"s"}]},"flags":"i"}},{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:99:5: guards field actions against reload and accepts an unchanged target
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_99_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_99_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:112:5: uses actionable textarea selectors for guarded typing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_112_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_112_5_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"textbox"},{"matcher":"toBeTruthy","negate":false},{"matcher":"toContain","negate":false,"expected":"Address entered"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:126:5: rejects a changed option and an input changed to password
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_126_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_126_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:136:5: rejects a guarded selector after same-URL reload
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_136_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_136_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:145:5: reports a pre-dispatch stale target to the adaptive task
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_145_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_145_5_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:154:5: reports a stale field before any text input to the adaptive task
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_154_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_154_5_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"code":"BROWSER_STALE_TARGET","actionDispatched":false}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:164:5: rejects a navigation while the model is choosing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_164_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_164_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:176:5: rejects a reload at the same URL while the model is choosing
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_176_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_176_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:188:5: cancels an in-flight guarded click before dispatch
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_188_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_188_5_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"cancelled"},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.integration.test.ts:241:5: cancels inference without clicking
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_241_5_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-integration-test-832fdae3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_integration_test_ts_241_5_each1"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toContain","negate":false,"expected":"Ready"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:43:3: uses the existing click tool and sends only matching labels to the model
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_43_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_43_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"actionResult":{"selector":"#settings","resolvedBy":"system-one"}}}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["#settings",{"__jait_matcher":"any","type":"AbortSignal"},{"documentUrl":{"__jait_observed":0},"documentTimeOrigin":{"__jait_observed":1},"tagName":"button","name":"Settings","text":"Settings"}],"hybrid":true},{"matcher":"toContain","negate":false,"expected":"Settings"},{"matcher":"toContain","negate":true,"expected":"private page contents"},{"matcher":"toContain","negate":true,"expected":"private field value"},{"matcher":"toContain","negate":true,"expected":"Delete account"},{"matcher":"toContain","negate":true,"expected":"example.test"}]"##,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:58:3: keeps explicit selectors working without System One
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_58_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_58_3"#,
+        r##"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["#settings",{"__jait_type":"undefined"}]},{"matcher":"toHaveBeenCalled","negate":true}]"##,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:66:3: requires an explicit complete label and refuses ambiguous or unconfigured targets
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_66_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_66_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"complete label"},{"matcher":"toThrow","negate":false,"expected":"ambiguous"},{"matcher":"toThrow","negate":false,"expected":"ambiguous"},{"matcher":"toThrow","negate":false,"expected":"complete label"},{"matcher":"toThrow","negate":false,"expected":"not configured"},{"matcher":"toThrow","negate":false,"expected":"exactly one"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:86:3: stops when the model abstains, is uncertain, fails, or is cancelled
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_86_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_86_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"confidently"},{"matcher":"toThrow","negate":false,"expected":"confidently"},{"matcher":"toThrow","negate":false,"expected":"unavailable"},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:100:3: never starts inference in secret-safe or user-controlled sessions
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_100_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_100_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"secret-safe"},{"matcher":"toThrow","negate":false,"expected":"not shared"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:111:3: does not click when %s changes during inference
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_111_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_111_3_each0"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:111:3: does not click when %s changes during inference
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_111_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_111_3_each1"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-fast-click.test.ts:122:3: reports a completed click even if control is taken afterward
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_122_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-fast-click-test-8c584145"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_fast_click_test_ts_122_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
@@ -27456,6 +28842,78 @@ fn tailstatic_packages_gateway_src_tools_browser_intelligence_test_ts_57_3() {
         r#"gateway-src-tools-browser-intelligence-test-4eb9086c"#,
         r#"tailstatic_packages_gateway_src_tools_browser_intelligence_test_ts_57_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.integration.test.ts:12:3: captures a browser interaction through the Jait surface
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_record_integration_test_ts_12_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-integration-test-d96ccad7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_integration_test_ts_12_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"h264"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.integration.test.ts:12:3: captures a browser interaction through the Jait surface
+#[test]
+#[ignore = "original source skip or capability gate; unresolved"]
+fn tailstatic_packages_gateway_src_tools_browser_record_integration_test_ts_12_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-integration-test-d96ccad7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_integration_test_ts_12_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"h264"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.test.ts:33:3: rejects secret-safe sessions before capturing
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_record_test_ts_33_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-test-e2ad05b3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_test_ts_33_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"permission was lost"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.test.ts:41:3: discards an in-flight frame when control is handed to the user
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_record_test_ts_41_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-test-e2ad05b3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_test_ts_41_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"discarded"},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.test.ts:57:3: rejects an artifact directory symlink outside the project
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_record_test_ts_57_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-test-e2ad05b3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_test_ts_57_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"escapes the project"},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.test.ts:66:3: isolates recordings by user and rejects a second start
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_record_test_ts_66_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-test-e2ad05b3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_test_ts_66_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-record.test.ts:77:3: records real browser interactions into a playable MP4
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_record_test_ts_77_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-record-test-e2ad05b3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_record_test_ts_77_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeGreaterThanOrEqual","negate":false,"optional":true,"expected":1},{"matcher":"toBeGreaterThanOrEqual","negate":false,"optional":true,"expected":2},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"h264,1280,720"}]"#,
     );
 }
 
@@ -28756,6 +30214,36 @@ fn tailstatic_packages_gateway_src_tools_channel_tools_test_ts_209_3() {
     );
 }
 
+// packages/gateway/src/tools/chat-control-tool.test.ts:46:3: requires plan approval and is unavailable in read-only ask mode
+#[test]
+fn tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_46_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-chat-control-tool-test-2d7b4795"#,
+        r#"tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_46_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/chat-control-tool.test.ts:51:3: sends, queues, steers and stops another chat through the real chat routes
+#[test]
+fn tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_51_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-chat-control-tool-test-2d7b4795"#,
+        r#"tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_51_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"running":false}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toContain","negate":false,"expected":"openai/gpt-4o"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"steer"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"accepted":true,"queued":true}},{"matcher":"toMatchObject","negate":false,"expected":{"running":true,"queued":[{"content":"Second task"}]}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"cancelled":true}},{"matcher":"toEqual","negate":false,"optional":true,"expected":["First task","Second task"]},{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"running":false,"queued":[]}},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/tools/chat-control-tool.test.ts:92:3: refuses the current chat, other users' chats, idle steering and chats without a provider
+#[test]
+fn tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_92_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-chat-control-tool-test-2d7b4795"#,
+        r#"tailstatic_packages_gateway_src_tools_chat_control_tool_test_ts_92_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"current chat"},{"matcher":"toContain","negate":false,"expected":"not found"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"409"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"provider"},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
 // packages/gateway/src/tools/chat-modes.test.ts:5:3: requires swarm mode to deploy a task-appropriate team of specialist sub-agents
 #[test]
 fn tailstatic_packages_gateway_src_tools_chat_modes_test_ts_5_3() {
@@ -29523,46 +31011,6 @@ fn tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_32_3() {
         r#"gateway-src-tools-diagram-tools-test-7d78f496"#,
         r#"tailstatic_packages_gateway_src_tools_diagram_tools_test_ts_32_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
-    );
-}
-
-// packages/gateway/src/tools/elevated-tools.test.ts:78:3: executes with a secret prompt and keeps the password out of tool inputs and audit output
-#[test]
-fn tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_78_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-elevated-tools-test-ddb5848e"#,
-        r#"tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_78_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"root-owned output"},{"matcher":"toEqual","negate":false,"expected":[{"title":"Administrator password","prompt":"Password to run an elevated command: install system packages","requestedBy":"elevated.run"}]},{"matcher":"toBe","negate":false,"expected":"sudo"},{"matcher":"toEqual","negate":false,"expected":["-S","-k","-p","","--","sh","-lc","apt-get update"]},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.execute","toolName":"elevated.run"}}]"#,
-    );
-}
-
-// packages/gateway/src/tools/elevated-tools.test.ts:122:3: exposes the elevated tool through the schema path without password parameters
-#[test]
-fn tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_122_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-elevated-tools-test-ddb5848e"#,
-        r#"tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_122_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveProperty","negate":true,"expected":"properties.password"}]"#,
-    );
-}
-
-// packages/gateway/src/tools/elevated-tools.test.ts:136:3: uses UAC elevation via -Verb RunAs when no username is provided
-#[test]
-fn tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_136_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-elevated-tools-test-ddb5848e"#,
-        r#"tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_136_3"#,
-        r#"[{"matcher":"toContain","negate":false,"optional":true,"expected":"-EncodedCommand"},{"matcher":"toContain","negate":false,"optional":true,"expected":"-Verb RunAs"},{"matcher":"toContain","negate":true,"optional":true,"expected":"-Credential"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"uac-elevated-output"},{"matcher":"toBe","negate":false,"expected":"powershell.exe"}]"#,
-    );
-}
-
-// packages/gateway/src/tools/elevated-tools.test.ts:169:3: runs powershell under the provided administrator account without exposing the password in inputs
-#[test]
-fn tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_169_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-elevated-tools-test-ddb5848e"#,
-        r#"tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_169_3"#,
-        r#"[{"matcher":"toContain","negate":false,"optional":true,"expected":"-EncodedCommand"},{"matcher":"toContain","negate":false,"optional":true,"expected":"-Credential"},{"matcher":"toContain","negate":true,"optional":true,"expected":"-Verb RunAs"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"windows-admin-output"},{"matcher":"toEqual","negate":false,"expected":[{"title":"Administrator password","prompt":"Password for .\\Administrator to run an elevated command: inspect local services","requestedBy":"elevated.run"}]},{"matcher":"toBe","negate":false,"expected":"powershell.exe"},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toContain","negate":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.execute","toolName":"elevated.run","inputs":{"__jait_matcher":"not","value":{"__jait_matcher":"objectContaining","value":{"password":{"__jait_matcher":"anything"}}}}}}]"#,
     );
 }
 
@@ -30956,6 +32404,76 @@ fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_413_3() {
     );
 }
 
+// packages/gateway/src/tools/project-chat-tool.test.ts:22:3: requires plan approval and is unavailable in read-only ask mode
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_22_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_22_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:26:3: creates a separate project chat, persists the exact message and starts the selected model through the real chat route
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_26_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_26_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeNull","negate":false},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"chat.provider":"jait","chat.cliModels":{"jait":"openai/gpt-4o"},"chat.providerRuntimeMode":"supervised"}},{"matcher":"toBe","negate":false,"optional":true,"dynamic":true},{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"model":"openai/gpt-4o"}},{"matcher":"toContain","negate":false,"expected":"Please fix this."},{"matcher":"toBe","negate":false,"optional":true,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:80:3: passes explicit provider, model and effort to an independent live chat
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_80_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_80_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"chat.provider":"codex","chat.cliModels":{"codex":"gpt-test"},"chat.reasoningEffort":"ultra"}},{"matcher":"toBeNull","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"chat.reasoningEffort":"low"}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:103:3: reports a rejected submission without falling back to a thread or moving the source chat
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_103_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_103_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"HTTP 503"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:125:3: honors cancellation before creating a chat or submitting its first message
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_125_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_125_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"cancelled before it started"},{"matcher":"toMatchObject","negate":false,"expected":{"accepted":false}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:155:3: reports an unknown submission after cancellation while awaiting acceptance
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_155_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_155_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"accepted":null}},{"matcher":"toContain","negate":false,"expected":"unknown"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/project-chat-tool.test.ts:187:3: does not create a chat in another user's project
+#[test]
+fn tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_187_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-project-chat-tool-test-6b5f46d1"#,
+        r#"tailstatic_packages_gateway_src_tools_project_chat_tool_test_ts_187_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
 // packages/gateway/src/tools/project-editor-tools.test.ts:5:3: opens the editor only through an explicit tool call
 #[test]
 fn tailstatic_packages_gateway_src_tools_project_editor_tools_test_ts_5_3() {
@@ -31428,180 +32946,190 @@ fn tailstatic_packages_gateway_src_tools_redeploy_tools_test_ts_87_3() {
 
 // packages/gateway/src/tools/registry.test.ts:35:3: registers project tools and does not expose any workspace.* alias
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_35_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_36_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_35_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_36_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"Create a Jait project"},{"matcher":"toContain","negate":false,"expected":"project"},{"matcher":"toContain","negate":false,"expected":"SCP"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:48:3: registers session.search when session search deps are provided
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_48_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_49_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_48_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_49_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"prior chat messages"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:56:3: normalizes builtin tools with builtin source metadata
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_56_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_57_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_56_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_57_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"source":"builtin","sourceMetadata":{"kind":"builtin"}}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"name":"builtin.echo","source":"builtin","sourceMetadata":{"kind":"builtin"}}}}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:76:3: registers plugin tools with explicit plugin source metadata
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_76_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_77_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_76_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_77_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"source":"plugin:demo-plugin","sourceMetadata":{"kind":"plugin","pluginId":"demo-plugin","pluginDisplayName":"Demo Plugin"},"tier":"external","category":"external","risk":"high","defaultConsentLevel":"dangerous"}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"name":"demo.echo","source":"plugin:demo-plugin","sourceMetadata":{"kind":"plugin","pluginId":"demo-plugin","pluginDisplayName":"Demo Plugin"}}}}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:115:3: returns validation errors and logs tool.validation_error
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_115_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_116_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_115_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_116_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"Input validation failed"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.validation_error","status":"failed","toolName":"echo"}}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:144:3: logs execute + result on success
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_144_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_145_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_144_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_145_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.execute","status":"executing","toolName":"ok.tool"}},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.result","status":"completed","toolName":"ok.tool"}}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:169:3: logs tool.error when tool throws
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_169_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_170_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_169_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_170_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"kaboom"},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.execute","status":"executing","toolName":"boom.tool"}},{"matcher":"toMatchObject","negate":false,"expected":{"actionType":"tool.error","status":"failed","toolName":"boom.tool"}}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:199:3: retrieves natural-language capability matches without requiring every word
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_199_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_200_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_199_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_200_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"preview.open"},{"matcher":"toContain","negate":false,"expected":"browser.click"},{"matcher":"toBe","negate":false,"expected":"network.scan"},{"matcher":"toBe","negate":false,"expected":"ssh.run"},{"matcher":"toBe","negate":false,"expected":"memory.search"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:214:3: supports fuzzy matching, priority boosts, limits, and disabled tools
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_214_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_215_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_214_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_215_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"preview.open"},{"matcher":"toBe","negate":false,"expected":"deploy.preferred"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"deploy.basic"}]"#,
     );
 }
 
-// packages/gateway/src/tools/registry.test.ts:226:3: keeps critical helpers and discovery tools visible to MCP clients
+// packages/gateway/src/tools/registry.test.ts:current:227: exposes helpers, plugin tools and bridged MCP server tools to MCP clients but keeps other core tools internal
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_226_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_227_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_226_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["todo","user.ask","tools.list","tools.search","preview.open","plugin.deploy"]}]"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_227_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["todo","user.ask","tools.list","tools.search","preview.open","plugin.deploy","mcp.github.issue"]},{"matcher":"toContain","negate":true,"expected":"mcp.github.issue"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/registry.test.ts:current:253: lets MCP clients discover bridged server tools with tools.search and tools.list
+#[test]
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_253_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-registry-test-8ca5ea02"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_253_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"matches":[{"name":"mcp.opengym.get_workout_history","openai_name":"mcp_opengym_get_workout_history"}]}},{"matcher":"toMatchObject","negate":false,"expected":{"total":1}},{"matcher":"toContain","negate":false,"expected":"mcp.opengym.get_workout_history"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:255:3: keeps a gated stage-1 tool registered after the late rebuild merges more deps
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_255_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_281_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_255_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_281_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"agent.github"},{"matcher":"toContain","negate":false,"expected":"agent.github"},{"matcher":"toContain","negate":true,"expected":"agent.github"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:271:1: ranks a query containing constructor without reading inherited synonyms
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_271_1() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_297_1() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_271_1"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_297_1"#,
         r#"[{"matcher":"toThrow","negate":true},{"matcher":"toBe","negate":false,"expected":"file.read"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:280:3: handles recovered prompts and large tool descriptions within a bounded CPU budget
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_280_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_306_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_280_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_306_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":10},{"matcher":"toBeLessThan","negate":false,"expected":2000}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:295:3: keeps discovery keywords at both ends of a long prompt
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_295_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_321_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_295_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_321_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"network.scan"},{"matcher":"toContain","negate":false,"expected":"preview.open"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:305:3: does not fuzzy-match giant tokens and still finds a trailing typo
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_305_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_331_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_305_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_331_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"preview.open"}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:311:3: does lexical ranking once and preserves limits during semantic fallback
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_311_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_337_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_311_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_337_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:331:3: registers browser handoffs only with both services and retains preview compatibility
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_331_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_357_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_331_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_357_3"#,
         r#"[{"matcher":"toBeDefined","negate":false},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeDefined","negate":false},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":39,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"r"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"v"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"w"},{"id":7,"kind":"char","value":"."},{"id":38,"kind":"alt","nodes":[{"id":12,"kind":"seq","nodes":[{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"p"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"n"}]},{"id":17,"kind":"seq","nodes":[{"id":13,"kind":"char","value":"s"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"o"},{"id":16,"kind":"char","value":"p"}]},{"id":25,"kind":"seq","nodes":[{"id":18,"kind":"char","value":"r"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"s"},{"id":21,"kind":"char","value":"t"},{"id":22,"kind":"char","value":"a"},{"id":23,"kind":"char","value":"r"},{"id":24,"kind":"char","value":"t"}]},{"id":32,"kind":"seq","nodes":[{"id":26,"kind":"char","value":"s"},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"a"},{"id":29,"kind":"char","value":"t"},{"id":30,"kind":"char","value":"u"},{"id":31,"kind":"char","value":"s"}]},{"id":37,"kind":"seq","nodes":[{"id":33,"kind":"char","value":"l"},{"id":34,"kind":"char","value":"o"},{"id":35,"kind":"char","value":"g"},{"id":36,"kind":"char","value":"s"}]}]}]},"flags":""}},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/tools/registry.test.ts:345:3: defaults to the owning persona only inside that user's thread
 #[test]
-fn tailstatic_packages_gateway_src_tools_registry_test_ts_345_3() {
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_371_3() {
     tail_assertions::check(
         r#"gateway-src-tools-registry-test-8ca5ea02"#,
-        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_345_3"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_371_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":"persona"}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["owner","persona"]},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}}]"#,
     );
 }
@@ -34147,6 +35675,36 @@ fn tailstatic_packages_gateway_src_tools_web_tools_test_ts_51_3() {
         r#"gateway-src-tools-web-tools-test-dc71eacd"#,
         r#"tailstatic_packages_gateway_src_tools_web_tools_test_ts_51_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/windows-elevation.test.ts:47:3: exposes elevated/username/reason without a password parameter and drops elevated.run
+#[test]
+fn tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_47_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-windows-elevation-test-9ab15863"#,
+        r#"tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_47_3"#,
+        r#"[{"matcher":"toHaveProperty","negate":false,"expected":"elevated"},{"matcher":"toHaveProperty","negate":false,"expected":"reason"},{"matcher":"toHaveProperty","negate":true,"expected":"password"},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/windows-elevation.test.ts:60:3: uses UAC (-Verb RunAs) when no username is provided
+#[test]
+fn tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_60_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-windows-elevation-test-9ab15863"#,
+        r#"tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_60_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":0,"stdout":"uac-output","timedOut":false}},{"matcher":"toBe","negate":false,"expected":"powershell.exe"},{"matcher":"toContain","negate":false,"expected":"-Verb RunAs"},{"matcher":"toContain","negate":true,"expected":"-Credential"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/windows-elevation.test.ts:72:3: uses credential elevation with the password only in the child environment
+#[test]
+fn tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_72_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-windows-elevation-test-9ab15863"#,
+        r#"tailstatic_packages_gateway_src_tools_windows_elevation_test_ts_72_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":3,"stderr":"denied"}},{"matcher":"toContain","negate":false,"expected":"-Credential"},{"matcher":"toContain","negate":true,"expected":"-Verb RunAs"},{"matcher":"toContain","negate":true,"expected":"hunter2"},{"matcher":"toContain","negate":true,"expected":"hunter2"},{"matcher":"toBe","negate":false,"expected":"hunter2"}]"#,
     );
 }
 

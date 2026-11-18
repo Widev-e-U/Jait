@@ -280,6 +280,24 @@ describe('SessionSelector', () => {
     expect(markup).toContain('truncate text-xs font-bold text-foreground')
   })
 
+  it('only marks the project unread after its running loop stops', () => {
+    const project = createProject()
+    project.sessions = [project.sessions[0]]
+    project.sessions[0].lastActiveAt = '2026-07-06T00:00:01.000Z'
+    const metadata = (status: 'running' | 'waiting') => JSON.stringify({ loop: {
+      id: 'goal', goal: 'Fix it', criteria: ['Pass'], status, iteration: 1, revision: 2,
+      checkedIteration: 0, summary: '', nextMessage: '', evidence: [], updatedAt: '2026-07-06T00:00:01.000Z',
+    } })
+    const render = () => renderToStaticMarkup(
+      <SessionSelector projects={[project]} activeProjectId={null} onSelectProject={() => {}}
+        onCreateProject={() => {}} onRemoveProject={() => {}} onChangeDirectory={() => {}} />,
+    )
+    project.sessions[0].metadata = metadata('running')
+    expect(render()).toContain('min-w-0 truncate text-xs font-normal">Jait</span>')
+    project.sessions[0].metadata = metadata('waiting')
+    expect(render()).toContain('min-w-0 truncate text-xs font-bold text-foreground">Jait</span>')
+  })
+
   it('keeps a read active session at normal weight', () => {
     const project = createProject()
     // Mark every session as read, including the active one.

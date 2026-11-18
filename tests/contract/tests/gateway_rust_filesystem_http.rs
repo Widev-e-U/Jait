@@ -63,13 +63,13 @@ impl FilesystemNodes for Nodes {
             .push(json!({"op":"register","node":node}));
         self.nodes.lock().unwrap().push(node);
     }
-    fn nodes(&self) -> Value {
+    fn nodes(&self, _user_id: &str) -> Value {
         json!(*self.nodes.lock().unwrap())
     }
-    fn roots<'a>(&'a self, node: Value) -> BrowseFuture<'a> {
+    fn roots<'a>(&'a self, _user_id: &'a str, node: Value) -> BrowseFuture<'a> {
         Box::pin(async move { self.result("roots", node, None) })
     }
-    fn browse<'a>(&'a self, node: Value, path: Value) -> BrowseFuture<'a> {
+    fn browse<'a>(&'a self, _user_id: &'a str, node: Value, path: Value) -> BrowseFuture<'a> {
         Box::pin(async move { self.result("browse", node, Some(path)) })
     }
 }
@@ -105,7 +105,18 @@ async fn scenario(mut input: Value, prepare: impl FnOnce(&std::path::Path)) -> V
     })
     .await
     .unwrap();
-    let expected = expected.unwrap()[0].clone();
+    let mut expected = expected.unwrap()[0].clone();
+    if input["ws"] == false {
+        // Node's optional-adapter fixture falls back to local browsing for remote IDs.
+        // Production supplies a control plane; Rust intentionally fails closed in this
+        // unwired state so a remote selection cannot disclose the gateway filesystem.
+        // The folder picker treats non-success responses as errors (folder-picker-dialog.tsx).
+        let results = expected["results"].as_array_mut().unwrap();
+        for index in [0, 1, 2, 3, 6] {
+            assert_ne!(results[index]["status"], 502, "reference fallback changed");
+            results[index] = json!({"status":502,"body":{"error":"NODE_BROWSE_FAILED","message":"Remote filesystem node is unavailable"}});
+        }
+    }
     let db = db::open_database(std::path::Path::new(":memory:")).unwrap();
     db::migrate_database(&db).unwrap();
     db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at)VALUES('owner','alice','fixture','old','old')").unwrap();
@@ -147,6 +158,7 @@ async fn scenario(mut input: Value, prepare: impl FnOnce(&std::path::Path)) -> V
     let gateway = Gateway::bind_authenticated(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
         },
         HealthState::default(),
         auth.clone(),

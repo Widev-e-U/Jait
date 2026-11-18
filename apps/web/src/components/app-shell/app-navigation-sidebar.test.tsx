@@ -5,12 +5,23 @@ import { describe, expect, it } from 'vitest'
 import { AppNavigationSidebar } from './app-navigation-sidebar'
 import { UpdateButton } from './update-button'
 import { AuthProvider } from '@/hooks/useAuth'
+import { UnreadChatCountContext } from '@/hooks/useUnreadChatCount'
 
 function renderWithAuth(element: ReactElement) {
   return renderToStaticMarkup(<AuthProvider>{element}</AuthProvider>)
 }
 
 describe('AppNavigationSidebar', () => {
+  it('shows the chat count with an accessible description and caps the visible badge', () => {
+    const markup = renderWithAuth(
+      <UnreadChatCountContext.Provider value={127}>
+        <AppNavigationSidebar account={{ username: 'User', initial: 'U', loading: false, onLogin: () => {}, onLogout: () => {}, themeMode: 'system', onThemeModeChange: () => {} }} currentView="messenger" onNavigate={() => {}} onOpenSettings={() => {}} />
+      </UnreadChatCountContext.Provider>,
+    )
+    expect(markup).toContain('aria-describedby="sidebar-badge-chat"')
+    expect(markup).toContain('aria-label="127 unread chats"')
+    expect(markup).toContain('>99+</span>')
+  })
   it('shows the full desktop navigation and account on Settings', () => {
     const markup = renderWithAuth(
       <AppNavigationSidebar

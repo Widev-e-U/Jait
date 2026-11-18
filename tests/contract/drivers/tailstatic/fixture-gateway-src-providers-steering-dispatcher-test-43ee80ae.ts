@@ -86,7 +86,40 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each0": {
+case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3": {
+
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const queue = new SteeringController();
+    const deliver = vi.fn(async () => true);
+    const dispatcher = new ProviderSteeringDispatcher(queue, deliver, vi.fn(), vi.fn());
+    const attachments = [{ name: "shot.png", mimeType: "image/png", data: "AAAA" }];
+    dispatcher.start();
+    queue.steer("look at this", { attachments });
+    await flush();
+    __jait_capture(0, (deliver.mock.calls), ([attachments]));
+    dispatcher.dispose();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each0": {
 
 
 function deferred<T>() {
@@ -128,7 +161,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each1": {
+case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_48_3_each1": {
 
 
 function deferred<T>() {
@@ -170,7 +203,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_54_3": {
+case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_66_3": {
 
 
 function deferred<T>() {
@@ -210,7 +243,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_73_3": {
+case "tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_85_3": {
 
 
 function deferred<T>() {

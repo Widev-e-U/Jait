@@ -633,7 +633,7 @@ fn remote_terminal_shell_integration_markers_and_buffers_match_reference() {
     assert!(STOP_TIMEOUT < START_TIMEOUT);
     assert_eq!(MAX_OUTPUT_CHUNKS, 10_000);
     assert_eq!(RETAINED_OUTPUT_CHUNKS, 5_000);
-    assert!(RETAINED_OUTPUT_CHUNKS < MAX_OUTPUT_CHUNKS);
+    const _: () = assert!(RETAINED_OUTPUT_CHUNKS < MAX_OUTPUT_CHUNKS);
 }
 
 // ===========================================================================

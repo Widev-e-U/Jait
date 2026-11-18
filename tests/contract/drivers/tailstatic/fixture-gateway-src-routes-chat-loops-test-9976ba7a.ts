@@ -54,7 +54,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_94_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_103_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -74,7 +74,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -126,18 +134,22 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
     onTurn = () => {
       const loop = loops.get(sessionId)!;
+      if (calls.length === 3) {
+        sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+        return;
+      }
       loops.check(sessionId, calls.length === 1
         ? { revision: loop.revision, outcome: "continue", summary: "Fix prepared", nextMessage: "Run the regression test" }
         : { revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Regression command exited 0"] });
@@ -146,20 +158,21 @@ await (async()=>{
     await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId))), { timeout: 10000 });
     __jait_capture(1, (calls));
     __jait_capture(2, (JSON.stringify(calls[1])));
-    __jait_capture(3, (readMessages().filter(message => message.role === "user")));
-    __jait_capture(4, (readMessages().filter(message => message.role === "assistant")));
-    __jait_capture(5, (publish.mock.calls));
+    __jait_capture(3, (JSON.stringify(calls[2])));
+    __jait_capture(4, (readMessages().filter(message => message.role === "user")));
+    __jait_capture(5, (readMessages().filter(message => message.role === "assistant")));
+    __jait_capture(6, (publish.mock.calls));
   
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_110_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_124_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -179,7 +192,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -231,19 +252,19 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
     loops.goal(sessionId, "Finish saved work", ["Check passes"]);
     await app.close();
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
     app = await reopen();
     await app.ready();
     await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.status)), { timeout: 10000 });
@@ -253,110 +274,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_121_3": {
-
-const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
-/*__jait_scope_open__*/{
-let app: Awaited<ReturnType<typeof createServer>>;
-let mock: Server;
-let loops: ChatLoopService;
-let sessionId: string;
-let headers: { authorization: string };
-let otherHeaders: { authorization: string };
-let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
-let onTurn: () => void;
-let responseStatus: number;
-let closeDb: () => void;
-let state: SessionStateService;
-let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
-let publish: ReturnType<typeof vi.spyOn>;
-let readMessages: () => Array<{ role: string; content: string }>;
-let sessions: SessionService;
-let userId: string;
-const __jait_hook_1545 = async () => {
-    calls = [];
-    responseStatus = 200;
-    onTurn = () => {};
-    mock = createHttpServer(async (req, res) => {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      calls.push(JSON.parse(body));
-      if (responseStatus !== 200) {
-        res.writeHead(responseStatus, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
-        return;
-      }
-      onTurn();
-      if (req.url?.endsWith("/api/chat")) {
-        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
-        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
-        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
-      } else {
-        res.writeHead(200, { "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
-        res.end("data: [DONE]\n\n");
-      }
-    });
-    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    closeDb = () => sqlite.close();
-    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    sessions = new SessionService(db);
-    const users = new UserService(db);
-    const user = users.createUser("loop-owner", "password123");
-    userId = user.id;
-    const otherUser = users.createUser("loop-other-owner", "password123");
-    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
-    const ws = new WsControlPlane(config, db);
-    publish = vi.spyOn(ws, "publishChatNotification");
-    loops = new ChatLoopService(sessions, ws);
-    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
-    state = new SessionStateService(db);
-    // The user's explicit choice for this chat. Loop turns must run on exactly
-    // this provider and model; nothing is inferred when either is missing.
-    state.set(sessionId, {
-      "chat.provider": "jait",
-      "chat.cliModels": { jait: "fixture-model" },
-    });
-    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
-    app = await reopen();
-    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
-    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
-    await app.ready();
-  };
-const __jait_hook_4438 = async () => {
-    sessionWaits.clearSession(sessionId);
-    await app.close();
-    await new Promise<void>(resolve => mock.close(() => resolve()));
-    closeDb();
-  };
-await __jait_hook_1545();
-try {
-await (async()=>{
-
-    state.set(sessionId, { "loop.turn-options": {
-      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "stale-marker-model",
-      provider: "stale-marker-provider",
-      sessionId: "another-chat", _systemNotification: "Wrong hidden task",
-    } });
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
-    loops.goal(sessionId, "Fix the authorized target", ["Pass"]);
-    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.status)), { timeout: 10000 });
-    __jait_capture(1, (calls[0]?.model));
-    __jait_capture(2, (JSON.stringify(calls[0])));
-    __jait_capture(3, (JSON.stringify(calls[0])));
-  
-})();
-
-} finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
@@ -382,7 +300,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -434,32 +360,32 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
-    onTurn = () => {
-      const loop = loops.get(sessionId)!;
-      if (loop.status === "running") loops.check(sessionId, { revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Passed"] });
-    };
-    loops.goal(sessionId, "Fix", ["Pass"]);
-    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.iteration)), { timeout: 10000 });
-    __jait_capture(1, (publish.mock.calls));
-    await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Explain the result" } });
-    await vi.waitFor(() => __jait_capture(2, (publish.mock.calls)));
-    __jait_capture(3, (publish.mock.calls[0]?.[1]));
-    __jait_capture(4, (loops.get(sessionId)?.iteration));
+    state.set(sessionId, { "loop.turn-options": {
+      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "stale-marker-model",
+      provider: "stale-marker-provider",
+      sessionId: "another-chat", _systemNotification: "Wrong hidden task",
+    } });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    loops.goal(sessionId, "Fix the authorized target", ["Pass"]);
+    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.status)), { timeout: 10000 });
+    __jait_capture(1, (calls[0]?.model));
+    __jait_capture(2, (JSON.stringify(calls[0])));
+    __jait_capture(3, (JSON.stringify(calls[0])));
   
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
@@ -485,7 +411,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -537,13 +471,126 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
+try {
+await (async()=>{
+
+    onTurn = () => {
+      const loop = loops.get(sessionId)!;
+      if (loop.status === "running") checkpointAndAsk({ revision: loop.revision, outcome: "complete", summary: "Verified", evidence: ["Passed"] });
+    };
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.iteration)), { timeout: 10000 });
+    __jait_capture(1, (publish.mock.calls));
+    loops.control(sessionId, "pause");
+    sessionWaits.clear("question:fixture");
+    await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Explain the result" } });
+    await vi.waitFor(() => __jait_capture(2, (publish.mock.calls)));
+    __jait_capture(3, (publish.mock.calls[0]?.[1]));
+    __jait_capture(4, (loops.get(sessionId)?.iteration));
+  
+})();
+
+} finally {
+await __jait_hook_5033();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_165_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let mock: Server;
+let loops: ChatLoopService;
+let sessionId: string;
+let headers: { authorization: string };
+let otherHeaders: { authorization: string };
+let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
+let onTurn: () => void;
+let responseStatus: number;
+let closeDb: () => void;
+let state: SessionStateService;
+let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
+let publish: ReturnType<typeof vi.spyOn>;
+let readMessages: () => Array<{ role: string; content: string }>;
+let sessions: SessionService;
+let userId: string;
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
+    calls = [];
+    responseStatus = 200;
+    onTurn = () => {};
+    mock = createHttpServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      calls.push(JSON.parse(body));
+      if (responseStatus !== 200) {
+        res.writeHead(responseStatus, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
+        return;
+      }
+      onTurn();
+      if (req.url?.endsWith("/api/chat")) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
+        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+      } else {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      }
+    });
+    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    closeDb = () => sqlite.close();
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
+    sessions = new SessionService(db);
+    const users = new UserService(db);
+    const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
+    const otherUser = users.createUser("loop-other-owner", "password123");
+    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
+    const ws = new WsControlPlane(config, db);
+    publish = vi.spyOn(ws, "publishChatNotification");
+    loops = new ChatLoopService(sessions, ws);
+    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
+    state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
+    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
+    app = await reopen();
+    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
+    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
+    await app.ready();
+  };
+const __jait_hook_5033 = async () => {
+    sessionWaits.clearSession(sessionId);
+    await app.close();
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+    closeDb();
+  };
+await __jait_hook_2140();
 try {
 await (async()=>{
 
@@ -563,205 +610,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_160_3": {
-
-const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
-/*__jait_scope_open__*/{
-let app: Awaited<ReturnType<typeof createServer>>;
-let mock: Server;
-let loops: ChatLoopService;
-let sessionId: string;
-let headers: { authorization: string };
-let otherHeaders: { authorization: string };
-let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
-let onTurn: () => void;
-let responseStatus: number;
-let closeDb: () => void;
-let state: SessionStateService;
-let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
-let publish: ReturnType<typeof vi.spyOn>;
-let readMessages: () => Array<{ role: string; content: string }>;
-let sessions: SessionService;
-let userId: string;
-const __jait_hook_1545 = async () => {
-    calls = [];
-    responseStatus = 200;
-    onTurn = () => {};
-    mock = createHttpServer(async (req, res) => {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      calls.push(JSON.parse(body));
-      if (responseStatus !== 200) {
-        res.writeHead(responseStatus, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
-        return;
-      }
-      onTurn();
-      if (req.url?.endsWith("/api/chat")) {
-        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
-        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
-        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
-      } else {
-        res.writeHead(200, { "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
-        res.end("data: [DONE]\n\n");
-      }
-    });
-    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    closeDb = () => sqlite.close();
-    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    sessions = new SessionService(db);
-    const users = new UserService(db);
-    const user = users.createUser("loop-owner", "password123");
-    userId = user.id;
-    const otherUser = users.createUser("loop-other-owner", "password123");
-    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
-    const ws = new WsControlPlane(config, db);
-    publish = vi.spyOn(ws, "publishChatNotification");
-    loops = new ChatLoopService(sessions, ws);
-    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
-    state = new SessionStateService(db);
-    // The user's explicit choice for this chat. Loop turns must run on exactly
-    // this provider and model; nothing is inferred when either is missing.
-    state.set(sessionId, {
-      "chat.provider": "jait",
-      "chat.cliModels": { jait: "fixture-model" },
-    });
-    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
-    app = await reopen();
-    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
-    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
-    await app.ready();
-  };
-const __jait_hook_4438 = async () => {
-    sessionWaits.clearSession(sessionId);
-    await app.close();
-    await new Promise<void>(resolve => mock.close(() => resolve()));
-    closeDb();
-  };
-await __jait_hook_1545();
-try {
-await (async()=>{
-
-    sessionWaits.raise({ key: "loop-question", sessionId, kind: "question" });
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
-    loops.goal(sessionId, "Fix", ["Pass"]);
-    await new Promise(resolve => setTimeout(resolve, 350));
-    __jait_capture(0, (calls));
-    sessionWaits.clear("loop-question");
-    await vi.waitFor(() => __jait_capture(1, (loops.get(sessionId)?.status)), { timeout: 10000 });
-    __jait_capture(2, (calls));
-  
-})();
-
-} finally {
-await __jait_hook_4438();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_171_3": {
-
-const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
-/*__jait_scope_open__*/{
-let app: Awaited<ReturnType<typeof createServer>>;
-let mock: Server;
-let loops: ChatLoopService;
-let sessionId: string;
-let headers: { authorization: string };
-let otherHeaders: { authorization: string };
-let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
-let onTurn: () => void;
-let responseStatus: number;
-let closeDb: () => void;
-let state: SessionStateService;
-let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
-let publish: ReturnType<typeof vi.spyOn>;
-let readMessages: () => Array<{ role: string; content: string }>;
-let sessions: SessionService;
-let userId: string;
-const __jait_hook_1545 = async () => {
-    calls = [];
-    responseStatus = 200;
-    onTurn = () => {};
-    mock = createHttpServer(async (req, res) => {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      calls.push(JSON.parse(body));
-      if (responseStatus !== 200) {
-        res.writeHead(responseStatus, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
-        return;
-      }
-      onTurn();
-      if (req.url?.endsWith("/api/chat")) {
-        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
-        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
-        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
-      } else {
-        res.writeHead(200, { "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
-        res.end("data: [DONE]\n\n");
-      }
-    });
-    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    closeDb = () => sqlite.close();
-    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    sessions = new SessionService(db);
-    const users = new UserService(db);
-    const user = users.createUser("loop-owner", "password123");
-    userId = user.id;
-    const otherUser = users.createUser("loop-other-owner", "password123");
-    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
-    const ws = new WsControlPlane(config, db);
-    publish = vi.spyOn(ws, "publishChatNotification");
-    loops = new ChatLoopService(sessions, ws);
-    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
-    state = new SessionStateService(db);
-    // The user's explicit choice for this chat. Loop turns must run on exactly
-    // this provider and model; nothing is inferred when either is missing.
-    state.set(sessionId, {
-      "chat.provider": "jait",
-      "chat.cliModels": { jait: "fixture-model" },
-    });
-    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
-    app = await reopen();
-    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
-    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
-    await app.ready();
-  };
-const __jait_hook_4438 = async () => {
-    sessionWaits.clearSession(sessionId);
-    await app.close();
-    await new Promise<void>(resolve => mock.close(() => resolve()));
-    closeDb();
-  };
-await __jait_hook_1545();
-try {
-await (async()=>{
-
-    responseStatus = 400;
-    loops.goal(sessionId, "Fix", ["Pass"]);
-    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.status)), { timeout: 10000 });
-    __jait_capture(1, (publish.mock.calls[0]?.[1]));
-    await new Promise(resolve => setTimeout(resolve, 350));
-    __jait_capture(2, (calls));
-  
-})();
-
-} finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
@@ -787,7 +636,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -839,13 +696,227 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
+try {
+await (async()=>{
+
+    sessionWaits.raise({ key: "loop-question", sessionId, kind: "question" });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    __jait_capture(0, (calls));
+    sessionWaits.clear("loop-question");
+    await vi.waitFor(() => __jait_capture(1, (loops.get(sessionId)?.status)), { timeout: 10000 });
+    __jait_capture(2, (calls));
+  
+})();
+
+} finally {
+await __jait_hook_5033();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_191_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let mock: Server;
+let loops: ChatLoopService;
+let sessionId: string;
+let headers: { authorization: string };
+let otherHeaders: { authorization: string };
+let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
+let onTurn: () => void;
+let responseStatus: number;
+let closeDb: () => void;
+let state: SessionStateService;
+let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
+let publish: ReturnType<typeof vi.spyOn>;
+let readMessages: () => Array<{ role: string; content: string }>;
+let sessions: SessionService;
+let userId: string;
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
+    calls = [];
+    responseStatus = 200;
+    onTurn = () => {};
+    mock = createHttpServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      calls.push(JSON.parse(body));
+      if (responseStatus !== 200) {
+        res.writeHead(responseStatus, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
+        return;
+      }
+      onTurn();
+      if (req.url?.endsWith("/api/chat")) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
+        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+      } else {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      }
+    });
+    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    closeDb = () => sqlite.close();
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
+    sessions = new SessionService(db);
+    const users = new UserService(db);
+    const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
+    const otherUser = users.createUser("loop-other-owner", "password123");
+    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
+    const ws = new WsControlPlane(config, db);
+    publish = vi.spyOn(ws, "publishChatNotification");
+    loops = new ChatLoopService(sessions, ws);
+    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
+    state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
+    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
+    app = await reopen();
+    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
+    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
+    await app.ready();
+  };
+const __jait_hook_5033 = async () => {
+    sessionWaits.clearSession(sessionId);
+    await app.close();
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+    closeDb();
+  };
+await __jait_hook_2140();
+try {
+await (async()=>{
+
+    responseStatus = 400;
+    loops.goal(sessionId, "Fix", ["Pass"]);
+    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.status)), { timeout: 10000 });
+    __jait_capture(1, (publish.mock.calls[0]?.[1]));
+    await new Promise(resolve => setTimeout(resolve, 350));
+    __jait_capture(2, (calls));
+  
+})();
+
+} finally {
+await __jait_hook_5033();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_200_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let mock: Server;
+let loops: ChatLoopService;
+let sessionId: string;
+let headers: { authorization: string };
+let otherHeaders: { authorization: string };
+let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
+let onTurn: () => void;
+let responseStatus: number;
+let closeDb: () => void;
+let state: SessionStateService;
+let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
+let publish: ReturnType<typeof vi.spyOn>;
+let readMessages: () => Array<{ role: string; content: string }>;
+let sessions: SessionService;
+let userId: string;
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
+    calls = [];
+    responseStatus = 200;
+    onTurn = () => {};
+    mock = createHttpServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      calls.push(JSON.parse(body));
+      if (responseStatus !== 200) {
+        res.writeHead(responseStatus, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
+        return;
+      }
+      onTurn();
+      if (req.url?.endsWith("/api/chat")) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
+        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+      } else {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      }
+    });
+    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    closeDb = () => sqlite.close();
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
+    sessions = new SessionService(db);
+    const users = new UserService(db);
+    const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
+    const otherUser = users.createUser("loop-other-owner", "password123");
+    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
+    const ws = new WsControlPlane(config, db);
+    publish = vi.spyOn(ws, "publishChatNotification");
+    loops = new ChatLoopService(sessions, ws);
+    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
+    state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
+    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
+    app = await reopen();
+    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
+    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
+    await app.ready();
+  };
+const __jait_hook_5033 = async () => {
+    sessionWaits.clearSession(sessionId);
+    await app.close();
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+    closeDb();
+  };
+await __jait_hook_2140();
 try {
 await (async()=>{
 
@@ -862,10 +933,10 @@ await (async()=>{
         // Model follows the explicit user request through the same service as
         // loop.resume. Its checkpoint must restart automatic continuation.
         const resumed = loops.control(sessionId, "resume");
-        loops.check(sessionId, { revision: resumed.revision, outcome: "continue", summary: "Recovered", nextMessage: "Run the remaining regression" });
+        checkpointAndAsk({ revision: resumed.revision, outcome: "continue", summary: "Recovered", nextMessage: "Run the remaining regression" });
       } else {
         __jait_capture(4, (JSON.stringify(calls.at(-1))));
-        loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passes"] });
+        checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passes"] });
       }
     };
     await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Continue the saved migration goal" } });
@@ -875,13 +946,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_205_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_225_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -901,7 +972,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -953,19 +1032,19 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
     onTurn = () => {
       if (calls.length === 1) loops.goal(sessionId, "Finish work", ["Check passes"]);
-      if (calls.length === 3) loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passes"] });
+      if (calls.length === 3) checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passes"] });
     };
     await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Work until the check passes" } });
     await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId))), { timeout: 10000 });
@@ -975,13 +1054,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_216_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_236_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -1001,7 +1080,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -1053,24 +1140,25 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
     const goal = loops.goal(sessionId, "Fix", ["Pass"]);
-    loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "Which target?" });
+    checkpointAndAsk({ revision: goal.revision, outcome: "waiting", summary: "Which target?" });
     __jait_capture(0, ((await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/loop`, headers: otherHeaders })).statusCode));
     __jait_capture(1, ((await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/loop`, headers: otherHeaders, payload: { action: "resume" } })).statusCode));
     onTurn = () => {
       __jait_capture(2, (loops.get(sessionId)?.status));
-      loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passed"] });
+      checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passed"] });
     };
+    sessionWaits.clear("question:fixture");
     const response = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Use the authorized lab target" } });
     __jait_capture(3, (response.statusCode));
     await vi.waitFor(() => __jait_capture(4, (loops.get(sessionId)?.iteration)));
@@ -1080,13 +1168,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_232_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_253_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -1106,7 +1194,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -1158,33 +1254,33 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
-    onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "waiting", summary: "Which network is authorized?" });
+    onTurn = () => checkpointAndAsk({ revision: loops.get(sessionId)!.revision, outcome: "waiting", summary: "Which network is authorized?" });
     loops.goal(sessionId, "Check the authorized network", ["Authorized checks pass"]);
-    await vi.waitFor(() => __jait_capture(0, (publish.mock.calls)), { timeout: 10000 });
+    await vi.waitFor(() => __jait_capture(0, (loops.get(sessionId)?.iteration)), { timeout: 10000 });
     __jait_capture(1, (calls));
-    __jait_capture(2, (publish.mock.calls[0]?.[1]));
+    __jait_capture(2, (publish.mock.calls));
     __jait_capture(3, (loops.get(sessionId)?.status));
   
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_241_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_262_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -1204,7 +1300,15 @@ let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
 let sessions: SessionService;
 let userId: string;
-const __jait_hook_1545 = async () => {
+const checkpointAndAsk = (input: Parameters<ChatLoopService["check"]>[1]) => {
+    if (input.outcome === "waiting") sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    const checked = loops.check(sessionId, input);
+    if (input.outcome !== "complete") return checked;
+    // Simulate the agent presenting the verified result through the Q&A tool.
+    sessionWaits.raise({ key: "question:fixture", kind: "question", sessionId });
+    return loops.check(sessionId, { revision: checked.revision, outcome: "waiting", summary: "Result verified. What next?" });
+  };
+const __jait_hook_2140 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -1256,13 +1360,13 @@ const __jait_hook_1545 = async () => {
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4438 = async () => {
+const __jait_hook_5033 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1545();
+await __jait_hook_2140();
 try {
 await (async()=>{
 
@@ -1278,7 +1382,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4438();
+await __jait_hook_5033();
 }
 }
 

@@ -45,6 +45,18 @@ describe("uuidv7", () => {
     }
   });
 
+  it("seeds the first clock tick at the Unix epoch", async () => {
+    vi.resetModules();
+    vi.spyOn(Date, "now").mockReturnValue(0);
+    vi.spyOn(crypto, "getRandomValues").mockImplementation(bytes => {
+      if (bytes instanceof Uint8Array) bytes.fill(0);
+      return bytes;
+    });
+    const { uuidv7: freshUuid } = await import("./uuidv7.js");
+    expect(freshUuid()).toBe("00000000-0000-7000-8000-000000000000");
+    expect(freshUuid()).toBe("00000000-0000-7001-8000-000000000000");
+  });
+
   it("embeds the current unix-ms timestamp", () => {
     const now = new Date("2024-06-15T12:34:56.789Z").getTime();
     vi.spyOn(Date, "now").mockReturnValue(now);

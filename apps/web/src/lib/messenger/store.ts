@@ -1,7 +1,8 @@
+import { notificationAvatarUrl } from './notification-avatar'
 import { messengerCommandSchema, type MessengerToolResponse } from '@jait/shared'
 import type { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk'
 import type { IEncryptedFile } from 'matrix-encrypt-attachment'
-import { latestConfirmedEvent, roomReadReceipts } from './read-state'
+import { latestConfirmedEvent, roomBridgeStatuses, roomReadReceipts } from './read-state'
 import { messengerReadLink } from './notification-actions'
 import { triggerSystemNotification, revokeSystemNotification } from '@/lib/system-notifications'
 import { cachedBlob } from './blob-cache'
@@ -38,6 +39,7 @@ export class MessengerStore {
   private unreadOverrides = new Map<string, boolean>()
   private automaticReadPaused = new Set<string>()
   private notifiedEvents = new Map<string, Set<string>>()
+  private typing = new Map<string, Map<string, { name: string; timer: ReturnType<typeof setTimeout> }>>()
 
   constructor(private owner: string, private storage: Storage = sessionStorage) {}
 
@@ -145,7 +147,8 @@ export class MessengerStore {
           this.initialSyncComplete = true
           this.update({ status: 'ready', error: null })
         } else if (state === sdk.SyncState.Error || state === sdk.SyncState.Reconnecting) {
-          this.update({ status: 'reconnecting', error: 'Connection interrupted. Matrix is retrying.' })
+          this.clearTyping()
+          this.update({ status: 'reconnecting', error: 'Connection interrupted. Matrix is retrying.', typing: [] })
         }
         this.refresh()
       })
@@ -165,6 +168,26 @@ export class MessengerStore {
         if (room && this.initialSyncComplete) void this.notify(event, room)
       })
       const refresh = () => { if (this.client === client) this.refresh() }
+      client.on(sdk.ClientEvent.Event, event => {
+        if (!client || this.client !== client || event.getType() !== 'm.typing') return
+        const roomId = event.getRoomId()
+        const userIds = event.getContent().user_ids
+        const room = roomId && client.getRoom(roomId)
+        if (!roomId || !room || !Array.isArray(userIds)) return
+        this.clearTypingRoom(roomId)
+        const members = new Map<string, { name: string; timer: ReturnType<typeof setTimeout> }>()
+        for (const userId of userIds) {
+          if (typeof userId !== 'string' || userId === this.session?.userId || members.has(userId)) continue
+          const timer = setTimeout(() => {
+            members.delete(userId)
+            if (!members.size) this.typing.delete(roomId)
+            if (this.snapshot.selectedRoomId === roomId) this.publishTyping()
+          }, 35_000)
+          members.set(userId, { name: room.getMember(userId)?.name || userId, timer })
+        }
+        if (members.size) this.typing.set(roomId, members)
+        if (this.snapshot.selectedRoomId === roomId) this.publishTyping()
+      })
       client.on(sdk.RoomEvent.Name, refresh)
       client.on(sdk.RoomEvent.MyMembership, refresh)
       client.on(sdk.RoomEvent.Receipt, (_event, room) => {
@@ -272,14 +295,33 @@ export class MessengerStore {
     const messages = selected?.getLiveTimeline().getEvents().map(event => this.message(event, selected)).filter((m): m is MessengerMessage => m !== null) ?? []
     if (selected && messages.some(message => message.own)) {
       const receipts = roomReadReceipts(selected, this.session.userId)
-      for (const message of messages) if (message.own) message.readBy = receipts.get(message.id) ?? []
+      const statuses = roomBridgeStatuses(selected, this.session.userId)
+      for (const message of messages) if (message.own) {
+        message.readBy = receipts.get(message.id) ?? []
+        message.bridgeStatus = statuses.get(message.id)
+      }
     }
     this.update({ rooms, messages, hasEarlier: !!selected?.getLiveTimeline().getPaginationToken(this.sdk!.Direction.Backward) })
+  }
+
+  private clearTypingRoom(roomId: string) {
+    for (const member of this.typing.get(roomId)?.values() ?? []) clearTimeout(member.timer)
+    this.typing.delete(roomId)
+  }
+
+  private clearTyping() {
+    for (const roomId of this.typing.keys()) this.clearTypingRoom(roomId)
+  }
+
+  private publishTyping() {
+    const members = this.typing.get(this.snapshot.selectedRoomId ?? '')
+    this.update({ typing: members ? [...members.values()].map(member => member.name) : [] })
   }
 
   selectRoom(id: string | null) {
     if (id) this.automaticReadPaused.delete(id)
     this.update({ selectedRoomId: id })
+    this.publishTyping()
     this.refresh()
   }
 
@@ -370,7 +412,10 @@ export class MessengerStore {
     this.notifiedEvents.set(room.roomId, notified)
     const sender = room.getMember(event.getSender() ?? '')?.name || event.getSender()
     const isGroup = room.getJoinedMemberCount() > 2
+    const iconUrl = await notificationAvatarUrl(room.getMember(event.getSender() ?? '')?.getMxcAvatarUrl(), url => this.avatarBlob(url))
+    if (this.visibleRoom === room.roomId && document.visibilityState === 'visible' && document.hasFocus()) return
     await triggerSystemNotification({
+      ...(iconUrl ? { iconUrl } : {}),
       id: 'matrix:' + id, title: !isGroup && sender ? sender : room.name, body: isGroup && sender ? `${sender}: New message` : 'New message',
       independentOfAttention: true,
       link: '/messenger?roomId=' + encodeURIComponent(room.roomId),
@@ -615,7 +660,8 @@ export class MessengerStore {
     this.automaticReadPaused.clear()
     for (const ids of this.notifiedEvents.values()) for (const id of ids) void revokeSystemNotification('matrix:' + id)
     this.notifiedEvents.clear()
-    this.update({ status: 'disconnected', session: null, rooms: [], messages: [], selectedRoomId: null, error: null, notifications: false, assistantAccess: false })
+    this.clearTyping()
+    this.update({ typing: [], status: 'disconnected', session: null, rooms: [], messages: [], selectedRoomId: null, error: null, notifications: false, assistantAccess: false })
   }
 }
 

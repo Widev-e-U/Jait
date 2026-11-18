@@ -180,9 +180,14 @@ await __jait_hook_1100();
 try {
 await (async()=>{
 
-    const checkout = await prStyleCheckout("shallow-checkout", { keepTrackingRef: false });
-    __jait_thrown(0, () => git(checkout, "rev-parse --verify refs/remotes/origin/main"));
-    __jait_thrown(1, () => git(checkout, "rev-parse --verify refs/heads/main"));
+    await writeFile(join(origin, "file.txt"), "second commit");
+    git(origin, "add -A");
+    git(origin, "commit -m second");
+    const checkout = await prStyleCheckout("full-checkout", { keepTrackingRef: false });
+    __jait_capture(0, (git(checkout, "rev-parse --is-shallow-repository")));
+    __jait_capture(1, (git(checkout, "rev-list --count HEAD")));
+    __jait_thrown(2, () => git(checkout, "rev-parse --verify refs/remotes/origin/main"));
+    __jait_thrown(3, () => git(checkout, "rev-parse --verify refs/heads/main"));
 
     const result = await svc.createWorktree(
       checkout,
@@ -191,9 +196,12 @@ await (async()=>{
       join(worktreesRoot, "fetched"),
       { fastPath: false },
     );
-    __jait_capture(2, (git(result.path, "rev-parse HEAD")), (expectedTip()));
-    __jait_capture(3, (git(result.path, "branch --show-current")));
-    __jait_capture(4, (existsSync(join(result.path, "file.txt"))));
+    __jait_capture(4, (git(result.path, "rev-parse HEAD")), (expectedTip()));
+    __jait_capture(5, (git(result.path, "branch --show-current")));
+    __jait_capture(6, (existsSync(join(result.path, "file.txt"))));
+    __jait_capture(7, (git(checkout, "rev-parse --is-shallow-repository")));
+    __jait_capture(8, (git(checkout, "rev-list --count HEAD")));
+    __jait_thrown(9, () => git(checkout, "config --get branch.jait/cccc3333.remote"));
   
 })();
 
@@ -204,7 +212,7 @@ await __jait_hook_1680();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_118_3": {
+case "tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_126_3": {
 
 
 function git(cwd: string, cmd: string) {
@@ -271,7 +279,7 @@ await __jait_hook_1680();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_132_3": {
+case "tailstatic_packages_gateway_src_services_git_worktree_base_test_ts_140_3": {
 
 
 function git(cwd: string, cmd: string) {

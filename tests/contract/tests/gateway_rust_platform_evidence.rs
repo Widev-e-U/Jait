@@ -238,7 +238,8 @@ mod voice_service {
                 wake_word_enabled: Some(false),
                 ..Default::default()
             },
-        );
+        )
+        .expect("disable wake word for the muted session");
         let muted = svc
             .transcribe("s2", Some("Hey Jait"), None, "2024-01-01T00:00:00Z")
             .expect("muted session still transcribes");

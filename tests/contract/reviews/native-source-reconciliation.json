@@ -45,100 +45,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/db/connection.ts",
-      "sha256": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
-      "review": "WAL, foreign keys and sync settings, migration error tracking, repair idempotence, rollback, backup and TypeScript reopen.",
-      "cases": [
-        {
-          "id": "all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "uuidv7_layout_and_boundaries_match_the_real_typescript_generator",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "explicit_state_and_database_paths_follow_reference_precedence",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "migration_failure_is_not_recorded_and_schema_repairs_are_idempotent",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "populated_repository_dedup_redirects_references_and_enforces_owner_path_uniqueness",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "reference_null_metadata_failure_is_preserved_without_marking_migration_applied",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "ecmascript_path_whitespace_preserves_bom_and_nel_reference_behavior",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/db/migrations.ts",
-      "sha256": "6a5c9c35b52c25b583d245ee324707704e0f1a9e37f4a34aa7b86d1cdd5c62f7",
-      "review": "Every current-definition prefix 0..75 matches schema and populated workspace/session state; repository dedup/owner uniqueness and JSON-null failure. Historical released-schema corpus and platform recovery remain replacement gates.",
-      "cases": [
-        {
-          "id": "all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "uuidv7_layout_and_boundaries_match_the_real_typescript_generator",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "explicit_state_and_database_paths_follow_reference_precedence",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "migration_failure_is_not_recorded_and_schema_repairs_are_idempotent",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "populated_repository_dedup_redirects_references_and_enforces_owner_path_uniqueness",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "reference_null_metadata_failure_is_preserved_without_marking_migration_applied",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        },
-        {
-          "id": "ecmascript_path_whitespace_preserves_bom_and_nel_reference_behavior",
-          "source": "tests/contract/tests/gateway_rust_storage.rs",
-          "target": "gateway_rust_storage"
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/security/http-auth.ts",
       "sha256": "78d20d47af2d2370631eb0fec3fc193d7b33889a26d9f04fe01132adb230e5f5",
       "review": "Bidirectional signed tokens, exact public paths and bearer parsing, missing/invalid/expired/not-yet-valid tokens, NumericDate types, purpose truthiness, HS256-only signatures, critical headers, cookie precedence and 401 responses. Signed duplicate b64 critical entries are accepted by the reference and retained; unsupported critical names and unencoded critical payloads are rejected.",
@@ -172,95 +78,6 @@
           "id": "signed_base64url_padding_and_ascii_whitespace_match_reference",
           "source": "tests/contract/tests/gateway_rust_auth.rs",
           "target": "gateway_rust_auth"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/services/users.ts",
-      "sha256": "ff344fbadd79bfa17a66581d7156a1fba6de61d494d43297cc01906320d7146d",
-      "review": "User lookup, Unicode normalization, fixed scrypt parameters and TS reopen of Rust credentials, malformed stored hashes rejected in both backends after a reproduced reference fix, owner-only hashed expiring/single-use invitations, settings defaults/malformed JSON/null patches/user isolation, last selection, internal session binding and owned archive cleanup. Internal binding must receive route-level authorization before any route is enabled. Foundation review 2026-10-18: reference binding now uses an atomic conditional UPDATE; native SQL matches. Focused repository contract verifies unowned claim, foreign-owner denial and same-owner idempotence; auth HTTP foreign-binding case also passed. No new component credit.",
-      "cases": [
-        {
-          "id": "native_users_settings_and_selection_match_reference_with_unicode_and_null_patches",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        },
-        {
-          "id": "settings_recover_malformed_json_and_normalize_legacy_values",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        },
-        {
-          "id": "invitations_are_owner_only_hashed_single_use_and_expire_at_the_boundary",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        },
-        {
-          "id": "archive_cleanup_removes_only_owned_archives_and_internal_binding_matches_reference",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        },
-        {
-          "id": "rust_created_password_hashes_and_default_settings_reopen_in_typescript",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        },
-        {
-          "id": "corrupt_password_digests_cannot_authenticate",
-          "source": "tests/contract/tests/gateway_rust_users.rs",
-          "target": "gateway_rust_users"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/routes/auth.ts",
-      "sha256": "4705ba74452535f06c52c5c1f781663f8c2f9fb77e2d2a40175f21b7be7ed1cf",
-      "review": "All account route families over real HTTP: login/register/refresh/logout cookies, owner-only invitations, expiry and one-time use, settings filtering/nulls/model limits, tool locks, environment status, archived cleanup, session binding, deleted users and origin denials. Explicit database/secret configuration; production startup remains gated.",
-      "cases": [
-        {
-          "id": "browser_origin_checks_match_exact_reference_urls_and_host_rules",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "account_validation_login_refresh_and_auth_denials_match_actual_server",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "settings_patch_filtering_nullable_fields_and_user_isolation_match_actual_server",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "tool_settings_preserve_core_locks_and_filter_unknown_names",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "origin_rejections_and_deleted_user_denials_prevent_effects",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "native_first_owner_registration_preserves_utf16_password_length_rule",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "binding_cannot_transfer_another_users_session",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "environment_status_and_bounded_recent_models_match_actual_server",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
-        },
-        {
-          "id": "registration_consumes_valid_invitation_once_and_rejects_expired_tokens",
-          "source": "tests/contract/tests/gateway_rust_http.rs",
-          "target": "gateway_rust_http"
         }
       ]
     },
@@ -665,58 +482,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/services/sessions.ts",
-      "sha256": "f7e0684329a85a9741bd1eb400abb51a0169cba9b82b7ee8d62657c81ee9f4cb",
-      "review": "Session CRUD, nullable updates, optional owner filters, project and personal scopes, list limits, monotonic activity, observed viewed acknowledgements, metadata/error UTF-16 handling, immutable history forks and transactional rollback compared against disposable production SQLite. Library operations require caller authorization; session HTTP and streaming remain unported. Legacy malformed metadata and UTF-16 truncation retain reference behavior. Nullable legacy name/status columns and invalid activity errors are covered. Reference refresh 2026-10-22: question forks delete loop metadata without changing the parent. Failing-before/passing-after regression and existing session contracts pass. See tests/contract/reviews/native-session-freshness.md.",
-      "cases": [
-        {
-          "id": "session_crud_scope_filters_limits_moves_and_nullable_patches_match_reference",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_activity_is_monotonic_and_viewed_acknowledgement_never_exceeds_observed_activity",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_project_lifecycle_changes_only_authorized_matching_status_rows",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_chat_selection_error_merge_truncation_clearing_and_legacy_metadata_match_reference",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_fork_freezes_owned_history_context_and_metadata_without_mutating_parent",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_live_fork_replaces_only_last_assistant_and_keeps_exact_partial_payload",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_fork_is_atomic_when_message_copy_fails",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "session_nullable_legacy_rows_and_invalid_activity_remain_observable",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        },
-        {
-          "id": "question_fork_drops_parent_loop_state_and_preserves_parent_metadata",
-          "source": "tests/contract/tests/gateway_rust_sessions.rs",
-          "target": "gateway_rust_sessions"
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/lib/bounded-json.ts",
       "sha256": "236bd21482d68beee5861c8bc9cd7a485aa2850abe657fe02e6cc70ded9e80eb",
       "review": "Exact JSON retention and ECMAScript key/number ordering; progressively bounded compaction, depth/width/byte ceilings, shared/circular object identities, BigInt and undefined handling, UTF-16 surrogate-safe truncation, invalid serialized JSON fallback. Native JSON graph API represents non-JSON programmatic inputs without unsafe code. Finite integer storage budgets are typed at native boundaries.",
@@ -1016,110 +781,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/services/node-permissions.ts",
-      "sha256": "6b9f2c544ba1b60906ff6290972dfce05b42043297110fac36f348a3a49067ca",
-      "review": "Production SQLite comparison of deny-all registration, identity preservation on repeat hello, exact capability names, explicit integer grants, unknown-key rejection, best-effort partial writes, absent/broken database failures, audit records and transactional forget rollback. Native transport and route-level node ownership enforcement remain unported; callers must authorize grant changes.",
-      "cases": [
-        {
-          "id": "capabilities_are_exact_and_new_nodes_deny_every_capability",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "no_database_means_denied_and_no_persistence",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "explicit_grants_unknown_keys_and_failed_updates_match_persisted_evidence",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "only_integer_one_grants_and_hellos_do_not_regrant_or_backfill_existing_nodes",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "forgetting_is_transactional_and_revokes_grants",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "broken_persistence_fails_closed_and_permission_audit_failures_are_nonfatal",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "reasoning_effort_is_shape_checked_without_provider_value_allowlists",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "defaults_use_only_the_selected_users_provider_and_authorized_session_state",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "defaults_reject_invalid_runtime_and_model_shapes_and_propagate_storage_failures",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/services/thread-defaults.ts",
-      "sha256": "5841b6096aa13fc04679d5026463b9e16834cd05ceeedf7eba4252ba5a28f80b",
-      "review": "Production settings and session-state comparisons for trimmed identifiers, optional services, omitted fields, inherited provider/model/effort/runtime, invalid value shapes, 64-character reasoning-effort limits and storage error propagation. Resolver is an internal boundary; callers must authorize the user and session.",
-      "cases": [
-        {
-          "id": "capabilities_are_exact_and_new_nodes_deny_every_capability",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "no_database_means_denied_and_no_persistence",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "explicit_grants_unknown_keys_and_failed_updates_match_persisted_evidence",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "only_integer_one_grants_and_hellos_do_not_regrant_or_backfill_existing_nodes",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "forgetting_is_transactional_and_revokes_grants",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "broken_persistence_fails_closed_and_permission_audit_failures_are_nonfatal",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "reasoning_effort_is_shape_checked_without_provider_value_allowlists",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "defaults_use_only_the_selected_users_provider_and_authorized_session_state",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        },
-        {
-          "id": "defaults_reject_invalid_runtime_and_model_shapes_and_propagate_storage_failures",
-          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
-          "target": "gateway_rust_policy_state"
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/services/thread-history.ts",
       "sha256": "558ed027cf4fed5c82c7cd3ef37143f26c5c5646ca6e687cb422ee56fbbd4db4",
       "review": "Thread replay builder compared against the production TypeScript function over an explicit activity source: stable timestamp ordering and tie reversal, role/payload filtering, full-content precedence, 24-message and 12000 UTF-16-unit budgets, original-task preservation, task/location/execution checkpoints, six outcomes, latest todo, lone-surrogate truncation and source error propagation. Native activity sources supply decoded timestamps and authorization; thread storage/provider integration remains unported.",
@@ -1326,33 +987,6 @@
           "id": "backend_and_log_failures_expose_durable_partial_effects_without_fake_success",
           "source": "tests/contract/tests/gateway_rust_recall.rs",
           "target": "gateway_rust_recall"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/lib/persisted-tool-calls.ts",
-      "sha256": "6817c212e5eeac13c5525c97f532e12026c194d4484161e0d4cb91f8da8ec1aa",
-      "review": "Exact raw JSON retention, malformed/nonarray rejection, field type/default/optional metadata rules, three compaction passes, byte limits and floored minimum budgets, Unicode byte boundaries, metadata-only fallback and prefix truncation. Focused contracts use finite-number, well-formed Unicode JSON; JS-specific nonfinite overflow and unpaired surrogate parsing remain compatibility limits.",
-      "cases": [
-        {
-          "id": "persisted_calls_preserve_valid_raw_json_and_reject_malformed_or_nonarrays",
-          "source": "tests/contract/tests/gateway_rust_persisted.rs",
-          "target": "gateway_rust_persisted"
-        },
-        {
-          "id": "persisted_calls_compact_exact_field_types_defaults_and_optional_metadata",
-          "source": "tests/contract/tests/gateway_rust_persisted.rs",
-          "target": "gateway_rust_persisted"
-        },
-        {
-          "id": "persisted_calls_enforce_byte_boundaries_unicode_and_metadata_only_fallback",
-          "source": "tests/contract/tests/gateway_rust_persisted.rs",
-          "target": "gateway_rust_persisted"
-        },
-        {
-          "id": "persisted_calls_apply_progressive_compaction_passes_and_floor_minimum_budgets",
-          "source": "tests/contract/tests/gateway_rust_persisted.rs",
-          "target": "gateway_rust_persisted"
         }
       ]
     },
@@ -2709,63 +2343,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "sha256": "043186a43d339af8bd5f3b3d040880271baf56a721ee0d00373210ba6fdeabe3",
-      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit.",
-      "cases": [
-        {
-          "id": "every_model_resolver_and_branch_has_exact_prompt_and_reminder_text",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "model_selection_preserves_matcher_prefix_and_registration_precedence",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "full_context_building_preserves_global_folder_skill_style_and_environment_order",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "local_backend_context_and_missing_or_empty_optional_fields_match",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "utf16_graph_and_global_limits_preserve_a_split_surrogate",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "custom_registry_resolution_and_nullish_identity_reminder_rules_match",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "shared_sections_modes_and_styles_are_exact",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "global_instruction_file_precedence_tilde_errors_and_utf8_match",
-          "source": "tests/contract/tests/gateway_rust_prompts.rs",
-          "target": "gateway_rust_prompts"
-        },
-        {
-          "id": "native_wait_policy_matches_real_reference_and_never_lifts_execution_deadline",
-          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
-          "target": "gateway_rust_terminal_execution"
-        },
-        {
-          "id": "production_terminal_tool_yields_inspects_cancels_and_notifies_without_rerunning",
-          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
-          "target": "gateway_rust_terminal_execution"
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/tools/prompts/xai-prompt.ts",
       "sha256": "26a218f2a4ea9ea4ea3ade2a687355e1cf3cfb7268b582c56c9c3c2290746d57",
       "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review.",
@@ -3237,53 +2814,6 @@
       ]
     },
     {
-      "path": "packages/gateway/src/services/background-command-continuation.ts",
-      "sha256": "98b282e51f87862d10956ba7de727bed011e50b1fd55da93454c86c0240e8f63",
-      "review": "Real TypeScript contracts for cron/manifest validation, UUID actions and continuation selection/callback lifecycles, including deferred callback replacement; five restored mutations. See native-helpers.md.",
-      "cases": [
-        {
-          "id": "cron_checks_five_fields_ranges_steps_safe_integers_and_js_whitespace",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "manifests_keep_minimal_validation_order_and_ascii_word_ids",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "public_action_uuid_helper_matches_timestamp_entropy_and_layout",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "continuation_preserves_metadata_null_overrides_and_external_provider_selection",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "continuation_database_failures_and_fallback_short_circuit_match",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "resume_callbacks_preserve_identity_errors_and_separate_chat_thread_keys",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "replacing_a_resume_callback_during_await_preserves_both_invocations",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        },
-        {
-          "id": "chat_resume_options_forward_missing_empty_false_and_hidden_without_changing_identity",
-          "source": "tests/contract/tests/gateway_rust_helpers.rs",
-          "target": "gateway_rust_helpers"
-        }
-      ]
-    },
-    {
       "path": "packages/gateway/src/services/intervention-run-resume.ts",
       "sha256": "d50226d6689f041f92d0b92ae463ca449897b3ae98ee2801bffdd0795692a571",
       "review": "Real TypeScript contracts for callback lifecycle/identity and replacement across await, plus ChatResumeOptions missing/empty/false/true forwarding with thread isolation; two additional caught/restored mutations for the 2026-10-22 source update. See native-helpers.md.",
@@ -3354,48 +2884,6 @@
           "id": "source_parser_accepts_only_declared_strings_and_description_defaults_match",
           "source": "tests/contract/tests/gateway_rust_windows.rs",
           "target": "gateway_rust_windows"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/security/path-guard.ts",
-      "sha256": "e19dd0063837e95c28739cd49c0d267115465344fb7ddb9e58d2065db305d31e",
-      "review": "Linux path normalization, traversal, denied paths and final-entry symlink behavior including error metadata.",
-      "cases": [
-        {
-          "id": "diagram_file_first_fallback_ownership_update_and_unicode_trim",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "diagram_failed_database_write_leaves_file_and_legacy_rows_order_by_time",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "path_normalization_boundary_null_precedence_denied_case_and_relative_roots",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "final_symlink_checks_internal_external_dangling_loops_and_disabled_checks",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "diagram_tool_metadata_and_utf16_input_boundaries",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "architecture_tool_validation_optional_store_and_ws_delivery_share_request_identity",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
-        },
-        {
-          "id": "architecture_tool_store_and_sink_failures_retain_earlier_file_effects",
-          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
-          "target": "gateway_rust_diagrams"
         }
       ]
     },
@@ -3487,117 +2975,6 @@
       "path": "packages/gateway/src/tools/agent-communication.ts",
       "sha256": "29b46716f2fdc149a1b5f77b7a9afff49d53f3425541893ae3774e2cc7b6deed",
       "review": "Complete intent parsing, render-segment stripping, success classification, descriptions and constants.",
-      "cases": [
-        {
-          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/tools/agent-message-tool.ts",
-      "sha256": "b6fadedfc1dfa1ec3a41eba477a57dd33740491ef5e67b8fbd17b29e4bcce7be",
-      "review": "Metadata and swarm message execution with retained live arrays, sender/count defaults and invalid note behavior.",
-      "cases": [
-        {
-          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/tools/gateway-tools.ts",
-      "sha256": "410155b8e7f6d3d054c333d5023e7a82000d7c9cd9138edb8be283579cc4a7a5",
-      "review": "Metadata and gateway status aggregation with optional services, uptime, enabled filtering and failure ordering.",
-      "cases": [
-        {
-          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        },
-        {
-          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
-          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
-          "target": "gateway_rust_runtime_tools"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/tools/tool-names.ts",
-      "sha256": "f293fbfe5eecb507af84cb77ab3d2a2bc85dab027d94ca0f2af814562eac4fac",
-      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript. 2026-10-24 tool UX refresh: Canonical browser lifecycle names and legacy policy equivalence are covered by runtime metadata, registry and permission contracts.",
       "cases": [
         {
           "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
@@ -4049,6 +3426,706 @@
       ]
     },
     {
+      "path": "packages/gateway/src/providers/provider-auth.ts",
+      "sha256": "1dc5c7c0e31da8bed1103169027cf19c13dc0e2fdc03308d4f1bc34484a1df2d",
+      "review": "Native Linux authentication children with literal argument parsing, filtered/ordered environment, bounded UTF-16 output, timeout and device-login state, explicit process ownership, input and overload handling. Real child/reference comparisons, 37 TypeScript tests, ten native executions, strict Clippy and three restored mutations. Windows execution and live provider credential integration remain separate. Bounded reference review follows tests/contract/reviews/native-provider-auth.md; live authentication/provider connectivity, Windows process execution and production composition remain separate.",
+      "cases": [
+        {
+          "id": "command_parser_preserves_escapes_unicode_and_literal_arguments",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        },
+        {
+          "id": "auth_details_match_shared_url_code_input_prompt_and_blocked_label_rules",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        },
+        {
+          "id": "ansi_environment_precedence_case_and_unsupported_results",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        },
+        {
+          "id": "logout_captures_exit_signal_ansi_tail_environment_and_literal_args",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        },
+        {
+          "id": "device_login_complete_partial_input_completed_error_and_timeout",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        },
+        {
+          "id": "started_login_accepts_input_and_releases_admission_after_exit_and_owner_drop",
+          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
+          "target": "gateway_rust_provider_auth"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/providers/pi-mcp-provision.ts",
+      "sha256": "ec19bb8ac1e707d9f212b6af0148eb435b5194c164aef918299da60404dd337a",
+      "review": "Native owned per-session Pi config/wrappers, provider filtering, HTTP/SSE/stdio maps, private directories and cleanup. Actual wrapper execution with literal arguments, exact config/text comparisons, partial-write cleanup, ten component/transport executions plus a native unit test, gateway TypeScript check, strict Clippy, three restored mutations and three fail-then-pass production reference regressions. Windows wrapper text only; live Pi adapter and provider dispatch remain separate. Bounded reference review follows tests/contract/reviews/native-pi-mcp.md; live authentication/provider connectivity, Windows process execution and production composition remain separate.",
+      "cases": [
+        {
+          "id": "provider_filtering_empty_servers_default_command_and_command_trimming",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        },
+        {
+          "id": "stdio_http_sse_names_defaults_env_duplicates_and_numeric_key_order",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        },
+        {
+          "id": "wrapper_exec_preserves_literal_paths_arguments_and_session_config",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        },
+        {
+          "id": "windows_wrapper_text_retains_crlf_percent_forwarding_and_stdio_config",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        },
+        {
+          "id": "invalid_roots_and_session_paths_are_best_effort_without_leaked_files",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        },
+        {
+          "id": "concurrent_session_configs_are_distinct_and_last_owner_cleanup_is_idempotent",
+          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
+          "target": "gateway_rust_pi_mcp"
+        }
+      ]
+    }
+  ],
+  "deferred_reason": "Historical reviews retained for sources whose native status or fingerprint requires re-review before reconciliation.",
+  "deferred_sources": [
+    {
+      "path": "packages/gateway/src/db/connection.ts",
+      "sha256": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
+      "review": "WAL, foreign keys and sync settings, migration error tracking, repair idempotence, rollback, backup and TypeScript reopen.",
+      "cases": [
+        {
+          "id": "all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "uuidv7_layout_and_boundaries_match_the_real_typescript_generator",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "explicit_state_and_database_paths_follow_reference_precedence",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "migration_failure_is_not_recorded_and_schema_repairs_are_idempotent",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "populated_repository_dedup_redirects_references_and_enforces_owner_path_uniqueness",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "reference_null_metadata_failure_is_preserved_without_marking_migration_applied",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "ecmascript_path_whitespace_preserves_bom_and_nel_reference_behavior",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/db/migrations.ts",
+      "sha256": "6a5c9c35b52c25b583d245ee324707704e0f1a9e37f4a34aa7b86d1cdd5c62f7",
+      "review": "Every current-definition prefix 0..75 matches schema and populated workspace/session state; repository dedup/owner uniqueness and JSON-null failure. Historical released-schema corpus and platform recovery remain replacement gates.",
+      "cases": [
+        {
+          "id": "all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "uuidv7_layout_and_boundaries_match_the_real_typescript_generator",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "explicit_state_and_database_paths_follow_reference_precedence",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "migration_failure_is_not_recorded_and_schema_repairs_are_idempotent",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "populated_repository_dedup_redirects_references_and_enforces_owner_path_uniqueness",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "reference_null_metadata_failure_is_preserved_without_marking_migration_applied",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        },
+        {
+          "id": "ecmascript_path_whitespace_preserves_bom_and_nel_reference_behavior",
+          "source": "tests/contract/tests/gateway_rust_storage.rs",
+          "target": "gateway_rust_storage"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/users.ts",
+      "sha256": "ff344fbadd79bfa17a66581d7156a1fba6de61d494d43297cc01906320d7146d",
+      "review": "User lookup, Unicode normalization, fixed scrypt parameters and TS reopen of Rust credentials, malformed stored hashes rejected in both backends after a reproduced reference fix, owner-only hashed expiring/single-use invitations, settings defaults/malformed JSON/null patches/user isolation, last selection, internal session binding and owned archive cleanup. Internal binding must receive route-level authorization before any route is enabled. Foundation review 2026-10-18: reference binding now uses an atomic conditional UPDATE; native SQL matches. Focused repository contract verifies unowned claim, foreign-owner denial and same-owner idempotence; auth HTTP foreign-binding case also passed. No new component credit.",
+      "cases": [
+        {
+          "id": "native_users_settings_and_selection_match_reference_with_unicode_and_null_patches",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        },
+        {
+          "id": "settings_recover_malformed_json_and_normalize_legacy_values",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        },
+        {
+          "id": "invitations_are_owner_only_hashed_single_use_and_expire_at_the_boundary",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        },
+        {
+          "id": "archive_cleanup_removes_only_owned_archives_and_internal_binding_matches_reference",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        },
+        {
+          "id": "rust_created_password_hashes_and_default_settings_reopen_in_typescript",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        },
+        {
+          "id": "corrupt_password_digests_cannot_authenticate",
+          "source": "tests/contract/tests/gateway_rust_users.rs",
+          "target": "gateway_rust_users"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/routes/auth.ts",
+      "sha256": "4705ba74452535f06c52c5c1f781663f8c2f9fb77e2d2a40175f21b7be7ed1cf",
+      "review": "All account route families over real HTTP: login/register/refresh/logout cookies, owner-only invitations, expiry and one-time use, settings filtering/nulls/model limits, tool locks, environment status, archived cleanup, session binding, deleted users and origin denials. Explicit database/secret configuration; production startup remains gated.",
+      "cases": [
+        {
+          "id": "browser_origin_checks_match_exact_reference_urls_and_host_rules",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "account_validation_login_refresh_and_auth_denials_match_actual_server",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "settings_patch_filtering_nullable_fields_and_user_isolation_match_actual_server",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "tool_settings_preserve_core_locks_and_filter_unknown_names",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "origin_rejections_and_deleted_user_denials_prevent_effects",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "native_first_owner_registration_preserves_utf16_password_length_rule",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "binding_cannot_transfer_another_users_session",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "environment_status_and_bounded_recent_models_match_actual_server",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        },
+        {
+          "id": "registration_consumes_valid_invitation_once_and_rejects_expired_tokens",
+          "source": "tests/contract/tests/gateway_rust_http.rs",
+          "target": "gateway_rust_http"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/sessions.ts",
+      "sha256": "f7e0684329a85a9741bd1eb400abb51a0169cba9b82b7ee8d62657c81ee9f4cb",
+      "review": "Session CRUD, nullable updates, optional owner filters, project and personal scopes, list limits, monotonic activity, observed viewed acknowledgements, metadata/error UTF-16 handling, immutable history forks and transactional rollback compared against disposable production SQLite. Library operations require caller authorization; session HTTP and streaming remain unported. Legacy malformed metadata and UTF-16 truncation retain reference behavior. Nullable legacy name/status columns and invalid activity errors are covered. Reference refresh 2026-10-22: question forks delete loop metadata without changing the parent. Failing-before/passing-after regression and existing session contracts pass. See tests/contract/reviews/native-session-freshness.md.",
+      "cases": [
+        {
+          "id": "session_crud_scope_filters_limits_moves_and_nullable_patches_match_reference",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_activity_is_monotonic_and_viewed_acknowledgement_never_exceeds_observed_activity",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_project_lifecycle_changes_only_authorized_matching_status_rows",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_chat_selection_error_merge_truncation_clearing_and_legacy_metadata_match_reference",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_fork_freezes_owned_history_context_and_metadata_without_mutating_parent",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_live_fork_replaces_only_last_assistant_and_keeps_exact_partial_payload",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_fork_is_atomic_when_message_copy_fails",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "session_nullable_legacy_rows_and_invalid_activity_remain_observable",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "question_fork_drops_parent_loop_state_and_preserves_parent_metadata",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/node-permissions.ts",
+      "sha256": "6b9f2c544ba1b60906ff6290972dfce05b42043297110fac36f348a3a49067ca",
+      "review": "Production SQLite comparison of deny-all registration, identity preservation on repeat hello, exact capability names, explicit integer grants, unknown-key rejection, best-effort partial writes, absent/broken database failures, audit records and transactional forget rollback. Native transport and route-level node ownership enforcement remain unported; callers must authorize grant changes.",
+      "cases": [
+        {
+          "id": "capabilities_are_exact_and_new_nodes_deny_every_capability",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "no_database_means_denied_and_no_persistence",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "explicit_grants_unknown_keys_and_failed_updates_match_persisted_evidence",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "only_integer_one_grants_and_hellos_do_not_regrant_or_backfill_existing_nodes",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "forgetting_is_transactional_and_revokes_grants",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "broken_persistence_fails_closed_and_permission_audit_failures_are_nonfatal",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "reasoning_effort_is_shape_checked_without_provider_value_allowlists",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "defaults_use_only_the_selected_users_provider_and_authorized_session_state",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "defaults_reject_invalid_runtime_and_model_shapes_and_propagate_storage_failures",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/thread-defaults.ts",
+      "sha256": "5841b6096aa13fc04679d5026463b9e16834cd05ceeedf7eba4252ba5a28f80b",
+      "review": "Production settings and session-state comparisons for trimmed identifiers, optional services, omitted fields, inherited provider/model/effort/runtime, invalid value shapes, 64-character reasoning-effort limits and storage error propagation. Resolver is an internal boundary; callers must authorize the user and session.",
+      "cases": [
+        {
+          "id": "capabilities_are_exact_and_new_nodes_deny_every_capability",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "no_database_means_denied_and_no_persistence",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "explicit_grants_unknown_keys_and_failed_updates_match_persisted_evidence",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "only_integer_one_grants_and_hellos_do_not_regrant_or_backfill_existing_nodes",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "forgetting_is_transactional_and_revokes_grants",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "broken_persistence_fails_closed_and_permission_audit_failures_are_nonfatal",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "reasoning_effort_is_shape_checked_without_provider_value_allowlists",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "defaults_use_only_the_selected_users_provider_and_authorized_session_state",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        },
+        {
+          "id": "defaults_reject_invalid_runtime_and_model_shapes_and_propagate_storage_failures",
+          "source": "tests/contract/tests/gateway_rust_policy_state.rs",
+          "target": "gateway_rust_policy_state"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/lib/persisted-tool-calls.ts",
+      "sha256": "6817c212e5eeac13c5525c97f532e12026c194d4484161e0d4cb91f8da8ec1aa",
+      "review": "Exact raw JSON retention, malformed/nonarray rejection, field type/default/optional metadata rules, three compaction passes, byte limits and floored minimum budgets, Unicode byte boundaries, metadata-only fallback and prefix truncation. Focused contracts use finite-number, well-formed Unicode JSON; JS-specific nonfinite overflow and unpaired surrogate parsing remain compatibility limits.",
+      "cases": [
+        {
+          "id": "persisted_calls_preserve_valid_raw_json_and_reject_malformed_or_nonarrays",
+          "source": "tests/contract/tests/gateway_rust_persisted.rs",
+          "target": "gateway_rust_persisted"
+        },
+        {
+          "id": "persisted_calls_compact_exact_field_types_defaults_and_optional_metadata",
+          "source": "tests/contract/tests/gateway_rust_persisted.rs",
+          "target": "gateway_rust_persisted"
+        },
+        {
+          "id": "persisted_calls_enforce_byte_boundaries_unicode_and_metadata_only_fallback",
+          "source": "tests/contract/tests/gateway_rust_persisted.rs",
+          "target": "gateway_rust_persisted"
+        },
+        {
+          "id": "persisted_calls_apply_progressive_compaction_passes_and_floor_minimum_budgets",
+          "source": "tests/contract/tests/gateway_rust_persisted.rs",
+          "target": "gateway_rust_persisted"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/tools/prompts/shared-sections.ts",
+      "sha256": "043186a43d339af8bd5f3b3d040880271baf56a721ee0d00373210ba6fdeabe3",
+      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit.",
+      "cases": [
+        {
+          "id": "every_model_resolver_and_branch_has_exact_prompt_and_reminder_text",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "model_selection_preserves_matcher_prefix_and_registration_precedence",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "full_context_building_preserves_global_folder_skill_style_and_environment_order",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "local_backend_context_and_missing_or_empty_optional_fields_match",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "utf16_graph_and_global_limits_preserve_a_split_surrogate",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "custom_registry_resolution_and_nullish_identity_reminder_rules_match",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "shared_sections_modes_and_styles_are_exact",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "global_instruction_file_precedence_tilde_errors_and_utf8_match",
+          "source": "tests/contract/tests/gateway_rust_prompts.rs",
+          "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "native_wait_policy_matches_real_reference_and_never_lifts_execution_deadline",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
+        },
+        {
+          "id": "production_terminal_tool_yields_inspects_cancels_and_notifies_without_rerunning",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/background-command-continuation.ts",
+      "sha256": "98b282e51f87862d10956ba7de727bed011e50b1fd55da93454c86c0240e8f63",
+      "review": "Real TypeScript contracts for cron/manifest validation, UUID actions and continuation selection/callback lifecycles, including deferred callback replacement; five restored mutations. See native-helpers.md.",
+      "cases": [
+        {
+          "id": "cron_checks_five_fields_ranges_steps_safe_integers_and_js_whitespace",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "manifests_keep_minimal_validation_order_and_ascii_word_ids",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "public_action_uuid_helper_matches_timestamp_entropy_and_layout",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "continuation_preserves_metadata_null_overrides_and_external_provider_selection",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "continuation_database_failures_and_fallback_short_circuit_match",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "resume_callbacks_preserve_identity_errors_and_separate_chat_thread_keys",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "replacing_a_resume_callback_during_await_preserves_both_invocations",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "chat_resume_options_forward_missing_empty_false_and_hidden_without_changing_identity",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/security/path-guard.ts",
+      "sha256": "e19dd0063837e95c28739cd49c0d267115465344fb7ddb9e58d2065db305d31e",
+      "review": "Linux path normalization, traversal, denied paths and final-entry symlink behavior including error metadata.",
+      "cases": [
+        {
+          "id": "diagram_file_first_fallback_ownership_update_and_unicode_trim",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "diagram_failed_database_write_leaves_file_and_legacy_rows_order_by_time",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "path_normalization_boundary_null_precedence_denied_case_and_relative_roots",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "final_symlink_checks_internal_external_dangling_loops_and_disabled_checks",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "diagram_tool_metadata_and_utf16_input_boundaries",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "architecture_tool_validation_optional_store_and_ws_delivery_share_request_identity",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        },
+        {
+          "id": "architecture_tool_store_and_sink_failures_retain_earlier_file_effects",
+          "source": "tests/contract/tests/gateway_rust_diagrams.rs",
+          "target": "gateway_rust_diagrams"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/tools/agent-message-tool.ts",
+      "sha256": "b6fadedfc1dfa1ec3a41eba477a57dd33740491ef5e67b8fbd17b29e4bcce7be",
+      "review": "Metadata and swarm message execution with retained live arrays, sender/count defaults and invalid note behavior.",
+      "cases": [
+        {
+          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/tools/gateway-tools.ts",
+      "sha256": "410155b8e7f6d3d054c333d5023e7a82000d7c9cd9138edb8be283579cc4a7a5",
+      "review": "Metadata and gateway status aggregation with optional services, uptime, enabled filtering and failure ordering.",
+      "cases": [
+        {
+          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/tools/tool-names.ts",
+      "sha256": "f293fbfe5eecb507af84cb77ab3d2a2bc85dab027d94ca0f2af814562eac4fac",
+      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript. 2026-10-24 tool UX refresh: Canonical browser lifecycle names and legacy policy equivalence are covered by runtime metadata, registry and permission contracts.",
+      "cases": [
+        {
+          "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "communication_intent_tags_whitespace_unknown_tags_descriptions_and_success",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "editor_requires_trimmed_session_project_and_ui_channel_and_propagates_sink_error",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "voice_validates_before_service_preserves_context_and_counts_audio_utf16_units",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "gateway_status_optional_services_uptime_floor_filters_and_source_failure_order",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        },
+        {
+          "id": "agent_messages_keep_live_arrays_only_for_nonempty_results_across_round_replacement",
+          "source": "tests/contract/tests/gateway_rust_runtime_tools.rs",
+          "target": "gateway_rust_runtime_tools"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/services/background-command-monitor.ts",
       "sha256": "e0bf81762fc3bd54274af6e8d763dcfa3ce8417fb2e6d4e5d3695f2dbffda4a5",
       "review": "Native terminal watcher and external completion lifecycle with injectable clock/timers/surface. Differential state transitions, shared admission, handler ownership, expiry and suppression; reproduced and fixed cancellation during output in reference and native. Seven focused monitor tests, four transport checks, three restored mutations and strict Clippy. Provider transport and production wake-up wiring remain separate. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit.",
@@ -4122,80 +4199,6 @@
           "id": "production_terminal_tool_yields_inspects_cancels_and_notifies_without_rerunning",
           "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
           "target": "gateway_rust_terminal_execution"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/providers/provider-auth.ts",
-      "sha256": "1dc5c7c0e31da8bed1103169027cf19c13dc0e2fdc03308d4f1bc34484a1df2d",
-      "review": "Native Linux authentication children with literal argument parsing, filtered/ordered environment, bounded UTF-16 output, timeout and device-login state, explicit process ownership, input and overload handling. Real child/reference comparisons, 37 TypeScript tests, ten native executions, strict Clippy and three restored mutations. Windows execution and live provider credential integration remain separate. Bounded reference review follows tests/contract/reviews/native-provider-auth.md; live authentication/provider connectivity, Windows process execution and production composition remain separate.",
-      "cases": [
-        {
-          "id": "command_parser_preserves_escapes_unicode_and_literal_arguments",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        },
-        {
-          "id": "auth_details_match_shared_url_code_input_prompt_and_blocked_label_rules",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        },
-        {
-          "id": "ansi_environment_precedence_case_and_unsupported_results",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        },
-        {
-          "id": "logout_captures_exit_signal_ansi_tail_environment_and_literal_args",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        },
-        {
-          "id": "device_login_complete_partial_input_completed_error_and_timeout",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        },
-        {
-          "id": "started_login_accepts_input_and_releases_admission_after_exit_and_owner_drop",
-          "source": "tests/contract/tests/gateway_rust_provider_auth.rs",
-          "target": "gateway_rust_provider_auth"
-        }
-      ]
-    },
-    {
-      "path": "packages/gateway/src/providers/pi-mcp-provision.ts",
-      "sha256": "ec19bb8ac1e707d9f212b6af0148eb435b5194c164aef918299da60404dd337a",
-      "review": "Native owned per-session Pi config/wrappers, provider filtering, HTTP/SSE/stdio maps, private directories and cleanup. Actual wrapper execution with literal arguments, exact config/text comparisons, partial-write cleanup, ten component/transport executions plus a native unit test, gateway TypeScript check, strict Clippy, three restored mutations and three fail-then-pass production reference regressions. Windows wrapper text only; live Pi adapter and provider dispatch remain separate. Bounded reference review follows tests/contract/reviews/native-pi-mcp.md; live authentication/provider connectivity, Windows process execution and production composition remain separate.",
-      "cases": [
-        {
-          "id": "provider_filtering_empty_servers_default_command_and_command_trimming",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
-        },
-        {
-          "id": "stdio_http_sse_names_defaults_env_duplicates_and_numeric_key_order",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
-        },
-        {
-          "id": "wrapper_exec_preserves_literal_paths_arguments_and_session_config",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
-        },
-        {
-          "id": "windows_wrapper_text_retains_crlf_percent_forwarding_and_stdio_config",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
-        },
-        {
-          "id": "invalid_roots_and_session_paths_are_best_effort_without_leaked_files",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
-        },
-        {
-          "id": "concurrent_session_configs_are_distinct_and_last_owner_cleanup_is_idempotent",
-          "source": "tests/contract/tests/gateway_rust_pi_mcp.rs",
-          "target": "gateway_rust_pi_mcp"
         }
       ]
     }

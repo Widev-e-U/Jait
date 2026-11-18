@@ -28,6 +28,14 @@ final class NotificationImage {
     // Firebase invokes its message callback on a worker thread. Completing the fetch before
     // returning keeps the service alive while Android is delivering a background push.
     static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId) {
+        fetchNow(context, cardId, notificationId, roomId, eventId, false);
+    }
+
+    static void fetchAvatarNow(Context context, String cardId, String notificationId, String roomId, String eventId) {
+        fetchNow(context, cardId, notificationId, roomId, eventId, true);
+    }
+
+    private static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId, boolean avatar) {
         if (roomId == null || roomId.isEmpty() || eventId == null || eventId.isEmpty()) return;
         Context app = context.getApplicationContext();
         HttpURLConnection connection = null;
@@ -36,7 +44,7 @@ final class NotificationImage {
             String gateway = prefs.getString("gatewayUrl", "");
             String token = prefs.getString("authToken", "");
             if (gateway.isEmpty() || token.isEmpty()) return;
-            URL endpoint = new URL(gateway.replaceAll("/+$", "") + "/api/messenger/notification-image");
+            URL endpoint = new URL(gateway.replaceAll("/+$", "") + (avatar ? "/api/messenger/notification-avatar" : "/api/messenger/notification-image"));
             if (!"http".equals(endpoint.getProtocol()) && !"https".equals(endpoint.getProtocol())) return;
             connection = (HttpURLConnection) endpoint.openConnection();
             connection.setInstanceFollowRedirects(false);
@@ -68,7 +76,10 @@ final class NotificationImage {
             while (options.outWidth / options.inSampleSize > 1024 || options.outHeight / options.inSampleSize > 1024) options.inSampleSize *= 2;
             options.inJustDecodeBounds = false;
             Bitmap image = BitmapFactory.decodeByteArray(data, 0, data.length, options);
-            if (image != null) ChatNotifications.attachImage(app, cardId, notificationId, image);
+            if (image != null) {
+                if (avatar) ChatNotifications.attachAvatar(app, cardId, notificationId, image);
+                else ChatNotifications.attachImage(app, cardId, notificationId, image);
+            }
         } catch (Exception ignored) {
             // The notification remains useful if the gateway or image is unavailable.
         } finally {

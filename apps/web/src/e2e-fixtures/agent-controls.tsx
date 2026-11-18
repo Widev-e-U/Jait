@@ -6,6 +6,7 @@ import { AgentControlButton } from '@/components/app-shell/agent-control-button'
 import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAgentControl } from '@/hooks/useAgentControl'
+import { AuthProvider } from '@/hooks/useAuth'
 import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import '@/index.css'
 
@@ -43,4 +44,4 @@ function Harness() {
 }
 const mount = document.createElement('div')
 document.body.replaceChildren(mount)
-createRoot(mount).render(<Harness />)
+createRoot(mount).render(<AuthProvider><Harness /></AuthProvider>)

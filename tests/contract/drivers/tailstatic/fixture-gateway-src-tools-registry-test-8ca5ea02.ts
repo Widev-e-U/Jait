@@ -2,6 +2,7 @@
 import type { AuditWriter } from "../../../../packages/gateway/src/services/audit.js";
 import { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
 import { createToolRegistry, type ToolRegistryDeps } from "../../../../packages/gateway/src/tools/index.js";
+import { createToolsListTool, createToolsSearchTool } from "../../../../packages/gateway/src/tools/meta-tools.js";
 import { ToolRegistry } from "../../../../packages/gateway/src/tools/registry.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
@@ -44,7 +45,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_35_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_36_3": {
 
 
 function context() {
@@ -97,7 +98,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_48_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_49_3": {
 
 
 function context() {
@@ -145,7 +146,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_56_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_57_3": {
 
 
 function context() {
@@ -198,7 +199,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_76_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_77_3": {
 
 
 function context() {
@@ -258,7 +259,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_115_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_116_3": {
 
 
 function context() {
@@ -327,7 +328,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_144_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_145_3": {
 
 
 function context() {
@@ -392,7 +393,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_169_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_170_3": {
 
 
 function context() {
@@ -460,7 +461,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_199_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_200_3": {
 
 
 function context() {
@@ -515,7 +516,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_214_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_215_3": {
 
 
 function context() {
@@ -567,7 +568,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_226_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_227_3": {
 
 
 function context() {
@@ -610,7 +611,11 @@ await (async()=>{
     registerDiscoveryTool(registry, "plugin.deploy", "Deploy through a plugin", { tier: "external", source: "plugin:deploy" });
     registerDiscoveryTool(registry, "mcp.github.issue", "Create a GitHub issue", { tier: "external", source: "mcp" });
 
+    // Every provider gets every tool the user connected to Jait, including
+    // servers added through `mcp.add_server` (source "mcp").
     __jait_capture(0, (registry.listForMcp().map((tool) => tool.name)));
+    // Bridged tools remain as disableable as any other tool.
+    __jait_capture(1, (registry.listForMcp(new Set(["mcp.github.issue"])).map((tool) => tool.name)));
   
 })();
 
@@ -621,7 +626,65 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_255_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_253_3": {
+
+
+function context() {
+  return {
+    sessionId: "s-registry",
+    actionId: "a-registry",
+    projectRoot: process.cwd(),
+    requestedBy: "test",
+  };
+}
+function registerDiscoveryTool(
+  registry: ToolRegistry,
+  name: string,
+  description: string,
+  options: { tier?: "core" | "standard" | "external"; source?: "builtin" | "mcp" | `plugin:${string}`; priority?: number } = {},
+): void {
+  registry.register({
+    name,
+    description,
+    tier: options.tier ?? "standard",
+    category: options.source === "mcp" ? "external" : "meta",
+    source: options.source ?? "builtin",
+    discovery: options.priority == null ? undefined : { priority: options.priority },
+    parameters: { type: "object", properties: {} },
+    execute: async () => ({ ok: true, message: "completed" }),
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "mcp.opengym.get_workout_history", "Get the user's workout history", {
+      tier: "external",
+      source: "mcp",
+    });
+    registerDiscoveryTool(registry, "read", "Read project files", { tier: "core" });
+    const mcpContext = { ...context(), requestedBy: "mcp-client" };
+
+    const search = await createToolsSearchTool(registry).execute({ query: "workout history" }, mcpContext);
+    __jait_capture(0, (search.data));
+
+    // The bridged tool is listed; the internal core `read` tool still is not.
+    const list = await createToolsListTool(registry).execute({}, mcpContext);
+    __jait_capture(1, (list.data));
+    __jait_capture(2, ((list.data as { catalogue: string }).catalogue));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_281_3": {
 
 
 function context() {
@@ -676,7 +739,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_271_1": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_297_1": {
 
 
 function context() {
@@ -722,7 +785,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_280_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_306_3": {
 
 
 function context() {
@@ -777,7 +840,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_295_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_321_3": {
 
 
 function context() {
@@ -827,7 +890,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_305_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_331_3": {
 
 
 function context() {
@@ -873,7 +936,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_311_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_337_3": {
 
 
 function context() {
@@ -930,7 +993,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_331_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_357_3": {
 
 
 function context() {
@@ -982,7 +1045,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_registry_test_ts_345_3": {
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_371_3": {
 
 
 function context() {

@@ -96,12 +96,12 @@ test('Team sections collapse while plain chats keep the normal transcript', asyn
 
 test('Teams can be filtered separately from WhatsApp', async ({ page }) => {
   await mount(page, '!general:test', 'Teams')
-  await page.getByRole('combobox', { name: 'Filter by service' }).click()
-  await expect(page.getByRole('option', { name: 'WhatsApp', exact: true })).toBeVisible()
-  await page.getByRole('option', { name: 'Teams', exact: true }).click()
+  const filters = page.getByRole('group', { name: 'Filter conversations' })
+  await expect(filters.getByRole('button', { name: 'WhatsApp', exact: true })).toBeVisible()
+  await filters.getByRole('button', { name: 'Teams', exact: true }).click()
+  await expect(filters.getByRole('button', { name: 'Teams', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('group', { name: 'Conversation general' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Conversation Bob' })).toHaveCount(0)
-  await expect(page.getByRole('combobox', { name: 'Filter by service' })).toHaveText('Teams')
 })
 
 

@@ -1,7 +1,6 @@
 // Translated fixture from packages/gateway/src/services/provider-usage.test.ts; expected literals are in tail_static.rs.
 import { migrateDatabase, openDatabase, type JaitDB } from "../../../../packages/gateway/src/db/connection.js";
 import type { SqliteDatabase } from "../../../../packages/gateway/src/db/sqlite-shim.js";
-import type { NotificationService } from "../../../../packages/gateway/src/services/notifications.js";
 import { providerUsage } from "../../../../packages/gateway/src/db/schema.js";
 import { ProviderUsageService } from "../../../../packages/gateway/src/services/provider-usage.js";
 import { vi } from '../tailmock.ts';
@@ -45,26 +44,22 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_28_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_22_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -76,32 +71,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_35_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_29_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -117,32 +108,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_52_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_46_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -161,32 +148,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_65_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_59_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -197,32 +180,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_70_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_64_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -242,32 +221,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_83_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -287,32 +262,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_111_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_105_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -336,32 +307,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_130_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_124_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -382,225 +349,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_146_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_140_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
-try {
-await (async()=>{
-
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.97,
-    });
-
-    __jait_capture(0, (warning.mock.calls));
-    __jait_capture(1, (warning.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_584();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_166_3": {
-
-
-let sqlite: SqliteDatabase;
-let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
-  const opened = await openDatabase(":memory:");
-  sqlite = opened.sqlite;
-  db = opened.db;
-  migrateDatabase(sqlite);
-};
-const __jait_hook_584 = () => {
-  sqlite.close();
-};
-/*__jait_scope_open__*/{
-await __jait_hook_434();
-try {
-await (async()=>{
-
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed_warning",
-      rateLimitType: "seven_day",
-    });
-
-    __jait_capture(0, (warning.mock.calls));
-    __jait_capture(1, (warning.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_584();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_180_3": {
-
-
-let sqlite: SqliteDatabase;
-let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
-  const opened = await openDatabase(":memory:");
-  sqlite = opened.sqlite;
-  db = opened.db;
-  migrateDatabase(sqlite);
-};
-const __jait_hook_584 = () => {
-  sqlite.close();
-};
-/*__jait_scope_open__*/{
-await __jait_hook_434();
-try {
-await (async()=>{
-
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.95,
-    });
-    __jait_capture(0, (warning.mock.calls));
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.3,
-    });
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.96,
-    });
-    __jait_capture(1, (warning.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_584();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_205_3": {
-
-
-let sqlite: SqliteDatabase;
-let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
-  const opened = await openDatabase(":memory:");
-  sqlite = opened.sqlite;
-  db = opened.db;
-  migrateDatabase(sqlite);
-};
-const __jait_hook_584 = () => {
-  sqlite.close();
-};
-/*__jait_scope_open__*/{
-await __jait_hook_434();
-try {
-await (async()=>{
-
-    const { service: notifications, warning } = makeNotifications();
-    const service = new ProviderUsageService(db);
-    service.attachNotifications(notifications);
-
-    service.recordClaudeRateLimit("account-1", "claude", {
-      status: "allowed",
-      rateLimitType: "five_hour",
-      utilization: 0.5,
-    });
-
-    __jait_capture(0, (warning.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_584();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_219_3": {
-
-
-let sqlite: SqliteDatabase;
-let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
-  const opened = await openDatabase(":memory:");
-  sqlite = opened.sqlite;
-  db = opened.db;
-  migrateDatabase(sqlite);
-};
-const __jait_hook_584 = () => {
-  sqlite.close();
-};
-/*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -629,32 +399,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_259_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_180_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -685,34 +451,30 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each0": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each0": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const ordinaryUsageAllowed = true;
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -732,35 +494,31 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each1": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_211_3_each1": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const ordinaryUsageAllowed = undefined;
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -780,35 +538,31 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each0": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each0": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const block = { ordinaryUsageAllowed: false, rateLimits: {} };
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -825,35 +579,31 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each1": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each1": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const block = { rateLimits: { spendControlReached: true } };
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -870,35 +620,31 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each2": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_229_3_each2": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const block = { rateLimits: { rateLimitReachedType: "workspace_member_credits_depleted" } };
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -915,33 +661,29 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_324_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_245_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -959,32 +701,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_337_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_258_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -1018,32 +756,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_380_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -1084,32 +818,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_435_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_356_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -1152,32 +882,28 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_472_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_393_3": {
 
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
-function makeNotifications() {
-  const warning = vi.fn();
-  return { warning, service: { warning } as unknown as NotificationService };
-}
-const __jait_hook_434 = async () => {
+const __jait_hook_371 = async () => {
   const opened = await openDatabase(":memory:");
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
 };
-const __jait_hook_584 = () => {
+const __jait_hook_521 = () => {
   sqlite.close();
 };
 /*__jait_scope_open__*/{
-await __jait_hook_434();
+await __jait_hook_371();
 try {
 await (async()=>{
 
@@ -1196,7 +922,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_584();
+await __jait_hook_521();
 }
 }
 

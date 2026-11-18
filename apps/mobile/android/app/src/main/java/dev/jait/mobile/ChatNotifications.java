@@ -43,10 +43,14 @@ final class ChatNotifications {
         if (lines.size() == 1) {
             builder.setStyle(new NotificationCompat.BigTextStyle().bigText(lines.get(0)));
         } else {
-            NotificationCompat.InboxStyle style = new NotificationCompat.InboxStyle();
-            for (String line : lines) style.addLine(line);
-            style.setSummaryText(lines.size() + " messages");
-            builder.setStyle(style).setNumber(lines.size());
+            // InboxStyle rows are single lines that Android ellipsizes. BigTextStyle wraps every message in full.
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; i < lines.size(); i++) {
+                if (i > 0) text.append('\n');
+                text.append(lines.get(i));
+            }
+            builder.setStyle(new NotificationCompat.BigTextStyle().bigText(text)
+                .setSummaryText(lines.size() + " messages")).setNumber(lines.size());
         }
     }
 
@@ -87,6 +91,22 @@ final class ChatNotifications {
         manager.notify(cardId, 0, builder.build());
     }
 
+    static synchronized void attachAvatar(Context context, String cardId, String eventId, android.graphics.Bitmap avatar) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        StatusBarNotification posted = card(manager, cardId);
+        if (posted == null) return;
+        ArrayList<String> ids = values(posted.getNotification().extras, IDS);
+        ArrayList<String> lines = values(posted.getNotification().extras, LINES);
+        if (ids.isEmpty() || ids.size() != lines.size() || !eventId.equals(ids.get(ids.size() - 1))) return;
+        NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
+        applyLines(builder, ids, lines);
+        android.os.Parcelable picture = posted.getNotification().extras.getParcelable(Notification.EXTRA_PICTURE);
+        if (picture instanceof android.graphics.Bitmap) builder.setStyle(new NotificationCompat.BigPictureStyle().bigPicture((android.graphics.Bitmap) picture)
+            .setSummaryText(lines.size() > 1 ? lines.size() + " messages" : lines.get(0)));
+        builder.setLargeIcon(avatar).setOnlyAlertOnce(true);
+        manager.notify(cardId, 0, builder.build());
+    }
+
     static synchronized void cancel(Context context, String cardId) {
         context.getSystemService(NotificationManager.class).cancel(cardId, 0);
         updateSummary(context);
@@ -101,6 +121,13 @@ final class ChatNotifications {
             .setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setGroup(GROUP)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN);
+        android.graphics.drawable.Icon icon = notification.getLargeIcon();
+        if (icon != null) {
+            android.graphics.drawable.Drawable drawable = icon.loadDrawable(context);
+            if (drawable instanceof android.graphics.drawable.BitmapDrawable) {
+                builder.setLargeIcon(((android.graphics.drawable.BitmapDrawable) drawable).getBitmap());
+            }
+        }
         for (int i = 0; i < NotificationCompat.getActionCount(notification); i++) {
             builder.addAction(NotificationCompat.getAction(notification, i));
         }
@@ -119,11 +146,13 @@ final class ChatNotifications {
             ArrayList<String> lines = values(posted.getNotification().extras, LINES);
             int index = ids.indexOf(eventId);
             if (index >= 0 && index < lines.size()) {
+                boolean removedLatest = index == ids.size() - 1;
                 ids.remove(index);
                 lines.remove(index);
                 if (ids.isEmpty()) manager.cancel(cardId, 0);
                 else {
                     NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
+                    if (removedLatest) builder.setLargeIcon((android.graphics.Bitmap) null);
                     applyLines(builder, ids, lines);
                     builder.setOnlyAlertOnce(true);
                     manager.notify(cardId, 0, builder.build());

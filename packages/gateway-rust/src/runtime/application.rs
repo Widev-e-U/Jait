@@ -323,6 +323,7 @@ pub struct Application {
     questions: crate::services::input_requests::UserQuestionService,
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
+    terminals: TerminalRoutes,
 }
 
 struct SessionRuntimeAdapter {
@@ -534,6 +535,7 @@ impl Application {
         });
         let health = HealthState::new(config.health, HealthSnapshot::default());
         let terminals = composed_terminal_routes(auth.clone(), &config.project_root);
+        let terminal_routes = terminals.clone();
         // Project roots come from the project records the same store confirms, so the
         // router needs no separately configured root and cannot be pointed elsewhere.
         let projects = ProjectRoutes::new(auth.clone()).with_surfaces(terminals.registry().clone());
@@ -906,6 +908,7 @@ impl Application {
                 questions,
                 preview_ports,
                 live_view_ports,
+                terminals: terminal_routes,
             }),
             Err(error) => {
                 auth.shutdown().await?;
@@ -982,15 +985,19 @@ impl Application {
         config.token_verifier = Arc::new(crate::security::ws_verifier::JwtTokenVerifier::new(
             self.auth.signing_secret(),
         ));
-        // The provisional controls spawn uncancellable blocking work and consent
-        // ownership is not leased through the decision. Do not let an embedder
-        // enable them on the composed runtime until those effects are supervised.
+        // Consent decisions stay unmounted: their ownership is not leased through the
+        // decision yet. Terminal controls are always the supervised, owner-scoped ones
+        // below, whatever the embedder supplied.
         config.consent = None;
-        config.terminals = None;
-        let transport = crate::runtime::ws_transport::WsTransport::new(
-            Arc::new(crate::ws::WsHub::new(config)),
-            max_connections,
-        );
+        config.terminals = Some(Arc::new(
+            crate::runtime::terminal_ws::SupervisedTerminalControl::new(self.terminals.clone()),
+        ));
+        config.authorizer = Some(Arc::new(
+            crate::runtime::terminal_ws::ComposedWsAuthorizer::new(self.terminals.clone()),
+        ));
+        let hub = Arc::new(crate::ws::WsHub::new(config));
+        crate::runtime::terminal_ws::spawn_output_pump(self.terminals.clone(), &hub);
+        let transport = crate::runtime::ws_transport::WsTransport::new(hub, max_connections);
         if let Some(consent) = &self.consent {
             crate::runtime::consent_ws::spawn(consent.clone(), transport.hub())?;
         }
@@ -1145,7 +1152,7 @@ mod ownership_tests {
     }
 
     #[tokio::test]
-    async fn websocket_mount_disables_unsupervised_effect_controls() {
+    async fn websocket_mount_supervises_terminals_and_keeps_consent_unmounted() {
         struct Controls;
         impl crate::ws::WsConsentControl for Controls {
             fn decide(&self, _: &str, _: &str, _: bool, _: Option<String>) -> Result<bool, String> {
@@ -1190,7 +1197,16 @@ mod ownership_tests {
             )
             .unwrap();
         assert!(transport.hub().config().consent.is_none());
-        assert!(transport.hub().config().terminals.is_none());
+        // The embedder's control is replaced: an unknown terminal is refused by the
+        // supervisor before it could reach `Controls`, which panics if it is called.
+        let terminals = transport
+            .hub()
+            .config()
+            .terminals
+            .clone()
+            .expect("supervised terminal control is mounted");
+        assert!(terminals.write("nobody", "missing", "x").is_err());
+        assert!(terminals.resize("nobody", "missing", 80, 24).is_err());
         drop(transport);
         drop(app);
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();

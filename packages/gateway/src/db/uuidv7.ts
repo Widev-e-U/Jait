@@ -23,7 +23,7 @@ const COUNTER_MAX = 0xfff;
 /** Clock rewinds at or below this many ms keep the previous timestamp instead of re-anchoring. */
 const REWIND_TOLERANCE_MS = 1_000;
 
-let lastMs = 0;
+let lastMs = -1;
 let counter = 0;
 
 /** Advance the (timestamp, counter) pair so that consecutive ids order by creation order. */

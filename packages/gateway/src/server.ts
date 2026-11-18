@@ -98,6 +98,8 @@ import type { ProjectStateService } from "./services/project-state.js";
 import type { ThreadService } from "./services/threads.js";
 import { AgentControlService, type AgentStopResult } from "./services/agent-control.js";
 import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestration/executor.js";
+import { createArtifactVerifier } from "./services/orchestration/artifact-verifier.js";
+import { createInProcessWorkflowWorker } from "./services/orchestration/in-process-worker.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
@@ -326,19 +328,24 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       },
     })
     : undefined;
-  // Plan orchestration shares the halt switch. Its executor stays unbound until the
-  // sub-agent runner is wired, so attempts fail closed as interrupted rather than run.
+  // Keep restart recovery available when the worker dependencies are missing.
+  const workflowWorker = deps.userService && deps.toolRegistry
+    ? createInProcessWorkflowWorker(config, deps.userService, deps.toolRegistry)
+    : undefined;
   const orchestration: OrchestrationService | undefined = deps.db && agentControl
     ? new OrchestrationService({
       db: deps.db,
-      executor: new SubAgentTaskExecutor(unboundSubAgentRunner),
+      executor: new SubAgentTaskExecutor(workflowWorker ?? unboundSubAgentRunner),
+      verifier: deps.repoService ? createArtifactVerifier(deps.repoService) : undefined,
       isHalted: userId => agentControl.isHalted(userId),
     })
     : undefined;
+  let recoveredOrchestration: OrchestrationService | undefined;
   if (orchestration) {
     // Attempts left in flight by a restart become interrupted. Nothing re-runs them.
     try {
       const interrupted = orchestration.recoverAfterRestart();
+      recoveredOrchestration = orchestration;
       if (interrupted > 0) app.log.warn({ interrupted }, "plan attempts interrupted by restart; an operator must decide");
     } catch (error) {
       app.log.error({ error }, "plan orchestration recovery failed");
@@ -605,6 +612,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.planService && deps.repoService) {
     registerPlanRoutes(app, config, {
       planService: deps.planService,
+      orchestration: workflowWorker ? recoveredOrchestration : undefined,
       repoService: deps.repoService,
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
@@ -682,7 +690,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   // Self-update routes
   if (deps.shutdown) {
-    registerUpdateRoutes(app, config, { shutdown: deps.shutdown, port: config.port });
+    registerUpdateRoutes(app, config, { shutdown: deps.shutdown, port: config.port, ws: deps.ws });
   }
 
   // ── Voice assistant WebSocket (OpenAI Realtime) ─────────────────

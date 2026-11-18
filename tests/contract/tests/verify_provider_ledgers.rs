@@ -3,14 +3,14 @@
 //!
 //! PROVENANCE OF EXPECTATIONS
 //! * Account-type projection and label rules are re-derived from the real TypeScript:
-//!     sed -n '37,60p' packages/gateway/src/services/provider-accounts.ts
+//!   sed -n '37,60p' packages/gateway/src/services/provider-accounts.ts
 //!   -> label validation uses JS string `.length` (UTF-16 code units) and a hard cap of 80:
-//!      `if (label.length > 80) throw new Error("Account label must be 80 characters or fewer")`,
-//!      `createAccount` also rejects non-auth providers.
+//!   `if (label.length > 80) throw new Error("Account label must be 80 characters or fewer")`,
+//!   `createAccount` also rejects non-auth providers.
 //! * Usage warning copy comes from the real TypeScript:
-//!     sed -n '118,140p' packages/gateway/src/services/provider-usage.ts
+//!   sed -n '118,140p' packages/gateway/src/services/provider-usage.ts
 //!   -> "Approaching usage limit", "session limit", "weekly limit", "extra usage",
-//!      link target "/settings?tab=usage".
+//!   link target "/settings?tab=usage".
 //! * The main usage read path is already covered by the existing contract target
 //!   `gateway_rust_provider_usage.rs`; this file deliberately covers *different* paths:
 //!   warning emission/dedupe/re-arm, field redaction, owner scoping and the account_ids filter.
@@ -37,9 +37,11 @@ use std::sync::{Arc, Mutex};
 /// Consumer-side test double for the public `AccountAdapterFactory` seam. The service
 /// requires a real adapter for every created account, so this returns a minimal
 /// `ProviderAdapter` implementation and records the launch plan it was handed.
+type RecordedLaunch = (String, String, String, Option<String>);
+
 #[derive(Default)]
 struct RecordingFactory {
-    launches: Arc<Mutex<Vec<(String, String, String, Option<String>)>>>,
+    launches: Arc<Mutex<Vec<RecordedLaunch>>>,
 }
 
 impl RecordingFactory {
@@ -280,22 +282,19 @@ async fn create_rejects_unsupported_owner_and_label_bounds() {
     let err = svc
         .create("user-1".to_string(), "ollama".to_string(), "Personal", None)
         .await
-        .err()
-        .expect("non-auth provider rejected");
+        .expect_err("non-auth provider rejected");
     assert_eq!(err, "Provider accounts are not supported for ollama");
 
     let err = svc
         .create(String::new(), "claude-code".to_string(), "Personal", None)
         .await
-        .err()
-        .expect("missing owner rejected");
+        .expect_err("missing owner rejected");
     assert_eq!(err, "Authenticated owner is required");
 
     let err = svc
         .create("user-1".to_string(), "claude-code".to_string(), "  ", None)
         .await
-        .err()
-        .expect("blank label rejected");
+        .expect_err("blank label rejected");
     assert_eq!(err, "Account label is required");
 
     // 81 UTF-16 code units -> rejected (TS: label.length > 80).
@@ -303,8 +302,7 @@ async fn create_rejects_unsupported_owner_and_label_bounds() {
     let err = svc
         .create("user-1".to_string(), "claude-code".to_string(), &long, None)
         .await
-        .err()
-        .expect("81 chars rejected");
+        .expect_err("81 chars rejected");
     assert_eq!(err, "Account label must be 80 characters or fewer");
 
     // 41 emoji = 41 chars but 82 UTF-16 code units: TS `.length` counts code units, so rejected.
@@ -318,8 +316,7 @@ async fn create_rejects_unsupported_owner_and_label_bounds() {
             None,
         )
         .await
-        .err()
-        .expect("82 UTF-16 units rejected");
+        .expect_err("82 UTF-16 units rejected");
     assert_eq!(err, "Account label must be 80 characters or fewer");
 
     // The accepted 80-unit local-create path requires a descriptor-bound fixture

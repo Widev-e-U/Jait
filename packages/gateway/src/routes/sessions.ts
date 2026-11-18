@@ -136,6 +136,13 @@ export function registerSessionRoutes(
     return { session };
   });
 
+  // Count all active chats, independently of project sidebar pagination.
+  app.get("/api/sessions/unread-count", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    return { count: sessionService.countUnread(authUser.id) };
+  });
+
   // Get session by ID
   app.get("/api/sessions/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

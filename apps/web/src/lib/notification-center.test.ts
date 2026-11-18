@@ -4,16 +4,34 @@ import { clearNotifications, getNotifications, markAllNotificationsRead, markNot
 afterEach(() => clearNotifications())
 
 const record = (id: string) => recordNotification({ id, title: id, body: '', level: 'info' })
+const ids = () => getNotifications().map(item => item.id)
 
 describe('notification center', () => {
-  it('keeps newest first and replaces a repeated id as unread', () => {
+  it('keeps newest first and lets a repeated id replace the older entry', () => {
     record('a'); record('b')
-    markNotificationsRead(['a'])
     record('a')
-    expect(getNotifications().map(item => [item.id, item.read])).toEqual([['a', false], ['b', false]])
+    expect(ids()).toEqual(['a', 'b'])
   })
 
-  it('marks all unread entries read once, running read side effects', () => {
+  it('removes an entry as soon as it is read, with no clear step', () => {
+    record('a'); record('b'); record('c')
+    markNotificationsRead(['b'])
+    expect(ids()).toEqual(['c', 'a'])
+    markAllNotificationsRead()
+    expect(ids()).toEqual([])
+  })
+
+  it('ignores ids that are not in the list', () => {
+    const listener = vi.fn()
+    const stop = onNotificationRead(listener)
+    record('a')
+    markNotificationsRead(['missing'])
+    stop()
+    expect(ids()).toEqual(['a'])
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('runs read side effects once per entry that was actually read', () => {
     const listener = vi.fn()
     const stop = onNotificationRead(listener)
     record('a'); record('b')
@@ -21,17 +39,17 @@ describe('notification center', () => {
     markAllNotificationsRead()
     markAllNotificationsRead()
     stop()
-    expect(getNotifications().every(item => item.read)).toBe(true)
+    expect(ids()).toEqual([])
     expect(listener.mock.calls.map(([entry]) => entry.id)).toEqual(['a', 'b'])
   })
 
-  it('skips read side effects for reads handled elsewhere', () => {
+  it('removes reads handled elsewhere without running read side effects', () => {
     const listener = vi.fn()
     const stop = onNotificationRead(listener)
     record('a')
     markNotificationsRead(['a'], false)
     stop()
-    expect(getNotifications()[0]!.read).toBe(true)
+    expect(ids()).toEqual([])
     expect(listener).not.toHaveBeenCalled()
   })
 })

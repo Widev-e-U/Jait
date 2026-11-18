@@ -1,0 +1,35 @@
+name: Contract environment
+description: >
+  Node 22, Bun 1.4.0, the pinned Rust toolchain, and the gateway workspace
+  builds shared by the Rust gateway contract jobs. Run actions/checkout first.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+    - uses: oven-sh/setup-bun@v2
+      with:
+        # Native timezone contracts were reviewed against Bun 1.4.0 / ICU 78.3.
+        bun-version: "1.4.0"
+    # Every Cargo cache key in contract.yml embeds this toolchain version.
+    - uses: dtolnay/rust-toolchain@1.98.0
+      with:
+        components: rustfmt, clippy
+    - name: Install gateway dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
+    - name: Build gateway workspace dependencies
+      shell: bash
+      run: |
+        bun run --filter @jait/shared build
+        bun run --filter @jait/api-client build
+        bun run --filter @jait/screen-share build
+    # The gateway prebuild renders the whole web app in one Vite pass. With
+    # Node's default old-space limit (about 2 GB on the local dev box) that pass
+    # ran out of heap, so the step gets an explicit 4 GB limit.
+    - name: Build gateway
+      shell: bash
+      env:
+        NODE_OPTIONS: --max-old-space-size=4096
+      run: bun run --filter @jait/gateway build

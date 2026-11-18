@@ -433,10 +433,10 @@ export class AgentsApi {
     })
     if (!response.ok) throw new Error(`Failed to refresh models: ${response.statusText}`)
     this.resetProviderModels()
-    return this.listProviderModels(providerId, nodeId)
+    return this.listProviderModels(providerId, nodeId, providerId === 'jait')
   }
 
-  async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
+  async listProviderModels(providerId: ProviderId, nodeId?: string | null, refreshOllama = false): Promise<ProviderModelsResponse> {
     const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
     const cacheKey = `${providerId}:${effectiveNodeId}`
     // Pending discovery can take longer than the cache TTL (remote CLI probes
@@ -449,9 +449,12 @@ export class AgentsApi {
     if (cached && Date.now() - cached.cachedAt < 5 * 60_000) return cached.result
 
     const promise = (async () => {
-      const nodeQuery = effectiveNodeId === 'gateway' ? '' : `?nodeId=${encodeURIComponent(effectiveNodeId)}`
-      const res = await fetch(`${API_URL}/api/providers/${providerId}/models${nodeQuery}`, {
+      const query = effectiveNodeId === 'gateway'
+        ? refreshOllama ? '?refresh=true' : ''
+        : `?nodeId=${encodeURIComponent(effectiveNodeId)}`
+      const res = await fetch(`${API_URL}/api/providers/${providerId}/models${query}`, {
         headers: this.getHeaders(),
+        ...(providerId === 'jait' ? { cache: 'no-store' } : {}),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string; message?: string }

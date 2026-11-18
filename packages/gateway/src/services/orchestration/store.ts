@@ -155,6 +155,13 @@ export class OrchestrationStore {
       .all();
   }
 
+  getTaskAttempts(runId: string, taskId: string): AttemptRow[] {
+    return this.db.select().from(orchestrationAttempts)
+      .where(and(eq(orchestrationAttempts.runId, runId), eq(orchestrationAttempts.taskId, taskId)))
+      .orderBy(orchestrationAttempts.attemptNo)
+      .all();
+  }
+
   /** ready -> running, creating the attempt row. Returns null if another writer got there first. */
   claimTask(input: { runId: string; taskId: string; attemptId: string; now: string }): { attemptNo: number } | null {
     return this.db.transaction((tx) => {
@@ -167,6 +174,7 @@ export class OrchestrationStore {
           state: "running",
           attemptCount: attemptNo,
           currentAttemptId: input.attemptId,
+          agentRef: null,
           startedAt: input.now,
           finishedAt: null,
           updatedAt: input.now,
@@ -189,6 +197,23 @@ export class OrchestrationStore {
       }).run();
       refreshRun(tx, input.runId, input.now);
       return { attemptNo };
+    });
+  }
+
+  recordAgentRef(input: { runId: string; taskId: string; attemptId: string }, agentRef: string): boolean {
+    return this.db.transaction((tx) => {
+      const updated = tx.update(orchestrationTaskRuns)
+        .set({ agentRef })
+        .where(and(
+          taskKey(input.runId, input.taskId),
+          eq(orchestrationTaskRuns.currentAttemptId, input.attemptId),
+          eq(orchestrationTaskRuns.state, "running"),
+        ))
+        .run();
+      if (updated.changes !== 1) return false;
+      tx.update(orchestrationAttempts).set({ agentRef })
+        .where(eq(orchestrationAttempts.id, input.attemptId)).run();
+      return true;
     });
   }
 

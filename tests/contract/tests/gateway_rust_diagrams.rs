@@ -39,6 +39,17 @@ fn service(steps: Value) {
     );
     fs::remove_dir_all(&project).unwrap();
     fs::create_dir_all(&project).unwrap();
+    // Roots are created private: the native store never inherits the umask and requires
+    // existing, gateway-owned project roots, whereas the reference creates them implicitly.
+    // Pre-creating the roots these scenarios name keeps them focused on storage ordering.
+    for root in [&project, &project.join("second"), &project.join("other")] {
+        fs::create_dir_all(root).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(root, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
     let db = db::open_database(Path::new(":memory:")).unwrap();
     db::migrate_database(&db).unwrap();
     let service = ArchitectureDiagramService::with_time(&db, now);
@@ -60,7 +71,17 @@ fn service(steps: Value) {
                         if path.is_dir(){fs::remove_dir_all(path)?;}else if path.exists(){fs::remove_file(path)?;}
                     }else if s["directory"]==true {fs::create_dir_all(path)?;}
                     else {
-                        fs::create_dir_all(path.parent().unwrap())?;
+                        let parent=path.parent().unwrap();
+                        if !parent.exists() {
+                            // A fixture-created .jait must be private, not umask-dependent.
+                            #[cfg(unix)]
+                            {
+                                use std::os::unix::fs::DirBuilderExt;
+                                fs::DirBuilder::new().mode(0o700).create(parent)?;
+                            }
+                            #[cfg(not(unix))]
+                            fs::create_dir(parent)?;
+                        }
                         let bytes=s["bytes"].as_array().map(|a|a.iter().map(|v|v.as_u64().unwrap()as u8).collect::<Vec<_>>())
                             .unwrap_or_else(||s["content"].as_str().unwrap().as_bytes().to_vec());
                         fs::write(path,bytes)?;
@@ -274,9 +295,17 @@ fn tool(mut call: Value) {
     call["op"] = json!("nativediagrams.tool");
     call["root"] = json!(name);
     call["now"] = json!(now);
+    fs::create_dir_all(&project).unwrap();
     let expected = reference(&dir, call.clone());
     if project.exists() {
         fs::remove_dir_all(&project).unwrap();
+    }
+    fs::create_dir_all(&project).unwrap();
+    // The native writer requires a private, already-existing project directory.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&project, fs::Permissions::from_mode(0o700)).unwrap();
     }
     let db = db::open_database(Path::new(":memory:")).unwrap();
     db::migrate_database(&db).unwrap();

@@ -2069,7 +2069,7 @@ export function StructuredDataView({ value, depth = 0 }: { value: unknown; depth
           </span>
           </TooltipHint>
           <div className="min-w-0 break-words">
-            <StructuredDataView value={entry} depth={depth + 1} />
+            <StructuredDataView value={key === 'tool_name' && (value as Record<string, unknown>).type === 'tool_reference' && typeof entry === 'string' ? humanizeToolName(getJaitMcpToolName(entry) ?? entry) : entry} depth={depth + 1} />
           </div>
         </div>
       ))}

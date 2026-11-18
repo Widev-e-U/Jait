@@ -137,6 +137,7 @@ async fn run_scenario(steps: &Value) -> Value {
     let mut ids: Vec<String> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
     let mut out: Vec<Value> = Vec::new();
+    let mut pending_asks = Vec::new();
     let steps = steps.as_array().expect("steps array").clone();
     for step in steps {
         match text(&step, "op").expect("op") {
@@ -190,11 +191,11 @@ async fn run_scenario(steps: &Value) -> Value {
                     if handle.is_finished() {
                         Some(handle.await.unwrap())
                     } else {
-                        handle.abort();
+                        pending_asks.push(handle);
                         None
                     }
                 } else {
-                    handle.abort();
+                    pending_asks.push(handle);
                     None
                 };
                 out.push(match result {
@@ -375,6 +376,9 @@ async fn run_scenario(steps: &Value) -> Value {
         },
     });
     scrub(&mut document, &seen);
+    for handle in pending_asks {
+        handle.abort();
+    }
     document
 }
 

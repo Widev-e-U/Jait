@@ -5105,6 +5105,15 @@
               ]
             },
             {
+              "name": "messenger.attachment",
+              "risk": "medium",
+              "consent": "once",
+              "required": [
+                "roomId",
+                "eventId"
+              ]
+            },
+            {
               "name": "messenger.search",
               "risk": "low",
               "consent": "once",
@@ -5446,7 +5455,8 @@
                   "action": "messages",
                   "roomId": "!r:server",
                   "limit": 20,
-                  "earlier": false
+                  "earlier": false,
+                  "attachmentsOnly": false
                 },
                 "sameSignal": true
               }
@@ -5751,7 +5761,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:00.000Z"
@@ -5770,7 +5781,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:01.000Z",
               "lastSeenAt": "1970-01-01T00:00:01.000Z"
@@ -5789,7 +5801,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:02.000Z",
               "lastSeenAt": "1970-01-01T00:00:02.000Z"
@@ -5809,7 +5822,8 @@
                   "screenShare": false,
                   "voice": false,
                   "preview": false,
-                  "interactiveTerminal": false
+                  "interactiveTerminal": false,
+                  "gatewayUpdate": false
                 },
                 "connectedAt": "1970-01-01T00:00:01.000Z",
                 "lastSeenAt": "1970-01-01T00:00:03.000Z"
@@ -5830,7 +5844,8 @@
                   "screenShare": false,
                   "voice": false,
                   "preview": false,
-                  "interactiveTerminal": false
+                  "interactiveTerminal": false,
+                  "gatewayUpdate": false
                 },
                 "connectedAt": "1970-01-01T00:00:02.000Z",
                 "lastSeenAt": "1970-01-01T00:00:02.000Z"
@@ -5849,7 +5864,8 @@
                   "screenShare": false,
                   "voice": false,
                   "preview": false,
-                  "interactiveTerminal": false
+                  "interactiveTerminal": false,
+                  "gatewayUpdate": false
                 },
                 "connectedAt": "1970-01-01T00:00:00.000Z",
                 "lastSeenAt": "1970-01-01T00:00:00.000Z"
@@ -5888,7 +5904,8 @@
                 "screenShare": false,
                 "voice": true,
                 "preview": true,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               }
             }
           },
@@ -5953,7 +5970,8 @@
                 "screenShare": false,
                 "voice": true,
                 "preview": true,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:00.000Z"
@@ -5974,7 +5992,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": true,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:01.000Z"
@@ -5996,7 +6015,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": true,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:01.000Z"
@@ -6017,7 +6037,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": true,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:04.000Z"
@@ -6109,7 +6130,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:00.000Z"
@@ -6128,7 +6150,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:00.000Z",
               "lastSeenAt": "1970-01-01T00:00:01.000Z"
@@ -6147,7 +6170,8 @@
                 "screenShare": false,
                 "voice": false,
                 "preview": false,
-                "interactiveTerminal": false
+                "interactiveTerminal": false,
+                "gatewayUpdate": false
               },
               "connectedAt": "1970-01-01T00:00:02.000Z",
               "lastSeenAt": "1970-01-01T00:00:02.000Z"
@@ -6167,7 +6191,8 @@
                   "screenShare": false,
                   "voice": false,
                   "preview": false,
-                  "interactiveTerminal": false
+                  "interactiveTerminal": false,
+                  "gatewayUpdate": false
                 },
                 "connectedAt": "1970-01-01T00:00:02.000Z",
                 "lastSeenAt": "1970-01-01T00:00:03.000Z"
@@ -6192,7 +6217,8 @@
                     "screenShare": false,
                     "voice": false,
                     "preview": false,
-                    "interactiveTerminal": false
+                    "interactiveTerminal": false,
+                    "gatewayUpdate": false
                   },
                   "connectedAt": "1970-01-01T00:00:00.000Z",
                   "lastSeenAt": "1970-01-01T00:00:01.000Z"
@@ -75536,82 +75562,6 @@
     ]
   },
   {
-    "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_83_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedTeamChatRoutes",
-        "source": "packages/gateway/src/routes/team-chat.ts",
-        "source_test": "packages/gateway/src/routes/team-chat.test.ts",
-        "fixture": "gateway-src-routes-team-chat-test-7e419143",
-        "test": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_96_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedTeamChatRoutes",
-        "source": "packages/gateway/src/routes/team-chat.ts",
-        "source_test": "packages/gateway/src/routes/team-chat.test.ts",
-        "fixture": "gateway-src-routes-team-chat-test-7e419143",
-        "test": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_261_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedTeamChatRoutes",
-        "source": "packages/gateway/src/routes/team-chat.ts",
-        "source_test": "packages/gateway/src/routes/team-chat.test.ts",
-        "fixture": "gateway-src-routes-team-chat-test-7e419143",
-        "test": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_273_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedTeamChatRoutes",
-        "source": "packages/gateway/src/routes/team-chat.ts",
-        "source_test": "packages/gateway/src/routes/team-chat.test.ts",
-        "fixture": "gateway-src-routes-team-chat-test-7e419143",
-        "test": "tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
     "id": "internal.sourcereview.ha-states-missing-url",
     "calls": [
       {
@@ -79477,291 +79427,6 @@
         "source_test": "packages/gateway/src/tools/skill-tools.test.ts",
         "fixture": "gateway-src-tools-skill-tools-test-2356445c",
         "test": "tailstatic_packages_gateway_src_tools_skill_tools_test_ts_70_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_32_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_32_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_38_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_38_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_44_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_44_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_49_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_49_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_60_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_60_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_64_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_64_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_81_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_81_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_99_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_99_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_108_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_108_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_119_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_119_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_131_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_131_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_140_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_140_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_155_1",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_155_1"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_163_1",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_163_1"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedEmailService-packages_gateway_src_services_email_service_test_ts_184_1",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedEmailService",
-        "source": "packages/gateway/src/services/email/service.ts",
-        "source_test": "packages/gateway/src/services/email/service.test.ts",
-        "fixture": "gateway-src-services-email-service-test-c73809a4",
-        "test": "tailstatic_packages_gateway_src_services_email_service_test_ts_184_1"
       }
     ],
     "assertions": [
@@ -85120,63 +84785,6 @@
         "source_test": "packages/gateway/src/services/preview-runner.test.ts",
         "fixture": "gateway-src-services-preview-runner-test-53dc014a",
         "test": "tailstatic_packages_gateway_src_services_preview_runner_test_ts_121_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_78_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedElevatedTools",
-        "source": "packages/gateway/src/tools/elevated-tools.ts",
-        "source_test": "packages/gateway/src/tools/elevated-tools.test.ts",
-        "fixture": "gateway-src-tools-elevated-tools-test-ddb5848e",
-        "test": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_78_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_122_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedElevatedTools",
-        "source": "packages/gateway/src/tools/elevated-tools.ts",
-        "source_test": "packages/gateway/src/tools/elevated-tools.test.ts",
-        "fixture": "gateway-src-tools-elevated-tools-test-ddb5848e",
-        "test": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_122_3"
-      }
-    ],
-    "assertions": [
-      {
-        "path": "",
-        "kind": "reused-tail"
-      }
-    ]
-  },
-  {
-    "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_136_3",
-    "calls": [
-      {
-        "op": "sourcereview.reused",
-        "module": "reusedElevatedTools",
-        "source": "packages/gateway/src/tools/elevated-tools.ts",
-        "source_test": "packages/gateway/src/tools/elevated-tools.test.ts",
-        "fixture": "gateway-src-tools-elevated-tools-test-ddb5848e",
-        "test": "tailstatic_packages_gateway_src_tools_elevated_tools_test_ts_136_3"
       }
     ],
     "assertions": [

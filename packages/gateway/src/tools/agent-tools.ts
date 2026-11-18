@@ -143,6 +143,9 @@ function renderToolCalls(calls: ExecutedToolCall[]) {
 
 export interface AgentSpawnDeps {
   toolRegistry: ToolRegistry;
+  /** Internal allowlist for an in-process worker. An empty list disables tools. */
+  restrictedTools?: readonly string[];
+  onInProcessStart?: (subAgentId: string) => void;
   audit?: AuditWriter;
   /** LLM config resolver — gets config per request (supports per-user API keys) */
   getLLMConfig: (context: ToolContext) => LLMConfig;
@@ -212,6 +215,9 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       // "opus") would hit the wrong backend and 404. Route the specialist
       // through the actual provider instead.
       if (context.providerId && context.providerId !== "jait") {
+        if (deps.restrictedTools !== undefined) {
+          return { ok: false, message: "Restricted sub-agents require the in-process provider" };
+        }
         if (!providerRegistry || !gatewayAddress || !context.userId) {
           return {
             ok: false,
@@ -312,7 +318,9 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
 
       // ── Resolve allowed tools ──
       let allowedTools: Set<string>;
-      if (input.allowedTools) {
+      if (deps.restrictedTools !== undefined) {
+        allowedTools = new Set(deps.restrictedTools);
+      } else if (input.allowedTools) {
         allowedTools = new Set(
           input.allowedTools
             .split(",")
@@ -336,7 +344,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       // agent.message so they can talk to each other. Copy the set first:
       // `allowedTools` may still be the shared DEFAULT_SUBAGENT_TOOLS singleton.
       const swarmRoundId = input.__swarmRoundId;
-      if (swarmRoundId) {
+      if (swarmRoundId && deps.restrictedTools === undefined) {
         allowedTools = new Set(allowedTools);
         allowedTools.add(ToolName.AgentMessage);
       }
@@ -363,6 +371,8 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
         }
         context.signal.addEventListener("abort", () => subAbort.abort(), { once: true });
       }
+
+      deps.onInProcessStart?.(subAgentId);
 
       // ── Steering controller for the sub-agent ──
       const steering = new SteeringController();

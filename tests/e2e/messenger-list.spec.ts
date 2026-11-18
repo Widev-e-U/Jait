@@ -7,10 +7,17 @@ test.use({ screenshot: 'off' })
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII='
 
 async function mount(page: Page) {
-  const state = { user: '@alice:test', avatar: 'mxc://test/avatar-v1', unread: 2, teamsInvite: false, commands: [] as any[], requests: [] as string[] }
+  const state = { user: '@alice:test', avatar: 'mxc://test/avatar-v1', unread: 2, teamsInvite: false, hidden: new Set<string>(), commands: [] as any[], requests: [] as string[] }
   await page.route('**/api/messenger**', async route => {
     const url = new URL(route.request().url())
-    if (url.pathname.endsWith('/command')) { state.commands.push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }) }
+    if (url.pathname.endsWith('/command')) {
+      const command = route.request().postDataJSON()
+      state.commands.push(command)
+      // The gateway stores hidden state in account data, so the next snapshot reports it.
+      if (command.action === 'hide') state.hidden.add(command.roomId)
+      if (command.action === 'unhide') state.hidden.delete(command.roomId)
+      return route.fulfill({ json: { ok: true } })
+    }
     if (url.pathname.endsWith('/media')) {
       state.requests.push(route.request().postDataJSON().url)
       return route.fulfill({ json: { data: png } })
@@ -20,8 +27,8 @@ async function mount(page: Page) {
       session: { homeserver: 'https://matrix.test', userId: state.user, deviceId: 'A' },
       selectedRoomId: url.searchParams.get('roomId'), typing: url.searchParams.get('roomId') === '!alice:test' ? ['Bob'] : [], messages: [],
       rooms: [
-        { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar },
-        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
+        { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar, hidden: state.hidden.has('!alice:test') },
+        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', hidden: state.hidden.has('!bob:test'), peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
       ],
     } } })
   })
@@ -30,7 +37,8 @@ async function mount(page: Page) {
 }
 
 async function expectAvatars(page: Page) {
-  const avatars = page.getByRole('complementary', { name: 'Conversations' }).locator('img')
+  // Avatars are decorative (alt=""); provider logos in the header and rows are named after their service.
+  const avatars = page.getByRole('complementary', { name: 'Conversations' }).locator('img[alt=""]')
   await expect(avatars).toHaveCount(2)
   await expect.poll(() => avatars.evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
 }
@@ -46,9 +54,11 @@ for (const width of [390, 1280]) {
     const row = page.getByRole('group', { name: 'Conversation Alice' })
     const bounds = await row.boundingBox()
     expect(bounds!.height).toBeGreaterThanOrEqual(44)
-    expect(bounds!.height).toBeLessThanOrEqual(60)
+    // 44px avatar + 20px row padding + 1px divider.
+    expect(bounds!.height).toBeLessThanOrEqual(66)
     const name = await row.getByText('Alice', { exact: true }).boundingBox()
-    const service = await row.getByText('WhatsApp · Personal', { exact: true }).boundingBox()
+    // Rows show the provider logo (its alt text is the service name), not a text label.
+    const service = await row.getByRole('img', { name: 'WhatsApp', exact: true }).boundingBox()
     expect(service!.x).toBeGreaterThan(name!.x + name!.width)
     expect(Math.abs(service!.y + service!.height / 2 - name!.y - name!.height / 2)).toBeLessThan(1)
     const unreadBadge = row.getByLabel('2 unread messages', { exact: true })
@@ -58,7 +68,7 @@ for (const width of [390, 1280]) {
     expect(unread!.width).toBe(unread!.height)
     expect(Math.abs(unread!.y + unread!.height / 2 - bounds!.y - bounds!.height / 2)).toBeLessThan(1)
     await expect(row).toContainText('Firewall ready')
-    await expect(row).toContainText('WhatsApp')
+    await expect(row.getByRole('img', { name: 'WhatsApp', exact: true })).toBeVisible()
     await page.reload()
     await expectAvatars(page)
     expect(state.requests).toEqual(['mxc://test/avatar-v1'])
@@ -127,14 +137,17 @@ test('the conversation and three-dot menu share one hover and selected backgroun
   await expect.poll(() => hasUniformBackground(selected)).toBe(true)
 })
 
-test('large unread counts keep a centered circular badge', async ({ page }) => {
+test('large unread counts keep a centered pill badge', async ({ page }) => {
   const state = await mount(page)
   state.unread = 123
   await page.reload()
   const badge = page.getByRole('group', { name: 'Conversation Alice' }).getByLabel('123 unread messages', { exact: true })
   await expect(badge).toHaveText('99+')
   const bounds = await badge.boundingBox()
-  expect(bounds!.width).toBe(bounds!.height)
+  // Three characters widen the single-digit circle into a pill: fully rounded, wider than tall, ink still centered.
+  await expect(badge).toHaveCSS('border-top-left-radius', '9999px')
+  expect(bounds!.width).toBeGreaterThan(bounds!.height)
+  await expectBadgeInkCentered(badge, 'count', 'unread-99')
 })
 
 test('hidden chats stay out of the inbox and can be restored', async ({ page }) => {

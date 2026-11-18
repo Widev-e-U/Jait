@@ -1173,6 +1173,40 @@ describe("WsControlPlane", () => {
       remote.ws.close();
     });
 
+    it("authorizes paired node updates and accepts responses only from the dispatched connection", async () => {
+      const token = await createToken("update-owner");
+      const admin = openWs(port, { token });
+      const remote = openWs(port, { token });
+      await Promise.all([waitForOpen(admin.ws), waitForOpen(remote.ws)]);
+      await Promise.all([admin.collector.next(), remote.collector.next()]);
+      remote.ws.send(JSON.stringify({ type: "node.hello", payload: {
+        id: "update-node", name: "Update node", platform: "linux", role: "remote",
+        pairCredential: true, appVersion: "1.0.0", capabilities: { gatewayUpdate: true },
+      } }));
+      let message: any;
+      do { message = await remote.collector.next(); } while (message.type !== "node.credential");
+      expect(message.payload.credential).toMatch(/^jait-node-/);
+      await expect(plane.proxyNodeUpdate("update-node", "other-user", "1.0.1")).rejects.toThrow(/unavailable/);
+      await expect(plane.proxyNodeUpdate("update-node", "update-owner", "1.0.1")).rejects.toThrow(/not granted update/);
+      await grantPermissions(admin, "update-node", { update: true });
+      let settled = false;
+      const pending = plane.proxyNodeUpdate("update-node", "update-owner", "1.0.1").then(result => { settled = true; return result; });
+      do { message = await remote.collector.next(); } while (message.type !== "node.update-request");
+      expect(message.payload.version).toBe("1.0.1");
+      const requestId = message.payload.requestId;
+      admin.ws.send(JSON.stringify({ type: "node.update-response", payload: { requestId, result: { ok: true, newVersion: "9.9.9" } } }));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(settled).toBe(false);
+      remote.ws.send(JSON.stringify({ type: "node.update-response", payload: { requestId, result: { ok: true, newVersion: "1.0.1" } } }));
+      await expect(pending).resolves.toEqual({ ok: true, newVersion: "1.0.1" });
+      const disconnected = plane.proxyNodeUpdate("update-node", "update-owner", "1.0.2");
+      const rejected = expect(disconnected).rejects.toThrow(/disconnected/i);
+      do { message = await remote.collector.next(); } while (message.type !== "node.update-request");
+      remote.ws.close();
+      await rejected;
+      admin.ws.close();
+    });
+
     it("round-trips node grants through nodes.list and nodes.update-permissions", async () => {
       const token = await createToken("user-terminal-perms");
 

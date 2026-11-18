@@ -255,6 +255,18 @@ export function registerMessengerRoutes(
         });
     }
   });
+  app.post('/api/messenger/notification-avatar', async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const parsed = z.object({ roomId, eventId: z.string().min(1).max(512) }).strict().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid avatar reference.' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      return reply.type('image/jpeg').send(await messenger.notificationAvatar(user.id, parsed.data.roomId, parsed.data.eventId));
+    } catch {
+      return reply.code(404).send({ error: 'Avatar unavailable.' });
+    }
+  });
   app.post('/api/messenger/notification-image', async (request, reply) => {
     const user = await auth(request, reply);
     if (!user) return;

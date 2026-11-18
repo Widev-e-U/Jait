@@ -1505,3 +1505,10 @@ describe('inline email cards', () => {
     expect(isInlineToolCall({ callId: 'compose', tool: 'email_view', args: { action: 'compose' }, status: 'success', result: { ok: true, message: 'Draft opened' } } as ToolCallInfo)).toBe(false);
   });
 });
+
+it('renders tool reference names readably without changing other fields', () => {
+  const html = renderToStaticMarkup(createElement(StructuredDataView, { value: [{ type: 'tool_reference', tool_name: 'mcp__jait__ssh_run' }, { type: 'other', tool_name: 'raw_name' }] }))
+  expect(html).toContain('SSH Run')
+  expect(html).not.toContain('mcp__jait__ssh_run')
+  expect(html).toContain('raw_name')
+})

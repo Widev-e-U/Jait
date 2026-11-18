@@ -9,7 +9,7 @@ import { ConsentManager } from "../security/consent-manager.js";
 import { TrustEngine } from "../security/trust-engine.js";
 import type { ToolPermission } from "../security/tool-permissions.js";
 
-vi.mock("../services/system-one.js", () => ({ evaluateDecision: vi.fn(), systemOneEnabled: vi.fn() }));
+vi.mock("../services/system-one.js", () => ({ evaluateDecision: vi.fn(), systemOneEnabled: vi.fn(), rankSystemOne: vi.fn() }));
 const context: ToolContext = { sessionId: "chat", actionId: "test", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_BASE_URL: "http://model" } };
 const selected = { model: "fixture", answers: { target: { type: "choice" as const, choice: "c0", confidence: 0.95 } } };
 const snapshot = {

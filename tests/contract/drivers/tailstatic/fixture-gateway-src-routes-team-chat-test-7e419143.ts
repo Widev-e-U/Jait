@@ -10,6 +10,7 @@ import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
 import { ThreadService } from "../../../../packages/gateway/src/services/threads.js";
+import { TeamChatService } from "../../../../packages/gateway/src/services/team-chat.js";
 import { ProviderRegistry } from "../../../../packages/gateway/src/providers/registry.js";
 import { ToolRegistry } from "../../../../packages/gateway/src/tools/registry.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
@@ -56,7 +57,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_83_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_84_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -99,7 +100,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -120,8 +121,106 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
+try {
+await (async()=>{
+
+    const insertMessage = opened.sqlite.prepare("INSERT INTO team_room_messages (id, room_id, client_key, data) VALUES (?, ?, ?, ?)");
+    const insertDelivery = opened.sqlite.prepare("INSERT INTO team_room_deliveries (id, room_id, message_id, agent_id, session_id, status) VALUES (?, ?, ?, ?, ?, ?)");
+    for (let i = 0; i < 23; i++) {
+      const id = `message-${i}`;
+      insertMessage.run(id, roomId, id, JSON.stringify({ id, roomId, content: id }));
+      insertDelivery.run(`delivery-${i}`, roomId, id, "Developer", `session-${i}`, i === 0 ? "running" : "completed");
+    }
+    const getPage = async (query: string) => (await app.inject({ method: "GET", url: `/api/team-rooms/${roomId}?${query}`, headers })).json();
+    const latest = await getPage("limit=10");
+    __jait_capture(1, (latest.messages.map((m: { id: string }) => m.id)), (Array.from({ length: 10 }, (_, i) => `message-${i + 13}`)));
+    __jait_capture(2, (latest.hasMore));
+    __jait_capture(3, (latest.deliveries));
+    const middle = await getPage("limit=10&before=message-13");
+    __jait_capture(4, (middle.messages.map((m: { id: string }) => m.id)), (Array.from({ length: 10 }, (_, i) => `message-${i + 3}`)));
+    __jait_capture(5, (middle.hasMore));
+    const oldest = await getPage("limit=10&before=message-3");
+    __jait_capture(6, (oldest.messages.map((m: { id: string }) => m.id)));
+    __jait_capture(7, (oldest.hasMore));
+    __jait_capture(8, ((await snapshot()).messages));
+  
+})();
+
+} finally {
+await __jait_hook_4558();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_106_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+class TeamProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info = { id: this.id, name: "Test", description: "Test", available: true, modes: ["full-access", "supervised"] as ("full-access" | "supervised")[] };
+  beforeSend?: () => void;
+  progressContent?: string;
+  replyContent = "Work checked and ready.";
+  private events = new EventEmitter();
+  startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => ({
+    id: "provider-" + options.threadId, providerId: this.id, threadId: options.threadId,
+    status: "running", runtimeMode: options.mode, startedAt: new Date().toISOString(),
+  }));
+  sendTurn = vi.fn(async (sessionId: string, _content: string) => {
+    this.beforeSend?.();
+    setTimeout(() => {
+      if (this.progressContent) this.events.emit("event", { type: "message", sessionId, role: "assistant", content: this.progressContent });
+      if (this.replyContent) this.events.emit("event", { type: "token", sessionId, content: this.replyContent });
+      this.events.emit("event", { type: "turn.completed", sessionId });
+    }, 0);
+  });
+  stopSession = vi.fn(async () => {});
+  interruptTurn = vi.fn(async () => {});
+  checkAvailability = async () => true;
+  respondToApproval = async () => {};
+  onEvent(handler: (event: ProviderEvent) => void) {
+    this.events.on("event", handler); return () => this.events.off("event", handler);
+  }
+}
+/*__jait_scope_open__*/{
+let opened: Awaited<ReturnType<typeof openDatabase>>;
+let app: Awaited<ReturnType<typeof createServer>>;
+let users: UserService;
+let sessions: SessionService;
+let user: ReturnType<UserService["createUser"]>;
+let headers: { authorization: string };
+let provider: TeamProvider;
+let registry: ToolRegistry;
+let roomId: string;
+const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
+const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
+const __jait_hook_2989 = async () => {
+    opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
+    users = new UserService(opened.db); sessions = new SessionService(opened.db);
+    user = users.createUser("Jakob", "test-password");
+    headers = { authorization: "Bearer " + await signAuthToken(user, config.jwtSecret) };
+    const profiles = new ThreadService(opened.db);
+    for (const id of ["Scrum", "Developer", "QA"]) profiles.savePersonaAgent(user.id, personaAgentProfileSchema.parse({
+      id, name: id, persona: "Persona for " + id, role: id, reportsToId: id === "Scrum" ? null : "Scrum",
+      avatar: "Nova", providerId: "codex", model: "saved-model", requiresApproval: true, paused: false,
+      repositoryIds: [], skillIds: [], allowedTools: [], schedule: { kind: "adaptive", rules: "" },
+      notificationChannels: [], notificationEvents: [],
+    }));
+    provider = new TeamProvider();
+    const providers = new ProviderRegistry(); providers.register(provider);
+    registry = new ToolRegistry();
+    app = await createServer(config, { db: opened.db, userService: users, sessionService: sessions,
+      threadService: profiles, providerRegistry: providers, toolRegistry: registry, sessionState: new SessionStateService(opened.db) });
+    await app.ready();
+    const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
+    __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
+  };
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -139,13 +238,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_96_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_119_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -188,7 +287,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -209,8 +308,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -223,13 +322,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_104_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_127_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -272,7 +371,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -293,8 +392,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -332,13 +431,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_137_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_160_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -381,7 +480,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -402,8 +501,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -424,13 +523,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_153_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_176_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -473,7 +572,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -494,8 +593,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -517,13 +616,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_170_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_193_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -566,7 +665,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -587,8 +686,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -614,13 +713,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_191_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_214_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -663,7 +762,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -684,8 +783,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -715,13 +814,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_216_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_239_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -764,7 +863,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -785,8 +884,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -810,21 +909,29 @@ await (async()=>{
       item.agentId === "Developer" && item.sessionId !== active.sessionId && item.status === "running");
     __jait_captureType(5, (independent));
     __jait_capture(6, (provider.sendTurn.mock.calls));
+    // A hung running delivery must not prevent queued cancellation. Suppress
+    // the pump to prove the stop route itself finalizes the queued row.
+    const pump = vi.spyOn(TeamChatService.prototype, "pump").mockResolvedValue(undefined);
     const result = await app.inject({ method: "POST", url: `/api/threads/${active.sessionId}/interrupt`, headers });
     __jait_capture(7, (result.statusCode));
     await vi.waitFor(async () => __jait_capture(8, ((await snapshot()).deliveries.find((item: { id: string }) => item.id === queued.id)?.status)));
-    __jait_capture(9, ((await snapshot()).deliveries.find((item: { id: string }) => item.id === independent.id)?.status));
+    const stopped = await snapshot();
+    __jait_capture(9, (stopped.deliveries.find((item: { id: string }) => item.id === independent.id)?.status));
+    __jait_capture(10, (stopped.deliveries), (initial.deliveries.length));
+    __jait_capture(11, (stopped.messages.some((message: { id: string }) => message.id === queued.messageId)));
+    __jait_capture(12, (stopped.messages.some((message: { kind: string; parentMessageId?: string }) => message.kind === "result" && message.parentMessageId === queued.messageId)));
+    pump.mockRestore();
   
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_243_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_274_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -867,7 +974,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -888,8 +995,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -912,13 +1019,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_261_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_292_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -961,7 +1068,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -982,8 +1089,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -1000,13 +1107,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3": {
+case "tailstatic_packages_gateway_src_routes_team_chat_test_ts_304_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
@@ -1049,7 +1156,7 @@ let registry: ToolRegistry;
 let roomId: string;
 const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
 const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
-const __jait_hook_2929 = async () => {
+const __jait_hook_2989 = async () => {
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     users = new UserService(opened.db); sessions = new SessionService(opened.db);
     user = users.createUser("Jakob", "test-password");
@@ -1070,8 +1177,8 @@ const __jait_hook_2929 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_4498 = async () => { await app.close(); opened.sqlite.close(); };
-await __jait_hook_2929();
+const __jait_hook_4558 = async () => { await app.close(); opened.sqlite.close(); };
+await __jait_hook_2989();
 try {
 await (async()=>{
 
@@ -1087,7 +1194,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4498();
+await __jait_hook_4558();
 }
 }
 

@@ -17,6 +17,8 @@ export interface SystemNotificationInput extends NotificationContext {
   roomId?: string
   eventId?: string
   imageAvailable?: boolean
+  /** Bounded, locally resolved sender image. */
+  iconUrl?: string
   /** Locally produced events have no gateway-selected native notification owner. */
   independentOfAttention?: boolean
 }
@@ -91,6 +93,7 @@ async function notifyWithBrowserApi(
     link?: string
     markReadLink?: string
     scope?: string
+    iconUrl?: string
   },
 ): Promise<void> {
   if (!NotificationCtor) return
@@ -101,7 +104,7 @@ async function notifyWithBrowserApi(
   const options: NotificationOptions = {
     body: notif.body,
     tag: notif.id,
-    icon: NOTIFICATION_ICON,
+    icon: notif.iconUrl || NOTIFICATION_ICON,
     badge: NOTIFICATION_BADGE,
   }
 
@@ -207,6 +210,7 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
   const markReadLink = parseMessengerReadLink(notif.markReadLink) ? safeNotificationLink(notif.markReadLink) : null
   const nativeInput = {
     id: notif.id, title: notif.title, body: notif.body,
+    ...(notif.iconUrl ? { iconUrl: notif.iconUrl } : {}),
     ...(markReadLink ? { markReadLink } : {}),
     ...(link ? { link, scope: getApiUrl() || window.location?.origin || '' } : {}),
     ...(notif.replaceId ? { replaceId: notif.replaceId } : {}),

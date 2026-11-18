@@ -15,11 +15,11 @@ test('notification deck expands and collapses and updates when dismissed', async
   await expect(cards.first()).toHaveAttribute('data-expanded', 'true')
   await expect.poll(async () => cards.evaluateAll(elements => {
     const boxes = elements.map(element => element.getBoundingClientRect())
-    return boxes.map((box, index) => ({
-      height: Math.round(box.height),
-      gap: index ? Math.round(box.top - boxes[index - 1].bottom) : 0,
-    }))
-  })).toEqual([{ height: 110, gap: 0 }, { height: 110, gap: 8 }, { height: 110, gap: 8 }])
+    const actionIndex = elements.findIndex(element => element.textContent?.includes('First notification'))
+    const actionHeight = boxes[actionIndex].height
+    return boxes.every((box, index) => index === actionIndex || box.height < actionHeight)
+      && boxes.every((box, index) => index === 0 || Math.abs(box.top - boxes[index - 1].bottom - 8) < 1)
+  })).toBe(true)
   const actions = cards.filter({ hasText: 'First notification' })
   const cancelBox = await actions.getByRole('button', { name: 'Mark as read' }).boundingBox()
   const openBox = await actions.getByRole('button', { name: 'Open' }).boundingBox()

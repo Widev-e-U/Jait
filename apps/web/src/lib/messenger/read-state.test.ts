@@ -48,3 +48,23 @@ describe('public Matrix read evidence', () => {
     expect(read().get('$b')?.[0]?.timestamp).toBeNull()
   })
 })
+
+describe('bridge status evidence', () => {
+  it('trusts only the bridge bot and preserves delivery', async () => {
+    const { roomBridgeStatuses } = await import('./read-state')
+    const message = { getId: () => '$a', getSender: () => '@me:server', getType: () => 'm.room.message', status: null }
+    const status = (sender: string, state: string, delivered?: string[]) => ({
+      getId: () => '$status', getSender: () => sender, getType: () => 'com.beeper.message_send_status', status: null,
+      getContent: () => ({ 'm.relates_to': { rel_type: 'm.reference', event_id: '$a' }, status: state, delivered_to_users: delivered }),
+    })
+    const events = [message, status('@intruder:server', 'SUCCESS', ['@bob:server'])]
+    const room = { getLiveTimeline: () => ({ getEvents: () => events }), currentState: { getStateEvents: () => [{ getContent: () => ({ bridgebot: '@bot:server' }) }] }, getReadReceiptForUserId: () => null } as unknown as Room
+    expect(roomBridgeStatuses(room, '@me:server').size).toBe(0)
+    events.push(status('@bot:server', 'SUCCESS'))
+    expect(roomBridgeStatuses(room, '@me:server').get('$a')).toBe('sent')
+    events.push(status('@bot:server', 'SUCCESS', ['@bob:server']))
+    expect(roomBridgeStatuses(room, '@me:server').get('$a')).toBe('delivered')
+    events.push(status('@bot:server', 'SUCCESS'), status('@bot:server', 'PENDING'))
+    expect(roomBridgeStatuses(room, '@me:server').get('$a')).toBe('delivered')
+  })
+})

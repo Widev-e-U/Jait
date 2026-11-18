@@ -239,14 +239,33 @@ pub async fn desktop_ipc(
             let payload = if args.first().is_some_and(Value::is_object) { args[0].clone() }
                 else { json!({"title": args.first(), "body": args.get(1), "urgency": args.get(2)}) };
             #[cfg(windows)]
-            crate::notification::show(&app.config().identifier, &payload)?;
+            {
+                use tauri::Manager;
+                let mut payload = payload;
+                // Ignore any renderer-provided local path; only our cache may supply one.
+                if let Some(object) = payload.as_object_mut() { object.remove("localIconUrl"); }
+                let icon = payload.get("iconUrl").and_then(Value::as_str)
+                    .and_then(|data| app.path().app_cache_dir().ok().and_then(|dir| crate::notification::cache_avatar(data, &dir.join("notification-avatars"))));
+                if let Some(icon) = icon { payload["localIconUrl"] = json!(icon); }
+                crate::notification::show(&app.config().identifier, &payload)?;
+            }
             #[cfg(not(windows))]
             {
                 use tauri_plugin_notification::NotificationExt;
-                app.notification().builder()
+                let mut builder = app.notification().builder()
                     .title(payload["title"].as_str().unwrap_or("Jait"))
-                    .body(payload["body"].as_str().unwrap_or_default())
-                    .show().map_err(|e| e.to_string())?;
+                    .body(payload["body"].as_str().unwrap_or_default());
+                // The Linux notification protocol accepts a local path as the icon.
+                // macOS's notify-rust backend does not use this icon field.
+                #[cfg(target_os = "linux")]
+                if let Some(icon) = payload.get("iconUrl").and_then(Value::as_str)
+                    .and_then(|data| app.path().app_cache_dir().ok().and_then(|dir| crate::notification::cache_avatar(data, &dir.join("notification-avatars"))))
+                    .and_then(|uri| url::Url::parse(&uri).ok()?.to_file_path().ok())
+                    .and_then(|path| path.to_str().map(str::to_owned))
+                {
+                    builder = builder.icon(icon);
+                }
+                builder.show().map_err(|e| e.to_string())?;
             }
             return Ok(json!({"ok": true}));
         }

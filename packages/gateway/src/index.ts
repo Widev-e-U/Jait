@@ -264,6 +264,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
+  providerUsageService.attachNotifications(notifications);
 
   // Reclaim disk jait allocates but never frees. The notify hook matters: when
   // scratch lives in a shared sticky temp root, the entries may belong to
@@ -1577,6 +1578,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   let primaryLink: PrimaryLink | null = null;
   if (config.primaryGateway) {
     primaryLink = new PrimaryLink({
+      updatePort: config.port,
       primaryGateway: config.primaryGateway,
       primaryToken: config.primaryToken || undefined,
       nodeName: config.nodeName || undefined,

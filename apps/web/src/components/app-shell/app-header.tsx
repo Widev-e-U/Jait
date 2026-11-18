@@ -117,6 +117,12 @@ export function AppHeader(props: AppHeaderProps) {
 
   const sidebarOwnsNavigation = !isMobile
 
+  // The agent control is null until auth resolves (App mounts it only for a
+  // signed-in user). Hold its mobile slot while that check runs, so the logo and
+  // voice controls don't re-lay out when the control mounts.
+  const agentSlotLoading = Boolean(isMobile) && !agentControl && Boolean(isAuthLoading)
+  const agentSlotReserved = Boolean(isMobile) && (Boolean(agentControl) || Boolean(isAuthLoading))
+
   // Linux uses native window-manager decorations. Besides matching KDE/GNOME
   // conventions, this avoids WebKitGTK/X11 swallowing clicks on controls that
   // are nested below a `data-tauri-drag-region` ancestor.
@@ -145,11 +151,11 @@ export function AppHeader(props: AppHeaderProps) {
           {/* Left: Logo + mobile mic */}
           <div className={`flex items-center shrink-0 ${isMobile ? 'gap-0 h-10' : 'gap-1'}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <span className={isMobile
-              ? `ml-2 h-10 w-5 shrink-0 items-center justify-center ${agentControl ? 'hidden min-[470px]:flex' : 'flex'}`
+              ? `ml-2 h-10 w-5 shrink-0 items-center justify-center ${agentSlotReserved ? 'hidden min-[470px]:flex' : 'flex'}`
               : 'inline-flex shrink-0'}>
               <JaitIcon size={20} />
             </span>
-            <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} />
+            <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} layoutPending={agentSlotLoading} />
             {isMobile && agentControl}
           </div>
 

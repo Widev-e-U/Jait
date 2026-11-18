@@ -87,7 +87,7 @@ fn limit_normalization_matches_route_contract() {
     // The candidate window is always wider than the requested limit and bounded.
     for limit in [1, 20, 200] {
         let window = candidate_limit(limit);
-        assert!(window >= 500 && window <= 2000, "window {window}");
+        assert!((500..=2000).contains(&window), "window {window}");
         assert!(window >= limit);
     }
     assert_eq!(candidate_limit(usize::MAX), 2000);

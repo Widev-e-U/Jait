@@ -17,6 +17,7 @@ import type { OpenCodeGoUsage } from "./subscription-usage-fetchers.js";
 import { and, eq } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { providerUsage } from "../db/schema.js";
+import type { NotificationService } from "./notifications.js";
 import type { CodexRateLimitResetCredits, CodexRateLimitsResponse, OllamaUsageResponse } from "./provider-quota-fetchers.js";
 import { isOllamaQuotaUsageResponse } from "./provider-quota-fetchers.js";
 import { deriveOllamaResetWindow, parseOllamaResetSource, type OllamaResetSource } from "./provider-reset-windows.js";
@@ -66,8 +67,34 @@ export interface ProviderUsageSnapshot {
 
 const WARNING_THRESHOLD = 0.9;
 
+function labelForRateLimitType(type: string): string {
+  switch (type) {
+    case "five_hour":
+      return "session limit";
+    case "seven_day":
+      return "weekly limit";
+    case "seven_day_opus":
+      return "Opus weekly limit";
+    case "seven_day_sonnet":
+      return "Sonnet weekly limit";
+    case "overage":
+      return "extra usage";
+    default:
+      return type;
+  }
+}
+
 export class ProviderUsageService {
   constructor(private readonly db: JaitDB) {}
+
+  private notifications: NotificationService | undefined;
+  /** Tracks which (accountId, rateLimitType) pairs already crossed the warning threshold, to avoid re-notifying on every event until it resets. */
+  private readonly warned = new Set<string>();
+
+  attachNotifications(notifications: NotificationService): void {
+    this.notifications = notifications;
+  }
+
 
   recordClaudeRateLimit(accountId: string, providerType: string, info: ClaudeRateLimitInfo): void {
     // Claude reports every window's utilization in unifiedWindows; the top-level
@@ -122,6 +149,17 @@ export class ProviderUsageService {
         .run();
     } else {
       this.db.insert(providerUsage).values(row).run();
+    }
+
+    const warnKey = `${accountId}:${rateLimitType}`;
+    const isNearLimit = info.status === "allowed_warning" || info.status === "rejected" || (utilization !== null && utilization >= WARNING_THRESHOLD);
+    if (isNearLimit && !this.warned.has(warnKey)) {
+      this.warned.add(warnKey);
+      const label = labelForRateLimitType(rateLimitType);
+      const detail = utilization !== null ? `at ${Math.round(utilization * 100)}%` : "near its limit";
+      this.notifications?.warning("Approaching usage limit", `Claude Code's ${label} is ${detail}.`, "/settings?tab=usage");
+    } else if (!isNearLimit && this.warned.has(warnKey)) {
+      this.warned.delete(warnKey);
     }
   }
 

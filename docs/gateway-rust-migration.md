@@ -1,5 +1,32 @@
 # Gateway migration to Rust
 
+## Direct tool execution and remote project authority — 2026-11-16
+
+The Rust direct tool endpoint, MCP tool execution, and chat and thread turn admission refuse execution if the owned session's project
+or any owned ancestor names a remote node, or if its ancestry is missing, cyclic,
+or exceeds 64 projects. This fails closed even when the request omits `nodeId`
+or names `gateway`: a remote project path may also exist on the gateway host.
+The TypeScript route selects remote execution from the request `nodeId`; clients
+must supply the correct node when using it. Rust remote tool execution remains
+unavailable, and this check does not establish equivalent protection in other
+agent execution paths or against concurrent changes to project authority after turn admission.
+The shared local tool dispatcher also rechecks the active owned session, its
+project ancestry, and its resolved root after consent and before dispatch, including
+when a session move clears its recorded root. This covers direct, MCP, and
+gateway-managed chat tools. While an admitted local effect runs, the dispatcher
+rechecks the same authority every 500 ms and cancels only that effect when the check
+fails; the caller receives `ok: false`. The chat `terminal.run` host observes that
+cancellation and kills its shell's process group on cancel, timeout, or failure, so a
+cancelled or revoked command no longer runs to its own timeout. `binary_tool_policy`
+covers a revoked running command through the composed binary. Remaining gaps: a
+revoked effect can run for up to one 500 ms recheck period; file operations already in
+a blocking call finish; session moves are not serialized with running turns (the Node
+move route behaves the same way); and ACP providers perform effects independently of
+this dispatcher. ACP subprocess teardown is the ACP provider's own process-group
+handling, which this step did not re-verify. Execution authority is therefore not atomic.
+`binary_tool_policy` exercises a same-path remote project and a remote ancestor
+through the composed binary, including MCP tool execution and chat and thread turn admission. Existing local direct execution remains covered.
+
 ## Direct tool execution policy compatibility — 2026-11-16
 
 The authenticated Rust `/api/tools/execute` path reads the caller's current
@@ -15,6 +42,24 @@ binary. `binary_agent_tool_policy` checks that an agent-disabled tool is also
 denied to the direct API and succeeds again after re-enabling. These tests do not
 establish compatibility for all external clients or remote-node execution.
 
+
+## Team chat stop compatibility decision — 2026-11-16
+
+A user stop (`POST /api/threads/:id/interrupt`) that lands while a team-chat turn
+is in flight now finishes that delivery as `interrupted` with the error
+`Thread was stopped by user.` when the provider then reports the aborted turn as
+a failure. It posts no `blocked` message and queues no manager recovery review.
+Before, the abort surfaced as a failed delivery, which read the user's stop back
+as an agent failure and escalated it to the manager. The status and silence match
+the existing user-halt branch (`Autonomous work halted by user.`), so no new
+delivery state is introduced. Gateway restart recovery is unchanged: a thread with
+pending recovery still resumes its queued work. The change is TypeScript-only, and
+any Rust port of team-chat delivery must adopt the same rule before claiming it.
+Client evidence is limited to the gateway service test
+`finishes an in-flight turn that a stop aborts without a blocker or manager recovery`
+in `packages/gateway/src/services/team-chat-stopped-thread.test.ts`, which fails on
+HEAD (`expected 'failed' to be 'interrupted'`) and passes with the change. No web
+or mobile client test covers this path yet.
 
 ## MCP tool discovery compatibility decision — 2026-11-15
 

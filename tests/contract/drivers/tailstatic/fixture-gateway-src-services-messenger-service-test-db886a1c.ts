@@ -1,5 +1,16 @@
 // Translated fixture from packages/gateway/src/services/messenger-service.test.ts; expected literals are in tail_static.rs.
 import { fileURLToPath } from 'node:url';
+import { rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+
+import { MessengerBridge } from "../../../../packages/gateway/src/services/messenger-bridge.js";
+import { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
+import { FileSystemSurfaceFactory } from "../../../../packages/gateway/src/surfaces/filesystem.js";
+import { createMessengerTools } from "../../../../packages/gateway/src/tools/messenger-tools.js";
+import { createImageViewTool } from "../../../../packages/gateway/src/tools/file-tools.js";
+import { mcpContentForToolResult } from "../../../../packages/gateway/src/routes/mcp-server.js";
+import { mkdirSync, readFileSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { MessengerService, messengerHomeserver } from "../../../../packages/gateway/src/services/messenger-service.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
@@ -42,9 +53,9 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_18_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_29_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -54,7 +65,190 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const directory = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-access-${randomUUID()}`, __jait_original_url));
+    try {
+      const service = new MessengerService('test-secret', directory);
+      const connection = (service as any).connection('owner');
+      connection.session = { userId: '@alice:test' };
+      await connection.command({ action: 'assistantAccess', enabled: true });
+      const restarted = new MessengerService('test-secret', directory);
+      const restored = (restarted as any).connection('owner');
+      restored.start = vi.fn(async (session: unknown) => { restored.session = session; });
+      await restarted.resume('owner');
+      __jait_capture(0, (restored.assistantAccess));
+      await restored.command({ action: 'assistantAccess', enabled: true });
+      __jait_capture(1, (restored.assistantAccess));
+      const next = new MessengerService('test-secret', directory);
+      const nextConnection = (next as any).connection('owner');
+      nextConnection.start = vi.fn(async (session: unknown) => { nextConnection.session = session; });
+      await next.resume('owner');
+      __jait_capture(2, (nextConnection.assistantAccess));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_55_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, c, room, message } = setup();
+    const sharp = (await import(Bun.resolveSync("sharp", __jait_original_dir))).default;
+    const source = await sharp({ create: { width: 600, height: 400, channels: 3, background: '#c46422' } }).png().toBuffer();
+    c.client.doRequest.mockResolvedValue(source);
+    room.events.push(message('$photo', '@bob:test', { body: 'photo.png', msgtype: 'm.image', url: 'mxc://test/photo', info: { mimetype: 'image/png', size: source.length } } as any));
+    const preview = await service.notificationImage('test', '!room:test', '$photo');
+    __jait_capture(0, (preview.length), (256 * 1024));
+    __jait_capture(1, (await sharp(preview).metadata()));
+    await __jait_rejected(2, service.notificationImage('other', '!room:test', '$photo'));
+    await __jait_rejected(3, service.notificationImage('test', '!room:test', '$one'));
+    (room.summary as any).hidden = true;
+    await __jait_rejected(4, service.notificationImage('test', '!room:test', '$photo'));
+    (room.summary as any).hidden = false;
+    room.summary.membership = 'leave';
+    await __jait_rejected(5, service.notificationImage('test', '!room:test', '$photo'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_75_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    try {
+      const { c, room } = setup();
+      room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob' } }] as any;
+      const update = (user_ids: string[]) => c.sync({ rooms: { join: { '!room:test': { ephemeral: { events: [{ type: 'm.typing', content: { user_ids } }] }, timeline: { events: [] } } } } });
+      await update(['@alice:test', '@bob:test']);
+      __jait_capture(0, (c.snapshot('!room:test').typing));
+      await update([]);
+      __jait_capture(1, (c.snapshot('!room:test').typing));
+      await update(['@bob:test']);
+      vi.advanceTimersByTime(15001);
+      __jait_capture(2, (c.snapshot('!room:test').typing));
+    } finally { vi.useRealTimers(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    try {
+      const { c, room } = setup();
+      const notify = vi.fn();
+      c.incoming = () => notify;
+      room.summary = { ...room.summary, name: 'Teams bridge', service: 'Teams' } as any;
+      room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob' } }] as any;
+      const event = { event_id: '$direct', sender: '@bob:test', type: 'm.room.message', origin_server_ts: Date.now(), content: { body: 'Hello' } };
+      (room as any).peer = { userId: '@bob:test' };
+      c.announce(room, event);
+      await vi.advanceTimersByTimeAsync(10_000);
+      __jait_capture(0, (notify.mock.calls));
+      delete (room as any).peer;
+      room.summary.name = 'Team-Chat';
+      c.announce(room, { ...event, event_id: '$group', origin_server_ts: Date.now() });
+      await vi.advanceTimersByTimeAsync(10_000);
+      __jait_capture(1, (notify.mock.calls));
+    } finally { vi.useRealTimers(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_112_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -75,9 +269,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_24_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_118_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -87,7 +281,78 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c, room, message } = setup();
+    room.states = [
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', avatar_url: 'mxc://test/bob' } },
+      { type: 'm.room.member', state_key: '@eve:test', content: { displayname: 'Eve', avatar_url: 'https://example.test/photo' } },
+    ] as any;
+    room.events = [message('$bob', '@bob:test'), message('$eve', '@eve:test')];
+    const messages = c.messages('!room:test');
+    __jait_capture(0, (messages[0]));
+    __jait_capture(1, (messages[1]));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_129_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c, room, message } = setup();
+    room.events.push({ ...message('$reply'), content: { body: 'reply', 'm.relates_to': { 'm.in_reply_to': { event_id: '$one' } } } });
+    room.events.push({ event_id: '$edit', type: 'm.room.message', sender: room.events[0].sender, content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { body: 'updated' } } } as any);
+    __jait_capture(0, (c.messages('!room:test')[1].replyTo), ({ id: '$one', sender: room.events[0].sender, body: 'updated' }));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_135_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -109,9 +374,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_31_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_142_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -121,7 +386,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -143,9 +408,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_38_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_149_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -155,7 +420,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -179,9 +444,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_47_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_158_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -191,7 +456,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -215,9 +480,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_56_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_167_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -227,7 +492,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -254,9 +519,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_68_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -266,7 +531,56 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c, room } = setup();
+    room.states = [{ type: 'm.bridge', state_key: 'teams', content: { bridgebot: '@teamsbot:test' } }] as any;
+    room.receipts = { '$one': { '@teamsbot:test': { ts: 123 } } } as any;
+    __jait_capture(0, (c.messages('!room:test')[0]));
+    room.receipts = {};
+    const status = (id: string, sender: string, state: string, delivered?: string[]) => ({
+      event_id: id, type: 'com.beeper.message_send_status', sender,
+      content: { 'm.relates_to': { rel_type: 'm.reference', event_id: '$one' }, status: state, ...(delivered ? { delivered_to_users: delivered } : {}) },
+    });
+    const sync = (event: any) => c.sync({ rooms: { join: { '!room:test': { timeline: { events: [event] } } } } });
+    await sync(status('$forged', '@other:test', 'SUCCESS', ['@bob:test']));
+    __jait_captureType(1, (c.messages('!room:test')[0].bridgeStatus));
+    await sync(status('$sent', '@teamsbot:test', 'SUCCESS'));
+    __jait_capture(2, (c.messages('!room:test')[0].bridgeStatus));
+    await sync(status('$empty', '@teamsbot:test', 'SUCCESS', []));
+    __jait_capture(3, (c.messages('!room:test')[0].bridgeStatus));
+    await sync(status('$delivered', '@teamsbot:test', 'SUCCESS', ['@bob:test']));
+    __jait_capture(4, (c.messages('!room:test')[0].bridgeStatus));
+    await sync(status('$failed', '@teamsbot:test', 'FAIL_PERMANENT'));
+    __jait_capture(5, (c.messages('!room:test')[0].bridgeStatus));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_201_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -290,9 +604,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_77_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_210_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -302,7 +616,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -324,9 +638,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_220_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -336,7 +650,84 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    try {
+      const { c } = setup();
+      c.save = vi.fn();
+      c.client.setPresenceStatus = vi.fn().mockResolvedValue(undefined);
+      await c.setOwnPresence('online', true);
+      __jait_capture(0, (c.save.mock.calls));
+      await vi.advanceTimersByTimeAsync(45_000);
+      __jait_capture(1, (c.client.setPresenceStatus.mock.calls));
+      await c.setOwnPresence('unavailable', false);
+      await vi.advanceTimersByTimeAsync(45_000);
+      __jait_capture(2, (c.client.setPresenceStatus.mock.calls));
+    } finally { vi.useRealTimers(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_235_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    c.save = vi.fn();
+    c.client.setPresenceStatus = vi.fn().mockRejectedValue(new Error('unavailable'));
+    await __jait_rejected(0, c.setOwnPresence('online', true));
+    __jait_capture(1, (c.save.mock.calls));
+    __jait_capture(2, (c.ownPresence.keep));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_246_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -356,9 +747,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -368,7 +759,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -387,9 +778,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_257_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -399,7 +790,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -418,9 +809,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -430,7 +821,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -448,9 +839,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_266_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -460,7 +851,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -481,9 +872,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_273_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -493,7 +884,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 
@@ -512,9 +903,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each0": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -524,7 +915,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -570,9 +961,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each1": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -582,7 +973,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -628,9 +1019,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_314_3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -640,7 +1031,42 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'f847f7fa-2799-4dde-b3d1-f73019ebc1f0' } },
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Alice', membership: 'join' } },
+    ] }, timeline: { events: [] } } } } });
+    __jait_capture(0, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test').name));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each0": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -669,9 +1095,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each1": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -681,7 +1107,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -710,9 +1136,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each2": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -722,7 +1148,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -751,9 +1177,9 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each3": {
 
-
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
   const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
   const c = (service as any).connection('test');
@@ -763,7 +1189,7 @@ function setup() {
   const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
   const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
   c.rooms.set('!room:test', room);
-  return { c, room, message };
+  return { service, c, room, message };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -787,6 +1213,168 @@ await (async()=>{
 } finally {
 
 }
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_337_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, c, room, message } = setup();
+    c.assistantAccess = true;
+    const original = Buffer.from('fixture image bytes');
+    const encrypted = await encryptAttachment(Uint8Array.from(original).buffer);
+    c.client.doRequest.mockResolvedValue(Buffer.from(encrypted.data));
+    room.events.push(message('$picture', '@bob:test', {
+      msgtype: 'm.image', body: 'photo', filename: '../../escape.png',
+      file: { ...encrypted.info, url: 'mxc://test/media-id' },
+      info: { mimetype: 'image/png', size: original.length },
+    }) as any);
+
+    const listed = await service.assistant('test', { action: 'messages', roomId: '!room:test' });
+    __jait_capture(0, (listed.ok));
+    const text = JSON.stringify(listed);
+    __jait_capture(1, (text));
+    __jait_capture(2, (text));
+    __jait_capture(3, (text));
+    __jait_capture(4, (text), (encrypted.info.key.k));
+    const attachmentList = await service.assistant('test', { action: 'messages', roomId: '!room:test', attachmentsOnly: true });
+    __jait_capture(5, ((attachmentList.data as any).messages.map((item: any) => item.id)));
+    const searched = await service.assistant('test', { action: 'search', roomId: '!room:test', query: 'escape.png' });
+    __jait_capture(6, (JSON.stringify(searched)));
+    __jait_capture(7, (JSON.stringify(searched)), (encrypted.info.key.k));
+
+    const bridge = new MessengerBridge();
+    bridge.setGatewayHandler((owner, cmd, signal) => service.assistant(owner, cmd, signal));
+    const registry = new SurfaceRegistry();
+    registry.register(new FileSystemSurfaceFactory());
+    const root = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-test-${randomUUID()}`, __jait_original_url));
+    mkdirSync(root, { recursive: true });
+    const context = { userId: 'test', sessionId: 'attachment-session', actionId: 'a', projectRoot: root, requestedBy: 'test' };
+    try {
+      const tool = createMessengerTools(bridge, registry).find(t => t.name === 'messenger.attachment')!;
+      const result = await tool.execute({ roomId: '!room:test', eventId: '$picture' }, context);
+      __jait_capture(8, (result.ok));
+      const data = result.data as { path: string; size: number };
+      __jait_capture(9, (data.path.startsWith(join(root, '.jait/artifacts/messenger') + '/')));
+      __jait_capture(10, (readFileSync(data.path)), (original));
+      __jait_capture(11, (JSON.stringify(result)), (encrypted.info.key.k));
+      __jait_capture(12, (JSON.stringify(result)), (original.toString('base64')));
+      const viewed = await createImageViewTool(registry).execute({ path: data.path }, context);
+      const content = mcpContentForToolResult(viewed, context, 'image.view');
+      __jait_capture(13, (content), ({ type: 'image', data: original.toString('base64'), mimeType: 'image/png' }));
+      __jait_capture(14, (JSON.stringify(content[0])), (original.toString('base64')));
+      __jait_capture(15, (JSON.stringify(viewed)));
+      __jait_capture(16, (c.client.doRequest.mock.calls));
+    } finally {
+      await registry.stopAll('test');
+      rmSync(root, { recursive: true, force: true });
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_390_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, c, room, message } = setup();
+    room.events.push(message('$large', '@bob:test', { msgtype: 'm.file', body: 'large', url: 'mxc://test/id', info: { size: 21 * 1024 * 1024 } }) as any);
+    __jait_capture(0, ((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).ok));
+    c.assistantAccess = true;
+    __jait_capture(1, ((await service.assistant('test', { action: 'attachment', roomId: '!missing:test', eventId: '$large' })).ok));
+    __jait_capture(2, ((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$missing' })).ok));
+    __jait_capture(3, ((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).message));
+    room.summary.membership = 'leave';
+    __jait_capture(4, ((await service.assistant('test', { action: 'attachment', roomId: '!room:test', eventId: '$large' })).ok));
+    __jait_capture(5, (c.client.doRequest.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const root = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-link-test-${randomUUID()}`, __jait_original_url));
+    const outside = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-link-outside-${randomUUID()}`, __jait_original_url));
+    mkdirSync(root, { recursive: true }); mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, join(root, '.jait'), 'dir');
+    const registry = new SurfaceRegistry(); registry.register(new FileSystemSurfaceFactory());
+    const bridge = new MessengerBridge();
+    bridge.setGatewayHandler(async () => ({ ok: true, message: 'loaded', data: { name: 'x.png', mime: 'image/png', image: true, size: 1, base64: 'eA==' } }));
+    try {
+      const tool = createMessengerTools(bridge, registry).find(t => t.name === 'messenger.attachment')!;
+      const result = await tool.execute({ roomId: '!room:test', eventId: '$picture' }, { userId: 'test', sessionId: 'symlink-session', actionId: 'a', projectRoot: root, requestedBy: 'test' });
+      __jait_capture(0, (result.ok));
+    } finally {
+      await registry.stopAll('test');
+      rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true });
+    }
+  
+})();
+
+} finally {
+
 }
 }
 

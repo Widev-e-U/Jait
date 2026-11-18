@@ -99,6 +99,16 @@ describe('user message segment serialization', () => {
     ])
   })
 
+  it('keeps a zero-byte file through normalization and the clipboard payload', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'text', text: 'see ' },
+      { type: 'attachment', name: 'empty.txt', mimeType: 'text/plain', data: '' },
+    ]
+
+    expect(normalizeUserMessageSegments(segments)).toEqual(segments)
+    expect(parseUserMessageClipboardPayload(serializeUserMessageSegmentsForClipboard(segments)!)).toEqual(segments)
+  })
+
   it('round-trips chat references through clipboard and markdown', () => {
     const segments: UserMessageSegment[] = [
       { type: 'chat', sessionId: 'sess-abc', name: 'Gateway refactor' },

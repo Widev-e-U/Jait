@@ -61,6 +61,11 @@ import { useTerminalLayout, type TerminalLayoutState } from '@/hooks/useTerminal
 import { useChatPanelMeasure } from '@/hooks/useChatPanelMeasure'
 import { useDesktopWindow } from '@/hooks/useDesktopWindow'
 import { useInputDraft } from '@/hooks/useInputDraft'
+import {
+  getChatComposerDraftKey,
+  resolveChatComposerDraftOnEnter,
+  type ChatComposerDraft,
+} from '@/lib/chat-composer-draft'
 import { useLaunchQueueAttachments } from '@/hooks/useLaunchQueueAttachments'
 import { useManagerAutomationState } from '@/hooks/useManagerAutomationState'
 import { usePanelControllers } from '@/hooks/usePanelControllers'
@@ -73,6 +78,7 @@ import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useSkills } from '@/hooks/useSkills'
 import { useProjects, type ProjectSession } from '@/hooks/useProjects'
+import { UnreadChatCountContext, useUnreadChatCount } from '@/hooks/useUnreadChatCount'
 import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useBackendState } from '@/hooks/useBackendState'
@@ -527,9 +533,11 @@ function App() {
   } = useUpdateChecker({ token, isDesktop, appPlatform, apiUrl: API_URL })
 
   const refreshActiveSessionRef = useRef<() => Promise<void>>(async () => {})
+  const refreshUnreadChatsRef = useRef<() => void>(() => {})
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
     if (connected) {
       void refreshActiveSessionRef.current()
+      refreshUnreadChatsRef.current()
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
       // Re-hydrate the open thread — activities are fetched once per selection and
@@ -544,6 +552,8 @@ function App() {
   }, [handleConnectionRestart],)
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
+  const { count: unreadChatCount, refresh: refreshUnreadChats, scheduleRefresh: scheduleUnreadChatsRefresh } = useUnreadChatCount(token, onLoginRequired)
+  refreshUnreadChatsRef.current = refreshUnreadChats
 
   // Fetch filesystem nodes for project node tags.
   // Re-run on connect and on fs.node-* events so the desktop's own node
@@ -613,23 +623,24 @@ function App() {
     token,
     onLoginRequired
   )
+  // Local read receipts and list mutations must also refresh the badge when the
+  // websocket is disconnected; off-page chats are covered by chat events below.
+  useEffect(() => { scheduleUnreadChatsRefresh() }, [projects, personalSessions, scheduleUnreadChatsRefresh])
   const [changingNewChatContext, setChangingNewChatContext] = useState(false)
   const changingNewChatContextRef = useRef(false)
   const lastChatProjectId = useLastChatProject(getChatCacheScope(token, API_URL), activeProjectId, changingNewChatContext || !projectsInitialLoadComplete)
-  const chatDraftsRef = useRef(new Map<string, { text: string; segments: UserMessageSegment[] | undefined }>())
+  // Each chat keeps its own composer draft. Entering a chat with none saved keeps
+  // what was being typed, the same way its attachments carry over.
+  const chatDraftsRef = useRef(new Map<string, ChatComposerDraft>())
   const draftSessionRef = useRef(activeSessionId)
   useLayoutEffect(() => {
     if (draftSessionRef.current === activeSessionId) return
-    const previous = draftSessionRef.current
-    if (!previous && activeSessionId && inputValueRef.current) {
-      draftSessionRef.current = activeSessionId
-      return
-    }
-    if (previous) chatDraftsRef.current.set(previous, { text: inputValueRef.current, segments: inputSegments })
+    const current: ChatComposerDraft = { text: inputValueRef.current, segments: inputSegments }
+    chatDraftsRef.current.set(getChatComposerDraftKey(draftSessionRef.current), current)
     draftSessionRef.current = activeSessionId
-    const draft = activeSessionId ? chatDraftsRef.current.get(activeSessionId) : undefined
-    setInputValue(draft?.text ?? '')
-    setInputSegments(draft?.segments)
+    const next = resolveChatComposerDraftOnEnter(chatDraftsRef.current.get(getChatComposerDraftKey(activeSessionId)), current)
+    setInputValue(next.text)
+    setInputSegments(next.segments)
   }, [activeSessionId, inputSegments, inputValueRef, setInputSegments, setInputValue])
   refreshActiveSessionRef.current = refreshActiveSession
   fetchProjectsRef.current = fetchProjects
@@ -2080,6 +2091,7 @@ function App() {
     onAgentHaltEvent: agentControl.applyEvent,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
       if (type.startsWith('project.') || type.startsWith('chat.')) {
+        scheduleUnreadChatsRefresh()
         handleProjectEventRef.current(type, payload)
         return
       }
@@ -2089,7 +2101,7 @@ function App() {
         refreshFsNodesRef.current()
         fetchProjectsRef.current()
       }
-    }, [automation],),
+    }, [automation, scheduleUnreadChatsRefresh],),
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((payload: FsChangesPayload) => {
       const activeSurfaceId = activeProjectRef.current?.surfaceId ?? null
@@ -5233,6 +5245,7 @@ function App() {
 
   return (
     <ScreenShareProvider value={screenShare}>
+    <UnreadChatCountContext.Provider value={unreadChatCount}>
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         {showNodePermissionsGate && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
@@ -6061,6 +6074,7 @@ function App() {
 
       {/* Voice overlay removed — voice controls are now inline in the header */}
     </TooltipProvider>
+    </UnreadChatCountContext.Provider>
     </ScreenShareProvider>
   )
 }

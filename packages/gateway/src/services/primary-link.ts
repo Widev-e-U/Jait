@@ -23,7 +23,9 @@ import { homedir, hostname, platform } from "node:os";
 import { createHash, randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { createRequire } from "node:module";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
+import { prepareUpdate, discardUpdate, launchSystemdUpdate } from "../../bin/safe-update.mjs";
 import { TerminalSurface } from "../surfaces/terminal.js";
 import type { ToolResult } from "../tools/contracts.js";
 import {
@@ -35,6 +37,7 @@ import {
 } from "./project-search.js";
 
 const execAsync = promisify(exec);
+const { version: APP_VERSION } = createRequire(import.meta.url)("../../package.json") as { version: string };
 
 /** Tail of a background command's output reported back to the gateway. */
 const BACKGROUND_MAX_OUTPUT_CHARS = 4000;
@@ -53,6 +56,8 @@ interface BrowseEntry { name: string; path: string; type: "dir" | "file" }
 export interface PrimaryLinkOptions {
   /** Primary gateway URL — http(s)://, ws(s)://, or bare host:port. */
   primaryGateway: string;
+  /** HTTP health port, absent for node-only instances. */
+  updatePort?: number;
   /** Optional bearer token (JWT) for the primary's WS auth. */
   primaryToken?: string;
   /** Display name for this node (defaults to hostname). */
@@ -315,6 +320,7 @@ export class PrimaryLink {
           role: "remote",
           pairCredential: true,
           protocolVersion: NODE_PROTOCOL_VERSION,
+          appVersion: APP_VERSION,
           capabilities: {
             providers,
             surfaces: ["filesystem", "terminal"],
@@ -322,6 +328,7 @@ export class PrimaryLink {
             screenShare: false,
             voice: false,
             preview: false,
+            gatewayUpdate: Boolean(this.opts.updatePort && process.env.INVOCATION_ID && process.env.JAIT_ALLOW_REMOTE_UPDATE === "1"),
           },
         },
       });
@@ -378,9 +385,39 @@ export class PrimaryLink {
     }
   }
 
+  private updateInProgress = false;
+
   private async handleMessage(msg: { type?: string; payload?: Record<string, unknown> }): Promise<void> {
     const payload = (msg.payload ?? {}) as Record<string, unknown>;
     switch (msg.type) {
+      case "node.update-request": {
+        const requestId = typeof payload["requestId"] === "string" ? payload["requestId"] : "";
+        const version = payload["version"];
+        if (!requestId) break;
+        try {
+          if (process.env.JAIT_ALLOW_REMOTE_UPDATE !== "1") throw new Error("Remote updates are not enabled on this node");
+          if (!this.opts.updatePort || !process.env.INVOCATION_ID) throw new Error("Web updates require a systemd-managed gateway with an HTTP health endpoint");
+          if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Invalid version");
+          if (this.updateInProgress) throw new Error("An update is already in progress");
+          this.updateInProgress = true;
+          try {
+            const stdout = await new Promise<string>((resolve, reject) => {
+              exec("npm view @jait/gateway version", { timeout: 15_000, maxBuffer: 64 * 1024 }, (error, output) => error ? reject(error) : resolve(output));
+            });
+            const current = APP_VERSION.split(".").map(Number);
+            const requested = version.split(".").map(Number);
+            const newer = requested.some((part, index) => part > (current[index] ?? 0) && requested.slice(0, index).every((value, i) => value === current[i]));
+            if (stdout.trim() !== version || !newer) throw new Error("Requested version is not the latest newer release");
+            const plan = await prepareUpdate({ version });
+            try { await launchSystemdUpdate(plan, process.env.JAIT_UNIT ?? "jait-gateway", this.opts.updatePort); }
+            catch (error) { await discardUpdate(plan); throw error; }
+            this.send({ type: "node.update-response", payload: { requestId, result: { ok: true, newVersion: plan.newVersion } } });
+          } finally { this.updateInProgress = false; }
+        } catch (error) {
+          this.send({ type: "node.update-response", payload: { requestId, error: errMsg(error) } });
+        }
+        break;
+      }
       case "fs.browse-request": {
         const requestId = String(payload["requestId"] ?? "");
         try {

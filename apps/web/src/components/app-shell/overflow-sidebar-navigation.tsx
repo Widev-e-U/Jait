@@ -87,7 +87,7 @@ export function OverflowSidebarNavigation({ label, moreLabel, items, collapsed, 
                   <span className="min-w-0 flex-1"><span className="block truncate">{item.label}</span>
                     {item.description && <span className="block text-2xs text-muted-foreground">{item.description}</span>}
                   </span>
-                  {!!item.badge && <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-2xs font-bold leading-none tabular-nums text-primary-foreground">{item.badge > 99 ? '99+' : item.badge}</span>}
+                  {!!item.badge && <span aria-label={item.badgeLabel ?? String(item.badge)} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-2xs font-bold leading-none tabular-nums text-primary-foreground">{item.badge > 99 ? '99+' : item.badge}</span>}
                 </DropdownMenuItem>
               })}
             </DropdownMenuContent>

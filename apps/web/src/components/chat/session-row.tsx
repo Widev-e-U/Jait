@@ -14,7 +14,7 @@ import type {
   MouseEventHandler,
   ReactNode,
 } from 'react'
-import { readChatLoop, type SessionWait, type SessionWaitKind } from '@jait/shared'
+import { isSessionUnread, readChatLoop, type SessionWait, type SessionWaitKind } from '@jait/shared'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { formatAgo } from '@/lib/relative-time'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -30,13 +30,7 @@ export interface SessionRowSession {
   viewedAt?: string | null
 }
 
-/** True when a session has activity newer than when the user last opened it. */
-export function isSessionUnread(session: { lastActiveAt: string; viewedAt: string | null; createdAt?: string | null }): boolean {
-  const lastActive = Date.parse(session.lastActiveAt)
-  if (!Number.isFinite(lastActive)) return false
-  if (!session.viewedAt) return !session.createdAt || lastActive > Date.parse(session.createdAt)
-  return lastActive > Date.parse(session.viewedAt)
-}
+export { isSessionUnread } from '@jait/shared'
 
 export interface SessionRowProps {
   session: SessionRowSession
@@ -125,11 +119,7 @@ export function SessionRow({
   const chatError = parseSessionChatError(session.metadata)
   const loop = readChatLoop(session.metadata)
   const waitIcon = sessionWaitIcon(wait)
-  const unread = isSessionUnread({
-    lastActiveAt: session.lastActiveAt ?? '',
-    viewedAt: session.viewedAt ?? null,
-    createdAt: session.createdAt,
-  })
+  const unread = isSessionUnread(session)
   return (
     <div
       className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${

@@ -265,7 +265,7 @@ fn continuation_selection_parity_never_borrows_account_or_cross_provider_default
         json!({"seed":account_defaults,"state":recorded_codex,"allowProviderResolvedModel":true}),
     );
     assert_eq!(payload["provider"], json!("codex"));
-    assert!(payload.get("model").map_or(true, Value::is_null));
+    assert!(payload.get("model").is_none_or(Value::is_null));
     assert_ne!(payload["model"], json!(" deepseek-v4.1-flash:cloud "));
     // ...while the builtin HTTP backend always needs one named explicitly.
     assert_eq!(

@@ -216,11 +216,15 @@ async fn scenario(mut call: Value) {
                 ),
                 "count" => json!(manager.pending_count()),
                 "enable" => {
-                    manager.enable_approve_all_for_session(step["session"].as_str().unwrap());
+                    manager
+                        .enable_approve_all_for_session(step["session"].as_str().unwrap())
+                        .expect("approve-all session setup");
                     Value::Null
                 }
                 "disable" => {
-                    manager.disable_approve_all_for_session(step["session"].as_str().unwrap());
+                    manager
+                        .disable_approve_all_for_session(step["session"].as_str().unwrap())
+                        .expect("approve-all session setup");
                     Value::Null
                 }
                 "enabled" => json!(
@@ -463,7 +467,9 @@ async fn persisted_overrides_and_audit_survive_connection_reopen() {
             store: Some(Arc::new(SqliteConsentStore { db })),
             ..Default::default()
         });
-        manager.enable_approve_all_for_session("persisted");
+        manager
+            .enable_approve_all_for_session("persisted")
+            .expect("approve-all session setup");
         let mut handle = manager
             .request_consent(serde_json::from_value(input("s", "durable")).unwrap())
             .unwrap();
@@ -480,7 +486,9 @@ async fn persisted_overrides_and_audit_survive_connection_reopen() {
         query(&db, "SELECT action_id,decision FROM consent_log"),
         json!([{"action_id":"durable","decision":"rejected"}])
     );
-    manager.disable_approve_all_for_session("persisted");
+    manager
+        .disable_approve_all_for_session("persisted")
+        .expect("approve-all session setup");
     assert_eq!(
         query(&db, "SELECT * FROM consent_session_approvals"),
         json!([])

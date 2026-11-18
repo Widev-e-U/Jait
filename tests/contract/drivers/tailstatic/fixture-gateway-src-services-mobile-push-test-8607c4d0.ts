@@ -139,6 +139,41 @@ await (async()=>{
 
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, { project_id: "test", client_email: "test@example.com", private_key: "unused" }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone", "user-a", "token-a");
+      await service.sendMessengerMessage("user-a", { roomId: "!room:test", eventId: "$photo", title: "Bob", body: "Photo", timestamp: 1234, image: true });
+      const data = JSON.parse(send.mock.calls[0]![1]!.body as string).message.data;
+      __jait_capture(0, (data));
+      __jait_capture(1, (JSON.stringify(data)));
+      __jait_capture(2, (JSON.stringify(data)));
+    } finally { sqlite.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_57_3": {
+
+
+const registrations = [
+  { deviceId: "phone", userId: "user-a", token: "token-phone" },
+  { deviceId: "watch", userId: "user-a", token: "token-watch" },
+];
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
@@ -171,7 +206,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_70_3": {
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_86_3": {
 
 
 const registrations = [
@@ -209,7 +244,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_105_3": {
 
 
 const registrations = [
@@ -236,7 +271,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_99_3": {
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_115_3": {
 
 
 const registrations = [

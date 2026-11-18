@@ -27,7 +27,9 @@ export interface SubAgentRunRequest {
   taskId: string;
   attemptId: string;
   prompt: string;
+  claims: ResourceClaims;
   timeoutMs: number;
+  recordAgentRef?: (agentRef: string) => void;
   signal: AbortSignal;
 }
 
@@ -94,8 +96,10 @@ export class SubAgentTaskExecutor implements TaskExecutor {
       taskId: input.taskId,
       attemptId: input.attemptId,
       prompt: buildTaskPrompt(input),
+      claims: input.claims,
       timeoutMs: input.timeoutSeconds * 1000,
       signal: input.signal,
+      recordAgentRef: input.recordAgentRef,
     });
     return extractReport(result.text);
   }

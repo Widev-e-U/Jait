@@ -163,6 +163,8 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
 
+  private pendingNodeUpdates = new Map<string, { clientId: string; resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
   /** Pending remote provider operation requests */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pendingProviderOps = new Map<string, {
@@ -434,7 +436,7 @@ export class WsControlPlane {
     // A paired headless node can only identify itself and answer node operations.
     if (client.pairedNodeId && !new Set(["authenticate", "node.hello", "fs.register-node", "fs.browse-response", "fs.roots-response", "fs.op-response",
         "tool.op-response", "terminal.op-response", "terminal.output", "terminal.exit", "provider.op-response", "provider.event",
-        "tool.background-complete", "tool.op-output", "ping"]).has(msg.type)) {
+        "tool.background-complete", "tool.op-output", "node.update-response", "ping"]).has(msg.type)) {
       this.denyControl(client, "NODE_SCOPE_FORBIDDEN");
       return;
     }
@@ -708,6 +710,7 @@ export class WsControlPlane {
           role: payload.role ?? "remote",
           clientId: client.id,
           protocolVersion: payload.protocolVersion ?? NODE_PROTOCOL_VERSION,
+          appVersion: typeof payload.appVersion === "string" && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(payload.appVersion) ? payload.appVersion : undefined,
           capabilities: payload.capabilities,
         });
         // Persist node identity + deny-all default grants on first-seen.
@@ -1306,6 +1309,18 @@ export class WsControlPlane {
         break;
       }
 
+      case "node.update-response": {
+        const response = msg.payload as { requestId?: string; result?: unknown; error?: string } | undefined;
+        const pending = response?.requestId ? this.pendingNodeUpdates.get(response.requestId) : undefined;
+        if (pending && pending.clientId === client.id && response?.requestId) {
+          this.pendingNodeUpdates.delete(response.requestId);
+          clearTimeout(pending.timer);
+          if (response.error) pending.reject(new Error(response.error));
+          else pending.resolve(response.result);
+        }
+        break;
+      }
+
       // ── Generic fs operation responses (stat, read, write, list) ──
       case "fs.op-response": {
         const resp = msg.payload as {
@@ -1792,6 +1807,30 @@ export class WsControlPlane {
     return this.nodeStates.getSnapshot();
   }
 
+  listUpdateNodes(userId: string) {
+    return this.nodeStates.listNodes().filter((node) => this.nodeCredentials.owner(node.id) === userId && node.capabilities.gatewayUpdate).map((node) => ({
+      id: node.id, name: node.name, appVersion: node.appVersion, online: node.lifecycle === "ready",
+      granted: this.nodePermissions.isGranted(node.id, "update"),
+    }));
+  }
+
+  proxyNodeUpdate(nodeId: string, userId: string, version: string): Promise<unknown> {
+    const node = this.nodeStates.getNode(nodeId);
+    const clientId = this.nodeStates.getClientId(nodeId);
+    const client = clientId ? this.clients.get(clientId) : undefined;
+    if (!node || !node.capabilities.gatewayUpdate || !client || client.pairedNodeId !== nodeId || this.nodeCredentials.owner(nodeId) !== userId || !this.hasAuthority(client) || client.ws.readyState !== 1) {
+      return Promise.reject(new Error("Node is unavailable or does not support updates"));
+    }
+    const denied = this.permissionDeniedError(nodeId, "update");
+    if (denied) return Promise.reject(denied);
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.pendingNodeUpdates.delete(requestId); reject(new Error("Update status is unknown: request timed out. Check the node version before retrying.")); }, 120_000);
+      this.pendingNodeUpdates.set(requestId, { clientId: client.id, resolve, reject, timer });
+      this.send(client.ws, { type: "node.update-request" as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: { requestId, version } });
+    });
+  }
+
   /**
    * Proxy a browse request to a remote filesystem node.
    * Sends a WS message to the owning client and waits for a response.
@@ -2241,6 +2280,12 @@ export class WsControlPlane {
   // notices the remote session died, wedging the chat session as "processing"
   // in the meantime. Reject those callers immediately instead.
   private rejectPendingProviderOpsForClient(clientId: string) {
+    for (const [requestId, pending] of this.pendingNodeUpdates) {
+      if (pending.clientId !== clientId) continue;
+      clearTimeout(pending.timer);
+      this.pendingNodeUpdates.delete(requestId);
+      pending.reject(new Error("Update status is unknown: node disconnected. Check the node version before retrying."));
+    }
     for (const [requestId, pending] of this.pendingProviderOps) {
       if (pending.clientId !== clientId) continue;
       clearTimeout(pending.timer);

@@ -9,7 +9,7 @@ vi.mock('./crypto', () => ({ initializeCrypto: (client: Client) => client.initRu
 vi.mock('matrix-js-sdk', () => ({
   Direction: { Backward: 'b', Forward: 'f' },
   createClient: mock.createClient,
-  ClientEvent: { Sync: 'sync', Room: 'Room' },
+  ClientEvent: { Sync: 'sync', Room: 'Room', Event: 'event' },
   SyncState: { Prepared: 'PREPARED', Syncing: 'SYNCING', Error: 'ERROR', Reconnecting: 'RECONNECTING' },
   RoomEvent: { Timeline: 'timeline', Name: 'name', MyMembership: 'membership', Receipt: 'receipt', LocalEchoUpdated: 'echo', AccountData: 'accountData' },
   MatrixEventEvent: { Decrypted: 'decrypted' },
@@ -177,7 +177,7 @@ describe('personal Matrix client lifecycle', () => {
     await store.connect(input)
     await store.enableNotifications(true)
     const client = clients.at(-1)!
-    const room = { name: 'Personal', roomId: '!room:matrix.test', getMember: () => ({ name: 'Bob' }), getJoinedMemberCount: () => 2, getLiveTimeline: () => ({ getEvents: () => [], getPaginationToken: () => null }) }
+    const room = { name: 'Personal', roomId: '!room:matrix.test', getMember: () => ({ name: 'Bob', getMxcAvatarUrl: () => undefined }), getJoinedMemberCount: () => 2, getLiveTimeline: () => ({ getEvents: () => [], getPaginationToken: () => null }) }
     const event = {
       getId: () => '$message', getRoomId: () => room.roomId, getType: () => 'm.room.message',
       isDecryptionFailure: () => false, getSender: () => '@bob:matrix.test', status: null,
@@ -187,7 +187,7 @@ describe('personal Matrix client lifecycle', () => {
     expect(mock.notify).not.toHaveBeenCalled()
     client.emit('timeline', event, room, false, false, { liveEvent: true })
     client.emit('decrypted', event)
-    expect(mock.notify).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mock.notify).toHaveBeenCalledTimes(1))
     expect(mock.notify.mock.calls[0][0]).toMatchObject({ body: 'New message', link: '/messenger?roomId=!room%3Amatrix.test' })
   })
 })
@@ -335,5 +335,39 @@ describe('read and unread controls', () => {
     store.dispose()
     await expect(read).rejects.toThrow('Cancelled')
     expect(client.setRoomReadMarkers).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('typing indicators', () => {
+  it('tracks others per room, clears on stop, expiry, and disconnect', async () => {
+    const { store } = makeStore(); await store.connect(input)
+    const client = clients.at(-1)!; const { room } = readRoom(client)
+    vi.useFakeTimers()
+    try {
+      store.selectRoom(room.roomId)
+      const typing = (userIds: string[]) => client.emit('event', { getType: () => 'm.typing', getRoomId: () => room.roomId, getContent: () => ({ user_ids: userIds }) })
+      typing(['@bob:matrix.test', '@alice:matrix.test'])
+      expect(store.getSnapshot().typing).toEqual(['Bob'])
+      store.selectRoom('!other:matrix.test')
+      expect(store.getSnapshot().typing).toEqual([])
+      store.selectRoom(room.roomId)
+      expect(store.getSnapshot().typing).toEqual(['Bob'])
+      typing([])
+      expect(store.getSnapshot().typing).toEqual([])
+      typing(['@bob:matrix.test'])
+      await vi.advanceTimersByTimeAsync(30_000)
+      typing(['@bob:matrix.test'])
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(store.getSnapshot().typing).toEqual(['Bob'])
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(store.getSnapshot().typing).toEqual([])
+      typing(['@bob:matrix.test'])
+      client.emit('sync', 'RECONNECTING')
+      expect(store.getSnapshot().typing).toEqual([])
+      typing(['@bob:matrix.test'])
+      await store.disconnect()
+      expect(store.getSnapshot().typing).toEqual([])
+    } finally { vi.useRealTimers() }
   })
 })

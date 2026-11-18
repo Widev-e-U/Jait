@@ -2,10 +2,12 @@ import { messengerNotificationPreview } from '@jait/shared';
 import type { MessengerStoreApi, MessengerLogin } from './store';
 import { getApiUrl } from '@/lib/gateway-url';
 import { getAuthToken } from '@/lib/auth-token';
-import { triggerSystemNotification } from '@/lib/system-notifications';
+import { getNotifications } from '@/lib/notification-center';
+import { revokeSystemNotification, triggerSystemNotification } from '@/lib/system-notifications';
 import { messengerReadLink } from './notification-actions';
 import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
 import { cachedBlob, clearBlobCache } from './blob-cache';
+import { notificationAvatarUrl } from './notification-avatar';
 
 /** Bridge-generated IDs are not useful as notification sender names. */
 function notificationSenderName(value?: string): string | undefined {
@@ -19,6 +21,11 @@ const LOCAL_ECHO_PREFIX = '~local:';
 
 /** How many of the newest chats are kept warm in the message cache. */
 const PREFETCH_ROOMS = 8;
+
+/** Notification center id of a room's newest message; each new message replaces it. */
+function roomNotificationId(roomId: string): string {
+  return 'matrix-room:' + roomId;
+}
 
 /** Thin authenticated view of a gateway-owned Matrix device. Disposing a view never logs Matrix out. */
 export class GatewayMessengerStore implements MessengerStoreApi {
@@ -220,6 +227,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     );
     if (this.stopped || generation !== this.requestGeneration) return;
     const snapshot: MessengerSnapshot = result.snapshot;
+    this.dismissVisibleRoomNotification();
     const key = this.preferenceKey(snapshot.session);
     const sameAccount = key !== null && key === this.notificationKey;
     const notifications = sameAccount
@@ -266,9 +274,15 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         const message = snapshot.messages.at(-1);
         const sender = notificationSenderName(room.latestSender);
         const peerName = notificationSenderName(room.peer?.name);
-        void triggerSystemNotification({
+        const senderAvatar = room.latestSenderAvatarUrl || (room.peer && (!room.latestSender || room.latestSender === room.peer.name || room.latestSender === room.peer.userId) ? room.peer.avatarUrl || room.avatarUrl : undefined);
+        void notificationAvatarUrl(senderAvatar, url => this.avatarBlob(url)).then(iconUrl => {
+          const current = this.remoteSnapshot.rooms.find(entry => entry.id === room.id);
+          if (this.stopped || !this.remoteSnapshot.notifications || !current?.unread || current.timestamp !== room.timestamp ||
+              (this.visible === room.id && document.visibilityState === 'visible' && document.hasFocus())) return;
+          return triggerSystemNotification({
+          ...(iconUrl ? { iconUrl } : {}),
           id: room.latestEventId ? 'matrix-message:' + room.latestEventId : 'matrix-room-event:' + room.id + ':' + room.timestamp,
-          replaceId: 'matrix-room:' + room.id,
+          replaceId: roomNotificationId(room.id),
           title: room.peer ? sender ?? peerName ?? room.name : room.name,
           body: messengerNotificationPreview(!room.peer && sender ? `${sender}: ${room.preview || 'New message'}` : room.preview || 'New message'),
           independentOfAttention: true,
@@ -283,6 +297,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
                 ),
               }
             : {}),
+          });
         }).catch(() => {});
       }
     }
@@ -463,6 +478,18 @@ export class GatewayMessengerStore implements MessengerStoreApi {
   }
   setVisibleRoom(id: string | null) {
     this.visible = id;
+    this.dismissVisibleRoomNotification();
+  }
+  /**
+   * Viewing a room reads it, so the room's notification leaves the center and
+   * toast. Only a focused, visible page counts as viewing; a room open in an
+   * unfocused window keeps its entry until the window is focused again.
+   */
+  private dismissVisibleRoomNotification() {
+    const roomId = this.visible;
+    if (!roomId || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    const id = roomNotificationId(roomId);
+    if (getNotifications().some(item => item.id === id)) void revokeSystemNotification(id);
   }
   setAssistantAccess(enabled: boolean) {
     void this.action({ action: 'assistantAccess', enabled }).catch(() => {});

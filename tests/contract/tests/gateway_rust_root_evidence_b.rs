@@ -2,7 +2,7 @@
 //! packaging script:
 //!
 //!   * `packages/gateway/scripts/copy-shell-integration.mjs`
-//!         -> `jait_gateway::copy_shell_integration`
+//!     -> `jait_gateway::copy_shell_integration`
 //!
 //! Assertions pin observable packaging behaviour: the emitted TypeScript module
 //! text, the write/check outcome machine, the copy order exposed through the

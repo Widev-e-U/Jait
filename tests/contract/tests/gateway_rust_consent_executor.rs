@@ -101,7 +101,9 @@ async fn native(call: &Value, work: &Path) -> Value {
     });
     *manager_slot.lock().unwrap() = Some(manager.clone());
     if call["approveAll"] == true {
-        manager.enable_approve_all_for_session("session");
+        manager
+            .enable_approve_all_for_session("session")
+            .expect("approve-all session setup");
     }
     let trust = Arc::new(Trust {
         level: call["trustLevel"].as_f64().unwrap_or(0.0),
@@ -555,7 +557,9 @@ async fn command_denials_apply_to_all_terminal_names_even_with_internal_bypass()
         for bypass in ["full-access", "scheduler", "approve-all", "trust"] {
             let manager = ConsentManager::default();
             if bypass == "approve-all" {
-                manager.enable_approve_all_for_session("session");
+                manager
+                    .enable_approve_all_for_session("session")
+                    .expect("approve-all session setup");
             }
             let trust = Arc::new(Trust {
                 level: 3.0,

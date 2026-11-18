@@ -10,46 +10,67 @@ on:
 permissions:
   contents: read
 
+# Jobs run in parallel on separate runners instead of one serial job. The
+# coverage audit runs last and reads only what the other jobs upload: each job's
+# */report.json files and the docker image id.
+#
+# Cargo caches: a Rust job saves only the target directories it compiles, after
+# trimming test and bin executables (they are relinked on every run). Incremental
+# data is off because it is rebuilt per run and grows to tens of gigabytes, past
+# the 10 GB repository cache quota. The "1.98.0" in cache keys must match the
+# toolchain pinned in .github/actions/contract-setup.
+env:
+  CARGO_INCREMENTAL: "0"
+
 jobs:
-  gateway-contracts:
+  native-lane:
+    name: Native gateway lane
     runs-on: ubuntu-latest
-    # The full contract suite is deterministic but long: setup plus the native
-    # lane, internals and reference-source mutation passes already account for
-    # ~50 minutes on a 2-core runner, and the translated-assertion and audit
-    # steps follow. A 30 minute budget killed the job mid-suite (before the
-    # source-inventory audit ran) and reported it as cancelled, which is both
-    # misleading and hides real regressions behind a timeout.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/contract-setup
+      - name: Restore Cargo target cache
+        uses: actions/cache@v4
         with:
-          node-version: "22"
-      - uses: oven-sh/setup-bun@v2
-        with:
-          # Native timezone contracts were reviewed against Bun 1.4.0 / ICU 78.3.
-          bun-version: "1.4.0"
-      - uses: dtolnay/rust-toolchain@1.98.0
-        with:
-          components: rustfmt, clippy
-      - name: Install gateway dependencies
-        run: bun install --frozen-lockfile
-      - name: Build gateway workspace dependencies
-        run: |
-          bun run --filter @jait/shared build
-          bun run --filter @jait/api-client build
-          bun run --filter @jait/screen-share build
-          bun run --filter @jait/gateway build
-      - name: Check Rust formatting and lint
-        run: |
-          bun run test:contract:fmt
-          bun run test:contract:lint
+          path: |
+            .jait/artifacts/gateway-rust-target
+            .jait/artifacts/rust-contract-target/contracts-*
+          key: rust-native-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-native-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-
       - name: Build and validate the native gateway lane
         run: |
           node packages/gateway-rust/run.mjs fmt
           node packages/gateway-rust/run.mjs clippy --all-targets -- -D warnings
           bun run build:gateway:rust
           bun run test:gateway:rust
+      - name: Trim Cargo cache
+        if: always()
+        run: |
+          find .jait/artifacts/gateway-rust-target .jait/artifacts/rust-contract-target \
+            -path '*/debug/*' -type f -executable ! -name '*.so' ! -path '*/debug/build/*' \
+            -delete 2>/dev/null || true
+          du -sh .jait/artifacts/gateway-rust-target .jait/artifacts/rust-contract-target 2>/dev/null || true
+
+  contract-suite:
+    name: TypeScript gateway contract suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/contract-setup
+      - name: Restore Cargo target cache
+        uses: actions/cache@v4
+        with:
+          path: .jait/artifacts/rust-contract-target/contracts-*
+          key: rust-suite-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-suite-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-
+      - name: Check Rust formatting and lint
+        run: |
+          bun run test:contract:fmt
+          bun run test:contract:lint
       - name: Test parity tooling and identity transport
         run: node --test tests/contract/tooling/*.test.mjs
       - name: Test contract parser and runner failure handling
@@ -58,10 +79,72 @@ jobs:
         run: bun run test:contract
       - name: Test TypeScript internals with Rust assertions
         run: bun run test:contract:internal
+      - name: Upload contract reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-reports-suite
+          path: .jait/artifacts/contracts/*/report.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Trim Cargo cache
+        if: always()
+        run: |
+          find .jait/artifacts/gateway-rust-target .jait/artifacts/rust-contract-target \
+            -path '*/debug/*' -type f -executable ! -name '*.so' ! -path '*/debug/build/*' \
+            -delete 2>/dev/null || true
+          du -sh .jait/artifacts/gateway-rust-target .jait/artifacts/rust-contract-target 2>/dev/null || true
+
+  source-review:
+    name: Reference source review
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/contract-setup
+      - name: Restore Cargo target cache
+        uses: actions/cache@v4
+        with:
+          path: .jait/artifacts/rust-contract-target/source-review-*
+          key: rust-source-${{ runner.os }}-1.98.0-${{ hashFiles('tests/source-review/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-source-${{ runner.os }}-1.98.0-${{ hashFiles('tests/source-review/Cargo.lock') }}-
       - name: Validate reference source mutations and restored behavior
         run: bun run test:contract:source
       - name: Reconcile reviewed native and reference source contracts
         run: node tests/contract/tooling/native-source-review.mjs
+      - name: Upload contract reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-reports-source
+          path: .jait/artifacts/contracts/*/report.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Trim Cargo cache
+        if: always()
+        run: |
+          find .jait/artifacts/rust-contract-target \
+            -path '*/debug/*' -type f -executable ! -name '*.so' ! -path '*/debug/build/*' \
+            -delete 2>/dev/null || true
+          du -sh .jait/artifacts/rust-contract-target 2>/dev/null || true
+
+  translated:
+    name: Translated and Docker/Chromium integrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/contract-setup
+      # Restore only: this job reuses the latest contract suite cache instead of
+      # saving a second copy of the contract target.
+      - name: Restore Cargo target cache from the contract suite
+        uses: actions/cache/restore@v4
+        with:
+          path: .jait/artifacts/rust-contract-target/contracts-*
+          key: rust-translated-${{ runner.os }}-1.98.0-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-suite-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-
       - name: Test translated assertions and record source-bound evidence
         run: bun run test:contract:translated
       - name: Prepare owned Docker and Chromium integrations
@@ -75,6 +158,38 @@ jobs:
         run: |
           node tests/contract/run.mjs translated-report --profile docker
           node tests/contract/run.mjs translated-report --profile chromium
+      - name: Upload contract reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-reports-translated
+          path: |
+            .jait/artifacts/contracts/*/report.json
+            .jait/artifacts/contracts/native-docker-image.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+  contract-audit:
+    name: Coverage audit
+    needs: [native-lane, contract-suite, source-review, translated]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/contract-setup
+      - name: Download contract reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: contract-reports-*
+          merge-multiple: true
+          path: .jait/artifacts/contracts
+      - name: Restore Cargo target cache from the contract suite
+        uses: actions/cache/restore@v4
+        with:
+          path: .jait/artifacts/rust-contract-target/contracts-*
+          key: rust-audit-${{ runner.os }}-1.98.0-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-suite-${{ runner.os }}-1.98.0-${{ hashFiles('packages/gateway-rust/Cargo.lock', 'tests/contract/Cargo.lock') }}-
       - name: Audit external interface inventory
         run: |
           node tests/contract/tooling/capture-interfaces.mjs --check
