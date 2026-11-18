@@ -1,6 +1,6 @@
 # Plan orchestration (dependency-ordered runs)
 
-Status: core implemented in `packages/gateway/src/services/orchestration/`, covered by unit and service tests. Not yet wired to HTTP routes, agent tools, the UI, startup recovery, or a real executor. See "Not yet built".
+Status: core implemented in `packages/gateway/src/services/orchestration/`, covered by unit and service tests. Restart recovery and the halt switch are wired in `server.ts`. Not yet wired to HTTP routes, agent tools, the UI, or a sub-agent runner, so no task can run yet. See "Not yet built".
 
 ## Model
 
@@ -87,8 +87,6 @@ Migration 79 (`plan_orchestration_runs`) adds three tables: `orchestration_runs`
 
 - **Runner binding.** `SubAgentTaskExecutor` builds the prompt and parses the answer, but the `SubAgentRunner` that calls the existing `agent.spawn` / ACP path is not bound. The composition root must provide it, and until then no task can run. The runner must pass only the sub-agent's final answer, never its transcript.
 - **Verification runner.** The default fails closed. Command gates must go through the existing consent and terminal path. Agent-proposed commands must never run.
-- **Startup wiring.** `recoverAfterRestart()` must run at gateway boot, before any dispatch. It is not wired yet.
-- **Halt wiring.** `stopForUser` must be registered as an `AgentControlService` stop hook.
 - **Routes, agent tools and UI** (start, status, cancel, resume, inspect).
 - **Worktree isolation** for parallel writers, and integration of finished changes.
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.

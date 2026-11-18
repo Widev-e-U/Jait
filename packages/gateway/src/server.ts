@@ -97,6 +97,8 @@ import type { SessionStateService } from "./services/session-state.js";
 import type { ProjectStateService } from "./services/project-state.js";
 import type { ThreadService } from "./services/threads.js";
 import { AgentControlService, type AgentStopResult } from "./services/agent-control.js";
+import { SubAgentTaskExecutor, unboundSubAgentRunner } from "./services/orchestration/executor.js";
+import { OrchestrationService } from "./services/orchestration/orchestrator.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
 import type { PlanService } from "./services/plans.js";
@@ -303,11 +305,12 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   // Owner-wide autonomous-execution kill switch. Created before the routes that
   // consult it so every dispatch path shares one instance (and one durable row).
-  const agentControl = deps.db
+  const agentControl: AgentControlService | undefined = deps.db
     ? new AgentControlService(deps.db, {
       stopRunning: async (userId) => {
         const stopThreads = (app as unknown as { stopUserThreads?: (id: string) => Promise<AgentStopResult> }).stopUserThreads;
-        const results = await Promise.all([stopThreads?.(userId) ?? { stopped: 0, errors: [] }, haltPersonaChatRuns(userId)]);
+        const orchestrated = orchestration?.stopForUser(userId) ?? { stopped: 0, errors: [] };
+        const results = await Promise.all([stopThreads?.(userId) ?? { stopped: 0, errors: [] }, haltPersonaChatRuns(userId), orchestrated]);
         return { stopped: results.reduce((sum, result) => sum + result.stopped, 0), errors: results.flatMap(result => result.errors) };
       },
       onChange: ({ userId, state }) => {
@@ -323,6 +326,24 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       },
     })
     : undefined;
+  // Plan orchestration shares the halt switch. Its executor stays unbound until the
+  // sub-agent runner is wired, so attempts fail closed as interrupted rather than run.
+  const orchestration: OrchestrationService | undefined = deps.db && agentControl
+    ? new OrchestrationService({
+      db: deps.db,
+      executor: new SubAgentTaskExecutor(unboundSubAgentRunner),
+      isHalted: userId => agentControl.isHalted(userId),
+    })
+    : undefined;
+  if (orchestration) {
+    // Attempts left in flight by a restart become interrupted. Nothing re-runs them.
+    try {
+      const interrupted = orchestration.recoverAfterRestart();
+      if (interrupted > 0) app.log.warn({ interrupted }, "plan attempts interrupted by restart; an operator must decide");
+    } catch (error) {
+      app.log.error({ error }, "plan orchestration recovery failed");
+    }
+  }
   if (agentControl) {
     if (deps.ws) deps.ws.getAgentControlState = userId => agentControl.getState(userId);
     registerAgentControlRoutes(app, config, { agentControl, audit: deps.audit });

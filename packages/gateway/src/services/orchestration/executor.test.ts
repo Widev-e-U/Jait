@@ -8,6 +8,7 @@ import {
   SubAgentTaskExecutor,
   type SubAgentRunner,
   type SubAgentRunRequest,
+  unboundSubAgentRunner,
 } from "./executor.js";
 import { OrchestrationService, type TaskExecutionInput, type VerificationRunner } from "./orchestrator.js";
 
@@ -214,5 +215,18 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
     expect(view.tasks[0]?.attemptCount).toBe(2);
     expect(view.tasks[0]?.lastError).toContain("invalid agent report");
     expect(runner.run).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves attempts interrupted, never passed, while no sub-agent runner is bound", async () => {
+    const service = new OrchestrationService({
+      db,
+      executor: new SubAgentTaskExecutor(unboundSubAgentRunner),
+      verifier: passingVerifier,
+    });
+    const run = service.createRun(USER, { title: "unbound", tasks: [task] });
+    await service.settle();
+    const view = service.getRun(USER, run.id);
+    expect(view.status).toBe("interrupted");
+    expect(view.tasks[0]?.lastError).toContain("no sub-agent runner is bound");
   });
 });

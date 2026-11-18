@@ -101,6 +101,14 @@ export class SubAgentTaskExecutor implements TaskExecutor {
   }
 }
 
+/**
+ * Stands in until the real sub-agent runner is bound. An attempt that reaches it
+ * fails as an unknown outcome, so nothing runs without the real path.
+ */
+export const unboundSubAgentRunner: SubAgentRunner = {
+  run: () => Promise.reject(new Error("no sub-agent runner is bound to plan orchestration")),
+};
+
 function displayKey(key: string): string {
   return key === PROJECT_ROOT_KEY ? "the whole project" : key;
 }
