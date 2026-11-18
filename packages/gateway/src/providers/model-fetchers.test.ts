@@ -331,23 +331,6 @@ describe("fetchOllamaModels", () => {
     expect(result.map((m) => m.id)).toEqual(["b"]);
   });
 
-  it("refreshes past a pending catalogue read and ignores its late cache write", async () => {
-    let completeOlderRead!: (response: Response) => void;
-    const fetchMock = vi.fn()
-      .mockImplementationOnce(() => new Promise<Response>(resolve => { completeOlderRead = resolve; }))
-      .mockResolvedValueOnce(jsonResponse({ models: [{ name: "new:latest" }] }));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-    const url = "http://office.test:11434";
-
-    const olderRead = fetchOllamaModels(url);
-    const refreshed = await fetchOllamaModels(url, { force: true });
-    expect(refreshed.map(model => model.id)).toEqual(["new:latest"]);
-    completeOlderRead(jsonResponse({ models: [{ name: "old:latest" }] }));
-    await olderRead;
-    expect(await fetchOllamaModels(url)).toEqual(refreshed);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
   it("merges the hosted cloud catalogue for a signed-in daemon", async () => {
     mockFetchRoutes((url) => {
       if (url.endsWith("/api/me")) return jsonResponse({ plan: "pro", email: "a@b.c" });

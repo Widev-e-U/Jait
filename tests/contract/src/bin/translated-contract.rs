@@ -211,6 +211,8 @@ fn docker_inventory(available: &BTreeSet<String>) -> Result<BTreeSet<String>> {
     Ok(required)
 }
 
+const CHROMIUM_CASE_COUNT: usize = 36;
+
 fn chromium_inventory(available: &BTreeSet<String>) -> Result<BTreeSet<String>> {
     let selected: BTreeSet<_> = available
         .iter()
@@ -222,8 +224,8 @@ fn chromium_inventory(available: &BTreeSet<String>) -> Result<BTreeSet<String>> 
         .cloned()
         .collect();
     ensure!(
-        selected.len() == 33,
-        "Chromium profile requires all 33 original three-runtime integration variants"
+        selected.len() == CHROMIUM_CASE_COUNT,
+        "Chromium profile requires all {CHROMIUM_CASE_COUNT} three-runtime integration variants"
     );
     Ok(selected)
 }
@@ -428,7 +430,7 @@ fn main() {
 mod tests {
     #[test]
     fn chromium_profile_requires_the_complete_runtime_matrix() {
-        let mut inventory: BTreeSet<_> = (0..33)
+        let mut inventory: BTreeSet<_> = (0..CHROMIUM_CASE_COUNT)
             .map(|i| {
                 format!(
                     "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_{i}"
@@ -436,7 +438,10 @@ mod tests {
             })
             .collect();
         inventory.insert("unrelated_paid_provider_case".into());
-        assert_eq!(chromium_inventory(&inventory).unwrap().len(), 33);
+        assert_eq!(
+            chromium_inventory(&inventory).unwrap().len(),
+            CHROMIUM_CASE_COUNT
+        );
         inventory
             .remove("tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_0");
         assert!(chromium_inventory(&inventory).is_err());
