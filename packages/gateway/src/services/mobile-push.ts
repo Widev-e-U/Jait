@@ -143,6 +143,13 @@ export class MobilePushService {
           ...(notification.link ? { link: notification.link } : {}),
           ...(notification.replaceId ? { replaceId: notification.replaceId } : {}),
           ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
+          // Flat strings only: FCM data values are strings, and an agent avatar
+          // is not reliably deliverable as a push image, so identity travels in
+          // the title/body text with these fields as in-app enrichment.
+          ...(notification.agentId ? { agentId: notification.agentId } : {}),
+          ...(notification.agentName ? { agentName: notification.agentName } : {}),
+          ...(notification.agentRole ? { agentRole: notification.agentRole } : {}),
+          ...(notification.agentAvatar ? { agentAvatar: notification.agentAvatar } : {}),
           ...(notification.roomId ? { roomId: notification.roomId } : {}),
           ...(notification.eventId ? { eventId: notification.eventId } : {}),
           ...(notification.imageAvailable ? { imageAvailable: "true" } : {}),
