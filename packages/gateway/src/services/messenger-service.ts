@@ -946,25 +946,6 @@ class Connection {
           if (previous >= 0) room.states[previous] = event;
           else room.states.push(event);
         }
-        room.summary.name =
-          room.states.find((e) => e.type === 'm.room.name')?.content.name ??
-          room.states.find(
-            (e) =>
-              e.type === 'm.room.member' &&
-              e.state_key !== this.session?.userId,
-          )?.content.displayname ??
-          id;
-        room.summary.name = String(room.summary.name).slice(0, 512);
-        const topic = room.states.find((e) => e.type === 'm.room.topic')?.content?.topic;
-        if (typeof topic === 'string') room.summary.topic = topic.slice(0, 512);
-        else delete room.summary.topic;
-        if (isStatusRoom(room.summary)) {
-          room.summary.status = true;
-          room.summary.kind = 'status';
-        } else {
-          delete room.summary.status;
-          if (room.summary.kind === 'status') delete room.summary.kind;
-        }
         room.summary.encrypted = room.states.some(
           (e) => e.type === 'm.room.encryption',
         );
@@ -994,21 +975,35 @@ class Connection {
           peerEvent?.state_key !== undefined
             ? {
                 userId: peerEvent.state_key,
-                name: String(
-                  peerEvent.content?.displayname ?? peerEvent.state_key,
-                ).slice(0, 512),
+                name: (String(peerEvent.content?.displayname ?? '').trim() || peerEvent.state_key).slice(0, 512),
                 ...(typeof peerEvent.content?.avatar_url === 'string' &&
                 peerEvent.content.avatar_url.startsWith('mxc://')
                   ? { avatarUrl: peerEvent.content.avatar_url }
                   : {}),
               }
             : undefined;
-        // Some bridges initially name direct rooms with the remote user's UUID.
-        // Prefer the resolved participant name when it becomes available.
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(room.summary.name) &&
-            room.peer?.name && room.peer.name !== room.peer.userId &&
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(room.peer.name)) {
-          room.summary.name = room.peer.name;
+        const explicitName = room.states.find((e) => e.type === 'm.room.name')?.content?.name;
+        const memberName = room.states.find(
+          (e) => e.type === 'm.room.member' && e.state_key !== this.session?.userId,
+        )?.content?.displayname;
+        const roomName = String(explicitName ?? '').trim() || room.peer?.name || String(memberName ?? '').trim() || id;
+        // Some bridges use the remote user's UUID until the participant name is available.
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const peerName = room.peer?.name;
+        room.summary.name = (
+          uuid.test(roomName) && peerName && peerName !== room.peer?.userId && !uuid.test(peerName)
+            ? peerName
+            : roomName
+        ).slice(0, 512);
+        const topic = room.states.find((e) => e.type === 'm.room.topic')?.content?.topic;
+        if (typeof topic === 'string') room.summary.topic = topic.slice(0, 512);
+        else delete room.summary.topic;
+        if (isStatusRoom(room.summary)) {
+          room.summary.status = true;
+          room.summary.kind = 'status';
+        } else {
+          delete room.summary.status;
+          if (room.summary.kind === 'status') delete room.summary.kind;
         }
         const roomAvatar = room.states.find(
           (e) => e.type === 'm.room.avatar',

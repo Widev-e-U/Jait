@@ -361,6 +361,30 @@ describe('Messenger bridged service detection', () => {
     ] }, timeline: { events: [] } } } } });
     expect(c.snapshot().rooms.find((r: any) => r.id === '!teams:test').name).toBe('Alice');
   });
+  it.each(['', '   '])('keeps the Teams peer name after a blank room title update (%j)', async name => {
+    const { c } = setup();
+    const id = '!teams:test';
+    const summary = () => c.snapshot().rooms.find((room: any) => room.id === id);
+    await c.sync({
+      account_data: { events: [{ type: 'm.direct', content: { '@bob:test': [id] } }] },
+      rooms: { join: { [id]: { state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'Alice' } },
+        { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: 'msteams' }, bridgebot: '@bridge:test' } },
+        { type: 'm.room.member', state_key: '@bridge:test', content: { displayname: 'Teams bridge', membership: 'join' } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Alice', membership: 'join' } },
+      ] } } } },
+    });
+    expect(summary()).toMatchObject({ service: 'Teams', name: 'Alice' });
+
+    const updateTitle = (title: string) => c.sync({ rooms: { join: { [id]: { timeline: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: title } },
+    ] } } } } });
+    await updateTitle(name);
+    expect(summary()).toMatchObject({ name: 'Alice', peer: { userId: '@bob:test', name: 'Alice' } });
+
+    await updateTitle('New conversation title');
+    expect(summary().name).toBe('New conversation title');
+  });
   it.each(['go.mau.fi/mautrix-teams', 'msteams', 'teams', 'microsoft-teams'])('recognizes Teams metadata after joining an invitation (%s)', async protocol => {
     const { c } = setup();
     await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
