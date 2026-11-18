@@ -17,6 +17,67 @@ function matchesGuard(element, guard) {
     && rect.width > 0 && rect.height > 0;
 }
 
+// A history entry whose page leaves on its own this soon is a redirect hop.
+const HISTORY_BOUNCE_WINDOW_MS = 400;
+
+/**
+ * Back/forward like a browser's toolbar buttons instead of one raw history step:
+ * skips the blank start entry, entries that show the page already on screen,
+ * and redirect hops (sign-in pages, consent screens) that would bounce straight
+ * back to where the user was.
+ */
+async function navigateHistory(page, direction, signal) {
+  const checkCancelled = () => {
+    if (signal?.aborted) throw new Error('Cancelled');
+  };
+  const step = direction === 'back' ? -1 : 1;
+  checkCancelled();
+  let cdp;
+  try {
+    cdp = await page.context().newCDPSession(page);
+  } catch {
+    // Not Chromium: fall back to Playwright's single step.
+    await (step < 0 ? page.goBack({ waitUntil: 'domcontentloaded', timeout: 30000 }) : page.goForward({ waitUntil: 'domcontentloaded', timeout: 30000 }));
+    return;
+  }
+  // What the user sees; an entry that changes none of it on the same document is a no-op.
+  const view = () => page.evaluate(() => [performance.timeOrigin, document.title, Math.round(scrollX), Math.round(scrollY),
+    document.body?.innerText.length ?? 0].join('|')).catch(() => '');
+  const skip = new Set();
+  try {
+    for (let hop = 0; hop < 8; hop++) {
+      checkCancelled();
+      const { currentIndex, entries } = await cdp.send('Page.getNavigationHistory');
+      const current = entries[currentIndex];
+      let target = currentIndex + step;
+      while (entries[target] && (skip.has(entries[target].id) || entries[target].url === current.url)) target += step;
+      const entry = entries[target];
+      if (!entry || entry.url === 'about:blank') return;
+      const before = await view();
+      await cdp.send('Page.navigateToHistoryEntry', { entryId: entry.id });
+      await page.waitForURL(url => url.href !== current.url, { waitUntil: 'commit', timeout: 30000 });
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      const sameDocument = before !== '' && before.split('|')[0] === String(await page.evaluate(() => performance.timeOrigin).catch(() => ''));
+      if (sameDocument) {
+        // Give popstate/hashchange handlers a moment to render before comparing.
+        await new Promise(resolve => setTimeout(resolve, 150));
+        if (await view() === before) { skip.add(entry.id); continue; }
+      }
+      let bounced = false;
+      for (let redirect = 0; redirect < 5; redirect++) {
+        const landed = page.url();
+        if (!await page.waitForURL(url => url.href !== landed, { waitUntil: 'commit', timeout: HISTORY_BOUNCE_WINDOW_MS }).then(() => true, () => false)) break;
+        bounced = true;
+        await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      }
+      if (!bounced) return;
+      skip.add(entry.id);
+    }
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
 async function clickWithVisibleCursor(page, selector, signal, guard) {
   const checkCancelled = () => {
     if (signal?.aborted) throw new Error('Cancelled');
@@ -338,4 +399,4 @@ function collectPageSnapshot(requestedTarget) {
   };
 }
 
-module.exports = { clickWithVisibleCursor, guardedFieldAction, collectPageSnapshot };
+module.exports = { clickWithVisibleCursor, guardedFieldAction, collectPageSnapshot, navigateHistory };

@@ -5,7 +5,7 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
-import { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction, type BrowserClickGuard, type CursorPage } from "./browser-cursor.cjs";
+import { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction, navigateHistory, type BrowserClickGuard, type CursorPage } from "./browser-cursor.cjs";
 export type { BrowserClickGuard } from "./browser-cursor.cjs";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -1134,7 +1134,7 @@ async function createInProcessPlaywrightDriver(
     },
     async history(direction: "back" | "forward", signal?: AbortSignal) {
       const page = await ensureActivePage();
-      await withSignal(direction === "back" ? page.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 }) : page.goForward({ waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
+      await withSignal(navigateHistory(page, direction, signal), signal);
     },
     async click(selector: string, signal?: AbortSignal, guard?: BrowserClickGuard) {
       const page = await ensureActivePage();

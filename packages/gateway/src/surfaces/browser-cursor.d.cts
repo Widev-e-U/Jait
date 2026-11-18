@@ -30,6 +30,8 @@ export function clickWithVisibleCursor(page: CursorPage, selector: string, signa
 
 export function guardedFieldAction(page: CursorPage, selector: string, value: string, operation: "fill" | "select", signal: AbortSignal | undefined, guard: BrowserClickGuard): Promise<void>;
 
+/** Back/forward like a browser's toolbar buttons, skipping redirect hops and duplicate entries. */
+export function navigateHistory(page: unknown, direction: "back" | "forward", signal?: AbortSignal): Promise<void>;
 
 /** Page-side snapshot collector; returns a BrowserPageSnapshot without documentUrl. Serialized into the page by Playwright. */
 export function collectPageSnapshot(requestedTarget?: string): unknown;

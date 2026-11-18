@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-const { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction } = require("./browser-cursor.cjs");
+const { clickWithVisibleCursor, collectPageSnapshot, guardedFieldAction, navigateHistory } = require("./browser-cursor.cjs");
 
 const { chromium } = require("playwright");
 const { createInterface } = require("node:readline");
@@ -515,11 +515,9 @@ async function main() {
         return { targetId: targetInfo.targetId };
       } finally { await session.detach(); }
     },
-    history: async (params) => {
-      const page = await ensurePage();
-      if (params.direction === "back") await page.goBack({ waitUntil: "domcontentloaded", timeout: 30000 });
-      else if (params.direction === "forward") await page.goForward({ waitUntil: "domcontentloaded", timeout: 30000 });
-      else throw new Error("Invalid history direction");
+    history: async (params, signal) => {
+      if (params.direction !== "back" && params.direction !== "forward") throw new Error("Invalid history direction");
+      await navigateHistory(await ensurePage(), params.direction, signal);
       return null;
     },
     reload: async () => {
