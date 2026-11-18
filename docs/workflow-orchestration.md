@@ -37,6 +37,7 @@ Run status is derived from task states: any active task → `running`; any `inte
 
 ## Rules that are enforced
 
+- **Only approved tasks run.** A plan run is refused, before anything is persisted, if any task's status is not `approved` (`proposed`, `skipped`, and so on). The error code is `task_not_approved`.
 - **Completion is not success.** A valid `completed` report only moves the task to `verifying`. The task passes only when every required gate passes.
 - **Gates come from the plan.** Agent reports cannot add, change or skip gates. Reports that try to set `verified`, `passed`, `state`, `verification` and similar fields are rejected.
 - **Reports are validated.** The report must match the task and the attempt id. Unknown fields, bad statuses, unsafe paths and oversized content are rejected. Rejected reports count as failed attempts, never as success. Secrets are redacted (best effort).

@@ -173,6 +173,28 @@ function parseJsonArray(raw: string): unknown[] {
   }
 }
 
+/**
+ * Plan runs execute only tasks a person approved. Agent-proposed, skipped or
+ * otherwise unapproved tasks stop the run before anything is persisted.
+ * Malformed entries are left to graph validation.
+ */
+function unapprovedTaskIssues(tasks: unknown[]): PlanGraphIssue[] {
+  const issues: PlanGraphIssue[] = [];
+  for (const task of tasks) {
+    if (typeof task !== "object" || task === null) continue;
+    const record = task as Record<string, unknown>;
+    if (record.status === "approved") continue;
+    const id = typeof record.id === "string" ? record.id : null;
+    const status = typeof record.status === "string" ? record.status : "not approved";
+    issues.push({
+      code: "task_not_approved",
+      taskId: id,
+      message: `task ${id ? `"${id}"` : "(unnamed)"} is ${status}; approve it before running the plan`,
+    });
+  }
+  return issues;
+}
+
 function readWorkers(raw: number | undefined): number {
   if (raw === undefined) return ORCHESTRATION_LIMITS.defaultWorkers;
   if (!Number.isInteger(raw) || raw < ORCHESTRATION_LIMITS.minWorkers || raw > ORCHESTRATION_LIMITS.maxWorkers) {
@@ -700,11 +722,14 @@ export class OrchestrationService {
     if (input.planId !== undefined) {
       const plan = this.options.db.select().from(automationPlans).where(eq(automationPlans.id, input.planId)).get();
       if (!plan || plan.userId !== userId) throw new OrchestrationNotFoundError("plan not found");
+      const tasks = parseJsonArray(plan.tasks);
+      const unapproved = unapprovedTaskIssues(tasks);
+      if (unapproved.length > 0) throw new OrchestrationValidationError(unapproved);
       return {
         planId: plan.id,
         repoId: plan.repoId,
         title: input.title?.trim() || plan.title,
-        tasks: parseJsonArray(plan.tasks),
+        tasks,
       };
     }
     const title = input.title?.trim() ?? "";

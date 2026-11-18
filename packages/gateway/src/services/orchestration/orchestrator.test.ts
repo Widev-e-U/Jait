@@ -218,6 +218,34 @@ describe("validation and plans", () => {
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
+  it("refuses plan tasks a person has not approved and persists nothing", () => {
+    const plans = new PlanService(db);
+    const plan = plans.create({
+      repoId: "repo-1",
+      userId: USER,
+      title: "Agent proposal",
+      tasks: [
+        { id: "A", title: "Task A", description: "", status: "approved", verification: [gate()] },
+        { id: "B", title: "Task B", description: "", status: "proposed", verification: [gate()] },
+        { id: "C", title: "Task C", description: "", status: "skipped", verification: [gate()] },
+      ],
+    });
+    const executor: TaskExecutor = { execute: vi.fn(async (input: TaskExecutionInput) => report(input)) };
+    const service = makeService(executor);
+    let thrown: unknown;
+    try {
+      service.createRun(USER, { planId: plan.id });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(OrchestrationValidationError);
+    const issues = (thrown as OrchestrationValidationError).issues;
+    expect(issues.map((issue) => issue.code)).toEqual(["task_not_approved", "task_not_approved"]);
+    expect(issues.map((issue) => issue.taskId)).toEqual(["B", "C"]);
+    expect(service.listRuns(USER)).toHaveLength(0);
+    expect(executor.execute).not.toHaveBeenCalled();
+  });
+
   it("starts from a stored plan and keeps the run's snapshot when the plan changes", async () => {
     const plans = new PlanService(db);
     const plan = plans.create({
