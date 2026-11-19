@@ -9,13 +9,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "httpTotal": 448,
   "missing": 40,
   "mounted-fail-closed": 104,
-  "native-tested": 220,
-  "native-untested": 77,
+  "native-tested": 222,
+  "native-untested": 75,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 238,
+  "nativeTested": 240,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 44.91,
+  "nativeTestedPct": 45.28,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,8 +26,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 220,
-    "native-untested": 77,
+    "native-tested": 222,
+    "native-untested": 75,
     "missing": 151
   },
   "wsRustStatus": {
@@ -180,7 +180,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/provider-usage/summary` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/providers` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/providers/:id/auth/status` | native-untested | native-untested |  | routes/providers.ts |
-| GET | `/api/providers/:id/models` | native-untested | native-untested |  | routes/providers.ts |
+| GET | `/api/providers/:id/models` | native-tested | native-tested | `tests/binary_providers_routes.rs::builtin_provider_models_and_reset_through_the_binary` | routes/providers.ts |
 | GET | `/api/reminders` | missing | mounted-incomplete |  | routes/reminders.ts |
 | GET | `/api/reminders/export.md` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | GET | `/api/repos` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/repositories.ts |
@@ -400,7 +400,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/providers/:id/auth/logout` | native-untested | native-untested |  | routes/providers.ts |
 | POST | `/api/providers/:id/update` | native-untested | native-untested |  | routes/providers.ts |
 | POST | `/api/providers/backend/test` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/models/reset` | native-untested | native-untested |  | routes/providers.ts |
+| POST | `/api/providers/models/reset` | native-tested | native-tested | `tests/binary_providers_routes.rs::builtin_provider_models_and_reset_through_the_binary` | routes/providers.ts |
 | POST | `/api/providers/omniroute/test` | native-untested | native-untested |  | routes/providers.ts |
 | POST | `/api/reminders` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | POST | `/api/repos` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |

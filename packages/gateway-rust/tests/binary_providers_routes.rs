@@ -237,3 +237,56 @@ async fn provider_routes_through_the_binary() {
     assert!(st == 200 && b["accounts"] == json!([]), "{b}");
     let _ = &client;
 }
+
+#[tokio::test]
+async fn builtin_provider_models_and_reset_through_the_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let register = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"catalogue-owner","password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(register.status(), 200);
+    let token = register.json::<Value>().await.unwrap()["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let unauthenticated = client
+        .get(format!("{}/api/providers/jait/models", gateway.base))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthenticated.status(), 401);
+
+    // The built-in provider needs no account and serves its static model catalogue.
+    let models = client
+        .get(format!("{}/api/providers/jait/models", gateway.base))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(models.status(), 200);
+    let models = models.json::<Value>().await.unwrap();
+    let default = models["models"]
+        .as_array()
+        .expect("models array")
+        .iter()
+        .find(|model| model["id"] == "gpt-4o")
+        .unwrap_or_else(|| panic!("gpt-4o missing from {models}"));
+    assert_eq!(default["isDefault"], json!(true));
+
+    let reset = client
+        .post(format!("{}/api/providers/models/reset", gateway.base))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reset.status(), 200);
+    assert_eq!(reset.json::<Value>().await.unwrap(), json!({"ok": true}));
+}

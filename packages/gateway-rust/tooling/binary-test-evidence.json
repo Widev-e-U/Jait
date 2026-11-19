@@ -1479,6 +1479,26 @@
     },
     {
       "method": "GET",
+      "path": "/api/providers/:id/models",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "builtin_provider_models_and_reset_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/models/reset",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "builtin_provider_models_and_reset_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/terminals",
       "tests": [
         {

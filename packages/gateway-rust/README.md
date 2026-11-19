@@ -50,8 +50,19 @@ Open parity questions, not changed in this batch:
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 238 of 530 native-tested (44.91%). HTTP has 220 native-tested, 77 native-untested and 151 missing. WebSocket
+Inventory: 240 of 530 native-tested (45.28%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
 has 18 of 74, and background services have 0 of 8.
+
+## Built-in provider catalogue through the composed binary — 2026-11-19
+
+`builtin_provider_models_and_reset_through_the_binary` in `tests/binary_providers_routes.rs` covers
+`GET /api/providers/:id/models` for the built-in `jait` provider, which serves its static catalogue, and
+`POST /api/providers/models/reset`, which answers `{"ok":true}`. Model listing without a token is refused with 401.
+Provider accounts cannot be created in the Rust binary. Every account definition is built with `auth: false`
+(`providers/db_accounts.rs`), so `list_types` offers no type, and `create` refuses each one with `Provider accounts are
+not supported for <type>`. Create, rename, delete and the `opencode-go` connect therefore have no success path to test
+until the private launcher is ported. `GET /api/providers/:id/auth/status` answers 501 for every provider, because the
+Rust runtime does not expose auth status yet.
 
 ## Git local routes through the composed binary, and a patch-diff fix — 2026-11-19
 
