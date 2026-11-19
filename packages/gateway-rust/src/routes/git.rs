@@ -8,7 +8,9 @@
 //! GitHub forge routes (`gh`, github.com only, owner consent per project):
 //!        /gh-status, /gh-auth, /forge-status, /forge-auth, /pr-checks, /forge-pr-checks
 //!
-//! Deferred (see `DEFERRED` below): run-commit-flow, generate-commit-message.
+//! Commit messages: /generate-commit-message reads the scoped diff and streams the owner's model.
+//!
+//! Deferred (see `DEFERRED` below): run-commit-flow.
 //! run-stacked-action answers its denial until its network steps are gated.
 //!
 //! Exact commands require an owner-bound request grant and command authorization.
@@ -38,7 +40,7 @@ use serde_json::{Map, Value, json};
 use super::auth::{self, AuthState};
 
 /// Handlers that exist in the TypeScript module but are not ported yet.
-pub const DEFERRED: [&str; 2] = ["run-commit-flow", "generate-commit-message"];
+pub const DEFERRED: [&str; 1] = ["run-commit-flow"];
 
 #[derive(Clone)]
 pub struct GitRoutes {

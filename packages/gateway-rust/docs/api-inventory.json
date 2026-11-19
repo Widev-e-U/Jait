@@ -3,13 +3,13 @@
     "httpTotal": 448,
     "missing": 40,
     "mounted-fail-closed": 104,
-    "native-tested": 214,
-    "native-untested": 83,
+    "native-tested": 215,
+    "native-untested": 82,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
-    "nativeTested": 232,
+    "nativeTested": 233,
     "nativeTestedDenominator": 530,
-    "nativeTestedPct": 43.77,
+    "nativeTestedPct": 43.96,
     "wsTotal": 74,
     "wsInbound": 38,
     "wsOutboundCandidates": 36,
@@ -20,8 +20,8 @@
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
-      "native-tested": 214,
-      "native-untested": 83,
+      "native-tested": 215,
+      "native-untested": 82,
       "missing": 151
     },
     "wsRustStatus": {
@@ -4101,11 +4101,16 @@
       "nodeFiles": [
         "routes/git.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/git.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_git_commit_message.rs",
+          "name": "generate_commit_message_uses_the_owners_model_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",

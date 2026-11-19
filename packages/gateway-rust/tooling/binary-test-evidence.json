@@ -1915,6 +1915,16 @@
     },
     {
       "method": "POST",
+      "path": "/api/git/generate-commit-message",
+      "tests": [
+        {
+          "file": "tests/binary_git_commit_message.rs",
+          "name": "generate_commit_message_uses_the_owners_model_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
       "path": "/api/nodes/:id/credential",
       "tests": [
         {

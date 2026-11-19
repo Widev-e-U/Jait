@@ -32,11 +32,20 @@ does the same. That was wrong for the composed runtime, which confines `/api/git
 the Node route when I wrote it, so that comparison is withdrawn. This section replaces the note.
 
 Not covered by this test: `fetch`, `pull`, `sync` (network consent), `create-worktree`, `remove-worktree`, `gh-status`,
-`gh-auth`, `forge-status`, `forge-auth`, `pr-checks`, `forge-pr-checks`, `generate-commit-message`, `run-commit-flow` and
-`run-stacked-action`. They remain native-untested or missing.
+`gh-auth`, `forge-status`, `forge-auth`, `pr-checks`, `forge-pr-checks`, `run-commit-flow` and `run-stacked-action`. They
+remain native-untested or missing.
 
-Inventory: `nativeTested` is 232 of 530 (43.77%), up from 221 (41.70%). HTTP is 214 of 448 native-tested, with 83
-native-untested and 151 missing. WebSocket is 18 of 74 native-tested, and the 8 background services are still missing.
+Commit messages. `tests/binary_git_commit_message.rs` (`generate_commit_message_uses_the_owners_model_through_the_binary`)
+drives `POST /api/git/generate-commit-message` against a fake OpenAI-compatible model that the owner configures. It passed
+1 of 1 in a focused run. It covers the anonymous 401, the missing-cwd 400, the 403 for an unregistered repository and for a
+second account, the CLI-provider 501 and the empty-diff 400, which makes no model call. For a changed repository it checks
+that the streamed answer comes back trimmed, and that the request carries the diff, the configured model and key, `stream`,
+`max_tokens` 1024 and `temperature` 0.3. A provider 500 returns 502, and the response does not echo the key. A non-stream
+answer also returns 502. The prompt text has not been compared with the Node route.
+
+Inventory: `nativeTested` is 233 of 530 (43.96%), up from 232 (43.77%) before the commit-message test and from 221
+(41.70%) before the git-routes test. HTTP is 215 of 448 native-tested, with 82 native-untested and 151 missing. WebSocket is
+18 of 74 native-tested, and the 8 background services are still missing.
 
 ## Session titles, a Chat Completions fix and four route tests — 2026-11-19
 
@@ -178,7 +187,7 @@ This is a deliberate difference from the Node gateway, which scopes network git 
 Known limits (not hidden): no DNS pinning, so a TOCTOU window remains between consent and connect;
 `create-pr`, worktree push and stacked-action push stay denied; only GitHub forges are served (no
 GitLab, Gitea, Bitbucket, Azure or GitHub Enterprise); `pr-checks` needs a stored GitHub token where
-Node used ambient `gh` auth; `run-commit-flow` and `generate-commit-message` are not ported.
+Node used ambient `gh` auth; `run-commit-flow` is not ported. `generate-commit-message` is served and tested (see the git section above).
 Nothing here is marked verified in `native-coverage.json`.
 
 ## Component repairs and portability wave — 2026-11-05

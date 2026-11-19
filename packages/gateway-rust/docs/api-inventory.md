@@ -9,13 +9,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "httpTotal": 448,
   "missing": 40,
   "mounted-fail-closed": 104,
-  "native-tested": 214,
-  "native-untested": 83,
+  "native-tested": 215,
+  "native-untested": 82,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 232,
+  "nativeTested": 233,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 43.77,
+  "nativeTestedPct": 43.96,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,8 +26,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 214,
-    "native-untested": 83,
+    "native-tested": 215,
+    "native-untested": 82,
     "missing": 151
   },
   "wsRustStatus": {
@@ -319,7 +319,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/git/forge-auth` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/forge-pr-checks` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/forge-status` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/generate-commit-message` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/generate-commit-message` | native-tested | native-tested | `tests/binary_git_commit_message.rs::generate_commit_message_uses_the_owners_model_through_the_binary` | routes/git.ts |
 | POST | `/api/git/gh-auth` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/gh-status` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/identity` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
