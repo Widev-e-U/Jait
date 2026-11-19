@@ -7,13 +7,13 @@
     "native-untested": 75,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
-    "nativeTested": 240,
-    "nativeTestedDenominator": 530,
-    "nativeTestedPct": 45.28,
-    "wsTotal": 74,
+    "nativeTested": 243,
+    "nativeTestedDenominator": 594,
+    "nativeTestedPct": 40.91,
+    "wsTotal": 138,
     "wsInbound": 38,
-    "wsOutboundCandidates": 36,
-    "wsWithoutDirectionalRustReference": 61,
+    "wsOutboundCandidates": 100,
+    "wsWithoutDirectionalRustReference": 68,
     "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
@@ -25,9 +25,9 @@
       "missing": 151
     },
     "wsRustStatus": {
-      "native-tested": 18,
-      "native-untested": 0,
-      "missing": 56
+      "native-tested": 21,
+      "native-untested": 49,
+      "missing": 68
     },
     "serviceRustStatus": {
       "native-tested": 0,
@@ -6903,10 +6903,50 @@
     {
       "type": "agent.halted",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
+      "rustReference": true,
+      "status": "native-untested",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "alarm.schedule",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "attention.cleared",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "attention.raised",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "audio.done",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "audio.interrupt",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "type": "browser.updated",
@@ -6917,9 +6957,73 @@
       "rustStatus": "missing"
     },
     {
-      "type": "consent.pending-snapshot",
+      "type": "chat.archived",
       "direction": "server-to-client-candidate",
       "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "chat.completed",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "chat.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "chat.deleted",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "chat.moved",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "chat.notification-read",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "chat.restored",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "chat.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "consent.pending-snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
       "status": "native-tested",
       "binaryTests": [
         {
@@ -6930,9 +7034,47 @@
       "rustStatus": "native-tested"
     },
     {
+      "type": "consent.required",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
+    },
+    {
+      "type": "consent.resolved",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
+    },
+    {
       "type": "error",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
+      "rustReference": true,
       "status": "native-tested",
       "binaryTests": [
         {
@@ -6944,6 +7086,22 @@
     },
     {
       "type": "fs.browse-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "fs.browse-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "fs.changes",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -6969,6 +7127,22 @@
     {
       "type": "fs.op-request",
       "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "fs.op-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "fs.register-node",
+      "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
       "binaryTests": [],
@@ -6976,6 +7150,30 @@
     },
     {
       "type": "fs.roots-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "fs.roots-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "message.complete",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "message.started",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -6985,10 +7183,10 @@
     {
       "type": "messenger.request",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
+      "rustReference": true,
+      "status": "native-untested",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "type": "node.credential",
@@ -7000,6 +7198,14 @@
     },
     {
       "type": "node.disconnected",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "node.hello",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -7023,6 +7229,14 @@
       "rustStatus": "missing"
     },
     {
+      "type": "node.update-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "node.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
@@ -7033,7 +7247,7 @@
     {
       "type": "nodes.permissions",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
+      "rustReference": true,
       "status": "native-tested",
       "binaryTests": [
         {
@@ -7046,10 +7260,10 @@
     {
       "type": "notification",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
+      "rustReference": true,
+      "status": "native-untested",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "type": "notification.cleared",
@@ -7068,7 +7282,111 @@
       "rustStatus": "missing"
     },
     {
+      "type": "plan.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "plan.deleted",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "plan.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "preview.session",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "project.archived",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "project.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "project.deleted",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "project.restored",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "project.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
       "type": "provider.op-request",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "repo.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "repo.deleted",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "repo.updated",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "scheduler.executed",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -7108,6 +7426,22 @@
       "rustStatus": "missing"
     },
     {
+      "type": "secret.requested",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "secret.resolved",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "session-wait.snapshot",
       "direction": "server-to-client-candidate",
       "rustReference": false,
@@ -7116,9 +7450,25 @@
       "rustStatus": "missing"
     },
     {
-      "type": "session.created",
+      "type": "session-wait.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "session.completed",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "session.created",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
       "status": "native-tested",
       "binaryTests": [
         {
@@ -7127,6 +7477,30 @@
         }
       ],
       "rustStatus": "native-tested"
+    },
+    {
+      "type": "session.error",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "session.started",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "session.streaming",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "type": "session.streaming-snapshot",
@@ -7139,7 +7513,7 @@
     {
       "type": "surface.connected",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
+      "rustReference": true,
       "status": "native-tested",
       "binaryTests": [
         {
@@ -7150,7 +7524,23 @@
       "rustStatus": "native-tested"
     },
     {
+      "type": "surface.disconnected",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "surface.registry",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "surface.updated",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -7160,26 +7550,79 @@
     {
       "type": "terminal.execution",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
+      "rustReference": true,
+      "status": "native-untested",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "terminal.exit",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "type": "terminal.op-request",
       "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "terminal.op-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "terminal.output",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "thread.activity",
+      "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
       "binaryTests": [],
       "rustStatus": "missing"
     },
     {
-      "type": "terminal.output",
+      "type": "thread.created",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
       "binaryTests": [],
       "rustStatus": "missing"
+    },
+    {
+      "type": "thread.deleted",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "thread.status",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "thread.updated",
@@ -7190,12 +7633,76 @@
       "rustStatus": "missing"
     },
     {
+      "type": "tool.approval-required",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "tool.background-complete",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
       "type": "tool.op-request",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
+      "rustReference": true,
+      "status": "native-untested",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "tool.op-response",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "tool.output",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "tool.result",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "tool.start",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "turn.completed",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "turn.started",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "type": "ui.command",
@@ -7206,12 +7713,44 @@
       "rustStatus": "missing"
     },
     {
-      "type": "user-question.pending-snapshot",
+      "type": "ui.full-state",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
       "binaryTests": [],
       "rustStatus": "missing"
+    },
+    {
+      "type": "ui.state-sync",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "user-question.pending-snapshot",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "user-question.requested",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "user-question.resolved",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     }
   ],
   "services": [

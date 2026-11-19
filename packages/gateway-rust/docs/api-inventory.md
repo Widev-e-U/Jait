@@ -13,13 +13,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "native-untested": 75,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 240,
-  "nativeTestedDenominator": 530,
-  "nativeTestedPct": 45.28,
-  "wsTotal": 74,
+  "nativeTested": 243,
+  "nativeTestedDenominator": 594,
+  "nativeTestedPct": 40.91,
+  "wsTotal": 138,
   "wsInbound": 38,
-  "wsOutboundCandidates": 36,
-  "wsWithoutDirectionalRustReference": 61,
+  "wsOutboundCandidates": 100,
+  "wsWithoutDirectionalRustReference": 68,
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
@@ -31,9 +31,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
     "missing": 151
   },
   "wsRustStatus": {
-    "native-tested": 18,
-    "native-untested": 0,
-    "missing": 56
+    "native-tested": 21,
+    "native-untested": 49,
+    "missing": 68
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -813,39 +813,103 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - client-to-server-candidate: `tool.op-output` — missing — no binary test
 - client-to-server-candidate: `tool.op-response` — missing — no binary test
 - client-to-server-candidate: `ui.state` — missing — no binary test
-- server-to-client-candidate: `agent.halted` — missing — no binary test
+- server-to-client-candidate: `agent.halted` — native-untested — no binary test
+- server-to-client-candidate: `alarm.schedule` — native-untested — no binary test
+- server-to-client-candidate: `attention.cleared` — native-untested — no binary test
+- server-to-client-candidate: `attention.raised` — native-untested — no binary test
+- server-to-client-candidate: `audio.done` — native-untested — no binary test
+- server-to-client-candidate: `audio.interrupt` — native-untested — no binary test
 - server-to-client-candidate: `browser.updated` — missing — no binary test
+- server-to-client-candidate: `chat.archived` — missing — no binary test
+- server-to-client-candidate: `chat.completed` — native-untested — no binary test
+- server-to-client-candidate: `chat.created` — native-untested — no binary test
+- server-to-client-candidate: `chat.deleted` — missing — no binary test
+- server-to-client-candidate: `chat.moved` — native-untested — no binary test
+- server-to-client-candidate: `chat.notification-read` — native-untested — no binary test
+- server-to-client-candidate: `chat.restored` — missing — no binary test
+- server-to-client-candidate: `chat.updated` — native-untested — no binary test
 - server-to-client-candidate: `consent.pending-snapshot` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
+- server-to-client-candidate: `consent.required` — native-tested — `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary`, `tests/binary_thread_turns.rs::thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary`, `tests/binary_thread_turns.rs::thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write`, `tests/binary_thread_turns.rs::thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary`
+- server-to-client-candidate: `consent.resolved` — native-tested — `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary`
 - server-to-client-candidate: `error` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
-- server-to-client-candidate: `fs.browse-request` — missing — no binary test
+- server-to-client-candidate: `fs.browse-request` — native-untested — no binary test
+- server-to-client-candidate: `fs.browse-response` — native-untested — no binary test
+- server-to-client-candidate: `fs.changes` — missing — no binary test
 - server-to-client-candidate: `fs.node-disconnected` — missing — no binary test
 - server-to-client-candidate: `fs.node-registered` — missing — no binary test
-- server-to-client-candidate: `fs.op-request` — missing — no binary test
-- server-to-client-candidate: `fs.roots-request` — missing — no binary test
-- server-to-client-candidate: `messenger.request` — missing — no binary test
+- server-to-client-candidate: `fs.op-request` — native-untested — no binary test
+- server-to-client-candidate: `fs.op-response` — native-untested — no binary test
+- server-to-client-candidate: `fs.register-node` — missing — no binary test
+- server-to-client-candidate: `fs.roots-request` — native-untested — no binary test
+- server-to-client-candidate: `fs.roots-response` — native-untested — no binary test
+- server-to-client-candidate: `message.complete` — missing — no binary test
+- server-to-client-candidate: `message.started` — missing — no binary test
+- server-to-client-candidate: `messenger.request` — native-untested — no binary test
 - server-to-client-candidate: `node.credential` — missing — no binary test
 - server-to-client-candidate: `node.disconnected` — missing — no binary test
+- server-to-client-candidate: `node.hello` — missing — no binary test
 - server-to-client-candidate: `node.registry` — missing — no binary test
 - server-to-client-candidate: `node.update-request` — missing — no binary test
+- server-to-client-candidate: `node.update-response` — missing — no binary test
 - server-to-client-candidate: `node.updated` — missing — no binary test
 - server-to-client-candidate: `nodes.permissions` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
-- server-to-client-candidate: `notification` — missing — no binary test
+- server-to-client-candidate: `notification` — native-untested — no binary test
 - server-to-client-candidate: `notification.cleared` — missing — no binary test
 - server-to-client-candidate: `notification.snapshot` — missing — no binary test
+- server-to-client-candidate: `plan.created` — native-untested — no binary test
+- server-to-client-candidate: `plan.deleted` — native-untested — no binary test
+- server-to-client-candidate: `plan.updated` — native-untested — no binary test
+- server-to-client-candidate: `preview.session` — missing — no binary test
+- server-to-client-candidate: `project.archived` — missing — no binary test
+- server-to-client-candidate: `project.created` — native-untested — no binary test
+- server-to-client-candidate: `project.deleted` — native-untested — no binary test
+- server-to-client-candidate: `project.restored` — native-untested — no binary test
+- server-to-client-candidate: `project.updated` — native-untested — no binary test
 - server-to-client-candidate: `provider.op-request` — missing — no binary test
+- server-to-client-candidate: `repo.created` — native-untested — no binary test
+- server-to-client-candidate: `repo.deleted` — native-untested — no binary test
+- server-to-client-candidate: `repo.updated` — native-untested — no binary test
+- server-to-client-candidate: `scheduler.executed` — missing — no binary test
 - server-to-client-candidate: `screen-share:control-handoff` — missing — no binary test
 - server-to-client-candidate: `screen-share:start-error` — missing — no binary test
 - server-to-client-candidate: `screen-share:start-request` — missing — no binary test
 - server-to-client-candidate: `screen-share:state-update` — missing — no binary test
+- server-to-client-candidate: `secret.requested` — missing — no binary test
+- server-to-client-candidate: `secret.resolved` — missing — no binary test
 - server-to-client-candidate: `session-wait.snapshot` — missing — no binary test
+- server-to-client-candidate: `session-wait.updated` — missing — no binary test
+- server-to-client-candidate: `session.completed` — native-untested — no binary test
 - server-to-client-candidate: `session.created` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
+- server-to-client-candidate: `session.error` — native-untested — no binary test
+- server-to-client-candidate: `session.started` — native-untested — no binary test
+- server-to-client-candidate: `session.streaming` — missing — no binary test
 - server-to-client-candidate: `session.streaming-snapshot` — missing — no binary test
 - server-to-client-candidate: `surface.connected` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
+- server-to-client-candidate: `surface.disconnected` — missing — no binary test
 - server-to-client-candidate: `surface.registry` — missing — no binary test
-- server-to-client-candidate: `terminal.execution` — missing — no binary test
-- server-to-client-candidate: `terminal.op-request` — missing — no binary test
-- server-to-client-candidate: `terminal.output` — missing — no binary test
+- server-to-client-candidate: `surface.updated` — missing — no binary test
+- server-to-client-candidate: `terminal.execution` — native-untested — no binary test
+- server-to-client-candidate: `terminal.exit` — native-untested — no binary test
+- server-to-client-candidate: `terminal.op-request` — native-untested — no binary test
+- server-to-client-candidate: `terminal.op-response` — native-untested — no binary test
+- server-to-client-candidate: `terminal.output` — native-untested — no binary test
+- server-to-client-candidate: `thread.activity` — missing — no binary test
+- server-to-client-candidate: `thread.created` — missing — no binary test
+- server-to-client-candidate: `thread.deleted` — missing — no binary test
+- server-to-client-candidate: `thread.status` — native-tested — `tests/binary_thread_turns.rs::thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write`
 - server-to-client-candidate: `thread.updated` — missing — no binary test
-- server-to-client-candidate: `tool.op-request` — missing — no binary test
+- server-to-client-candidate: `tool.approval-required` — native-untested — no binary test
+- server-to-client-candidate: `tool.background-complete` — native-untested — no binary test
+- server-to-client-candidate: `tool.op-request` — native-untested — no binary test
+- server-to-client-candidate: `tool.op-response` — native-untested — no binary test
+- server-to-client-candidate: `tool.output` — native-untested — no binary test
+- server-to-client-candidate: `tool.result` — native-untested — no binary test
+- server-to-client-candidate: `tool.start` — native-untested — no binary test
+- server-to-client-candidate: `turn.completed` — native-untested — no binary test
+- server-to-client-candidate: `turn.started` — native-untested — no binary test
 - server-to-client-candidate: `ui.command` — missing — no binary test
-- server-to-client-candidate: `user-question.pending-snapshot` — missing — no binary test
+- server-to-client-candidate: `ui.full-state` — missing — no binary test
+- server-to-client-candidate: `ui.state-sync` — missing — no binary test
+- server-to-client-candidate: `user-question.pending-snapshot` — native-untested — no binary test
+- server-to-client-candidate: `user-question.requested` — native-untested — no binary test
+- server-to-client-candidate: `user-question.resolved` — native-untested — no binary test

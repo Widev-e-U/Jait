@@ -23,6 +23,56 @@ export function websocketCandidates(nodeSource, rustSource) {
   ].sort((a, b) => a.direction.localeCompare(b.direction) || a.type.localeCompare(b.type));
 }
 
+// Server-to-client WS types. Every gateway source is scanned, so frames sent outside ws.ts count, but only dotted
+// names are read from the other sources; that keeps schema fields such as `type: "object"` out of the inventory.
+// A template such as `thread.${event}` is expanded only from reviewed evidence: the literal union that types the
+// `event` parameter in the same file, or else the literal event arguments of the helper that builds the frame.
+// A template with neither throws, so an unreviewed frame type cannot silently drop out of the inventory.
+const WS_TEMPLATE_HELPERS = { thread: 'broadcastThreadEvent', plan: 'broadcastPlanEvent', repo: 'broadcastRepoEvent' };
+// Upstream protocols, not gateway frames. messenger-service.ts speaks Matrix and never reaches a socket. The voice
+// assistant sends these OpenAI Realtime frames over its upstream socket (openaiWs.send); its client frames still count.
+const WS_UPSTREAM_SOURCES = new Set(['services/messenger-service.ts']);
+const WS_UPSTREAM_TYPES = new Set([
+  'conversation.item.create', 'input_audio_buffer.append', 'input_audio_buffer.clear', 'input_audio_buffer.commit',
+  'response.cancel', 'response.create', 'session.update',
+]);
+export function nodeWsOutboundTypes(allFiles, wsSource = '') {
+  const files = allFiles.filter((file) => !WS_UPSTREAM_SOURCES.has(file.path));
+  const types = new Set(Array.from(wsSource.matchAll(/\btype\s*:\s*["'`]([a-z][\w.:-]*)["'`]/g), (match) => match[1]));
+  const templates = [];
+  for (const { text } of files) {
+    for (const match of text.matchAll(/\btype\s*:\s*["'`]([a-z][\w-]*\.[\w.:-]*)["'`]/g)) types.add(match[1]);
+    for (const match of text.matchAll(/\btype\s*:\s*`([a-z][\w-]*)\.\$\{(\w+)\}`/g)) {
+      templates.push({ prefix: match[1], variable: match[2], text });
+    }
+  }
+  for (const { prefix, variable, text } of templates) {
+    const union = new RegExp(String.raw`\b${variable}\s*:\s*((?:"[a-z]+"\s*\|\s*)*"[a-z]+")(?=\s*[,)])`, 'g');
+    let events = Array.from(text.matchAll(union), (match) => Array.from(match[1].matchAll(/"([a-z]+)"/g), (m) => m[1])).flat();
+    const helper = WS_TEMPLATE_HELPERS[prefix];
+    if (events.length === 0 && helper) {
+      const calls = new RegExp(String.raw`\b${helper}\(\s*(?:[^,()]+,\s*)?["']([a-z]+)["']`, 'g');
+      events = files.flatMap(({ text: source }) => Array.from(source.matchAll(calls), (match) => match[1]));
+    }
+    if (events.length === 0) throw new Error(`unexpanded WebSocket template ${prefix}.\${${variable}}`);
+    for (const event of events) types.add(`${prefix}.${event}`);
+  }
+  for (const type of WS_UPSTREAM_TYPES) types.delete(type);
+  return types;
+}
+
+// Client-to-server types stay the ws.ts switch cases; server-to-client types come from nodeWsOutboundTypes.
+// Rust evidence for a server-to-client type is its quoted name anywhere in the Rust sources (a lexical hint).
+export function websocketInventory(wsSource, nodeFiles, rust) {
+  const inbound = websocketCandidates(wsSource, rust.ws).filter((entry) => entry.direction === 'client-to-server-candidate');
+  const outbound = [...nodeWsOutboundTypes(nodeFiles, wsSource)].map((type) => ({
+    type,
+    direction: 'server-to-client-candidate',
+    rustReference: rust.all.includes(`"${type}"`),
+  }));
+  return [...inbound, ...outbound].sort((a, b) => a.direction.localeCompare(b.direction) || a.type.localeCompare(b.type));
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgs = join(here, '..', '..');
 const nodeSrc = join(pkgs, 'gateway', 'src');
@@ -184,11 +234,17 @@ function isTested(path) {
   return testedCache.get(staticPrefix);
 }
 
-// --- WS message candidates in the gateway hubs. This lexical scan is incomplete;
-// in particular, events emitted outside ws.ts and dynamically named types are absent.
-const wsEntries = websocketCandidates(
+// --- WS message candidates. Client-to-server types come from the ws.ts switch; server-to-client types come from
+// every gateway source, with templated `${event}` frames expanded from reviewed evidence. This is still lexical,
+// so a missing entry is possible; native status still needs a mapped binary test.
+const wsNodeFiles = walk(nodeSrc, ['.ts']).map((f) => ({ path: relative(nodeSrc, f), text: readFileSync(f, 'utf8') }));
+const wsEntries = websocketInventory(
   readFileSync(join(nodeSrc, 'ws.ts'), 'utf8'),
-  readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
+  wsNodeFiles,
+  {
+    ws: readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
+    all: walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n'),
+  },
 );
 // The only Rust evidence for a WS type is a lexical handler arm or emitted type in the Rust hub:
 // native-untested until a reviewed binary test is mapped in binary-test-evidence.json.

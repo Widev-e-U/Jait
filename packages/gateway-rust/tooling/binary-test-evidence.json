@@ -2370,6 +2370,48 @@
       ]
     },
     {
+      "direction": "server-to-client-candidate",
+      "type": "consent.required",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "consent.resolved",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "thread.status",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write"
+        }
+      ]
+    },
+    {
       "direction": "client-to-server-candidate",
       "type": "consent.approve",
       "tests": [

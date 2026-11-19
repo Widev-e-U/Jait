@@ -50,8 +50,9 @@ Open parity questions, not changed in this batch:
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 240 of 530 native-tested (45.28%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
-has 18 of 74, and background services have 0 of 8.
+Inventory: 243 of 594 native-tested (40.91%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
+has 21 of 138, and background services have 0 of 8. The WebSocket list now includes frames that Node sends from outside
+`ws.ts`, so the denominator grew; the percentage fell for that reason alone.
 
 ## Built-in provider catalogue through the composed binary — 2026-11-19
 
