@@ -38,6 +38,14 @@ export class WorkspaceConflictError extends Error {
   }
 }
 
+/** The integration branch advanced after the task was last synced, so its verification does not cover the combined state. Nothing was merged. */
+export class WorkspaceStaleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceStaleError";
+  }
+}
+
 const MAX_PATHS = 5_000;
 const IDENTITY_FALLBACK = ["-c", "user.name=Jait Workflow", "-c", "user.email=workflow@jait.invalid"];
 
@@ -138,7 +146,7 @@ export interface WorkspaceProvider {
   prepareRead(ref: WorkspaceRef): Promise<WorkspaceLocation>;
   /** `protects` are paths inside `writes` the task must leave untouched. */
   prepareWrite(ref: WorkspaceRef, writes: readonly string[], protects?: readonly string[]): Promise<WorkspaceLocation>;
-  checkScope(path: string, writes: readonly string[], protects?: readonly string[]): Promise<ScopeResult>;
+  checkScope(ref: WorkspaceRef, path: string, writes: readonly string[], protects?: readonly string[]): Promise<ScopeResult>;
   integrate(
     ref: WorkspaceRef,
     writes: readonly string[],
@@ -227,24 +235,30 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     await clearLeftoverMerge(path);
 
     // Leftovers are committed below, so protected or out-of-scope changes must stop here, uncommitted, for an operator to inspect.
-    const scope = await this.checkScope(path, writes, protects);
+    const scope = await this.checkScope(ref, path, writes, protects);
     if (!scope.ok) {
       throw new WorkspaceError(`workspace has changes ${describeScopeViolations(scope)}; inspect ${path}`);
     }
-    if (scope.changed.length > 0) {
-      await this.commitInScope(path, scope.changed, `wip: earlier attempt of ${taskId}`);
+    const uncommitted = await this.changedPaths(path, "HEAD");
+    if (uncommitted.changed.length > 0) {
+      await this.commitInScope(path, uncommitted.changed, `wip: earlier attempt of ${taskId}`);
     }
     await this.mergeInto(path, integration.branch, `sync ${taskId} with integration`);
     return { path, branch };
   }
 
   /**
-   * Changed paths against HEAD, untracked files included, checked against the declared
-   * writes and the protected paths. A protected path may not be created, changed or
-   * deleted, even though it lies inside the writes.
+   * Include committed task-branch changes, staged changes and the worktree. A
+   * worker may commit on its branch, so HEAD alone is not an authority boundary.
    */
-  async checkScope(path: string, writes: readonly string[], protects: readonly string[] = []): Promise<ScopeResult> {
-    const { changed, deleted } = await this.changedPaths(path);
+  async checkScope(ref: WorkspaceRef, path: string, writes: readonly string[], protects: readonly string[] = []): Promise<ScopeResult> {
+    this.repoPath(ref.userId, ref.repoId);
+    if (path !== this.taskPath(ref.runId, ref.taskId)) throw new WorkspaceError("scope check requires the task workspace");
+    const branch = (await git(path, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+    if (branch !== taskBranchName(ref.runId, ref.taskId)) throw new WorkspaceError("scope check requires the assigned task branch");
+    const base = (await git(path, ["merge-base", "HEAD", integrationBranchName(ref.runId)])).trim();
+    if (!/^[0-9a-f]{40,64}$/.test(base)) throw new WorkspaceError("cannot determine task integration base");
+    const { changed, deleted } = await this.changedPaths(path, base);
     const outside = changed.filter((file) => !pathCoveredByWrites(file, writes));
     const protectedPaths = changed.filter((file) => pathCoveredByWrites(file, writes) && pathIsProtected(file, protects));
     return { ok: outside.length === 0 && protectedPaths.length === 0, outside, changed, protectedPaths, deleted };
@@ -264,12 +278,17 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     const repoPath = this.repoPath(ref.userId, ref.repoId);
     const integration = await this.ensureIntegration(repoPath, ref.runId);
     const task = await this.existingTask(repoPath, ref.runId, ref.taskId);
-    const scope = await this.checkScope(task.path, writes, protects);
+    const scope = await this.checkScope(ref, task.path, writes, protects);
     if (!scope.ok) {
       throw new WorkspaceError(`changes ${describeScopeViolations(scope)} block integration`);
     }
-    if (scope.changed.length > 0) await this.commitInScope(task.path, scope.changed, message);
+    const uncommitted = await this.changedPaths(task.path, "HEAD");
+    if (uncommitted.changed.length > 0) await this.commitInScope(task.path, uncommitted.changed, message);
     const before = await headCommit(integration.path);
+    // A concurrent writer may have landed after this task was verified; merging now would skip verifying the combined state.
+    if (!(await isAncestor(task.path, before, task.branch))) {
+      throw new WorkspaceStaleError("integration advanced since this task was verified");
+    }
     const merged = await this.mergeInto(integration.path, task.branch, message);
     return { integrated: merged.head !== before, head: merged.head };
   }
@@ -292,16 +311,21 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
     return { path, branch };
   }
 
-  /** Changed paths against HEAD (tracked and untracked), and which of them are tracked files the task deleted. */
-  private async changedPaths(path: string): Promise<{ changed: string[]; deleted: string[] }> {
-    // With --no-renames and -z, --name-status prints a status code and a path, each NUL-terminated.
-    const status = splitNul(await git(path, ["--literal-pathspecs", "diff", "--no-renames", "--name-status", "-z", "HEAD"]));
+  /** Include the final tree and index separately, so staged changes cannot hide behind worktree reversions. */
+  private async changedPaths(path: string, base: string): Promise<{ changed: string[]; deleted: string[] }> {
+    const statuses = await Promise.all([
+      git(path, ["--literal-pathspecs", "diff", "--no-renames", "--name-status", "-z", base]),
+      git(path, ["--literal-pathspecs", "diff", "--cached", "--no-renames", "--name-status", "-z", "HEAD"]),
+    ]);
     const tracked: string[] = [];
     const deleted: string[] = [];
-    for (let index = 0; index + 1 < status.length; index += 2) {
-      const file = status[index + 1] as string;
-      tracked.push(file);
-      if (status[index] === "D") deleted.push(file);
+    for (const output of statuses) {
+      const status = splitNul(output);
+      for (let index = 0; index + 1 < status.length; index += 2) {
+        const file = status[index + 1] as string;
+        tracked.push(file);
+        if (status[index] === "D") deleted.push(file);
+      }
     }
     const untracked = splitNul(await git(path, ["ls-files", "--others", "--exclude-standard", "-z"]));
     const changed = [...new Set([...tracked, ...untracked])].sort();
@@ -330,6 +354,15 @@ export class WorkflowWorkspaces implements WorkspaceProvider {
       throw new WorkspaceConflictError(`merge of ${branch} conflicts`, files);
     }
     return { head: await headCommit(cwd) };
+  }
+}
+
+async function isAncestor(cwd: string, ancestor: string, descendant: string): Promise<boolean> {
+  try {
+    await git(cwd, ["merge-base", "--is-ancestor", ancestor, descendant]);
+    return true;
+  } catch {
+    return false;
   }
 }
 

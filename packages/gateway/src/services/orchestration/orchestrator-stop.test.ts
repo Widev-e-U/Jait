@@ -82,6 +82,39 @@ describe("stopped gates keep their worker until they settle", () => {
   });
 });
 
+describe("shutdown", () => {
+  it("interrupts and drains active work without dispatching queued tasks", async () => {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const started: TaskExecutionInput[] = [];
+    const executor: TaskExecutor = {
+      async execute(input) {
+        started.push(input);
+        await released;
+        return report(input);
+      },
+    };
+    const service = new OrchestrationService({ db, executor, verifier: passingVerifier, workspaces: inertWorkspaces });
+    const run = service.createRun(USER, { title: "shutdown", maxWorkers: 1, tasks: [task("A"), task("B")] });
+    await vi.waitFor(() => expect(started).toHaveLength(1));
+
+    let closed = false;
+    const closing = service.close().then(() => { closed = true; });
+    expect(started[0]!.signal.aborted).toBe(true);
+    expect(service.getRun(USER, run.id)).toMatchObject({ paused: true });
+    expect(service.getRun(USER, run.id).tasks[0]).toMatchObject({ state: "interrupted" });
+    expect(() => service.createRun(USER, { title: "late", tasks: [task("C")] })).toThrow("shutting down");
+    await pause(30);
+    expect(closed).toBe(false);
+    release();
+    await closing;
+    await service.close();
+    await pause(0);
+    expect(started).toHaveLength(1);
+    expect(service.getRun(USER, run.id).tasks[0]).toMatchObject({ state: "interrupted" });
+  });
+});
+
 describe("provider-aware concurrency", () => {
   it("caps concurrent attempts per owner and provider, even when the run allows more workers", async () => {
     let running = 0;

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { RepositoryService } from "../repositories.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { pathCoveredByWrites, taskBranchName, WorkflowWorkspaces, WorkspaceConflictError, WorkspaceError, integrationBranchName } from "./workspace.js";
+import { pathCoveredByWrites, taskBranchName, WorkflowWorkspaces, WorkspaceConflictError, WorkspaceError, WorkspaceStaleError, integrationBranchName } from "./workspace.js";
 
 const GIT_ENV = {
   ...process.env,
@@ -84,12 +84,12 @@ describe("workflow workspaces (real git)", () => {
     await writeIn(location.path, "docs/guide/intro.md", "hello\n");
     await writeIn(location.path, "src/hack.ts", "export {};\n");
 
-    const scope = await workspaces.checkScope(location.path, ["docs"]);
+    const scope = await workspaces.checkScope(ref("A"), location.path, ["docs"]);
     expect(scope.ok).toBe(false);
     expect(scope.outside).toEqual(["src/hack.ts"]);
     expect(scope.changed).toEqual(["docs/guide/intro.md", "src/hack.ts"]);
 
-    const whole = await workspaces.checkScope(location.path, ["."]);
+    const whole = await workspaces.checkScope(ref("A"), location.path, ["."]);
     expect(whole.ok).toBe(true);
   });
 
@@ -106,20 +106,20 @@ describe("workflow workspaces (real git)", () => {
 
     // Allowed: ordinary code changes.
     await writeIn(location.path, "src/lib.ts", "export const lib = 1;\n");
-    expect(await workspaces.checkScope(location.path, ["."], ["tests"])).toMatchObject({ ok: true, protectedPaths: [] });
+    expect(await workspaces.checkScope(ref("A"), location.path, ["."], ["tests"])).toMatchObject({ ok: true, protectedPaths: [] });
 
     // Weakening an existing test, deleting one and adding a file under a protected path all count.
     await writeIn(location.path, "tests/keep.test.ts", "it.skip('works', () => {});\n");
     await rm(join(location.path, "tests/gone.test.ts"));
     await writeIn(location.path, "tests/extra.test.ts", "it('extra', () => {});\n");
-    const scope = await workspaces.checkScope(location.path, ["."], ["tests"]);
+    const scope = await workspaces.checkScope(ref("A"), location.path, ["."], ["tests"]);
     expect(scope.ok).toBe(false);
     expect(scope.outside).toEqual([]);
     expect(scope.protectedPaths).toEqual(["tests/extra.test.ts", "tests/gone.test.ts", "tests/keep.test.ts"]);
     expect(scope.deleted).toEqual(["tests/gone.test.ts"]);
 
     // Without the protection the same changes are in scope.
-    expect((await workspaces.checkScope(location.path, ["."])).ok).toBe(true);
+    expect((await workspaces.checkScope(ref("A"), location.path, ["."])).ok).toBe(true);
   });
 
   it("applies protected paths by glob, and reports outside-scope and protected paths separately", async () => {
@@ -129,7 +129,7 @@ describe("workflow workspaces (real git)", () => {
     await writeIn(location.path, "src/a.ts", "changed\n");
     await writeIn(location.path, "docs/stray.md", "outside\n");
 
-    const scope = await workspaces.checkScope(location.path, ["src"], ["**/*.test.ts"]);
+    const scope = await workspaces.checkScope(ref("A"), location.path, ["src"], ["**/*.test.ts"]);
     expect(scope.ok).toBe(false);
     expect(scope.outside).toEqual(["docs/stray.md"]);
     expect(scope.protectedPaths).toEqual(["src/a.test.ts"]);
@@ -141,7 +141,7 @@ describe("workflow workspaces (real git)", () => {
     await rm(join(location.path, "docs/old.md"));
     await writeIn(location.path, "docs/new.md", "new\n");
 
-    const scope = await workspaces.checkScope(location.path, ["docs"]);
+    const scope = await workspaces.checkScope(ref("A"), location.path, ["docs"]);
     expect(scope.ok).toBe(true);
     expect(scope.deleted).toEqual(["docs/old.md"]);
     expect(scope.changed).toEqual(["docs/new.md", "docs/old.md"]);
@@ -179,6 +179,82 @@ describe("workflow workspaces (real git)", () => {
     expect(git(location.path, "status", "--porcelain")).toContain("tests/keep.test.ts");
   });
 
+  it("rejects committed protected and out-of-scope changes on verification, retry, and integration", async () => {
+    await seed({ "tests/keep.test.ts": "original\n", "docs/keep.md": "original\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["src", "tests"], ["tests"]);
+    const integration = workspaces.integrationPath(RUN);
+    const before = git(integration, "rev-parse", "HEAD");
+    await writeIn(location.path, "tests/keep.test.ts", "weakened\n");
+    await writeIn(location.path, "docs/keep.md", "outside\n");
+    git(location.path, "add", "tests/keep.test.ts", "docs/keep.md");
+    git(location.path, "commit", "-q", "-m", "worker commit");
+    expect(git(location.path, "status", "--porcelain")).toBe("");
+
+    const scope = await workspaces.checkScope(ref("A"), location.path, ["src", "tests"], ["tests"]);
+    expect(scope).toMatchObject({ ok: false, outside: ["docs/keep.md"], protectedPaths: ["tests/keep.test.ts"] });
+    await expect(workspaces.prepareWrite(ref("A"), ["src", "tests"], ["tests"])).rejects.toThrow("protected paths");
+    await expect(workspaces.integrate(ref("A"), ["src", "tests"], "integrate", ["tests"])).rejects.toThrow("protected paths");
+    expect(git(integration, "rev-parse", "HEAD")).toBe(before);
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("original\n");
+  });
+
+  it("refuses to verify or integrate after a worker detaches the task branch", async () => {
+    await seed({ "tests/keep.test.ts": "original\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+    await writeIn(location.path, "tests/keep.test.ts", "weakened\n");
+    git(location.path, "add", "tests/keep.test.ts");
+    git(location.path, "commit", "-q", "-m", "worker commit");
+    git(location.path, "checkout", "-q", "--detach", "HEAD^");
+    await expect(workspaces.checkScope(ref("A"), location.path, ["."], ["tests"]))
+      .rejects.toThrow("assigned task branch");
+    await expect(workspaces.integrate(ref("A"), ["."], "integrate", ["tests"]))
+      .rejects.toThrow("assigned task branch");
+    expect(await readFile(join(workspaces.integrationPath(RUN), "tests/keep.test.ts"), "utf8")).toBe("original\n");
+  });
+
+  it("detects staged protected changes even when the worktree restores the original file", async () => {
+    await seed({ "tests/keep.test.ts": "original\n" });
+    const location = await workspaces.prepareWrite(ref("A"), ["."], ["tests"]);
+    await writeIn(location.path, "tests/keep.test.ts", "weakened\n");
+    git(location.path, "add", "tests/keep.test.ts");
+    await writeIn(location.path, "tests/keep.test.ts", "original\n");
+    await writeIn(location.path, "src/change.ts", "new\n");
+    expect((await workspaces.checkScope(ref("A"), location.path, ["."], ["tests"])).protectedPaths)
+      .toEqual(["tests/keep.test.ts"]);
+    await expect(workspaces.integrate(ref("A"), ["."], "integrate", ["tests"])).rejects.toThrow("protected paths");
+    expect(await readFile(join(workspaces.integrationPath(RUN), "tests/keep.test.ts"), "utf8")).toBe("original\n");
+  });
+
+  it("preserves in-scope committed work across retries and integrates it", async () => {
+    const location = await workspaces.prepareWrite(ref("A"), ["docs"]);
+    await writeIn(location.path, "docs/a.md", "committed\n");
+    git(location.path, "add", "docs/a.md");
+    git(location.path, "commit", "-q", "-m", "worker commit");
+    await workspaces.prepareWrite(ref("A"), ["docs"]);
+    await workspaces.integrate(ref("A"), ["docs"], "integrate");
+    expect(await readFile(join(workspaces.integrationPath(RUN), "docs/a.md"), "utf8")).toBe("committed\n");
+  });
+
+  it("allows explicitly scoped test maintenance after a protected writer is rejected", async () => {
+    await seed({ "tests/keep.test.ts": "original test\n" });
+    const writer = await workspaces.prepareWrite(ref("writer"), ["."], ["tests"]);
+    await writeIn(writer.path, "tests/keep.test.ts", "weakened test\n");
+    const integration = workspaces.integrationPath(RUN);
+    const before = git(integration, "rev-parse", "HEAD");
+
+    await expect(workspaces.integrate(ref("writer"), ["."], "writer", ["tests"]))
+      .rejects.toThrow("protected paths");
+    expect(git(integration, "rev-parse", "HEAD")).toBe(before);
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("original test\n");
+
+    // A separate approved task can maintain the test through its own explicit claim.
+    const maintainer = await workspaces.prepareWrite(ref("maintainer"), ["tests/keep.test.ts"]);
+    await writeIn(maintainer.path, "tests/keep.test.ts", "maintained test\n");
+    await workspaces.integrate(ref("maintainer"), ["tests/keep.test.ts"], "maintain test");
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("maintained test\n");
+    expect(await readFile(join(repo, "tests/keep.test.ts"), "utf8")).toBe("original test\n");
+  });
+
   it("integrates verified work into the integration branch and never into main", async () => {
     const location = await workspaces.prepareWrite(ref("A"), ["docs"]);
     await writeIn(location.path, "docs/a.md", "from A\n");
@@ -209,9 +285,15 @@ describe("workflow workspaces (real git)", () => {
     await writeIn(c.path, "src/c.ts", "export const c = 1;\n");
 
     await workspaces.integrate(ref("B"), ["docs"], "integrate B");
+    // C was verified before B landed, so it must be re-synced (and re-verified) before it can merge.
+    await expect(workspaces.integrate(ref("C"), ["src"], "integrate C")).rejects.toBeInstanceOf(WorkspaceStaleError);
+    const integration = workspaces.integrationPath(RUN);
+    expect(existsSync(join(integration, "src/c.ts"))).toBe(false);
+
+    await workspaces.prepareWrite(ref("C"), ["src"]);
+    expect(await readFile(join(c.path, "docs/b.md"), "utf8")).toBe("B\n");
     await workspaces.integrate(ref("C"), ["src"], "integrate C");
 
-    const integration = workspaces.integrationPath(RUN);
     expect(await readFile(join(integration, "docs/b.md"), "utf8")).toBe("B\n");
     expect(await readFile(join(integration, "src/c.ts"), "utf8")).toBe("export const c = 1;\n");
     expect(git(integration, "status", "--porcelain")).toBe("");
@@ -225,7 +307,9 @@ describe("workflow workspaces (real git)", () => {
     await workspaces.integrate(ref("X"), ["."], "integrate X");
     const headAfterX = git(workspaces.integrationPath(RUN), "rev-parse", "HEAD");
 
-    const attempt = workspaces.integrate(ref("Y"), ["."], "integrate Y");
+    // Y never saw X's change, so it is stale first; the conflict surfaces when it re-syncs.
+    await expect(workspaces.integrate(ref("Y"), ["."], "integrate Y")).rejects.toBeInstanceOf(WorkspaceStaleError);
+    const attempt = workspaces.prepareWrite(ref("Y"), ["."]);
     await expect(attempt).rejects.toBeInstanceOf(WorkspaceConflictError);
     await attempt.catch((error: unknown) => {
       expect((error as WorkspaceConflictError).files).toEqual(["shared.txt"]);

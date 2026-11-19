@@ -286,6 +286,46 @@ describe("plan runs over real worktrees", () => {
     expect(existsSync(join(repo, "docs"))).toBe(false);
   });
 
+  it("checks the combined integration state in an approved join before advancing", async () => {
+    const invariant = "test ! -e docs/a.md || test ! -e docs/b.md";
+    const planId = createPlan([
+      approvedTask({ id: "A", writes: ["docs/a.md"], verification: [artifactGate("a", "docs/a.md")] }),
+      approvedTask({ id: "B", writes: ["docs/b.md"], verification: [artifactGate("b", "docs/b.md")] }),
+      approvedTask({ id: "J", dependsOn: ["A", "B"], reads: ["."], maxAttempts: 1, verification: [commandGate("combined", invariant)] }),
+      approvedTask({ id: "D", dependsOn: ["J"], reads: ["."], verification: [artifactGate("readme", "README.md")] }),
+    ]);
+    const started: string[] = [];
+    let writers = 0;
+    const executor: TaskExecutor = {
+      async execute(input) {
+        started.push(input.taskId);
+        if (input.taskId === "A" || input.taskId === "B") {
+          writers += 1;
+          await until(() => writers === 2);
+          const file = `docs/${input.taskId.toLowerCase()}.md`;
+          await writeIn(input.workspace!.path, file, input.taskId);
+          return reportFor(input, [file]);
+        }
+        return reportFor(input);
+      },
+    };
+    const { service, workspaces } = makeService(executor);
+    const run = service.createRun(OWNER, { planId, maxWorkers: 2 });
+    await service.settle();
+
+    const final = service.getRun(OWNER, run.id);
+    expect(final.status).toBe("failed");
+    expect(final.tasks.map((task) => [task.taskId, task.state])).toEqual([
+      ["A", "passed"], ["B", "passed"], ["J", "failed"], ["D", "blocked"],
+    ]);
+    expect(final.tasks.find((task) => task.taskId === "J")?.verification).toMatchObject([
+      { gateId: "combined", passed: false },
+    ]);
+    expect(started).not.toContain("D");
+    expect(commands).toEqual([{ command: invariant, projectRoot: workspaces.integrationPath(run.id), requestedBy: "workflow" }]);
+    expect(existsSync(join(repo, "docs"))).toBe(false);
+  });
+
   it("fails a writer that changes files outside its declared writes and blocks its dependents", async () => {
     const planId = createPlan([
       approvedTask({ id: "A", reads: ["."], verification: [artifactGate("readme", "README.md")] }),
@@ -380,6 +420,37 @@ describe("plan runs over real worktrees", () => {
     expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("it('works', () => {});\n");
   });
 
+  it("blocks a committed protected test change before a dependent task advances", async () => {
+    await seedProject({ "tests/keep.test.ts": "original\n" });
+    const planId = createPlan([
+      approvedTask({ id: "W", writes: ["."], protects: ["tests"], maxAttempts: 1, verification: [artifactGate("impl", "src/impl.ts")] }),
+      approvedTask({ id: "J", dependsOn: ["W"], writes: ["docs/j.md"], verification: [artifactGate("j", "docs/j.md")] }),
+    ]);
+    const executor: TaskExecutor = {
+      async execute(input) {
+        if (input.taskId === "W") {
+          await writeIn(input.workspace!.path, "src/impl.ts", "implementation\n");
+          await writeIn(input.workspace!.path, "tests/keep.test.ts", "weakened\n");
+          git(input.workspace!.path, "add", "src/impl.ts", "tests/keep.test.ts");
+          git(input.workspace!.path, "commit", "-q", "-m", "worker commit");
+        }
+        return reportFor(input);
+      },
+    };
+    const { service, workspaces } = makeService(executor);
+    const run = service.createRun(OWNER, { planId, maxWorkers: 2 });
+    await service.settle();
+    const final = service.getRun(OWNER, run.id);
+    expect(final.status).toBe("failed");
+    expect(final.tasks.find((task) => task.taskId === "W")?.verification?.[0]).toMatchObject({
+      gateId: "system:scope", passed: false, detail: "protected paths changed: tests/keep.test.ts",
+    });
+    expect(final.tasks.find((task) => task.taskId === "J")?.state).toBe("blocked");
+    const integration = workspaces.integrationPath(run.id);
+    expect(await readFile(join(integration, "tests/keep.test.ts"), "utf8")).toBe("original\n");
+    expect(existsSync(join(integration, "src/impl.ts"))).toBe(false);
+  });
+
   it("lets a writer add tests and delete a file it does not protect, and records the deletion", async () => {
     await seedProject({
       "tests/keep.test.ts": "it('works', () => {});\n",
@@ -398,7 +469,7 @@ describe("plan runs over real worktrees", () => {
         await writeIn(input.workspace!.path, "src/impl.ts", "export const impl = 1;\n");
         await writeIn(input.workspace!.path, "tests/new.test.ts", "it('new', () => {});\n");
         await rm(join(input.workspace!.path, "src/old.ts"));
-        return reportFor(input, ["src/impl.ts", "tests/new.test.ts", "src/old.ts"]);
+        return reportFor(input, []); // The agent omitted every change; evidence must still show git-observed paths.
       },
     };
     const { service, workspaces } = makeService(executor);
@@ -409,7 +480,7 @@ describe("plan runs over real worktrees", () => {
     expect(final.status).toBe("passed");
     const scope = final.tasks[0]?.verification?.find((outcome) => outcome.gateId === "system:scope");
     expect(scope).toMatchObject({ passed: true });
-    expect(scope?.detail).toBe("3 changed file(s) inside scope; deleted: src/old.ts");
+    expect(scope?.detail).toBe("3 changed file(s) inside scope; changed: src/impl.ts, src/old.ts, tests/new.test.ts; deleted: src/old.ts");
 
     const integration = workspaces.integrationPath(run.id);
     expect(existsSync(join(integration, "tests/new.test.ts"))).toBe(true);
@@ -441,6 +512,69 @@ describe("plan runs over real worktrees", () => {
     const outcomes = final.tasks[0]?.verification ?? [];
     expect(outcomes.find((outcome) => outcome.gateId === "never")).toMatchObject({ passed: false, detail: "exit 3" });
     expect(outcomes.find((outcome) => outcome.gateId === "system:integration")).toBeUndefined();
+    expect(existsSync(join(workspaces.integrationPath(run.id), "docs/w.md"))).toBe(false);
+  });
+
+  /** Lets another writer "land" on the integration branch right before a task integrates. */
+  function landOtherWorkBeforeIntegrate(workspaces: WorkflowWorkspaces, limit: number): { calls: () => number } {
+    const original = workspaces.integrate.bind(workspaces);
+    let calls = 0;
+    workspaces.integrate = async (ref, ...rest) => {
+      calls += 1;
+      if (calls <= limit) {
+        const path = workspaces.integrationPath(ref.runId);
+        await writeIn(path, `other/landed-${calls}.md`, `${calls}\n`);
+        git(path, "add", `other/landed-${calls}.md`);
+        git(path, "commit", "-q", "-m", `other writer ${calls}`);
+      }
+      return original(ref, ...rest);
+    };
+    return { calls: () => calls };
+  }
+
+  const staleWriterPlan = () =>
+    createPlan([
+      approvedTask({
+        id: "W",
+        writes: ["docs/w.md"],
+        verification: [artifactGate("w", "docs/w.md"), commandGate("w-check", "test -s docs/w.md")],
+      }),
+    ]);
+  const writeW: TaskExecutor = {
+    async execute(input) {
+      await writeIn(input.workspace!.path, "docs/w.md", "ok\n");
+      return reportFor(input, ["docs/w.md"]);
+    },
+  };
+
+  it("re-syncs and re-verifies a writer whose integration went stale, then integrates it", async () => {
+    const planId = staleWriterPlan();
+    const { service, workspaces } = makeService(writeW);
+    const spy = landOtherWorkBeforeIntegrate(workspaces, 1);
+    const run = service.createRun(OWNER, { planId });
+    await service.settle();
+
+    const final = service.getRun(OWNER, run.id);
+    expect(final.status).toBe("passed");
+    expect(spy.calls()).toBe(2);
+    expect(commands.filter((entry) => entry.command === "test -s docs/w.md")).toHaveLength(2);
+    const integration = workspaces.integrationPath(run.id);
+    expect(existsSync(join(integration, "docs/w.md"))).toBe(true);
+    expect(existsSync(join(integration, "other/landed-1.md"))).toBe(true);
+  });
+
+  it("holds a writer as interrupted when integration keeps advancing past its re-sync rounds", async () => {
+    const planId = staleWriterPlan();
+    const { service, workspaces } = makeService(writeW);
+    const spy = landOtherWorkBeforeIntegrate(workspaces, 10);
+    const run = service.createRun(OWNER, { planId });
+    await service.settle();
+
+    const final = service.getRun(OWNER, run.id);
+    expect(final.tasks[0]?.state).toBe("interrupted");
+    expect(final.status).not.toBe("completed");
+    expect(spy.calls()).toBe(3);
+    expect(commands.filter((entry) => entry.command === "test -s docs/w.md")).toHaveLength(3);
     expect(existsSync(join(workspaces.integrationPath(run.id), "docs/w.md"))).toBe(false);
   });
 

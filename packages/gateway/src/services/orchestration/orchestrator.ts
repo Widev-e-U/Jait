@@ -33,6 +33,7 @@ import {
   WorkflowWorkspaces,
   type WorkspaceProvider,
   WorkspaceConflictError,
+  WorkspaceStaleError,
   WorkspaceError,
   type WorkspaceRef,
 } from "./workspace.js";
@@ -186,11 +187,14 @@ const MANUAL_RETRY_BUDGET = 1; // one operator retry beyond maxAttempts
 const MAX_NOTE = 500;
 const MAX_ERROR = 2000;
 const MAX_DETAIL = 2000;
+/** How many times a writer is re-synced and re-verified after another writer lands first, before it is held. */
+const MAX_RESYNC_ROUNDS = 2;
 const DEFAULT_GLOBAL_WORKERS = 4;
 const DEFAULT_USER_WORKERS = 4;
 const DEFAULT_PROVIDER_WORKERS = 2;
 const TIMEOUT_REASON = "attempt timed out; outcome unknown, not retried automatically";
 const HALT_REASON = "stopped by agent halt; outcome unknown, not retried automatically";
+const SHUTDOWN_REASON = "gateway shutting down; outcome unknown, not retried automatically";
 const RESTART_REASON = "gateway restarted before the attempt finished; outcome unknown, not retried automatically";
 
 function errorMessage(error: unknown): string {
@@ -308,6 +312,7 @@ function readWorkers(raw: number | undefined): number {
 export class OrchestrationService {
   private readonly store: OrchestrationStore;
   private readonly active = new Map<string, ActiveAttempt>();
+  private closing = false;
   private readonly inflight = new Set<Promise<void>>();
   private readonly verifier: VerificationRunner;
   private readonly isHalted: (userId: string) => boolean;
@@ -521,6 +526,16 @@ export class OrchestrationService {
     return recovered.length;
   }
 
+  /** Stop dispatch and drain workers before their backing database is closed. */
+  async close(): Promise<void> {
+    if (!this.closing) {
+      this.closing = true;
+      this.store.pauseNonFinalRuns(this.nowIso());
+      for (const attempt of this.active.values()) this.abortAttempt(attempt, "shutdown");
+    }
+    await this.settle();
+  }
+
   /** Resolves once no attempt is in flight. Intended for tests and shutdown. */
   async settle(): Promise<void> {
     while (this.inflight.size > 0) {
@@ -532,6 +547,7 @@ export class OrchestrationService {
   // ── Dispatch ───────────────────────────────────────────────────────
 
   private pump(runId: string): void {
+    if (this.closing) return;
     const run = this.store.getRun(runId);
     if (!run || run.status !== "running" || run.paused) return;
     const definition = parseDefinition(run.definition);
@@ -594,6 +610,7 @@ export class OrchestrationService {
   /** Freed capacity may unblock any run, so every dispatchable run is pumped. */
   private schedulePumpAll(): void {
     queueMicrotask(() => {
+      if (this.closing) return;
       for (const runId of this.store.listDispatchableRunIds()) {
         try {
           this.pump(runId);
@@ -714,20 +731,51 @@ export class OrchestrationService {
     })) {
       return;
     }
-    const outcomes: VerificationOutcome[] = [];
+    // A writer is re-synced and re-verified when another writer lands first, so gates always cover the combined state.
+    for (let round = 0; ; round += 1) {
+      const outcomes: VerificationOutcome[] = [];
+      const next = await this.verifyRound(attempt, def, report, workspace, outcomes, round);
+      if (next !== "stale") return;
+      if (attempt.controller.signal.aborted) return;
+      try {
+        await this.serialize(attempt.runId, () =>
+          this.workspaces.prepareWrite(this.workspaceRef(attempt), def.claims.writes, def.claims.protects),
+        );
+      } catch (error) {
+        if (attempt.controller.signal.aborted) return;
+        this.finish(attempt, {
+          to: "interrupted",
+          outcome: "interrupted",
+          error: boundText(redactSecrets(`re-sync with integration failed: ${errorMessage(error)}; held for inspection`), MAX_ERROR),
+          result: report,
+        });
+        return;
+      }
+    }
+  }
+
+  /** One verification pass. Returns "stale" when integration moved on and the writer needs another pass. */
+  private async verifyRound(
+    attempt: ActiveAttempt,
+    def: NormalizedPlanTask,
+    report: AgentTaskReport,
+    workspace: TaskWorkspace | null,
+    outcomes: VerificationOutcome[],
+    round: number,
+  ): Promise<"done" | "stale"> {
     if (workspace?.mode === "write") {
       // Deterministic scope gate: a writer may only change what its claims declare, and nothing it must leave untouched.
-      const scope = await this.checkScopeGate(workspace.path, def.claims);
-      if (attempt.controller.signal.aborted) return;
+      const scope = await this.checkScopeGate(this.workspaceRef(attempt), workspace.path, def.claims);
+      if (attempt.controller.signal.aborted) return "done";
       outcomes.push(scope);
       if (!scope.passed) {
         this.failAttempt(attempt, def, `verification failed: ${scope.label}`, report, outcomes);
-        return;
+        return "done";
       }
     }
     for (const gate of def.verification) {
       const verdict = await this.runGate(attempt, gate, workspace?.path ?? null);
-      if (attempt.controller.signal.aborted) return;
+      if (attempt.controller.signal.aborted) return "done";
       outcomes.push({
         gateId: gate.id,
         label: gate.label,
@@ -739,11 +787,10 @@ export class OrchestrationService {
     const failedRequired = outcomes.filter((outcome) => outcome.required && !outcome.passed);
     if (failedRequired.length === 0) {
       if (workspace?.mode === "write") {
-        await this.integrateAndFinish(attempt, def, report, outcomes);
-        return;
+        return this.integrateAndFinish(attempt, def, report, outcomes, round < MAX_RESYNC_ROUNDS);
       }
       this.finish(attempt, { to: "passed", outcome: "passed", error: null, result: report, verification: outcomes });
-      return;
+      return "done";
     }
     this.failAttempt(
       attempt,
@@ -752,6 +799,7 @@ export class OrchestrationService {
       report,
       outcomes,
     );
+    return "done";
   }
 
   private async runGate(
@@ -804,16 +852,16 @@ export class OrchestrationService {
    * and so does any change to a protected path. Deleted files are always listed, so
    * a removed file is visible in the evidence even when the gate passes.
    */
-  private async checkScopeGate(path: string, claims: ResourceClaims): Promise<VerificationOutcome> {
+  private async checkScopeGate(ref: WorkspaceRef, path: string, claims: ResourceClaims): Promise<VerificationOutcome> {
     const protects = claims.protects ?? [];
     const label =
       protects.length > 0
         ? "changes stay inside the declared writes and leave protected paths untouched"
         : "changes stay inside the declared writes";
     try {
-      const scope = await this.workspaces.checkScope(path, claims.writes, protects);
+      const scope = await this.workspaces.checkScope(ref, path, claims.writes, protects);
       const detail = scope.ok
-        ? `${scope.changed.length} changed file(s) inside scope${listDeleted(scope.deleted)}`
+        ? `${scope.changed.length} changed file(s) inside scope${scope.changed.length > 0 ? `; changed: ${listPaths(scope.changed)}` : ""}${listDeleted(scope.deleted)}`
         : describeScopeFailure(scope);
       return { gateId: "system:scope", label, required: true, passed: scope.ok, detail: boundText(redactSecrets(detail), MAX_DETAIL) };
     } catch (error) {
@@ -837,8 +885,9 @@ export class OrchestrationService {
     def: NormalizedPlanTask,
     report: AgentTaskReport,
     outcomes: VerificationOutcome[],
-  ): Promise<void> {
-    if (attempt.controller.signal.aborted) return;
+    mayResync: boolean,
+  ): Promise<"done" | "stale"> {
+    if (attempt.controller.signal.aborted) return "done";
     const ref = this.workspaceRef(attempt);
     const label = "merged into the run's integration branch";
     try {
@@ -856,8 +905,10 @@ export class OrchestrationService {
           : `nothing new to integrate; integration head ${result.head}`,
       });
       this.finish(attempt, { to: "passed", outcome: "passed", error: null, result: report, verification: outcomes });
+      return "done";
     } catch (error) {
-      if (attempt.controller.signal.aborted) return;
+      if (attempt.controller.signal.aborted) return "done";
+      if (error instanceof WorkspaceStaleError && mayResync) return "stale";
       const conflict = error instanceof WorkspaceConflictError;
       outcomes.push({
         gateId: "system:integration",
@@ -883,6 +934,7 @@ export class OrchestrationService {
         result: report,
         verification: outcomes,
       });
+      return "done";
     }
   }
 
@@ -955,13 +1007,13 @@ export class OrchestrationService {
   }
 
   /** Halt or timeout: the outcome is unknown, so the attempt is interrupted and never retried automatically. */
-  private abortAttempt(attempt: ActiveAttempt, reason: "timeout" | "halted"): boolean {
+  private abortAttempt(attempt: ActiveAttempt, reason: "timeout" | "halted" | "shutdown"): boolean {
     if (attempt.controller.signal.aborted) return false;
     attempt.controller.abort(new Error(reason));
     return this.finish(attempt, {
       to: "interrupted",
       outcome: "interrupted",
-      error: reason === "timeout" ? TIMEOUT_REASON : HALT_REASON,
+      error: reason === "timeout" ? TIMEOUT_REASON : reason === "shutdown" ? SHUTDOWN_REASON : HALT_REASON,
     });
   }
 
@@ -1082,6 +1134,7 @@ export class OrchestrationService {
   }
 
   private assertNotHalted(userId: string): void {
+    if (this.closing) throw new OrchestrationConflictError("orchestration is shutting down");
     if (this.isHalted(userId)) throw new AgentHaltedError(undefined, "orchestration");
   }
 
