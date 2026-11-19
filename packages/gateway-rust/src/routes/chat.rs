@@ -1,6 +1,7 @@
 //! Explicitly mounted candidate chat HTTP/SSE adapter. It shares authenticated
 //! session admission and native persistence; it does not activate a provider.
 use super::auth::{self, AuthState, response};
+use super::chat_queue;
 use super::threads::{ThreadEventSink, thread_status_event};
 use crate::{
     execution::process_runner::ProcessCancellation,
@@ -18,13 +19,14 @@ use crate::{
     services::{
         projects::local_execution_allowed,
         sessions::{SessionFilter, SessionRecord, SessionService},
+        users::UserService,
     },
 };
 use axum::{
     Router,
     body::{Body, to_bytes},
     extract::{Path, Request, State},
-    http::header,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -112,6 +114,8 @@ struct ActiveState {
     snapshots: Mutex<HashMap<String, Weak<AtomicU64>>>,
     turns: Mutex<HashMap<String, ActiveTurn>>,
     device_changes: Mutex<HashSet<String>>,
+    // Guarded by turns when admitting or releasing a lease.
+    queue_waiters: Mutex<HashMap<String, (String, tokio::runtime::Handle)>>,
 }
 // Lease transitions and snapshot registration are serialized by `turns`.
 // The snapshots mutex is always acquired after `turns` when both are needed.
@@ -165,6 +169,9 @@ impl Drop for SnapshotRevision {
     }
 }
 
+/// Sends a session-scoped event `(owner, session, kind, payload)` to the owner's sockets.
+pub type SessionEventSink = Arc<dyn Fn(&str, &str, &str, Value) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ChatRoutes {
     pub(crate) auth: AuthState,
@@ -178,6 +185,8 @@ pub struct ChatRoutes {
     pub(crate) user_events: Option<super::repositories::RepositoryEventSink>,
     /// Broadcasts `thread.status` to every authorized socket; absent when no hub is mounted.
     pub(crate) thread_events: Option<ThreadEventSink>,
+    /// Carries `ui.state-sync` for the queue to the owner's sockets; absent when no hub is mounted.
+    pub(crate) session_events: Option<SessionEventSink>,
 }
 impl ChatRoutes {
     pub fn new(
@@ -199,6 +208,7 @@ impl ChatRoutes {
             events: EventBus::new(),
             user_events: None,
             thread_events: None,
+            session_events: None,
         })
     }
     pub(crate) fn device_change_lease(&self, session: &str) -> Option<Box<dyn Send>> {
@@ -211,7 +221,7 @@ impl ChatRoutes {
             return None;
         }
         Some(Box::new(DeviceChangeLease {
-            state: self.active.clone(),
+            routes: self.clone(),
             session: session.to_owned(),
         }))
     }
@@ -295,6 +305,7 @@ impl ChatRoutes {
         self.active.closed.store(true, Ordering::Release);
         self.events.close_all();
         let active = self.active.turns.lock().unwrap();
+        self.active.queue_waiters.lock().unwrap().clear();
         for turn in active.values() {
             turn.cancellation.cancel();
         }
@@ -363,18 +374,52 @@ impl ChatRoutes {
         self.thread_events = Some(events);
         self
     }
-    fn admit(&self, owner: &str, session: &str, thread: bool) -> Result<TurnLease, Box<Response>> {
+    pub(crate) fn with_session_events(mut self, events: SessionEventSink) -> Self {
+        self.session_events = Some(events);
+        self
+    }
+    fn try_admit(&self, owner: &str, session: &str, thread: bool) -> Result<TurnLease, AdmitError> {
+        self.try_admit_inner(owner, session, thread, false)
+    }
+    fn try_admit_inner(
+        &self,
+        owner: &str,
+        session: &str,
+        thread: bool,
+        queued: bool,
+    ) -> Result<TurnLease, AdmitError> {
         let mut active = self.active.turns.lock().unwrap();
         if self.active.closed.load(Ordering::Acquire) {
-            return Err(Box::new(response(503, json!({"error":"CHAT_CLOSED"}))));
+            return Err(AdmitError::Closed);
         }
-        if active.contains_key(session)
-            || self.active.device_changes.lock().unwrap().contains(session)
-        {
-            return Err(Box::new(response(409, json!({"error":"CHAT_BUSY"}))));
+        if let Some(turn) = active.get(session) {
+            if queued {
+                self.active.queue_waiters.lock().unwrap().insert(
+                    session.into(),
+                    (owner.into(), tokio::runtime::Handle::current()),
+                );
+            }
+            return Err(AdmitError::Busy {
+                chat_turn: !turn.thread,
+            });
+        }
+        if self.active.device_changes.lock().unwrap().contains(session) {
+            if queued {
+                self.active.queue_waiters.lock().unwrap().insert(
+                    session.into(),
+                    (owner.into(), tokio::runtime::Handle::current()),
+                );
+            }
+            return Err(AdmitError::Busy { chat_turn: false });
         }
         if active.len() >= usize::from(self.limits.max_active.get()) {
-            return Err(Box::new(response(503, json!({"error":"CHAT_CAPACITY"}))));
+            if queued {
+                self.active.queue_waiters.lock().unwrap().insert(
+                    session.into(),
+                    (owner.into(), tokio::runtime::Handle::current()),
+                );
+            }
+            return Err(AdmitError::Capacity);
         }
         let cancellation = ProcessCancellation::default();
         let (done, _) = watch::channel(false);
@@ -389,29 +434,53 @@ impl ChatRoutes {
         );
         self.active.changed(session);
         Ok(TurnLease {
-            state: self.active.clone(),
+            routes: self.clone(),
             session: session.into(),
             cancellation,
             done,
         })
     }
+    fn admit(&self, owner: &str, session: &str, thread: bool) -> Result<TurnLease, Box<Response>> {
+        self.try_admit(owner, session, thread)
+            .map_err(|error| Box::new(error.response()))
+    }
+}
+/// Why a turn was not admitted. Only a chat turn that is running lets a send queue behind it.
+enum AdmitError {
+    Closed,
+    Busy { chat_turn: bool },
+    Capacity,
+}
+impl AdmitError {
+    fn response(self) -> Response {
+        match self {
+            Self::Closed => response(503, json!({"error":"CHAT_CLOSED"})),
+            Self::Busy { .. } => response(409, json!({"error":"CHAT_BUSY"})),
+            Self::Capacity => response(503, json!({"error":"CHAT_CAPACITY"})),
+        }
+    }
 }
 struct DeviceChangeLease {
-    state: Arc<ActiveState>,
+    routes: ChatRoutes,
     session: String,
 }
 impl Drop for DeviceChangeLease {
     fn drop(&mut self) {
-        self.state
+        let turns = self.routes.active.turns.lock().unwrap();
+        self.routes
+            .active
             .device_changes
             .lock()
             .unwrap()
             .remove(&self.session);
+        let waiters = std::mem::take(&mut *self.routes.active.queue_waiters.lock().unwrap());
+        drop(turns);
+        self.routes.wake_queue_waiters(waiters);
     }
 }
 
 struct TurnLease {
-    state: Arc<ActiveState>,
+    routes: ChatRoutes,
     session: String,
     cancellation: ProcessCancellation,
     done: watch::Sender<bool>,
@@ -419,12 +488,14 @@ struct TurnLease {
 impl Drop for TurnLease {
     fn drop(&mut self) {
         self.cancellation.cancel();
-        {
-            let mut turns = self.state.turns.lock().unwrap();
+        let waiters = {
+            let mut turns = self.routes.active.turns.lock().unwrap();
             turns.remove(&self.session);
-            self.state.changed(&self.session);
-        }
+            self.routes.active.changed(&self.session);
+            std::mem::take(&mut *self.routes.active.queue_waiters.lock().unwrap())
+        };
         let _ = self.done.send(true);
+        self.routes.wake_queue_waiters(waiters);
     }
 }
 #[derive(Deserialize)]
@@ -603,11 +674,31 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
             Err(_) => return auth::internal_error(),
         }
     }
-    let lease = match state.admit(&user.id, &input.session_id, false) {
+    let lease = match state.try_admit(&user.id, &input.session_id, false) {
         Ok(lease) => lease,
-        Err(error) => return *error,
+        // A send during a chat turn joins the session's queue, as Node's does. A thread turn or a
+        // device change still refuses with CHAT_BUSY.
+        Err(AdmitError::Busy { chat_turn: true }) => {
+            return state
+                .queue_send(&user.id, &input.session_id, &input.content)
+                .await;
+        }
+        Err(error) => return error.response(),
     };
-    let session = match local_turn_session(&state, &user.id, &input.session_id).await {
+    start_turn(&state, user, input, lease).await
+}
+
+/// Runs an admitted chat turn and returns its event stream. Dropping the stream does not stop the
+/// turn: delivery failures are recorded, and the turn still completes and is persisted.
+async fn start_turn(
+    state: &ChatRoutes,
+    user: AuthUser,
+    input: ChatBody,
+    lease: TurnLease,
+) -> Response {
+    let client_id = client_message_id(&input);
+    let owner = user.id.clone();
+    let session = match local_turn_session(state, &user.id, &input.session_id).await {
         Ok(session) => session,
         Err(error) => return *error,
     };
@@ -692,6 +783,7 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     );
     let manager = state.manager.clone();
     let events = state.events.clone();
+    let drain = state.clone();
     let session_id = input.session_id;
     tokio::spawn(async move {
         let _lease = lease;
@@ -736,6 +828,9 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         };
         let _ = terminal_sender.send(format!("data: {terminal}\n\n"));
         drop(sender);
+        // Release the session before draining, so the next queued message can start in its place.
+        drop(_lease);
+        drain.drain_queued_soon(&owner, &session_id);
     });
     let stream = ChatStream {
         receiver,
@@ -750,6 +845,237 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
             (header::HeaderName::from_static("x-accel-buffering"), "no"),
         ],
         Body::from_stream(stream),
+    )
+        .into_response()
+}
+impl ChatRoutes {
+    /// Keeps a send that arrived during a chat turn in the session's queue, and answers it the way
+    /// Node does: an event stream with a `queued` event and `done`, status 202. A send with the same
+    /// text as a queued entry joins that entry.
+    async fn queue_send(&self, owner: &str, session: &str, content: &str) -> Response {
+        let (session_db, content_db) = (session.to_owned(), content.to_owned());
+        let stored = self
+            .auth
+            .with_database(move |db| {
+                let (stored, consumed) = chat_queue::read(db, &session_db)?;
+                // An entry whose id already ran is neither joined nor counted as waiting.
+                let mut queue = chat_queue::without_consumed(stored, &consumed);
+                let existing = queue
+                    .iter()
+                    .find(|entry| chat_queue::same_text(entry, &content_db))
+                    .cloned();
+                if let Some(existing) = existing {
+                    return Ok((existing, queue, false));
+                }
+                let entry = chat_queue::new_entry(&content_db);
+                queue.push(entry.clone());
+                chat_queue::store(db, &session_db, &queue, &consumed)?;
+                Ok((entry, queue, true))
+            })
+            .await;
+        let (entry, queue, created) = match stored {
+            Ok(stored) => stored,
+            Err(_) => return auth::internal_error(),
+        };
+        if created {
+            self.publish_queue(owner, session, &queue);
+        }
+        // The turn may have ended while this write was in flight; the queue must not wait for it.
+        self.drain_queued_soon(owner, session);
+        queued_stream(session, &entry, queue.len())
+    }
+
+    /// Starts the next queued message once the session is idle. Each queue write and each turn end
+    /// calls this. A write that lands while another turn holds the session is picked up by that
+    /// turn's end, so no entry waits behind an idle session.
+    pub(crate) fn drain_queued_soon(&self, owner: &str, session: &str) {
+        let routes = self.clone();
+        let (owner, session) = (owner.to_owned(), session.to_owned());
+        tokio::spawn(async move { routes.drain_queued(&owner, &session).await });
+    }
+
+    fn wake_queue_waiters(&self, waiters: HashMap<String, (String, tokio::runtime::Handle)>) {
+        if waiters.is_empty() || self.active.closed.load(Ordering::Acquire) {
+            return;
+        }
+        let runtime = waiters.values().next().unwrap().1.clone();
+        let routes = self.clone();
+        runtime.spawn(async move {
+            for (session, (owner, _)) in waiters {
+                if routes.active.closed.load(Ordering::Acquire) {
+                    break;
+                }
+                routes.drain_queued(&owner, &session).await;
+            }
+        });
+    }
+
+    async fn drain_queued(&self, owner: &str, session: &str) {
+        // Only a head that can start earns a lease. Admitting an idle session that has nothing to
+        // start would hold it for a moment, and a send or a thread turn arriving then would see it busy.
+        if !self.head_startable(owner, session).await {
+            return;
+        }
+        // Admission comes first. While another turn holds the session, the queue stays as it is.
+        let Ok(lease) = self.try_admit_inner(owner, session, false, true) else {
+            return;
+        };
+        let (owner_db, session_db) = (owner.to_owned(), session.to_owned());
+        let next = self
+            .auth
+            .with_database(move |db| {
+                let Some(user) = UserService::new(db).find_by_id(&owner_db)? else {
+                    return Ok(None);
+                };
+                let (stored, mut consumed) = chat_queue::read(db, &session_db)?;
+                let stored_len = stored.len();
+                let mut queue = chat_queue::without_consumed(stored, &consumed);
+                let Some(head) = queue.first().cloned() else {
+                    if stored_len > 0 {
+                        chat_queue::store(db, &session_db, &queue, &consumed)?;
+                    }
+                    return Ok(None);
+                };
+                // Unsupported uploads must remain queued rather than be silently dropped.
+                if head.get("held") == Some(&Value::Bool(true))
+                    || chat_queue::has_attachments(&head)
+                {
+                    return Ok(None);
+                }
+                queue.remove(0);
+                if let Some(id) = chat_queue::id_of(&head) {
+                    chat_queue::remember(&mut consumed, id);
+                }
+                chat_queue::store(db, &session_db, &queue, &consumed)?;
+                let user = AuthUser {
+                    id: user.id,
+                    username: user.username,
+                };
+                Ok(Some((user, head, queue)))
+            })
+            .await;
+        let next = match next {
+            Ok(next) => next,
+            Err(_) => return,
+        };
+        let Some((user, entry, rest)) = next else {
+            drop(lease);
+            // A write that landed while this drain held the session would otherwise wait for a turn
+            // end that never comes. Look again now that the session is free.
+            if self.head_startable(owner, session).await {
+                self.drain_queued_soon(owner, session);
+            }
+            return;
+        };
+        self.publish_queue(owner, session, &rest);
+        let content = entry
+            .get("content")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        let input = ChatBody {
+            session_id: session.to_owned(),
+            content,
+            client_message_id: None,
+        };
+        let started = start_turn(self, user, input, lease).await;
+        if !started.status().is_success() {
+            // The turn did not start (for example, the configured provider is unavailable), so the
+            // message stays queued for the next turn end or queue write.
+            self.restore_queued(owner, session, entry).await;
+        }
+    }
+
+    /// Drops the entries that already ran, then reports whether the head could start now: its owner
+    /// exists and nothing holds it. It takes no lease, so an idle session is never held for this check.
+    async fn head_startable(&self, owner: &str, session: &str) -> bool {
+        let (owner_db, session_db) = (owner.to_owned(), session.to_owned());
+        self.auth
+            .with_database(move |db| {
+                if UserService::new(db).find_by_id(&owner_db)?.is_none() {
+                    return Ok(false);
+                }
+                let (stored, consumed) = chat_queue::read(db, &session_db)?;
+                let stored_len = stored.len();
+                let queue = chat_queue::without_consumed(stored, &consumed);
+                if queue.len() != stored_len {
+                    chat_queue::store(db, &session_db, &queue, &consumed)?;
+                }
+                Ok(queue.first().is_some_and(|head| {
+                    head.get("held") != Some(&Value::Bool(true))
+                        && !chat_queue::has_attachments(head)
+                }))
+            })
+            .await
+            .unwrap_or(false)
+    }
+
+    /// Puts a message back at the head of the queue after its turn failed to start.
+    async fn restore_queued(&self, owner: &str, session: &str, entry: Value) {
+        let session_db = session.to_owned();
+        let restored = self
+            .auth
+            .with_database(move |db| {
+                let (queue, mut consumed) = chat_queue::read(db, &session_db)?;
+                let entry_id = chat_queue::id_of(&entry).map(str::to_owned);
+                if let Some(id) = entry_id.as_deref() {
+                    chat_queue::forget(&mut consumed, id);
+                }
+                let mut restored = vec![entry];
+                restored.extend(queue.into_iter().filter(|item| {
+                    entry_id.is_none() || chat_queue::id_of(item) != entry_id.as_deref()
+                }));
+                chat_queue::store(db, &session_db, &restored, &consumed)?;
+                Ok(restored)
+            })
+            .await;
+        if let Ok(queue) = restored {
+            self.publish_queue(owner, session, &queue);
+        }
+    }
+
+    /// Sends the queue to the owner's sockets as Node does: `ui.state-sync` with the whole queue,
+    /// or null when it is empty.
+    fn publish_queue(&self, owner: &str, session: &str, queue: &[Value]) {
+        let Some(sink) = &self.session_events else {
+            return;
+        };
+        let value = if queue.is_empty() {
+            Value::Null
+        } else {
+            Value::Array(queue.to_vec())
+        };
+        sink(
+            owner,
+            session,
+            "ui.state-sync",
+            json!({"key": chat_queue::QUEUE_KEY, "value": value}),
+        );
+    }
+}
+
+/// The 202 answer to a send that joined the queue: a `queued` event, then `done`.
+fn queued_stream(session: &str, message: &Value, queue_length: usize) -> Response {
+    let queued = json!({
+        "type": "queued",
+        "session_id": session,
+        "message": message,
+        "queue_length": queue_length,
+    });
+    let done = json!({
+        "type": "done",
+        "session_id": session,
+        "prompt_count": null,
+        "remaining_prompts": null,
+    });
+    (
+        StatusCode::ACCEPTED,
+        [
+            (header::CONTENT_TYPE, "text/event-stream"),
+            (header::CACHE_CONTROL, "no-cache"),
+            (header::HeaderName::from_static("x-accel-buffering"), "no"),
+        ],
+        format!("data: {queued}\n\ndata: {done}\n\n"),
     )
         .into_response()
 }

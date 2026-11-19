@@ -475,7 +475,7 @@ async fn request_limits_and_execution_configuration_fields_are_rejected() {
     fixture.finish().await;
 }
 #[tokio::test]
-async fn same_session_is_rejected_and_owner_cancel_persists_partial_then_releases() {
+async fn same_session_send_queues_and_owner_cancel_persists_partial_then_runs_the_queue() {
     let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
     let mut first = fixture
         .post("/api/chat")
@@ -484,16 +484,15 @@ async fn same_session_is_rejected_and_owner_cancel_persists_partial_then_release
         .await
         .unwrap();
     first.chunk().await.unwrap().unwrap();
-    assert_eq!(
-        fixture
-            .post("/api/chat")
-            .json(&json!({"sessionId":"session","content":"again"}))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        409
-    );
+    // A send during the running turn joins the session's queue instead of starting a second turn.
+    let queued = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"again"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(queued.status(), 202);
+    assert!(queued.text().await.unwrap().contains("\"type\":\"queued\""));
     assert_eq!(
         fixture
             .post("/api/chat/cancel")
@@ -532,19 +531,218 @@ async fn same_session_is_rejected_and_owner_cancel_persists_partial_then_release
     assert!(
         matches!(&fixture.events().await[1],TurnEvent::Assistant{content,tool_calls,..}if content=="response fragment "&&tool_calls.is_empty())
     );
+    // The queued send starts by itself once the cancelled turn releases the session. The provider
+    // stays paused, so the session is busy until the explicit cancel below.
+    wait_for_running_turn(&fixture, "again").await;
+    let rerun: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(rerun["cancelled"], true);
+    fixture.finish().await;
+}
+/// Waits until a turn whose message is `content` is running for the session.
+async fn wait_for_running_turn(fixture: &Fixture, content: &str) {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let events = fixture.events().await;
+            let started = events
+                .iter()
+                .any(|event| matches!(event, TurnEvent::User { content: text } if text == content));
+            let running = fixture
+                .routes
+                .active
+                .turns
+                .lock()
+                .unwrap()
+                .contains_key("session");
+            if started && running {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+#[tokio::test]
+async fn queued_turn_resumes_after_another_session_releases_capacity() {
+    let limits = ChatLimits {
+        max_active: NonZeroU16::new(1).unwrap(),
+        ..ChatLimits::default()
+    };
+    let fixture = Fixture::new(true, 1, limits).await;
+    let blocker = match fixture.routes.try_admit("owner", "other-session", false) {
+        Ok(lease) => lease,
+        Err(_) => panic!("capacity blocker should be admitted"),
+    };
     fixture
-        .factory
-        .provider
-        .pause
-        .store(false, Ordering::SeqCst);
-    let next = fixture
+        .auth
+        .with_database(|db| {
+            chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"waiting", "content":"waiting"})],
+                &[],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    fixture.routes.drain_queued("owner", "session").await;
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    drop(blocker);
+    wait_for_running_turn(&fixture, "waiting").await;
+    fixture.routes.close();
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn queued_turn_resumes_when_capacity_lease_drops_outside_runtime() {
+    let limits = ChatLimits {
+        max_active: NonZeroU16::new(1).unwrap(),
+        ..ChatLimits::default()
+    };
+    let fixture = Fixture::new(true, 1, limits).await;
+    let blocker = fixture
+        .routes
+        .try_admit("owner", "other-session", false)
+        .unwrap_or_else(|_| panic!("capacity blocker should be admitted"));
+    fixture
+        .auth
+        .with_database(|db| {
+            chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"waiting", "content":"waiting"})],
+                &[],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    fixture.routes.drain_queued("owner", "session").await;
+    std::thread::spawn(move || drop(blocker)).join().unwrap();
+    wait_for_running_turn(&fixture, "waiting").await;
+    fixture.routes.close();
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn queued_turn_resumes_after_device_change_finishes() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    let device_change = fixture.routes.device_change_lease("session").unwrap();
+    fixture
+        .auth
+        .with_database(|db| {
+            chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"waiting", "content":"waiting"})],
+                &[],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    fixture.routes.drain_queued("owner", "session").await;
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    drop(device_change);
+    wait_for_running_turn(&fixture, "waiting").await;
+    fixture.routes.close();
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn queued_upload_remains_intact_and_blocks_later_messages() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    let queue = vec![
+        json!({"id": "upload", "content": "describe", "attachments": [{"name": "image.png"}]}),
+        json!({"id": "later", "content": "later"}),
+    ];
+    let stored = queue.clone();
+    fixture
+        .auth
+        .with_database(move |db| Ok(chat_queue::store(db, "session", &stored, &[])?))
+        .await
+        .unwrap();
+
+    fixture.routes.drain_queued("owner", "session").await;
+
+    let (remaining, consumed) = fixture
+        .auth
+        .with_database(|db| Ok(chat_queue::read(db, "session")?))
+        .await
+        .unwrap();
+    assert_eq!(remaining, queue);
+    assert!(consumed.is_empty());
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn a_send_never_joins_a_queued_entry_that_already_ran() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    let mut first = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    first.chunk().await.unwrap().unwrap();
+    // A stale client snapshot can bring back an entry whose id already ran. That entry must not
+    // absorb a new send with the same text, or the send would never run.
+    fixture
+        .auth
+        .with_database(|db| {
+            crate::routes::chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"q-ran","content":"again"})],
+                &["q-ran".to_owned()],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let queued = fixture
         .post("/api/chat")
         .json(&json!({"sessionId":"session","content":"again"}))
         .send()
         .await
         .unwrap();
-    assert_eq!(next.status(), 200);
-    assert!(next.text().await.unwrap().contains("\"type\":\"done\""));
+    assert_eq!(queued.status(), 202);
+    let body = queued.text().await.unwrap();
+    let event = frames(&body)
+        .into_iter()
+        .find(|event| event["type"] == "queued")
+        .unwrap();
+    assert_ne!(event["message"]["id"], "q-ran");
+    let cancelled: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cancelled["cancelled"], true);
+    wait_for_running_turn(&fixture, "again").await;
+    let rerun: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(rerun["cancelled"], true);
     fixture.finish().await;
 }
 #[tokio::test]

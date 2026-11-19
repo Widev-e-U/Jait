@@ -33,6 +33,7 @@ pub mod environment;
 pub mod chat;
 
 pub mod chat_events;
+mod chat_queue;
 
 pub mod node_credentials;
 pub mod reminders;
