@@ -625,6 +625,62 @@ async fn session_root_removal_is_rechecked_after_tool_consent() {
 }
 
 #[tokio::test]
+async fn tool_catalogue_lists_the_runnable_tools_through_the_binary() {
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let anonymous = client.get(url("/api/tools")).send().await.unwrap();
+    assert_eq!(anonymous.status(), 401);
+    let registered: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let token = registered["access_token"].as_str().unwrap();
+    let response = client
+        .get(url("/api/tools"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let catalogue: Value = response.json().await.unwrap();
+    let tools = catalogue["tools"].as_array().unwrap();
+    let mut names: Vec<&str> = tools
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap_or_default())
+        .collect();
+    names.sort_unstable();
+    // The catalogue offers exactly the tools the gateway can run, not the reference registry.
+    assert_eq!(
+        names,
+        [
+            "file.list",
+            "file.patch",
+            "file.read",
+            "file.write",
+            "terminal.run"
+        ],
+        "{catalogue}"
+    );
+    for tool in tools {
+        assert!(
+            tool["description"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty()),
+            "{tool}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn project_revocation_stops_running_terminal_effect() {
     let gateway = Gateway::start();
     let original_root = gateway.directory.join("terminal-original");

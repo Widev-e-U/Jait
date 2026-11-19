@@ -1,5 +1,49 @@
 # Native Rust gateway
 
+## Session titles, a Chat Completions fix and four route tests — 2026-11-19
+
+`POST /api/sessions/:id/generate-title` now generates titles. `SessionRuntimeAdapter::title` (`runtime/application.rs`)
+calls the existing `services::thread_title_generation` module through `native_title_port()`. That port resolves the
+owner's Jait backend with `resolve_jait_llm_config` and makes one bounded completion with `call_jait_llm_completion`
+(512 tokens, temperature 0.2). If that fails, the route keeps the name derived from the prompt, as the reference does.
+Two differences remain. The reference's direct OpenAI and Ollama branch is not ported; it runs only when the stored
+`jait_backend` is empty, and the settings enum never stores an empty value. A failure is written to stderr, not to the
+reference's structured logger.
+
+`call_jait_llm_completion` had a porting bug. It sent Chat Completions bodies through the OpenCode Go translator
+(`go_request`), which rejects that protocol, so every one-shot completion on an OpenAI-compatible backend failed with
+`Invalid completion request`. The request and the response now skip the translator for Chat Completions, as the
+reference does (`callJaitLlmCompletion` posts `/chat/completions` unchanged). Responses and Messages still go through it.
+
+Route evidence. Each test runs through the composed binary and asserts a success outcome, not only an auth failure:
+
+- `GET /api/tools`: `tool_catalogue_lists_the_runnable_tools_through_the_binary` (`tests/binary_tool_policy.rs`). A
+  request without a token gets 401. With a token, the catalogue is exactly `file.read`, `file.write`, `file.list`,
+  `file.patch` and `terminal.run`. That is the runnable subset, not the reference's registry.
+- `POST /api/code-graph/index` and `POST /api/code-graph/path`, plus the success paths of `GET
+  /api/code-graph/snapshot` and `POST /api/code-graph/query`: `owner_index_builds_the_graph_through_the_binary`
+  (`tests/binary_code_graph.rs`). It is unix-only. A local fake Graphify executable, selected with
+  `JAIT_GRAPHIFY_COMMAND`, answers the pinned version probe and writes the graph file. The managed Python runtime
+  install is not exercised.
+- `POST /api/sessions/:id/generate-title`: `generate_title_uses_the_owners_provider_through_the_binary`
+  (`tests/binary_session_routes.rs`). A mock OpenAI-compatible server checks the title, the request shape (system
+  prompt, trimmed task, `max_tokens` 512, temperature 0.2), a named session that makes no provider call, another
+  account's 404, and the fallback after a provider 500.
+- `GET /api/calendar/connect/google`: `calendar_routes_through_the_binary` (`tests/binary_calendar_routes.rs`). The
+  owner gets an authorize URL with its client id, the callback redirect, PKCE `S256`, offline access and a state value.
+  An account with no credentials gets 400 `not configured`. The previous check accepted either 200 or 400.
+
+Focused runs before the completion fix: `binary_calendar_routes` 1 of 1, `binary_code_graph` 2 of 2 and
+`binary_tool_policy` 7 of 7. After the fix, `binary_session_routes` 3 of 3, including the title test.
+
+Inventory: `nativeTested` is 221 of 530 (41.70%), up from 216 (40.75%). HTTP is 203 of 448 native-tested, with 94
+native-untested and 151 missing. WebSocket is 18 of 74 native-tested, and the 8 background services are still missing.
+
+Known limit, not changed: the git routes (`/api/git/*`) take `cwd` from the request body and check only that the caller
+is signed in. The reference does the same. Any signed-in account can therefore run git operations in any directory the
+gateway can reach, including `discard`. Confining `cwd` to the caller's owned project roots would change behaviour, so
+it is a product and security decision for the owner, not a port fix.
+
 ## WebSocket node grants, test-only race fixes and build note — 2026-11-19
 
 The composed runtime now serves `nodes.list`, `nodes.get`, `nodes.update-permissions` and `nodes.forget` over

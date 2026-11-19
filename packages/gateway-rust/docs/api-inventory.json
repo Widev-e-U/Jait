@@ -3,13 +3,13 @@
     "httpTotal": 448,
     "missing": 40,
     "mounted-fail-closed": 104,
-    "native-tested": 198,
-    "native-untested": 99,
+    "native-tested": 203,
+    "native-untested": 94,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
-    "nativeTested": 216,
+    "nativeTested": 221,
     "nativeTestedDenominator": 530,
-    "nativeTestedPct": 40.75,
+    "nativeTestedPct": 41.7,
     "wsTotal": 74,
     "wsInbound": 38,
     "wsOutboundCandidates": 36,
@@ -20,8 +20,8 @@
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
-      "native-tested": 198,
-      "native-untested": 99,
+      "native-tested": 203,
+      "native-untested": 94,
       "missing": 151
     },
     "wsRustStatus": {
@@ -770,11 +770,16 @@
       "nodeFiles": [
         "routes/calendar.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/calendar.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -876,6 +881,10 @@
         {
           "file": "tests/binary_code_graph.rs",
           "name": "code_graph_routes_enforce_owned_project_boundaries"
+        },
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
         }
       ],
       "rustStatus": "native-tested"
@@ -2807,11 +2816,16 @@
       "nodeFiles": [
         "routes/terminals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "runtime/tools_mount.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "tool_catalogue_lists_the_runnable_tools_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3718,11 +3732,16 @@
       "nodeFiles": [
         "routes/code-graph.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3730,11 +3749,16 @@
       "nodeFiles": [
         "routes/code-graph.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/code_graph.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -3749,6 +3773,10 @@
         {
           "file": "tests/binary_code_graph.rs",
           "name": "code_graph_routes_enforce_owned_project_boundaries"
+        },
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
         }
       ],
       "rustStatus": "native-tested"
@@ -5662,11 +5690,16 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "generate_title_uses_the_owners_provider_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",

@@ -402,7 +402,13 @@ pub async fn call_jait_llm_completion(
         Protocol::ChatCompletions
     };
     let body = json!({"model":llm.openai_model,"messages":messages,"max_tokens":max_tokens.unwrap_or(256),"temperature":temperature.unwrap_or(0.3),"stream":false});
-    let body = go_request(&body, protocol).map_err(|_| "Invalid completion request")?;
+    // The reference posts this body unchanged to `/chat/completions`. The translator covers
+    // only the Responses and Messages shapes, so it must not reject Chat Completions.
+    let body = if protocol == Protocol::ChatCompletions {
+        body
+    } else {
+        go_request(&body, protocol).map_err(|_| "Invalid completion request")?
+    };
     if serde_json::to_vec(&body)
         .map_err(|_| "Invalid completion request")?
         .len()
@@ -454,7 +460,12 @@ pub async fn call_jait_llm_completion(
         if !status.is_success() {
             return Err(format!("LLM request failed ({})", status.as_u16()));
         }
-        let data = completion(&data, protocol).map_err(|_| "Invalid LLM completion".to_string())?;
+        // Chat Completions responses already carry `choices`; only the other shapes are translated.
+        let data = if protocol == Protocol::ChatCompletions {
+            data
+        } else {
+            completion(&data, protocol).map_err(|_| "Invalid LLM completion".to_string())?
+        };
         completion_text(&data, &llm.openai_model)
     };
     tokio::select! {biased; _=cancel.wait_cancelled()=>Err("LLM request cancelled".into()), result=operation=>result}

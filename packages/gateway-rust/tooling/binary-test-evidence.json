@@ -799,6 +799,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/tools",
+      "tests": [
+        {
+          "file": "tests/binary_tool_policy.rs",
+          "name": "tool_catalogue_lists_the_runnable_tools_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/tools/sessions.list",
       "tests": [
         {
@@ -814,6 +824,16 @@
         {
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/generate-title",
+      "tests": [
+        {
+          "file": "tests/binary_session_routes.rs",
+          "name": "generate_title_uses_the_owners_provider_through_the_binary"
         }
       ]
     },
@@ -1727,11 +1747,35 @@
     },
     {
       "method": "POST",
+      "path": "/api/code-graph/index",
+      "tests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/path",
+      "tests": [
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
       "path": "/api/code-graph/query",
       "tests": [
         {
           "file": "tests/binary_code_graph.rs",
           "name": "code_graph_routes_enforce_owned_project_boundaries"
+        },
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
         }
       ]
     },
@@ -1907,6 +1951,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/calendar/connect/google",
+      "tests": [
+        {
+          "file": "tests/binary_calendar_routes.rs",
+          "name": "calendar_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/calendar/calendars",
       "tests": [
         {
@@ -1942,6 +1996,10 @@
         {
           "file": "tests/binary_code_graph.rs",
           "name": "code_graph_routes_enforce_owned_project_boundaries"
+        },
+        {
+          "file": "tests/binary_code_graph.rs",
+          "name": "owner_index_builds_the_graph_through_the_binary"
         }
       ]
     },

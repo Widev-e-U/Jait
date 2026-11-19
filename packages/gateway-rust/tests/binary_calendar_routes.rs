@@ -218,14 +218,44 @@ async fn calendar_routes_through_the_binary() {
     assert_eq!(st, 200);
     assert_eq!(b["events"].as_array().unwrap().len(), 1);
     assert_eq!(b["events"][0]["id"], "earlier");
-    let (st, _) = call(
+    // The owner's saved client starts a consent flow with PKCE and a state bound to the callback.
+    let (st, b) = call(
         M::GET,
         "/api/calendar/connect/google".into(),
         o.clone(),
         None,
     )
     .await;
-    assert!(st == 200 || st == 400);
+    assert_eq!(st, 200, "{b}");
+    let redirect = b["redirectUri"].as_str().unwrap().to_owned();
+    assert!(redirect.ends_with("/api/calendar/oauth/callback"), "{b}");
+    let auth_url = url::Url::parse(b["authUrl"].as_str().unwrap()).unwrap();
+    assert_eq!(auth_url.host_str(), Some("accounts.google.com"), "{b}");
+    let params: std::collections::HashMap<String, String> =
+        auth_url.query_pairs().into_owned().collect();
+    assert_eq!(params["client_id"], "id", "{b}");
+    assert_eq!(params["redirect_uri"], redirect, "{b}");
+    assert_eq!(params["response_type"], "code", "{b}");
+    assert_eq!(params["code_challenge_method"], "S256", "{b}");
+    assert_eq!(params["access_type"], "offline", "{b}");
+    assert!(params["state"].len() >= 24, "{b}");
+    assert!(!params["code_challenge"].is_empty(), "{b}");
+    // The other account saved no credentials, so the same route refuses to start a flow.
+    let (st, b) = call(
+        M::GET,
+        "/api/calendar/connect/google".into(),
+        x.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(st, 400, "{b}");
+    assert!(
+        b["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not configured"),
+        "{b}"
+    );
 
     let response = client
         .get(url("/api/calendar/oauth/callback"))

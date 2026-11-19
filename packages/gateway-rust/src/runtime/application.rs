@@ -370,6 +370,40 @@ impl crate::routes::sessions::SessionRuntime for SessionRuntimeAdapter {
             hub.broadcast_user_event(user, event);
         }
     }
+
+    /// The reference's `generateTitleViaApi` through the native Jait-backend port. A failure
+    /// returns its message, and the route falls back to a prompt-derived name.
+    fn title(
+        &self,
+        request: crate::routes::sessions::TitleRequest,
+    ) -> crate::routes::sessions::TitleFuture<'_> {
+        Box::pin(async move {
+            let settings = request.settings;
+            let options = serde_json::json!({
+                "task": request.prompt,
+                "apiKeys": settings.as_ref().map(|s| &s.api_keys),
+                "jaitBackend": settings.as_ref().map(|s| s.jait_backend.as_str()).unwrap_or(""),
+                "model": request.model,
+                "config": {},
+            });
+            crate::services::thread_title::generate_title_via_api(
+                &options,
+                &crate::services::thread_title::native_title_port(),
+            )
+            .await
+            .map(|title| String::from_utf16_lossy(&title.0))
+            .map_err(crate::services::thread_title::TitleError::message)
+        })
+    }
+
+    fn title_warning(&self, session: &str, model: Option<&str>, error: &str) {
+        // The reference logs this warning. The native gateway has no structured logger here,
+        // so it writes the same fields to stderr.
+        eprintln!(
+            "Session title generation failed for {session} (model {}): {error}",
+            model.unwrap_or("default")
+        );
+    }
 }
 
 impl Application {

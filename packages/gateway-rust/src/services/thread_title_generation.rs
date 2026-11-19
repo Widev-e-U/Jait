@@ -1,8 +1,20 @@
 use super::normalize_generated_thread_title;
-use crate::{contracts::bounded_json::Utf16Text, text::js_trim, tools::core_io::HostError};
+use crate::{
+    contracts::bounded_json::Utf16Text,
+    execution::process_runner::ProcessCancellation,
+    services::{
+        jait_llm::{
+            JaitLlmConfig, ResolveJaitLlmOptions, ResolvedJaitLlmConfig, call_jait_llm_completion,
+            infer_context_window, resolve_jait_llm_config,
+        },
+        jait_models::JaitBackend,
+    },
+    text::js_trim,
+    tools::core_io::HostError,
+};
 use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
 pub const THREAD_TITLE_PROMPT: &str =
@@ -101,6 +113,15 @@ pub enum TitleError {
 impl From<HostError> for TitleError {
     fn from(error: HostError) -> Self {
         Self::Host(error)
+    }
+}
+impl TitleError {
+    /// The text reported to the warning log and the caller's fallback path.
+    pub fn message(self) -> String {
+        match self {
+            Self::Host(HostError::Error(message)) | Self::TypeError(message) => message,
+            Self::Host(HostError::Thrown(value)) => value.to_string(),
+        }
     }
 }
 
@@ -249,4 +270,77 @@ async fn call_llm(options: &Value, port: &TitleApiPort) -> Result<String, TitleE
         return Ok(content.into());
     }
     Err(HostError::Error(format!("{backend} title generation returned no content")).into())
+}
+
+/// The title port for the composed gateway. Jait-backend resolution and the bounded
+/// one-shot completion are the functions chat uses. The resolved key crosses only the
+/// two in-process operations and is never returned to a client. The direct OpenAI and
+/// Ollama branch is not ported: `call_llm` takes it only when the stored `jaitBackend`
+/// is empty, and the settings enum never stores an empty value.
+pub fn native_title_port() -> TitleApiPort {
+    Arc::new(
+        |operation: TitleApiOperation| -> BoxFuture<'static, Result<Value, HostError>> {
+            Box::pin(native_title_operation(operation))
+        },
+    )
+}
+
+async fn native_title_operation(operation: TitleApiOperation) -> Result<Value, HostError> {
+    match operation {
+        TitleApiOperation::ResolveLlm(input) => {
+            let api_keys: HashMap<String, String> = input["apiKeys"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_owned())))
+                .collect();
+            let resolved = resolve_jait_llm_config(ResolveJaitLlmOptions {
+                config: &JaitLlmConfig::default(),
+                api_keys: &api_keys,
+                requested_model: input["requestedModel"].as_str(),
+                jait_backend: input["jaitBackend"].as_str().and_then(JaitBackend::parse),
+                strict_model: false,
+            })
+            .map_err(HostError::Error)?;
+            Ok(json!({
+                "backend": resolved.backend,
+                "openaiApiKey": resolved.openai_api_key,
+                "openaiBaseUrl": resolved.openai_base_url,
+                "openaiModel": resolved.openai_model,
+            }))
+        }
+        TitleApiOperation::CompleteLlm {
+            config,
+            messages,
+            options,
+        } => {
+            let backend = serde_json::from_value::<JaitBackend>(config["backend"].clone())
+                .map_err(|_| HostError::Error("Title backend is invalid".into()))?;
+            let model = string(&config, "openaiModel").to_owned();
+            let llm = ResolvedJaitLlmConfig {
+                backend,
+                openai_api_key: string(&config, "openaiApiKey").to_owned(),
+                openai_base_url: string(&config, "openaiBaseUrl").to_owned(),
+                context_window: infer_context_window(&model),
+                openai_model: model,
+                num_ctx: None,
+            };
+            let text = call_jait_llm_completion(
+                &llm,
+                messages.as_array().cloned().unwrap_or_default(),
+                options["maxTokens"]
+                    .as_u64()
+                    .and_then(|tokens| u32::try_from(tokens).ok()),
+                options["temperature"].as_f64(),
+                "",
+                &ProcessCancellation::default(),
+            )
+            .await
+            .map_err(HostError::Error)?;
+            Ok(Value::String(text))
+        }
+        TitleApiOperation::Fetch { .. } => Err(HostError::Error(
+            "Direct title endpoints are not available in the native gateway".into(),
+        )),
+    }
 }

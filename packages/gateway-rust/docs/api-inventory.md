@@ -9,13 +9,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "httpTotal": 448,
   "missing": 40,
   "mounted-fail-closed": 104,
-  "native-tested": 198,
-  "native-untested": 99,
+  "native-tested": 203,
+  "native-untested": 94,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 216,
+  "nativeTested": 221,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 40.75,
+  "nativeTestedPct": 41.7,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,8 +26,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 198,
-    "native-untested": 99,
+    "native-tested": 203,
+    "native-untested": 94,
     "missing": 151
   },
   "wsRustStatus": {
@@ -94,14 +94,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/calendar/accounts` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/calendars` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/config` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
-| GET | `/api/calendar/connect/google` | native-untested | native-untested |  | routes/calendar.ts |
+| GET | `/api/calendar/connect/google` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/events` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/oauth/callback` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/channels` | missing | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/setup` | missing | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/channels/:id/status` | missing | mounted-fail-closed |  | routes/channels.ts |
 | GET | `/api/code-graph` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
-| GET | `/api/code-graph/snapshot` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
+| GET | `/api/code-graph/snapshot` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries`, `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
 | GET | `/api/consent/:id` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/count` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/pending` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
@@ -232,7 +232,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/threads/:id/activities` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | GET | `/api/threads/:id/runtime` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
-| GET | `/api/tools` | native-untested | native-untested |  | routes/terminals.ts |
+| GET | `/api/tools` | native-tested | native-tested | `tests/binary_tool_policy.rs::tool_catalogue_lists_the_runnable_tools_through_the_binary` | routes/terminals.ts |
 | GET | `/api/tools/sessions.list` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/tools/sessions.status` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/trust` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
@@ -294,9 +294,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/chat` | native-tested | native-tested | `tests/binary_agent_tool_policy.rs::reenabled_tool_is_advertised_and_executed_in_new_chat` | routes/chat.ts |
 | POST | `/api/chat/prewarm` | native-untested | native-untested |  | routes/chat.ts |
 | POST | `/api/code-graph/graphrag/prepare` | native-untested | native-untested |  | routes/code-graph.ts |
-| POST | `/api/code-graph/index` | native-untested | native-untested |  | routes/code-graph.ts |
-| POST | `/api/code-graph/path` | native-untested | native-untested |  | routes/code-graph.ts |
-| POST | `/api/code-graph/query` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries` | routes/code-graph.ts |
+| POST | `/api/code-graph/index` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
+| POST | `/api/code-graph/path` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
+| POST | `/api/code-graph/query` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries`, `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
 | POST | `/api/consent/:id/approve` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/:id/approve-all` | native-untested | native-untested |  | routes/consent.ts |
 | POST | `/api/consent/:id/reject` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
@@ -441,7 +441,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/sessions/:id/archive` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/cancel` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/fork` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| POST | `/api/sessions/:id/generate-title` | native-untested | native-untested |  | routes/sessions.ts |
+| POST | `/api/sessions/:id/generate-title` | native-tested | native-tested | `tests/binary_session_routes.rs::generate_title_uses_the_owners_provider_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/loop` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/move` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/plan/execute` | native-untested | native-untested |  | routes/chat.ts |

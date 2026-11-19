@@ -409,3 +409,177 @@ async fn device_change_is_blocked_during_chat_through_the_binary() {
     assert_eq!(change(&session).await.unwrap().status(), 200);
     model_task.abort();
 }
+
+#[tokio::test]
+async fn generate_title_uses_the_owners_provider_through_the_binary() {
+    use axum::response::IntoResponse;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    // An OpenAI-compatible model stands in for the owner's configured provider. It records
+    // each request and can be switched to fail.
+    let fail = Arc::new(AtomicBool::new(false));
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let model = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post({
+            let fail = fail.clone();
+            let seen = seen.clone();
+            move |axum::Json(body): axum::Json<Value>| async move {
+                seen.lock().unwrap().push(body);
+                if fail.load(Ordering::SeqCst) {
+                    return (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        axum::Json(json!({"error":"provider down"})),
+                    )
+                        .into_response();
+                }
+                axum::Json(json!({"choices":[{"message":{"role":"assistant","content":"Title: Release notes plan"},"finish_reason":"stop"}]}))
+                    .into_response()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let model_base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let model_task = tokio::spawn(async move { axum::serve(listener, model).await.unwrap() });
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let url = |path: &str| format!("{}{path}", gateway.base);
+    let owner: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owner = owner["access_token"].as_str().unwrap().to_owned();
+    let settings = client
+        .patch(url("/api/auth/settings"))
+        .bearer_auth(&owner)
+        .json(&json!({"api_keys":{"OPENAI_BASE_URL":model_base, "OPENAI_API_KEY":"test-key"}, "selected_model":"test-model"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(settings.status(), 200);
+    let invite: Value = client
+        .post(url("/api/auth/invitations"))
+        .bearer_auth(&owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other: Value = client
+        .post(url("/api/auth/register"))
+        .json(&json!({"username":"other", "password":"owner-pass-123", "invitation":invite["invitation"]}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let other = other["access_token"].as_str().unwrap().to_owned();
+    let create = |token: String| {
+        let client = client.clone();
+        let target = url("/api/sessions");
+        async move {
+            let session: Value = client
+                .post(target)
+                .bearer_auth(token)
+                .json(&json!({}))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            session["id"].as_str().unwrap().to_owned()
+        }
+    };
+    let first = create(owner.clone()).await;
+    let second = create(owner.clone()).await;
+    let generate = |id: String, prompt: &'static str, token: String| {
+        let client = client.clone();
+        let target = url(&format!("/api/sessions/{id}/generate-title"));
+        async move {
+            let response = client
+                .post(target)
+                .bearer_auth(token)
+                .json(&json!({"prompt": prompt}))
+                .send()
+                .await
+                .unwrap();
+            let status = response.status().as_u16();
+            (
+                status,
+                response.json::<Value>().await.unwrap_or(Value::Null),
+            )
+        }
+    };
+
+    // The provider answers with a titled line; the route keeps the normalized title.
+    let (status, body) = generate(
+        first.clone(),
+        "  Draft the release notes for version two  ",
+        owner.clone(),
+    )
+    .await;
+    assert!(
+        status == 200
+            && body["generated"] == true
+            && body["session"]["name"] == "Release notes plan",
+        "{body}"
+    );
+    let request = seen.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(request["max_tokens"], 512, "{request}");
+    assert_eq!(request["temperature"], 0.2, "{request}");
+    assert_eq!(
+        request["messages"][0]["content"],
+        "Reply with ONLY a short task title (3-8 words). No quotes, bullets, or commentary.",
+        "{request}"
+    );
+    assert_eq!(
+        request["messages"][1]["content"], "Draft the release notes for version two",
+        "{request}"
+    );
+
+    // A named session keeps its name and makes no provider call.
+    let calls = seen.lock().unwrap().len();
+    let (status, body) = generate(first.clone(), "Another prompt", owner.clone()).await;
+    assert!(
+        status == 200
+            && body["generated"] == false
+            && body["session"]["name"] == "Release notes plan",
+        "{body}"
+    );
+    assert_eq!(seen.lock().unwrap().len(), calls);
+
+    // Another account cannot title the owner's session.
+    let (status, _) = generate(second.clone(), "Prompt", other).await;
+    assert_eq!(status, 404);
+
+    // A provider failure keeps the name derived from the prompt.
+    fail.store(true, Ordering::SeqCst);
+    let (status, body) = generate(
+        second.clone(),
+        "Summarise the failing build logs",
+        owner.clone(),
+    )
+    .await;
+    assert!(
+        status == 200
+            && body["generated"] == false
+            && body["session"]["name"] == "Summarise the failing build logs",
+        "{body}"
+    );
+    model_task.abort();
+}
