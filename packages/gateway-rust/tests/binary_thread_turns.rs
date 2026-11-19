@@ -641,6 +641,101 @@ async fn thread_stop_and_interrupt_match_the_node_contract_through_the_binary() 
     wait_for_status(&client, &base, &token, &thread, "interrupted").await;
 }
 
+/// Stopping a native turn that waits for consent interrupts it. The owner's socket hears the
+/// interruption, no completed or error status follows, and approving the stale consent request
+/// cannot run its write.
+#[tokio::test]
+async fn thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let token = register(&client, &base).await;
+    configure_model(&client, &base, &token, &model_base).await;
+    let (thread, _session) = new_thread(&client, &base, &token, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &token).await;
+
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/threads/{thread}/start"),
+        json!({"message": "start the note"}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let running = ws
+        .until("thread.status", WAIT)
+        .await
+        .expect("the owner's socket hears the turn start");
+    assert_eq!(running["payload"]["status"], "running", "{running}");
+    let required = ws
+        .until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    let consent_id = required["payload"]["id"].as_str().unwrap().to_owned();
+
+    // Stop answers once the stopped turn has released its session.
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/threads/{thread}/stop"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["ok"], true, "{body}");
+    let interrupted = ws
+        .until("thread.status", WAIT)
+        .await
+        .expect("the owner's socket hears the stop");
+    assert_eq!(interrupted["payload"]["threadId"], thread.as_str());
+    assert_eq!(
+        interrupted["payload"]["status"], "interrupted",
+        "{interrupted}"
+    );
+    assert_eq!(
+        interrupted["payload"]["thread"]["status"], "interrupted",
+        "{interrupted}"
+    );
+    wait_for_status(&client, &base, &token, &thread, "interrupted").await;
+
+    // Approving the stale request cannot run its write.
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/consent/{consent_id}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_ne!(status, 200, "{body}");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        std::fs::read_to_string(gateway.directory.join("thread-note.txt")).unwrap(),
+        "original\n",
+        "a stopped turn's write must never run"
+    );
+
+    // No completed or error status follows the stop.
+    while let Some(later) = ws.until("thread.status", Duration::from_millis(800)).await {
+        assert!(
+            !matches!(
+                later["payload"]["status"].as_str(),
+                Some("completed" | "error")
+            ),
+            "{later}"
+        );
+    }
+    assert_eq!(
+        thread_json(&client, &base, &token, &thread).await["status"],
+        "interrupted"
+    );
+    model_task.abort();
+}
+
 /// File tools in a native thread: an approved write creates a file in a directory that does not
 /// exist yet, and a read of a denied secret path completes without consent and never returns the
 /// file's contents to the model.

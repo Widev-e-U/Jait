@@ -55,10 +55,20 @@ const ACTIVITY_COLUMNS: &str = "id, thread_id, kind, summary, payload, created_a
 /// skipped (the requested provider id is still persisted verbatim).
 pub type ProviderCheck = Arc<dyn Fn(&str, &str) -> bool + Send + Sync>;
 
+/// Broadcasts a thread event to every authorized WebSocket client, as Node's `broadcastAll` does.
+pub type ThreadEventSink = Arc<dyn Fn(&str, Value) + Send + Sync>;
+
+/// Cancels the native turn that an owner runs on a chat session. The receiver resolves once that
+/// turn has released the session; `None` means no such turn was active.
+pub type TurnCancel =
+    Arc<dyn Fn(&str, &str) -> Option<tokio::sync::watch::Receiver<bool>> + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ThreadRoutes {
     auth: AuthState,
     provider_check: Option<ProviderCheck>,
+    events: Option<ThreadEventSink>,
+    cancel_turn: Option<TurnCancel>,
 }
 
 impl ThreadRoutes {
@@ -66,6 +76,8 @@ impl ThreadRoutes {
         Self {
             auth,
             provider_check: None,
+            events: None,
+            cancel_turn: None,
         }
     }
 
@@ -73,7 +85,21 @@ impl ThreadRoutes {
         Self {
             auth,
             provider_check: Some(check),
+            events: None,
+            cancel_turn: None,
         }
+    }
+
+    /// Broadcasts `thread.status` when a thread is stopped, so every socket sees the interruption.
+    pub fn with_thread_events(mut self, events: ThreadEventSink) -> Self {
+        self.events = Some(events);
+        self
+    }
+
+    /// Cancels the owner's active native turn when its thread is stopped.
+    pub fn with_turn_cancel(mut self, cancel: TurnCancel) -> Self {
+        self.cancel_turn = Some(cancel);
+        self
     }
 
     pub fn router(self) -> Router {
@@ -946,24 +972,52 @@ async fn get_thread(
 /// are not started by this gateway yet, so a recorded session cannot be
 /// stopped or interrupted here; those requests fail closed instead of
 /// pretending the provider was reached.
+/// The owner's thread as stored, or the response that refuses it.
+async fn owned_thread(
+    state: &ThreadRoutes,
+    id: String,
+    headers: &axum::http::HeaderMap,
+) -> Result<Value, Response> {
+    let user = auth::require_user(&state.auth, headers)
+        .await
+        .map_err(|response| *response)?;
+    let user_id = user.id.clone();
+    run(state, move |conn| select_owned_thread(conn, &id, &user_id))
+        .await
+        .map_err(|response| *response)?
+        .ok_or_else(|| error_response(404, "Thread not found"))
+}
+
+/// An owned thread with its provider session handle. Native provider sessions
+/// are not started by this gateway yet, so a recorded session cannot be
+/// stopped or interrupted here; those requests fail closed instead of
+/// pretending the provider was reached.
 async fn owned_session(
     state: &ThreadRoutes,
     id: String,
     headers: &axum::http::HeaderMap,
 ) -> Result<(String, Option<String>), Response> {
-    let user = auth::require_user(&state.auth, headers)
-        .await
-        .map_err(|response| *response)?;
-    let user_id = user.id.clone();
-    let lookup = id.clone();
-    let thread = run(state, move |conn| {
-        select_owned_thread(conn, &lookup, &user_id)
-    })
-    .await
-    .map_err(|response| *response)?
-    .ok_or_else(|| error_response(404, "Thread not found"))?;
+    let thread = owned_thread(state, id.clone(), headers).await?;
     let session = thread["providerSessionId"].as_str().map(str::to_owned);
     Ok((id, session))
+}
+
+/// The `thread.status` payload Node broadcasts: `{threadId, status, thread?, error?}`, where the
+/// thread is the stored row after the write.
+pub(crate) fn thread_status_event(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    error: Option<&str>,
+) -> rusqlite::Result<Value> {
+    let mut payload = json!({"threadId": id, "status": status});
+    if let Some(thread) = select_thread(conn, id)? {
+        payload["thread"] = thread;
+    }
+    if let Some(error) = error {
+        payload["error"] = json!(error);
+    }
+    Ok(payload)
 }
 
 async fn stop_thread(
@@ -971,24 +1025,54 @@ async fn stop_thread(
     State(state): State<ThreadRoutes>,
     request: Request,
 ) -> Response {
-    let (id, session) = match owned_session(&state, id, &request.headers().clone()).await {
-        Ok(found) => found,
+    let thread = match owned_thread(&state, id.clone(), request.headers()).await {
+        Ok(thread) => thread,
         Err(response) => return response,
     };
-    if session.is_some() {
+    if thread["providerSessionId"].is_string() {
         return json_response(
             409,
             json!({"error":"STOP_FAILED","details":"Provider session control is unavailable in this gateway"}),
         );
     }
-    match run(&state, move |conn| {
-        crate::services::thread_recovery::mark_interrupted(conn, &id, &now_iso())
+    let owner = thread["userId"].as_str().unwrap_or_default().to_owned();
+    let chat_session = thread["sessionId"].as_str().map(str::to_owned);
+    // The interrupted state is written before the native turn is cancelled, so the turn's own
+    // outcome cannot be recorded in between. Every socket then hears the same status.
+    let lookup = id.clone();
+    let payload = match run(&state, move |conn| {
+        crate::services::thread_recovery::mark_interrupted(conn, &lookup, &now_iso())?;
+        thread_status_event(conn, &lookup, "interrupted", None)
     })
     .await
     {
-        Ok(_) => json_response(200, json!({"ok":true})),
-        Err(response) => *response,
+        Ok(payload) => payload,
+        Err(response) => return *response,
+    };
+    if let Some(events) = &state.events {
+        events("thread.status", payload);
     }
+    if let (Some(cancel), Some(session)) = (&state.cancel_turn, chat_session)
+        && let Some(mut done) = cancel(owner.as_str(), session.as_str())
+    {
+        // Like steering, wait until the stopped turn has released its session, so a consent answer
+        // sent after this response cannot reach the stopped turn.
+        let drained = tokio::time::timeout(std::time::Duration::from_secs(8), async {
+            while !*done.borrow_and_update() {
+                if done.changed().await.is_err() {
+                    break;
+                }
+            }
+        })
+        .await;
+        if drained.is_err() {
+            return json_response(
+                500,
+                json!({"error":"STOP_FAILED","details":"Running turn did not stop"}),
+            );
+        }
+    }
+    json_response(200, json!({"ok":true}))
 }
 
 async fn interrupt_thread(

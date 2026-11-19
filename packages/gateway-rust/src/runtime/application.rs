@@ -563,6 +563,16 @@ impl Application {
                 }
             })
         };
+        let thread_events: crate::routes::threads::ThreadEventSink = {
+            let hub = repository_hub.clone();
+            Arc::new(move |kind: &str, payload: serde_json::Value| {
+                if let Ok(slot) = hub.lock()
+                    && let Some(hub) = slot.as_ref()
+                {
+                    hub.broadcast_all(kind, payload);
+                }
+            })
+        };
         let chat = factory
             .map(|factory| {
                 ChatRoutes::new(
@@ -574,9 +584,17 @@ impl Application {
                 .map(|chat| {
                     chat.with_database_owner(database_owner.clone())
                         .with_user_events(repository_events.clone())
+                        .with_thread_events(thread_events.clone())
                 })
             })
             .transpose()?;
+        let turn_cancel: crate::routes::threads::TurnCancel = {
+            let chat = chat.clone();
+            Arc::new(move |owner: &str, session: &str| {
+                chat.as_ref()
+                    .and_then(|chat| chat.cancel_thread_turn(owner, session))
+            })
+        };
         let mut sessions = SessionRoutes::new(
             auth.clone(),
             config.project_root.to_string_lossy().into_owned(),
@@ -647,6 +665,8 @@ impl Application {
                         registry.is_visible_to(provider, user)
                     })
                 })
+                .with_thread_events(thread_events.clone())
+                .with_turn_cancel(turn_cancel.clone())
                 .router(),
             )
             .merge(ReminderRoutes::new(auth.clone()).with_native_projects().with_native_threads().router())

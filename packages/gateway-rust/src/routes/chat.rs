@@ -1,6 +1,7 @@
 //! Explicitly mounted candidate chat HTTP/SSE adapter. It shares authenticated
 //! session admission and native persistence; it does not activate a provider.
 use super::auth::{self, AuthState, response};
+use super::threads::{ThreadEventSink, thread_status_event};
 use crate::{
     execution::process_runner::ProcessCancellation,
     providers::openai_stream::EventSink,
@@ -175,6 +176,8 @@ pub struct ChatRoutes {
     pub(crate) events: Arc<EventBus>,
     /// Per-user WS fan-out for `chat.updated`; absent when no hub is mounted.
     pub(crate) user_events: Option<super::repositories::RepositoryEventSink>,
+    /// Broadcasts `thread.status` to every authorized socket; absent when no hub is mounted.
+    pub(crate) thread_events: Option<ThreadEventSink>,
 }
 impl ChatRoutes {
     pub fn new(
@@ -195,6 +198,7 @@ impl ChatRoutes {
             active: Arc::new(ActiveState::default()),
             events: EventBus::new(),
             user_events: None,
+            thread_events: None,
         })
     }
     pub(crate) fn device_change_lease(&self, session: &str) -> Option<Box<dyn Send>> {
@@ -340,6 +344,24 @@ impl ChatRoutes {
         {
             turn.cancellation.cancel();
         }
+    }
+    /// Cancels the native turn that `owner` runs on chat `session`, if one is active. The returned
+    /// receiver resolves once that turn has released the session.
+    pub(crate) fn cancel_thread_turn(
+        &self,
+        owner: &str,
+        session: &str,
+    ) -> Option<watch::Receiver<bool>> {
+        let turns = self.active.turns.lock().unwrap();
+        let turn = turns
+            .get(session)
+            .filter(|turn| turn.thread && turn.owner == owner)?;
+        turn.cancellation.cancel();
+        Some(turn.done.subscribe())
+    }
+    pub fn with_thread_events(mut self, events: ThreadEventSink) -> Self {
+        self.thread_events = Some(events);
+        self
     }
     fn admit(&self, owner: &str, session: &str, thread: bool) -> Result<TurnLease, Box<Response>> {
         let mut active = self.active.turns.lock().unwrap();
@@ -855,25 +877,37 @@ async fn thread_resume(
     thread_turn(state, id, request, ThreadAction::Resume).await
 }
 
-/// Records a thread status change; completion-like states stamp `completed_at`.
-async fn set_thread_status(
+/// Records a thread status change and broadcasts `thread.status`, as Node's `broadcastThreadStatus`
+/// does. A guarded write (a turn's own outcome) never replaces `interrupted`, so an event that
+/// arrives after a stop cannot undo it. Completion-like states stamp `completed_at`.
+async fn write_thread_status(
     auth: &AuthState,
+    events: Option<ThreadEventSink>,
     id: &str,
     status: &'static str,
     error: Option<&str>,
     activity: Option<(&'static str, String, Value)>,
+    guarded: bool,
 ) -> Result<(), ()> {
     let (id, error) = (id.to_owned(), error.map(str::to_owned));
-    auth.with_database(move |db| {
+    let payload = auth.with_database(move |db| {
         let now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-        db.execute(
+        let guard = if guarded {
+            " AND status IS NOT 'interrupted'"
+        } else {
+            ""
+        };
+        let changed = db.execute(
             &format!(
                 "UPDATE agent_threads SET status = ?2, error = ?3, \
                  completed_at = CASE WHEN ?2 IN ('completed','error','interrupted') THEN {now} ELSE NULL END, \
-                 updated_at = {now} WHERE id = ?1"
+                 updated_at = {now} WHERE id = ?1{guard}"
             ),
             rusqlite::params![id, status, error],
         )?;
+        if changed == 0 {
+            return Ok::<_, DbError>(None);
+        }
         if let Some((kind, summary, payload)) = activity {
             db.execute(
                 &format!(
@@ -889,10 +923,19 @@ async fn set_thread_status(
                 ],
             )?;
         }
-        Ok::<_, DbError>(())
+        Ok::<_, DbError>(Some(thread_status_event(
+            db,
+            &id,
+            status,
+            error.as_deref(),
+        )?))
     })
     .await
-    .map_err(|_| ())
+    .map_err(|_| ())?;
+    if let (Some(events), Some(payload)) = (events, payload) {
+        events("thread.status", payload);
+    }
+    Ok(())
 }
 
 /// Runs one agent turn for a thread on its session, through the same provider, tool and consent
@@ -1065,9 +1108,17 @@ async fn thread_turn(
         shown.to_owned(),
         json!({"role":"user","content":shown,"fullContent":message}),
     );
-    if set_thread_status(&state.auth, &id, "running", None, Some(activity))
-        .await
-        .is_err()
+    if write_thread_status(
+        &state.auth,
+        state.thread_events.clone(),
+        &id,
+        "running",
+        None,
+        Some(activity),
+        false,
+    )
+    .await
+    .is_err()
     {
         return auth::internal_error();
     }
@@ -1099,6 +1150,7 @@ async fn thread_turn(
     );
     let manager = state.manager.clone();
     let auth_state = state.auth.clone();
+    let thread_events = state.thread_events.clone();
     let thread_id = id.clone();
     tokio::spawn(async move {
         let _lease = lease;
@@ -1138,7 +1190,17 @@ async fn thread_turn(
             ),
         };
         let _ = store.append_stream_terminal(event).await;
-        let _ = set_thread_status(&auth_state, &thread_id, status, error, None).await;
+        // A turn's own outcome is guarded: once a stop has interrupted the thread, it is not overwritten.
+        let _ = write_thread_status(
+            &auth_state,
+            thread_events,
+            &thread_id,
+            status,
+            error,
+            None,
+            true,
+        )
+        .await;
         drop(sender);
     });
     if action == ThreadAction::Steer {

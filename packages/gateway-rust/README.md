@@ -30,11 +30,23 @@ Node's escape check is a string prefix (`rel.startsWith("..")`), so it refuses a
 compares path components after normalization, so that name is an ordinary file and `../x` is still refused. The
 denied-name check matches only at the project root, as in Node, so `docs/.aws/` is not refused.
 
+Thread status is broadcast as `thread.status` with `{threadId, status, thread, error?}`, the payload that Node's
+`broadcastThreadStatus` sends. The native turn path (`start`, `send`, `steer`, `resume`) broadcasts `running` once its
+turn is admitted, and broadcasts the completion or error when the turn ends. That completion write is skipped while the
+thread is `interrupted`, so a turn that ends after a stop cannot undo it. `stop` on a native
+thread marks it interrupted, broadcasts that, cancels the owner's active native turn, and answers `{"ok":true}` once
+any such turn has released its session. If the turn does not stop within 8 seconds, `stop` answers 500
+`STOP_FAILED`. `thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write` covers a stop
+during a consent wait.
+
 Open parity questions, not changed in this batch:
-- `stop_thread` and `set_thread_status` write only the database. A native turn that is still running is not cancelled
-  by `stop`, and neither handler broadcasts a thread status event. Node's `stop` marks a native thread interrupted and
-  broadcasts the status (`broadcastThreadStatus`). Whether a WebSocket client sees a status change from a native turn
-  was not checked, and neither was whether Node cancels the in-flight native turn.
+- Thread events carry `sessionId: null` where Node sends `""`. The web's only `thread.status` handler does not read that
+  field, and its session filter treats both values as no session.
+- Other writers of `agent_threads.status` do not broadcast. Team-chat delivery errors (`mark_error` in
+  `runtime/team_chat_mount.rs`, reached when an agent is paused) update the row only.
+- A `start` or `send` that reads the thread before a stop and admits its turn after it can still start a running turn.
+  `mark_interrupted` documents that starts must be serialized with stops, and the Rust path does not do that yet.
+- `stop` on a thread with a provider session still answers 409, because this gateway has no provider session control.
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
