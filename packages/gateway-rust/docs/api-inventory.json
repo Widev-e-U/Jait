@@ -8,12 +8,12 @@
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
     "nativeTested": 243,
-    "nativeTestedDenominator": 594,
-    "nativeTestedPct": 40.91,
-    "wsTotal": 138,
-    "wsInbound": 38,
-    "wsOutboundCandidates": 100,
-    "wsWithoutDirectionalRustReference": 68,
+    "nativeTestedDenominator": 607,
+    "nativeTestedPct": 40.03,
+    "wsTotal": 151,
+    "wsInbound": 44,
+    "wsOutboundCandidates": 107,
+    "wsWithoutDirectionalRustReference": 77,
     "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
@@ -26,8 +26,8 @@
     },
     "wsRustStatus": {
       "native-tested": 21,
-      "native-untested": 49,
-      "missing": 68
+      "native-untested": 53,
+      "missing": 77
     },
     "serviceRustStatus": {
       "native-tested": 0,
@@ -6532,6 +6532,14 @@
   ],
   "ws": [
     {
+      "type": "announce",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "architecture.render-result",
       "direction": "client-to-server-candidate",
       "rustReference": false,
@@ -6540,7 +6548,23 @@
       "rustStatus": "missing"
     },
     {
+      "type": "audio",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "authenticate",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "commit",
       "direction": "client-to-server-candidate",
       "rustReference": false,
       "status": "missing",
@@ -6599,6 +6623,22 @@
     },
     {
       "type": "fs.roots-response",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "initial_text",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "interrupt",
       "direction": "client-to-server-candidate",
       "rustReference": false,
       "status": "missing",
@@ -6780,6 +6820,14 @@
       "rustStatus": "missing"
     },
     {
+      "type": "stop",
+      "direction": "client-to-server-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "subscribe",
       "direction": "client-to-server-candidate",
       "rustReference": true,
@@ -6926,6 +6974,14 @@
     },
     {
       "type": "attention.raised",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "audio",
       "direction": "server-to-client-candidate",
       "rustReference": true,
       "status": "native-untested",
@@ -7394,7 +7450,31 @@
       "rustStatus": "missing"
     },
     {
+      "type": "screen-share:answer",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "screen-share:control-handoff",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "screen-share:ice-candidate",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "type": "screen-share:offer",
       "direction": "server-to-client-candidate",
       "rustReference": false,
       "status": "missing",
@@ -7509,6 +7589,14 @@
       "status": "missing",
       "binaryTests": [],
       "rustStatus": "missing"
+    },
+    {
+      "type": "status",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
     },
     {
       "type": "surface.connected",
@@ -7633,6 +7721,14 @@
       "rustStatus": "missing"
     },
     {
+      "type": "tool_call",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
       "type": "tool.approval-required",
       "direction": "server-to-client-candidate",
       "rustReference": true,
@@ -7682,6 +7778,14 @@
     },
     {
       "type": "tool.start",
+      "direction": "server-to-client-candidate",
+      "rustReference": true,
+      "status": "native-untested",
+      "binaryTests": [],
+      "rustStatus": "native-untested"
+    },
+    {
+      "type": "transcript",
       "direction": "server-to-client-candidate",
       "rustReference": true,
       "status": "native-untested",

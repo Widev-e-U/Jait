@@ -12,10 +12,7 @@ export function websocketCandidates(nodeSource, rustSource) {
   const values = (text, pattern) => new Set(Array.from(text.matchAll(pattern), (match) => match[1]));
   const inbound = values(nodeSource, /\bcase\s+["']([a-z][\w.:-]*)["']\s*:/g);
   const outbound = values(nodeSource, /\btype\s*:\s*["'`]([a-z][\w.:-]*)["'`]/g);
-  const rustInbound = new Set();
-  for (const match of rustSource.matchAll(/("(?:[a-z][\w.:-]*)"(?:\s*\|\s*"(?:[a-z][\w.:-]*)")*)\s*=>/g)) {
-    for (const name of match[1].matchAll(/"([a-z][\w.:-]*)"/g)) rustInbound.add(name[1]);
-  }
+  const rustInbound = rustInboundArms(rustSource);
   const rustOutbound = values(rustSource, /["']type["']\s*:\s*["']([a-z][\w.:-]*)["']/g);
   return [
     ...[...inbound].map((type) => ({ type, direction: 'client-to-server-candidate', rustReference: rustInbound.has(type) })),
@@ -61,16 +58,127 @@ export function nodeWsOutboundTypes(allFiles, wsSource = '') {
   return types;
 }
 
-// Client-to-server types stay the ws.ts switch cases; server-to-client types come from nodeWsOutboundTypes.
-// Rust evidence for a server-to-client type is its quoted name anywhere in the Rust sources (a lexical hint).
-export function websocketInventory(wsSource, nodeFiles, rust) {
-  const inbound = websocketCandidates(wsSource, rust.ws).filter((entry) => entry.direction === 'client-to-server-candidate');
-  const outbound = [...nodeWsOutboundTypes(nodeFiles, wsSource)].map((type) => ({
-    type,
-    direction: 'server-to-client-candidate',
-    rustReference: rust.all.includes(`"${type}"`),
-  }));
-  return [...inbound, ...outbound].sort((a, b) => a.direction.localeCompare(b.direction) || a.type.localeCompare(b.type));
+// Client-to-server types are the ws.ts switch cases plus the voice-assistant socket's switch arms. Server-to-client
+// types are the Node emitters, the voice-assistant frames and the screen-share relays, and each client-only literal
+// (see clientOnlyWsEntries) is added in its direction. Rust evidence for a client-to-server type is a handler arm in
+// the Rust hub; for a server-to-client type it is the quoted name anywhere in the Rust sources (a lexical hint).
+export function websocketInventory(wsSource, nodeFiles, rust, clientFiles = []) {
+  const voice = nodeFiles.find((file) => file.path === VOICE_SOURCE);
+  const frames = voice ? voiceSocketFrames(voice.text) : { emitted: [], handled: [] };
+  const inbound = new Set([
+    ...websocketCandidates(wsSource, rust.ws).filter((entry) => entry.direction === 'client-to-server-candidate').map((entry) => entry.type),
+    ...frames.handled,
+  ]);
+  const outbound = new Set([...nodeWsOutboundTypes(nodeFiles, wsSource), ...frames.emitted, ...relayedWsTypes(wsSource)]);
+  const armed = rustInboundArms(rust.ws);
+  return [
+    ...[...inbound].map((type) => ({ type, direction: 'client-to-server-candidate' })),
+    ...[...outbound].map((type) => ({ type, direction: 'server-to-client-candidate' })),
+    ...clientOnlyWsEntries(clientFiles, outbound, inbound),
+  ]
+    .map(({ type, direction, ...rest }) => ({
+      type,
+      direction,
+      rustReference: direction === 'client-to-server-candidate' ? armed.has(type) : rust.all.includes(`"${type}"`),
+      ...rest,
+    }))
+    .sort((a, b) => a.direction.localeCompare(b.direction) || a.type.localeCompare(b.type));
+}
+
+// Rust handler arms named by a client-to-server type: `"type" =>` or `"a" | "b" =>` in the Rust hub.
+function rustInboundArms(rustSource) {
+  const arms = new Set();
+  for (const match of rustSource.matchAll(/("(?:[a-z][\w.:-]*)"(?:\s*\|\s*"(?:[a-z][\w.:-]*)")*)\s*=>/g)) {
+    for (const name of match[1].matchAll(/"([a-z][\w.:-]*)"/g)) arms.add(name[1]);
+  }
+  return arms;
+}
+
+// The voice-assistant socket (/ws/voice-assistant) speaks its own protocol and never passes through ws.ts. Its server
+// frames are `send(clientWs, { type })` calls and its client frames are the arms of `switch (msg.type)`. A send whose
+// type is not a literal throws, so an unreviewed frame cannot drop out of the inventory.
+export const VOICE_SOURCE = 'voice-assistant/service.ts';
+export function voiceSocketFrames(text) {
+  const sends = text.match(/\bsend\(\s*clientWs\b/g)?.length ?? 0;
+  const emitted = [...text.matchAll(/\bsend\(\s*clientWs\s*,\s*\{\s*type\s*:\s*["'`]([a-z][\w.-]*)["'`]/g)].map((m) => m[1]);
+  if (emitted.length !== sends) {
+    throw new Error(`unexpanded voice-assistant frame: ${sends - emitted.length} send(clientWs, ...) call(s) without a literal type`);
+  }
+  const start = text.indexOf('switch (msg.type)');
+  if (start < 0) throw new Error('voice-assistant client switch (msg.type) not found');
+  let depth = 0;
+  let end = start;
+  for (let i = text.indexOf('{', start); i < text.length; i++) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}' && --depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  const handled = [...text.slice(start, end).matchAll(/\bcase\s+["']([a-z][\w.-]*)["']\s*:/g)].map((m) => m[1]);
+  return { emitted: [...new Set(emitted)], handled: [...new Set(handled)] };
+}
+
+// A screen-share signal is relayed rather than built: its case arm calls this.relayShareSignal(..., msg), which forwards
+// the same type to the other peers, so that type is also a server-to-client frame. Only the call form counts.
+export function relayedWsTypes(wsSource) {
+  const cases = [...wsSource.matchAll(/\bcase\s+["']([a-z][\w.:-]*)["']\s*:/g)];
+  return new Set(
+    cases
+      .filter((m, i) => /this\.relayShareSignal\(/.test(wsSource.slice(m.index, cases[i + 1]?.index ?? wsSource.length)))
+      .map((m) => m[1]),
+  );
+}
+
+// Client WebSocket literals, read from the web, API-client, CLI and desktop sources. A file counts only when it opens or
+// reads a socket, so HTTP and DOM `type` fields are not read. Consumed literals are `.type ===` tests and `case` arms;
+// sent literals are the objects passed to JSON.stringify. WS_NON_FRAME_LITERALS match the same shape but name no socket
+// frame; each entry is a reviewed exclusion with its reason.
+export const WS_CLIENT_ROOTS = [
+  'apps/web/src', 'packages/api-client/src', 'packages/cli/src', 'packages/screen-share/src', 'apps/desktop/src-tauri/src', 'apps/desktop/crates',
+];
+const WS_NON_FRAME_LITERALS = new Map([
+  ['dir', 'file-browser tree entry type (useUICommands)'],
+  ['directory', 'file-browser tree entry type (useUICommands)'],
+  ['done', 'end-of-stream event of the chat HTTP stream (api-client)'],
+  ['token', 'token event of the chat HTTP stream (api-client)'],
+  ['keydown', 'DOM KeyboardEvent type (terminal-view)'],
+  ['provider.event-from-child', 'desktop IPC relay from a child process (useUICommands)'],
+  ['terminal.output-from-child', 'desktop IPC relay from a child process (useUICommands)'],
+  ['terminal.exit-from-child', 'desktop IPC relay from a child process (useUICommands)'],
+  ['tool.background-complete-from-child', 'desktop IPC relay from a child process (useUICommands)'],
+]);
+const WS_CLIENT_SOCKET = /new WebSocket\(|onmessage|\bws\.send\(|socket\.send\(|\.send\(JSON\.stringify|Message::Text|tungstenite|connect_async/;
+export function clientWsLiterals(files) {
+  const consumed = new Map();
+  const sent = new Map();
+  const add = (map, type, path) => {
+    if (!map.has(type)) map.set(type, new Set());
+    map.get(type).add(path);
+  };
+  for (const { path, text } of files) {
+    if (!WS_CLIENT_SOCKET.test(text)) continue;
+    for (const m of text.matchAll(/\.type\s*(?:===?|!==?)\s*["'`]([a-z][\w.:-]*)["'`]/g)) add(consumed, m[1], path);
+    for (const m of text.matchAll(/\bcase\s+["'`]([a-z][\w.:-]*)["'`]\s*:/g)) add(consumed, m[1], path);
+    for (const m of text.matchAll(/JSON\.stringify\(\s*\{\s*type\s*:\s*["'`]([a-z][\w.:-]*)["'`]/g)) add(sent, m[1], path);
+  }
+  return { consumed, sent };
+}
+
+// A client literal with no gateway entry in its direction is a candidate, marked clientOnly. A consumed literal is a
+// server-to-client frame; a sent literal is a client-to-server frame. None is native without a mapped binary test.
+export function clientOnlyWsEntries(files, serverOutbound, serverInbound) {
+  const { consumed, sent } = clientWsLiterals(files);
+  const entries = [];
+  for (const [type, paths] of consumed) {
+    if (serverOutbound.has(type) || WS_NON_FRAME_LITERALS.has(type)) continue;
+    entries.push({ type, direction: 'server-to-client-candidate', clientOnly: true, clientFiles: [...paths].sort() });
+  }
+  for (const [type, paths] of sent) {
+    if (serverInbound.has(type) || WS_NON_FRAME_LITERALS.has(type)) continue;
+    entries.push({ type, direction: 'client-to-server-candidate', clientOnly: true, clientFiles: [...paths].sort() });
+  }
+  return entries;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -238,6 +346,14 @@ function isTested(path) {
 // every gateway source, with templated `${event}` frames expanded from reviewed evidence. This is still lexical,
 // so a missing entry is possible; native status still needs a mapped binary test.
 const wsNodeFiles = walk(nodeSrc, ['.ts']).map((f) => ({ path: relative(nodeSrc, f), text: readFileSync(f, 'utf8') }));
+// Client-side WebSocket sources: each root that exists, without test files.
+const wsClientFiles = WS_CLIENT_ROOTS.flatMap((root) => {
+  const dir = join(pkgs, '..', root);
+  if (!existsSync(dir)) return [];
+  return walk(dir, ['.ts', '.tsx', '.rs'])
+    .filter((file) => !/\.(test|spec)\.[^.]+$/.test(file))
+    .map((file) => ({ path: relative(join(pkgs, '..'), file), text: readFileSync(file, 'utf8') }));
+});
 const wsEntries = websocketInventory(
   readFileSync(join(nodeSrc, 'ws.ts'), 'utf8'),
   wsNodeFiles,
@@ -245,6 +361,7 @@ const wsEntries = websocketInventory(
     ws: readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
     all: walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n'),
   },
+  wsClientFiles,
 );
 // The only Rust evidence for a WS type is a lexical handler arm or emitted type in the Rust hub:
 // native-untested until a reviewed binary test is mapped in binary-test-evidence.json.
@@ -423,9 +540,9 @@ if (process.argv.includes('--write')) {
     '',
     '## WS message candidates (heuristic)',
     '',
-    'Client-to-server candidates come from all case arms in the Node hub; server-to-client candidates come from literal type properties there. Both can include unrelated switches or objects, and events emitted elsewhere or dynamic types are omitted. A directional Rust reference is only a lexical match in the Rust hub; it does not establish mounting, behavior, coverage, or parity.',
+    'Client-to-server candidates come from the case arms of the Node hub and of the voice-assistant socket. Server-to-client candidates come from literal frame types in every Node gateway source, the voice-assistant frames and the screen-share relays, which forward the type they receive. clientOnly candidates are literals that a web, API-client, CLI or desktop WebSocket handler reads or sends and that no Node source has in that direction. Both lists can include unrelated switches or objects, and dynamic types are omitted. A Rust reference is only a lexical match: a client-to-server reference is a handler arm in the Rust hub, and a server-to-client reference is the quoted type name anywhere in the Rust sources, so an unrelated quoted word (for example the voice-assistant frame "status") can match. It does not establish mounting, behavior, coverage, or parity.',
     '',
-    ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.rustStatus} — ${w.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ') || 'no binary test'}`),
+    ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.rustStatus} — ${w.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ') || 'no binary test'}${w.clientOnly ? ' — clientOnly' : ''}`),
     '',
   ].join('\n');
   writeFileSync(join(out, 'api-inventory.md'), md);

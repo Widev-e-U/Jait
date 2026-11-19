@@ -14,12 +14,12 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
   "nativeTested": 243,
-  "nativeTestedDenominator": 594,
-  "nativeTestedPct": 40.91,
-  "wsTotal": 138,
-  "wsInbound": 38,
-  "wsOutboundCandidates": 100,
-  "wsWithoutDirectionalRustReference": 68,
+  "nativeTestedDenominator": 607,
+  "nativeTestedPct": 40.03,
+  "wsTotal": 151,
+  "wsInbound": 44,
+  "wsOutboundCandidates": 107,
+  "wsWithoutDirectionalRustReference": 77,
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
@@ -32,8 +32,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   },
   "wsRustStatus": {
     "native-tested": 21,
-    "native-untested": 49,
-    "missing": 68
+    "native-untested": 53,
+    "missing": 77
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -773,16 +773,21 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 
 ## WS message candidates (heuristic)
 
-Client-to-server candidates come from all case arms in the Node hub; server-to-client candidates come from literal type properties there. Both can include unrelated switches or objects, and events emitted elsewhere or dynamic types are omitted. A directional Rust reference is only a lexical match in the Rust hub; it does not establish mounting, behavior, coverage, or parity.
+Client-to-server candidates come from the case arms of the Node hub and of the voice-assistant socket. Server-to-client candidates come from literal frame types in every Node gateway source, the voice-assistant frames and the screen-share relays, which forward the type they receive. clientOnly candidates are literals that a web, API-client, CLI or desktop WebSocket handler reads or sends and that no Node source has in that direction. Both lists can include unrelated switches or objects, and dynamic types are omitted. A Rust reference is only a lexical match: a client-to-server reference is a handler arm in the Rust hub, and a server-to-client reference is the quoted type name anywhere in the Rust sources, so an unrelated quoted word (for example the voice-assistant frame "status") can match. It does not establish mounting, behavior, coverage, or parity.
 
+- client-to-server-candidate: `announce` — missing — no binary test
 - client-to-server-candidate: `architecture.render-result` — missing — no binary test
+- client-to-server-candidate: `audio` — missing — no binary test
 - client-to-server-candidate: `authenticate` — missing — no binary test
+- client-to-server-candidate: `commit` — missing — no binary test
 - client-to-server-candidate: `consent.approve` — native-tested — `tests/binary_ws_messages.rs::consent_decisions_over_ws_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `consent.reject` — native-tested — `tests/binary_ws_messages.rs::consent_decisions_over_ws_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `fs.browse-response` — missing — no binary test
 - client-to-server-candidate: `fs.op-response` — missing — no binary test
 - client-to-server-candidate: `fs.register-node` — missing — no binary test
 - client-to-server-candidate: `fs.roots-response` — missing — no binary test
+- client-to-server-candidate: `initial_text` — missing — no binary test
+- client-to-server-candidate: `interrupt` — missing — no binary test
 - client-to-server-candidate: `messenger.register` — missing — no binary test
 - client-to-server-candidate: `messenger.result` — missing — no binary test
 - client-to-server-candidate: `node.hello` — missing — no binary test
@@ -801,6 +806,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - client-to-server-candidate: `screen-share:offer` — missing — no binary test
 - client-to-server-candidate: `screen-share:start-request` — missing — no binary test
 - client-to-server-candidate: `screen-share:stop-request` — missing — no binary test
+- client-to-server-candidate: `stop` — missing — no binary test
 - client-to-server-candidate: `subscribe` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
 - client-to-server-candidate: `terminal.exit` — missing — no binary test
 - client-to-server-candidate: `terminal.input` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
@@ -817,6 +823,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `alarm.schedule` — native-untested — no binary test
 - server-to-client-candidate: `attention.cleared` — native-untested — no binary test
 - server-to-client-candidate: `attention.raised` — native-untested — no binary test
+- server-to-client-candidate: `audio` — native-untested — no binary test
 - server-to-client-candidate: `audio.done` — native-untested — no binary test
 - server-to-client-candidate: `audio.interrupt` — native-untested — no binary test
 - server-to-client-candidate: `browser.updated` — missing — no binary test
@@ -870,7 +877,10 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `repo.deleted` — native-untested — no binary test
 - server-to-client-candidate: `repo.updated` — native-untested — no binary test
 - server-to-client-candidate: `scheduler.executed` — missing — no binary test
+- server-to-client-candidate: `screen-share:answer` — missing — no binary test
 - server-to-client-candidate: `screen-share:control-handoff` — missing — no binary test
+- server-to-client-candidate: `screen-share:ice-candidate` — missing — no binary test
+- server-to-client-candidate: `screen-share:offer` — missing — no binary test
 - server-to-client-candidate: `screen-share:start-error` — missing — no binary test
 - server-to-client-candidate: `screen-share:start-request` — missing — no binary test
 - server-to-client-candidate: `screen-share:state-update` — missing — no binary test
@@ -884,6 +894,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `session.started` — native-untested — no binary test
 - server-to-client-candidate: `session.streaming` — missing — no binary test
 - server-to-client-candidate: `session.streaming-snapshot` — missing — no binary test
+- server-to-client-candidate: `status` — native-untested — no binary test
 - server-to-client-candidate: `surface.connected` — native-tested — `tests/binary_ws_messages.rs::terminal_controls_are_owner_scoped_through_the_binary`
 - server-to-client-candidate: `surface.disconnected` — missing — no binary test
 - server-to-client-candidate: `surface.registry` — missing — no binary test
@@ -898,6 +909,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `thread.deleted` — missing — no binary test
 - server-to-client-candidate: `thread.status` — native-tested — `tests/binary_thread_turns.rs::thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write`
 - server-to-client-candidate: `thread.updated` — missing — no binary test
+- server-to-client-candidate: `tool_call` — native-untested — no binary test
 - server-to-client-candidate: `tool.approval-required` — native-untested — no binary test
 - server-to-client-candidate: `tool.background-complete` — native-untested — no binary test
 - server-to-client-candidate: `tool.op-request` — native-untested — no binary test
@@ -905,6 +917,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `tool.output` — native-untested — no binary test
 - server-to-client-candidate: `tool.result` — native-untested — no binary test
 - server-to-client-candidate: `tool.start` — native-untested — no binary test
+- server-to-client-candidate: `transcript` — native-untested — no binary test
 - server-to-client-candidate: `turn.completed` — native-untested — no binary test
 - server-to-client-candidate: `turn.started` — native-untested — no binary test
 - server-to-client-candidate: `ui.command` — missing — no binary test

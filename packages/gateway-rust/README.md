@@ -50,9 +50,18 @@ Open parity questions, not changed in this batch:
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 243 of 594 native-tested (40.91%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
-has 21 of 138, and background services have 0 of 8. The WebSocket list now includes frames that Node sends from outside
-`ws.ts`, so the denominator grew; the percentage fell for that reason alone.
+Inventory: 243 of 607 native-tested (40.03%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
+has 21 of 151 (53 native-untested, 77 missing), and background services have 0 of 8. The WebSocket list grew from 138
+to 151 entries, so the percentage fell from 40.91% for that reason alone; no existing entry changed status.
+
+The 13 added WebSocket entries are the voice-assistant socket (`/ws/voice-assistant`, `voice-assistant/service.ts`):
+server frames `audio`, `status`, `transcript` and `tool_call`, and client frames `audio`, `initial_text`, `commit`,
+`interrupt`, `announce` and `stop`. The screen-share relays (`screen-share:offer`, `screen-share:answer`,
+`screen-share:ice-candidate`) are also server frames, because `ws.ts` forwards the received message to the other peers.
+The web, API-client, CLI and desktop WebSocket handlers add no literal that no Node source emits or handles, so no
+`clientOnly` entry exists. The CLI and the desktop host contain no WebSocket code. The Rust gateway has no voice socket;
+its `native-untested` status for `status`, `transcript`, `tool_call` and `audio` is a lexical match on those quoted words
+elsewhere in the Rust sources, not a voice implementation.
 
 ## Built-in provider catalogue through the composed binary — 2026-11-19
 
