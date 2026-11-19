@@ -22,6 +22,7 @@ import {
 } from '@/lib/agents-api'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { PlanRunPanel } from './PlanRunPanel'
 
 
 // ── Status helpers ───────────────────────────────────────────────────
@@ -543,6 +544,7 @@ export function PlanModal({
                   </div>
                 )}
               </div>
+              <PlanRunPanel key={activePlan.id} planId={activePlan.id} />
             </>
           )}
 

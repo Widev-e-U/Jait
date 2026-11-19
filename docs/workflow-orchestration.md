@@ -189,6 +189,7 @@ A task with `"worker": { "kind": "acp", "providerId": "claude-code" }` runs its 
 - `POST /api/plan-runs/:runId/cancel` cancels the run. Running attempts are signalled, and their late reports are ignored.
 - `POST /api/plan-runs/:runId/resume` takes `decisions` for interrupted tasks: `taskId`, `decision` (`retry` or `fail`) and an inspection `note`.
 - The run view also carries `workerSessionId` (`workflow:<runId>`, where the workers' consent prompts appear) and `pendingApprovals` (the prompts the workers wait on now).
+- **Web panel.** The plan dialog (`PlanModal`) has a Runs section for the open plan. It starts a run with a worker count, lists the plan's runs, and shows each task's state, dependencies, worker, attempts and last error, along with the pending approvals. A running run refreshes itself. Cancel is offered while a run is not final. Resume needs a retry or fail choice and a note for each interrupted task, and nothing restarts on a default.
 
 ## Chat tools
 
@@ -231,7 +232,6 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 
 ## Not built yet
 
-- **UI panel for plan runs.** The chat tools and HTTP routes are the surfaces. No panel exists in the web app.
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
 - **Automatic worktree cleanup.** Worktrees are retained for review.
 - **Post-integration verification.** Gates run in the writer's workspace before integration. The integration head is verified only when a later task runs its gates on it.

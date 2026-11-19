@@ -7,6 +7,7 @@ import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 import type { PersonaAgentDraft } from '@/lib/persona-agents'
+import type { PlanRunDecision } from '@/lib/plan-run-model'
 import type {
   AgentThread,
   AutomationPlan,
@@ -21,6 +22,8 @@ import type {
   GenerateJaitTodosRequest,
   GeneratePlanTasksRequest,
   JaitTodo,
+  OrchestrationAttemptView,
+  OrchestrationRunView,
   PlanTask,
   ProviderAuthStatus,
   ProviderId,
@@ -48,6 +51,12 @@ export interface GithubIntakeDecision { id: string; event: string; action: strin
 export interface GithubIntakeState { mode: 'observe'; rules: GithubIntakeRule[]; decisions: GithubIntakeDecision[] }
 
 const API_URL = getApiUrl()
+
+/** The gateway answers failed run requests with { error }. Fall back to the status when it does not. */
+async function planRunErrorMessage(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => null) as { error?: unknown } | null
+  return typeof body?.error === 'string' && body.error ? body.error : `${fallback}: ${res.statusText || res.status}`
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -937,6 +946,65 @@ export class AgentsApi {
       throw new Error(err.error || `Failed to start tasks: ${res.statusText}`)
     }
     return await res.json() as { tasks: PlanTask[]; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }
+  }
+
+  // ── Plan runs ──────────────────────────────────────────────────
+
+  async listPlanRuns(): Promise<OrchestrationRunView[]> {
+    const res = await fetch(`${API_URL}/api/plan-runs`, { headers: this.getHeaders() })
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to list runs'))
+    const data = await res.json() as { runs: OrchestrationRunView[] }
+    return data.runs
+  }
+
+  async getPlanRun(runId: string): Promise<OrchestrationRunView> {
+    const res = await fetch(`${API_URL}/api/plan-runs/${encodeURIComponent(runId)}`, { headers: this.getHeaders() })
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to load run'))
+    const data = await res.json() as { run: OrchestrationRunView }
+    return data.run
+  }
+
+  async startPlanRun(planId: string, maxWorkers?: number): Promise<OrchestrationRunView> {
+    const res = await fetch(`${API_URL}/api/plans/${encodeURIComponent(planId)}/runs`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(maxWorkers === undefined ? {} : { maxWorkers }),
+    })
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to start run'))
+    const data = await res.json() as { run: OrchestrationRunView }
+    return data.run
+  }
+
+  async cancelPlanRun(runId: string): Promise<OrchestrationRunView> {
+    const res = await fetch(`${API_URL}/api/plan-runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to cancel run'))
+    const data = await res.json() as { run: OrchestrationRunView }
+    return data.run
+  }
+
+  async resumePlanRun(runId: string, decisions: PlanRunDecision[]): Promise<OrchestrationRunView> {
+    const res = await fetch(`${API_URL}/api/plan-runs/${encodeURIComponent(runId)}/resume`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ decisions }),
+    })
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to resume run'))
+    const data = await res.json() as { run: OrchestrationRunView }
+    return data.run
+  }
+
+  async listPlanRunAttempts(runId: string, taskId: string): Promise<OrchestrationAttemptView[]> {
+    const res = await fetch(
+      `${API_URL}/api/plan-runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/attempts`,
+      { headers: this.getHeaders() },
+    )
+    if (!res.ok) throw new Error(await planRunErrorMessage(res, 'Failed to load attempts'))
+    const data = await res.json() as { attempts: OrchestrationAttemptView[] }
+    return data.attempts
   }
 
   async listJaitTodos(repoId: string): Promise<JaitTodo[]> {
