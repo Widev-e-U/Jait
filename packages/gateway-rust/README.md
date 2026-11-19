@@ -50,9 +50,33 @@ Open parity questions, not changed in this batch:
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 243 of 607 native-tested (40.03%). HTTP has 222 native-tested, 75 native-untested and 151 missing. WebSocket
-has 21 of 151 (53 native-untested, 77 missing), and background services have 0 of 8. The WebSocket list grew from 138
-to 151 entries, so the percentage fell from 40.91% for that reason alone; no existing entry changed status.
+Inventory: 249 of 607 native-tested (41.02%). HTTP has 228 native-tested, 66 native-untested and 154 missing. WebSocket
+has 21 of 151 (53 native-untested, 77 missing), and background services have 0 of 8, all missing.
+
+Changes since the WebSocket checkpoint (243 of 607, 40.03%):
+- `POST /api/consent/:id/approve-all` is driven by `consent_approve_all_resolves_the_pending_request_through_the_binary`
+  in `tests/binary_thread_turns.rs`. The harness that makes a consent-gated tool call lives there, not in
+  `binary_state_consent.rs`. The test checks a 401 without a token, a stranger's 404 (the request stays pending), the
+  owner's 200 bulk approval that runs the write and completes the turn, and a second call's 404.
+- Five repository-proposal rows are driven by `repository_todos_and_proposal_aliases_are_owner_scoped` in
+  `tests/binary_repo_proposals_routes.rs`: `GET` and `POST /api/repos/:repoId/proposals`, `GET /api/repos/:repoId/todos`,
+  `PATCH /api/repo-proposals/:id` and `DELETE /api/repo-proposals/:id`. Each has an owner result and a non-owner 404.
+- `POST /api/repos/:repoId/todos/generate`, `POST /api/repos/:id/strategy/generate` and `POST /api/plans/:id/generate`
+  are now `mounted-fail-closed`, not native-untested. Every router defaults to `generator: None`, nothing in the runtime
+  sets one, and the shared `generate` helper answers 503 `Generation service is unavailable`.
+
+Not mapped, and why:
+- Store (`/api/store/skills…`, `/api/store/packages`). The ClawHub client is fixed to the public `https://clawhub.ai`
+  and refuses non-public hosts and pins resolved addresses, by design. A black-box success path needs live network or a
+  test seam that bypasses that guard. This needs a user decision; until then the store stays native-untested.
+- `tests/application_mounts.rs` drives `PATCH /api/skills/:id`, `POST /api/chat/prewarm` and the session plan routes in
+  process through `Application`, not through the spawned binary. The manifest counts binary tests only, so these stay
+  unmapped.
+- Scheduler. `runtime/application.rs` builds `SchedulerService` for the job CRUD routes only. Its executor refuses every
+  run ("Scheduled tool execution is not available in the Rust gateway yet"), and `SchedulerService::start` is called only
+  from tests in `scheduler/service.rs`, so the timer never starts in production. It stays missing.
+- Session plan execute and reject, and `PATCH /api/sessions/:id/state`, are asserted only as 404 (no pending plan, or a
+  non-owner). They are not mapped.
 
 The 13 added WebSocket entries are the voice-assistant socket (`/ws/voice-assistant`, `voice-assistant/service.ts`):
 server frames `audio`, `status`, `transcript` and `tool_call`, and client frames `audio`, `initial_text`, `commit`,

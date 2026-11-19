@@ -8,14 +8,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 {
   "httpTotal": 448,
   "missing": 40,
-  "mounted-fail-closed": 104,
-  "native-tested": 222,
-  "native-untested": 75,
+  "mounted-fail-closed": 107,
+  "native-tested": 228,
+  "native-untested": 66,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 66.3,
-  "nativeTested": 243,
+  "nativeRouteReferencePct": 65.6,
+  "nativeTested": 249,
   "nativeTestedDenominator": 607,
-  "nativeTestedPct": 40.03,
+  "nativeTestedPct": 41.02,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
@@ -26,9 +26,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 222,
-    "native-untested": 75,
-    "missing": 151
+    "native-tested": 228,
+    "native-untested": 66,
+    "missing": 154
   },
   "wsRustStatus": {
     "native-tested": 21,
@@ -70,7 +70,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | DELETE | `/api/projects/archived` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::permanent_archive_deletion_is_atomic_and_owner_scoped` | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | missing | mounted-incomplete |  | routes/reminders.ts |
-| DELETE | `/api/repo-proposals/:id` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| DELETE | `/api/repo-proposals/:id` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | DELETE | `/api/secrets/:id` | native-tested | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
 | DELETE | `/api/security/checks/:id` | missing | mounted-fail-closed |  | routes/security-workbench.ts |
@@ -185,12 +185,12 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/reminders/export.md` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | GET | `/api/repos` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/repositories.ts |
 | GET | `/api/repos/:repoId/plans` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
-| GET | `/api/repos/:repoId/proposals` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| GET | `/api/repos/:repoId/proposals` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | GET | `/api/repos/:id/pull-requests` | native-untested | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/pull-requests/:number/diff` | native-untested | native-untested |  | routes/pull-requests.ts |
 | GET | `/api/repos/:id/strategy` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
-| GET | `/api/repos/:repoId/todos` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| GET | `/api/repos/:repoId/todos` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | GET | `/api/screen-share/chat/:chatId` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/screen-share/devices` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | GET | `/api/screen-share/state` | missing | mounted-fail-closed |  | routes/screen-share.ts |
@@ -264,7 +264,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | PATCH | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/projects.ts |
 | PATCH | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
 | PATCH | `/api/reminders/:id` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
-| PATCH | `/api/repo-proposals/:id` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| PATCH | `/api/repo-proposals/:id` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
@@ -298,7 +298,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/code-graph/path` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
 | POST | `/api/code-graph/query` | native-tested | native-tested | `tests/binary_code_graph.rs::code_graph_routes_enforce_owned_project_boundaries`, `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
 | POST | `/api/consent/:id/approve` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
-| POST | `/api/consent/:id/approve-all` | native-untested | native-untested |  | routes/consent.ts |
+| POST | `/api/consent/:id/approve-all` | native-tested | native-tested | `tests/binary_thread_turns.rs::consent_approve_all_resolves_the_pending_request_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/:id/reject` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/consent/pending/:sessionId/approve-all` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | POST | `/api/email/accounts` | missing | mounted-fail-closed |  | routes/email.ts |
@@ -357,7 +357,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/nodes/:id/credential` | native-tested | native-tested | `tests/binary_misc_routes.rs::node_credentials_enforce_ownership_and_revocation_through_binary` | server.ts |
 | POST | `/api/plan-runs/:runId/cancel` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plan-runs/:runId/resume` | missing | missing |  | routes/plan-runs.ts |
-| POST | `/api/plans/:id/generate` | native-untested | native-untested |  | routes/plans.ts |
+| POST | `/api/plans/:id/generate` | missing | mounted-fail-closed |  | routes/plans.ts |
 | POST | `/api/plans/:id/runs` | missing | missing |  | routes/plan-runs.ts |
 | POST | `/api/plans/:id/start` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
 | POST | `/api/plans/:id/tasks/:taskId/start` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
@@ -405,14 +405,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/reminders` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | POST | `/api/repos` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | POST | `/api/repos/:repoId/plans` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
-| POST | `/api/repos/:repoId/proposals` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| POST | `/api/repos/:repoId/proposals` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | POST | `/api/repos/:id/pull-requests/:number/comments` | native-untested | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/pull-requests/:number/merge` | native-untested | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/pull-requests/:number/resolve-conflicts` | native-untested | native-untested |  | routes/pull-requests.ts |
 | POST | `/api/repos/:id/pull-requests/:number/reviews` | native-untested | native-untested |  | routes/pull-requests.ts |
-| POST | `/api/repos/:id/strategy/generate` | native-untested | native-untested |  | routes/repositories.ts |
+| POST | `/api/repos/:id/strategy/generate` | missing | mounted-fail-closed |  | routes/repositories.ts |
 | POST | `/api/repos/:repoId/todos` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
-| POST | `/api/repos/:repoId/todos/generate` | native-untested | native-untested |  | routes/repo-proposals.ts |
+| POST | `/api/repos/:repoId/todos/generate` | missing | mounted-fail-closed |  | routes/repo-proposals.ts |
 | POST | `/api/screen-share/approve` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/capture` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/control/:operation` | missing | missing |  | routes/screen-share.ts |

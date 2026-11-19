@@ -216,6 +216,36 @@ async fn repository_todos_and_proposal_aliases_are_owner_scoped() {
         response.json::<Value>().await.unwrap()["proposal"]["status"],
         "done"
     );
+    // POST /api/repos/:repoId/proposals creates a proposal for the owner. DELETE /api/repo-proposals/:id
+    // removes it for the owner; a non-owner gets the same 404 as the other owner-scoped routes.
+    let response = client
+        .post(url(&proposals))
+        .bearer_auth(&owner)
+        .json(&json!({"message":"Write the changelog"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    let extra = response.json::<Value>().await.unwrap()["proposal"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let extra_alias = format!("/api/repo-proposals/{extra}");
+    let response = client
+        .delete(url(&extra_alias))
+        .bearer_auth(&other)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 404);
+    let response = client
+        .delete(url(&extra_alias))
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.json::<Value>().await.unwrap(), json!({"ok": true}));
     let response = client
         .post(url(&format!("{todos}/generate")))
         .bearer_auth(&owner)

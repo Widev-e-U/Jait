@@ -232,6 +232,9 @@ const FAIL_CLOSED_ROUTES = new Set([
   'DELETE /api/mobile/push-devices/{}', 'POST /api/mobile/push-devices/test', 'PUT /api/mobile/routines/{}',
   // The production maintenance authority (ReadOnlyAuthority) refuses every repository, so no run starts.
   'POST /api/maintenance/run',
+  // Generation routes share one generate() helper that answers 503 when no generator is wired. The composed
+  // application wires none (every router defaults to generator: None), so each of these refuses the effect.
+  'POST /api/plans/{}/generate', 'POST /api/repos/{}/strategy/generate', 'POST /api/repos/{}/todos/generate',
 ]);
 // Mounted endpoints with a working subset and missing production collaborators. An empty
 // success is not evidence that the omitted backend has no data. Keys use normalized paths.

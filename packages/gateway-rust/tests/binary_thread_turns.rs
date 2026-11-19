@@ -806,3 +806,132 @@ async fn thread_file_tools_create_files_and_refuse_secret_paths_through_the_bina
     assert!(!results.contains("PRIVATE KEY"), "{results}");
     model_task.abort();
 }
+
+/// `POST /api/consent/:id/approve-all` is the notification bulk approval. Through the binary it approves the pending
+/// request in the owner's session, which runs the write and completes the turn. A stranger gets the 404 that Node
+/// returns and leaves the request pending. A second bulk approval finds nothing pending.
+#[tokio::test]
+async fn consent_approve_all_resolves_the_pending_request_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let (thread, session) = new_thread(&client, &base, &owner, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &owner).await;
+
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &owner,
+        &format!("/api/threads/{thread}/start"),
+        json!({"message": "start the note"}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let required = ws
+        .until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    let consent_id = required["payload"]["id"].as_str().unwrap().to_owned();
+    let approve_all = format!("{base}/api/consent/{consent_id}/approve-all");
+    assert_eq!(
+        std::fs::read_to_string(gateway.directory.join("thread-note.txt")).unwrap(),
+        "original\n",
+        "the write must wait for consent"
+    );
+
+    let (status, body) = send_json(client.post(approve_all.as_str()).json(&json!({}))).await;
+    assert_eq!(status, 401, "{body}");
+
+    let invite: Value = client
+        .post(format!("{base}/api/auth/invitations"))
+        .bearer_auth(&owner)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let stranger: Value = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&json!({
+            "username": "stranger",
+            "password": "owner-pass-123",
+            "invitation": invite["invitation"],
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let stranger = stranger["access_token"].as_str().unwrap().to_owned();
+    let (status, body) = send_json(
+        client
+            .post(approve_all.as_str())
+            .bearer_auth(&stranger)
+            .json(&json!({})),
+    )
+    .await;
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["error"], "NOT_FOUND", "{body}");
+    let (_, pending) = send_json(
+        client
+            .get(format!("{base}/api/consent/pending"))
+            .bearer_auth(&owner),
+    )
+    .await;
+    assert_eq!(
+        pending["requests"].as_array().map(Vec::len),
+        Some(1),
+        "{pending}"
+    );
+
+    let (status, body) = send_json(
+        client
+            .post(approve_all.as_str())
+            .bearer_auth(&owner)
+            .json(&json!({})),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["ok"], true, "{body}");
+    assert_eq!(body["sessionId"], session.as_str(), "{body}");
+    assert_eq!(body["approvedCount"], 1, "{body}");
+    assert_eq!(body["requestIds"], json!([consent_id]), "{body}");
+    let resolved = ws
+        .until("consent.resolved", WAIT)
+        .await
+        .expect("the owner's socket receives the decision");
+    assert_eq!(resolved["payload"]["requestId"], consent_id.as_str());
+    assert_eq!(resolved["payload"]["approved"], true, "{resolved}");
+    wait_for_status(&client, &base, &owner, &thread, "completed").await;
+    assert_eq!(
+        std::fs::read_to_string(gateway.directory.join("thread-note.txt")).unwrap(),
+        "from thread\n",
+        "the approved write did not run; tool results: {}",
+        model.tool_results()
+    );
+
+    let (_, pending) = send_json(
+        client
+            .get(format!("{base}/api/consent/pending"))
+            .bearer_auth(&owner),
+    )
+    .await;
+    assert_eq!(pending["requests"], json!([]), "{pending}");
+    let (status, body) = send_json(
+        client
+            .post(approve_all.as_str())
+            .bearer_auth(&owner)
+            .json(&json!({})),
+    )
+    .await;
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["error"], "NOT_FOUND", "{body}");
+    model_task.abort();
+}

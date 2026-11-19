@@ -2,14 +2,14 @@
   "summary": {
     "httpTotal": 448,
     "missing": 40,
-    "mounted-fail-closed": 104,
-    "native-tested": 222,
-    "native-untested": 75,
+    "mounted-fail-closed": 107,
+    "native-tested": 228,
+    "native-untested": 66,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 66.3,
-    "nativeTested": 243,
+    "nativeRouteReferencePct": 65.6,
+    "nativeTested": 249,
     "nativeTestedDenominator": 607,
-    "nativeTestedPct": 40.03,
+    "nativeTestedPct": 41.02,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
@@ -20,9 +20,9 @@
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
-      "native-tested": 222,
-      "native-untested": 75,
-      "missing": 151
+      "native-tested": 228,
+      "native-untested": 66,
+      "missing": 154
     },
     "wsRustStatus": {
       "native-tested": 21,
@@ -394,11 +394,16 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -2123,11 +2128,16 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2188,11 +2198,16 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3303,11 +3318,16 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -3809,11 +3829,16 @@
       "nodeFiles": [
         "routes/consent.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/consent.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "consent_approve_all_resolves_the_pending_request_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4608,11 +4633,11 @@
       "nodeFiles": [
         "routes/plans.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/plans.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5298,11 +5323,16 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5358,11 +5388,11 @@
       "nodeFiles": [
         "routes/repositories.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/repositories.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5387,11 +5417,11 @@
       "nodeFiles": [
         "routes/repo-proposals.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/repo_proposals.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",

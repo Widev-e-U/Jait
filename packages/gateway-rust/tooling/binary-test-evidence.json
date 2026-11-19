@@ -414,6 +414,16 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/consent/:id/approve-all",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "consent_approve_all_resolves_the_pending_request_through_the_binary"
+        }
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/trust",
       "tests": [
@@ -2000,6 +2010,56 @@
         {
           "file": "tests/binary_misc_routes.rs",
           "name": "misc_routes_are_owned_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/todos",
+      "tests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/proposals",
+      "tests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/proposals",
+      "tests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/repo-proposals/:id",
+      "tests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/repo-proposals/:id",
+      "tests": [
+        {
+          "file": "tests/binary_repo_proposals_routes.rs",
+          "name": "repository_todos_and_proposal_aliases_are_owner_scoped"
         }
       ]
     },
