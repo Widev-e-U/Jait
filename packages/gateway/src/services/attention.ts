@@ -120,6 +120,9 @@ export const CONSENT_ATTENTION_ACTIONS: AttentionAction[] = [
   { id: "approve-all", label: "Approve all", kind: "approve-all" },
 ];
 
+/** A plan run's worker prompts never bulk-approve, so their notification offers only the single decisions. */
+export const WORKER_CONSENT_ATTENTION_ACTIONS: AttentionAction[] = CONSENT_ATTENTION_ACTIONS.filter((action) => action.kind !== "approve-all");
+
 /**
  * Notification action rows are tightly capped by every platform (Android shows
  * 3, Windows toasts 5, web notifications 2 on most browsers), so only the first

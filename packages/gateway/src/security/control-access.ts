@@ -3,6 +3,11 @@ import type { SessionService } from "../services/sessions.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import type { ConsentManager } from "./consent-manager.js";
 
+/** Owners of plan runs' worker sessions. Those sessions are not chats, so they need their own lookup. */
+export interface WorkflowSessionOwners {
+  ownerOfWorkflowSession(sessionId: string): string | null;
+}
+
 /** One ownership policy shared by HTTP, WebSocket input and output. */
 export class ControlAccess {
   constructor(
@@ -10,6 +15,7 @@ export class ControlAccess {
     private surfaces?: SurfaceRegistry,
     private consent?: ConsentManager,
     private threads?: Pick<ThreadService, "getById">,
+    private workflows?: WorkflowSessionOwners,
   ) {}
   executionSession(sessionId: string, userId: string, projectRoot: string): string {
     if (sessionId !== "default" || !this.sessions || typeof this.sessions.create !== "function") return sessionId;
@@ -27,8 +33,16 @@ export class ControlAccess {
     const owner = this.surfaces?.getOwner(id);
     return owner ? owner === userId : this.session(surface.sessionId ?? "", userId);
   }
+  /**
+   * Consent prompts also come from a plan run's worker session. Only that run's
+   * owner passes this check. Chat, terminal and WebSocket access keep using session().
+   */
+  consentSession(sessionId: string, userId: string | null): boolean {
+    if (this.session(sessionId, userId)) return true;
+    return Boolean(userId && this.workflows?.ownerOfWorkflowSession(sessionId) === userId);
+  }
   consentRequest(id: string, userId: string | null): boolean {
     const request = this.consent?.getRequest(id);
-    return Boolean(request && request.status === "pending" && this.session(request.sessionId, userId));
+    return Boolean(request && request.status === "pending" && this.consentSession(request.sessionId, userId));
   }
 }

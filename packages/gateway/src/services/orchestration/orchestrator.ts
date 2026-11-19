@@ -218,12 +218,21 @@ function describeScopeFailure(scope: ScopeResult): string {
   return parts.join("; ");
 }
 
+const WORKFLOW_SESSION_PREFIX = "workflow:";
+
 /**
  * The session that carries a run's worker tool calls and command gates, and so
  * its consent prompts. It is not the chat that started the run.
  */
 export function workflowSessionId(runId: string): string {
-  return `workflow:${runId}`;
+  return `${WORKFLOW_SESSION_PREFIX}${runId}`;
+}
+
+/** The run behind a worker session, or null for any other session. */
+export function workflowRunIdOf(sessionId: string): string | null {
+  if (!sessionId.startsWith(WORKFLOW_SESSION_PREFIX)) return null;
+  const runId = sessionId.slice(WORKFLOW_SESSION_PREFIX.length);
+  return runId.length > 0 ? runId : null;
 }
 
 function parseDefinition(raw: string): RunDefinition {
@@ -362,6 +371,15 @@ export class OrchestrationService {
 
   getRun(userId: string, runId: string): OrchestrationRunView {
     return this.toView(this.requireRunRow(userId, runId));
+  }
+
+  /**
+   * The owner of the run behind a worker session, or null. Consent routes admit
+   * only this owner, so a worker's prompt reaches the person who started its run.
+   */
+  ownerOfWorkflowSession(sessionId: string): string | null {
+    const runId = workflowRunIdOf(sessionId);
+    return runId === null ? null : (this.store.getRun(runId)?.userId ?? null);
   }
 
   getTaskAttempts(userId: string, runId: string, taskId: string): OrchestrationAttemptView[] {

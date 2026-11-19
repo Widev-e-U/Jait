@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
+import { ControlAccess } from "./control-access.js";
 import { signAuthToken } from "./http-auth.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { DeviceRegistry } from "../services/device-registry.js";
@@ -94,4 +95,27 @@ it("protects mobile consent approvals with the same ownership policy", async () 
   expect(approve).not.toHaveBeenCalled();
   expect((await app.inject({ method: "POST", url, headers })).statusCode).toBe(200);
   expect(approve).toHaveBeenCalledTimes(1);
+});
+
+describe("plan run worker sessions", () => {
+  const owners = { ownerOfWorkflowSession: (sessionId: string) => (sessionId === "workflow:run-1" ? "owner" : null) };
+  const consent = { getRequest: (id: string) => ({ id, status: "pending", sessionId: "workflow:run-1" }) } as any;
+
+  it("admits the run's owner to its consent prompts and nobody else", () => {
+    const access = new ControlAccess(undefined, undefined, consent, undefined, owners);
+    expect(access.consentSession("workflow:run-1", "owner")).toBe(true);
+    expect(access.consentSession("workflow:run-1", "stranger")).toBe(false);
+    expect(access.consentRequest("req-1", "owner")).toBe(true);
+    expect(access.consentRequest("req-1", "stranger")).toBe(false);
+  });
+
+  it("leaves chat, thread and terminal access to worker sessions closed", () => {
+    const access = new ControlAccess(undefined, undefined, consent, undefined, owners);
+    expect(access.session("workflow:run-1", "owner")).toBe(false);
+  });
+
+  it("grants nothing without a lookup or without a user", () => {
+    expect(new ControlAccess(undefined, undefined, consent).consentSession("workflow:run-1", "owner")).toBe(false);
+    expect(new ControlAccess(undefined, undefined, consent, undefined, owners).consentSession("workflow:run-1", null)).toBe(false);
+  });
 });

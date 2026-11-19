@@ -11,6 +11,7 @@ import {
   type TaskExecutionInput,
   type TaskExecutor,
   type VerificationRunner,
+  workflowSessionId,
 } from "./orchestrator.js";
 
 const USER = "user-1";
@@ -222,6 +223,11 @@ describe("ownership and worker limits", () => {
     expect(() => service.getRun("someone-else", run.id)).toThrow(OrchestrationNotFoundError);
     expect(() => service.cancelRun("someone-else", run.id)).toThrow(OrchestrationNotFoundError);
     expect(service.listRuns("someone-else")).toEqual([]);
+    // A worker session belongs to its run's owner, so only that owner can answer its prompts.
+    expect(service.ownerOfWorkflowSession(workflowSessionId(run.id))).toBe(USER);
+    expect(service.ownerOfWorkflowSession("workflow:")).toBeNull();
+    expect(service.ownerOfWorkflowSession("workflow:no-such-run")).toBeNull();
+    expect(service.ownerOfWorkflowSession("chat-session-1")).toBeNull();
   });
 
   it("respects the process-wide limit across runs and fills freed slots", async () => {

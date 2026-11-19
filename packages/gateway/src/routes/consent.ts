@@ -50,7 +50,7 @@ export function registerConsentRoutes(
   app.get("/api/consent/pending", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
-    const requests = consentManager.listPending().filter((r) => access.session(r.sessionId, user.id));
+    const requests = consentManager.listPending().filter((r) => access.consentSession(r.sessionId, user.id));
     return { requests };
   });
 
@@ -115,10 +115,13 @@ export function registerConsentRoutes(
 
   // Notification bulk approval applies only to currently pending requests in this chat.
   // The preHandler validates ownership of the originating request before any mutation.
+  // A plan run's worker session never bulk-approves: one approval would cover the run's later calls too.
   app.post("/api/consent/:id/approve-all", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
     const { id } = request.params as { id: string };
     const pending = consentManager.getRequest(id);
-    if (!pending || pending.status !== "pending") {
+    if (!pending || pending.status !== "pending" || !access.session(pending.sessionId, user.id)) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Consent request not found or already resolved" });
     }
     const sessionId = pending.sessionId;
@@ -204,7 +207,7 @@ export function registerConsentRoutes(
   app.get("/api/consent/count", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
-    return { count: consentManager.listPending().filter((r) => access.session(r.sessionId, user.id)).length };
+    return { count: consentManager.listPending().filter((r) => access.consentSession(r.sessionId, user.id)).length };
   });
 
   // GET /api/trust — list all trust levels

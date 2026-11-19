@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
-import { ControlAccess } from "../security/control-access.js";
+import { ControlAccess, type WorkflowSessionOwners } from "../security/control-access.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { SchedulerService } from "../scheduler/service.js";
 import type { ConsentManager } from "../security/consent-manager.js";
@@ -19,10 +19,11 @@ interface MobileRouteDeps {
   config: AppConfig;
   mobilePush?: MobilePushService;
   scheduler?: SchedulerService;
+  workflowOwners?: WorkflowSessionOwners;
 }
 
 export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps) {
-  const access = new ControlAccess(deps.sessionService, undefined, deps.consentManager, deps.threadService);
+  const access = new ControlAccess(deps.sessionService, undefined, deps.consentManager, deps.threadService, deps.workflowOwners);
   app.get("/api/mobile/discovery", async (request) => {
     const host = request.hostname;
     const protocol = request.protocol;
@@ -172,7 +173,7 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
   app.get("/api/mobile/consent/pending", async (request, reply) => {
     const user = await requireAuth(request, reply, deps.config.jwtSecret);
     if (!user) return;
-    return { requests: deps.consentManager.listPending().filter((entry) => access.session(entry.sessionId, user.id)) };
+    return { requests: deps.consentManager.listPending().filter((entry) => access.consentSession(entry.sessionId, user.id)) };
   });
 
   app.post("/api/mobile/consent/:id/approve", async (request, reply) => {

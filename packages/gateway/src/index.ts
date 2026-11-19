@@ -74,7 +74,9 @@ import {
   AttentionService,
   attentionActionsForQuestion,
   CONSENT_ATTENTION_ACTIONS,
+  WORKER_CONSENT_ATTENTION_ACTIONS,
 } from "./services/attention.js";
+import { workflowRunIdOf } from "./services/orchestration/orchestrator.js";
 import { PreviewService } from "./services/preview.js";
 import { sessionWaits, terminalWaitKey } from "./services/session-waits.js";
 import { setSecurityWorkbenchDb } from "./security/workbench.js";
@@ -666,7 +668,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
         // High-risk actions block the agent on a 2-minute timer, so they get
         // heads-up treatment; routine ones stay in the shade.
         urgent: request.risk === "high",
-        actions: CONSENT_ATTENTION_ACTIONS,
+        actions: workflowRunIdOf(request.sessionId) === null ? CONSENT_ATTENTION_ACTIONS : WORKER_CONSENT_ATTENTION_ACTIONS,
         link: `/?session=${encodeURIComponent(request.sessionId)}&consent=${encodeURIComponent(request.id)}`,
         detail: request as unknown as Record<string, unknown>,
         expiresAt: request.expiresAt,
