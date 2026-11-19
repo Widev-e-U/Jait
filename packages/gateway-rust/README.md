@@ -47,6 +47,12 @@ Open parity questions, not changed in this batch:
 - A `start` or `send` that reads the thread before a stop and admits its turn after it can still start a running turn.
   `mark_interrupted` documents that starts must be serialized with stops, and the Rust path does not do that yet.
 - `stop` on a thread with a provider session still answers 409, because this gateway has no provider session control.
+- Queued chat messages are missing. Node keeps a `queued_messages` session state, answers a send made while a turn runs
+  with 202 and the queued id, drains the queue when the turn ends, and drains again on `PATCH /api/sessions/:id/state`
+  when its body carries `queued_messages` (`packages/gateway/src/routes/chat.ts`, `routes/sessions.ts`). The web UI relies
+  on this (`apps/web/src/hooks/useChat.ts`, `App.tsx`). Rust answers the same send with 409 `CHAT_BUSY`
+  (`routes/chat.rs`) and has no queue and no drain. Until this is ported, `PATCH /api/sessions/:id/state` stays
+  native-untested, and a web-UI chat cannot queue a message while a turn is running.
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
