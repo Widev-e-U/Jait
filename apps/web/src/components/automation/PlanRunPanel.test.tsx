@@ -21,6 +21,7 @@ function render(overrides: Partial<PlanRunDetailProps> & Pick<PlanRunDetailProps
       onShowAttempts={noop}
       onCancel={noop}
       onResume={noop}
+      onDecideApproval={noop}
       {...overrides}
     />,
   )
@@ -94,7 +95,7 @@ describe('PlanRunDetail', () => {
     expect(html).toContain('Cancel run')
   })
 
-  it('shows the approvals a worker waits on, with the session that answers them', () => {
+  it('shows the approvals a worker waits on, with approve and refuse for the owner', () => {
     const html = textOf(render({
       run: run({
         pendingApprovals: [{ id: 'req-1', toolName: 'acp.claude-code', summary: 'claude-code asks to run "Edit file"', createdAt: '2026-11-18T10:04:00.000Z' }],
@@ -105,7 +106,9 @@ describe('PlanRunDetail', () => {
     expect(html).toContain('Waiting for approval (1)')
     expect(html).toContain('acp.claude-code')
     expect(html).toContain('Edit file')
-    expect(html).toContain('workflow:run-1')
+    expect(html).toContain('Approve')
+    expect(html).toContain('Refuse')
+    expect(html).toContain('do not appear in the chat that started the run')
   })
 
   it('offers no resume or cancel for a finished run, and no decisions', () => {

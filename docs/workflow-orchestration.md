@@ -167,7 +167,7 @@ A task with `"worker": { "kind": "acp", "providerId": "claude-code" }` runs its 
 - The task must declare writes. Its changes then always land in an isolated worktree and pass the scope gate. A task without writes is refused at creation (`invalid_worker`).
 - The provider must offer supervised mode. A provider that only offers full access is never started.
 - Jait's own MCP tools are not offered to the agent, so the agent's tools are only its own. Each of them that needs approval asks first.
-- Each approval is a consent request on the run's workflow session (`workflow:<runId>`), where the owner answers it. A refusal reaches the agent. A stopped attempt denies its pending requests at once.
+- Each approval is a consent request on the run's workflow session (`workflow:<runId>`), which only the run's owner can answer, in the plan's Runs section or through the consent routes. A refusal reaches the agent. A stopped attempt denies its pending requests at once.
 - Only a finished turn is an answer. A timeout, a stop, a failed start or a transport error leaves the outcome unknown, so the attempt is `interrupted`.
 - The attempt records its worker as `acp:<providerId>:<attemptId>`.
 - Each ACP provider has its own per-owner concurrency cap, so a coding agent never takes an in-process worker's slot.
@@ -189,7 +189,7 @@ A task with `"worker": { "kind": "acp", "providerId": "claude-code" }` runs its 
 - `POST /api/plan-runs/:runId/cancel` cancels the run. Running attempts are signalled, and their late reports are ignored.
 - `POST /api/plan-runs/:runId/resume` takes `decisions` for interrupted tasks: `taskId`, `decision` (`retry` or `fail`) and an inspection `note`.
 - The run view also carries `workerSessionId` (`workflow:<runId>`, where the workers' consent prompts appear) and `pendingApprovals` (the prompts the workers wait on now).
-- **Web panel.** The plan dialog (`PlanModal`) has a Runs section for the open plan. It starts a run with a worker count, lists the plan's runs, and shows each task's state, dependencies, worker, attempts and last error, along with the pending approvals. A running run refreshes itself. Cancel is offered while a run is not final. Resume needs a retry or fail choice and a note for each interrupted task, and nothing restarts on a default.
+- **Web panel.** The plan dialog (`PlanModal`) has a Runs section for the open plan. It starts a run with a worker count, lists the plan's runs, and shows each task's state, dependencies, worker, attempts and last error, along with the pending approvals, which the owner can approve or refuse. A running run refreshes itself. Cancel is offered while a run is not final. Resume needs a retry or fail choice and a note for each interrupted task, and nothing restarts on a default.
 
 ## Chat tools
 
@@ -225,7 +225,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 ## Security boundaries
 
 - Owner isolation: runs, repositories and worktrees are owner-scoped. A worker never runs in another owner's context.
-- Consent: every in-process tool call and every command gate passes through the consent-aware executor. Each approval an ACP agent asks for is a consent request on the same workflow session, through the same consent manager. Irreversible commands always re-ask. Workflow requests never run in full-access mode, and the `scheduler` bypass does not apply to them.
+- Consent: every in-process tool call and every command gate passes through the consent-aware executor. Each approval an ACP agent asks for is a consent request on the same workflow session, through the same consent manager. Irreversible commands always re-ask. Workflow requests never run in full-access mode, and the `scheduler` bypass does not apply to them. Only the run's owner can list, approve and refuse those prompts, through the consent and mobile routes (`ControlAccess.consentSession`). Approve-all is never offered for a worker session, so one approval cannot cover the run's later calls.
 - Halt: a global halt blocks new runs and new starts. Running attempts are interrupted, and nothing is integrated after a halt.
 - Paths: workers cannot read or write outside their workspace, and the scope gate catches changes that escape their declared writes.
 - A worktree is not a sandbox. It isolates git state, not processes. Command gates and worker tools still run with the gateway's permissions, subject to consent.
@@ -235,7 +235,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 - **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
 - **Automatic worktree cleanup.** Worktrees are retained for review.
 - **Post-integration verification.** Gates run in the writer's workspace before integration. The integration head is verified only when a later task runs its gates on it.
-- **Consent visibility.** Consent prompts for workers still appear under the session `workflow:<runId>`, not under the chat that started the run. The run view and `plan.run.status` name that session and list the pending prompts, but the starting chat does not show them.
+- **Worker prompts in the starting chat.** Worker prompts are answered in the plan's Runs section, through the consent and mobile routes, and from phone notifications. The chat that started the run does not list them.
 - **Process-level limits.** A zombie executor that ignores abort keeps its slot until it settles or the gateway restarts. Command gates stop their terminal, but worker tools that spawn processes outside a gate are not covered. The in-process worker has no such tool.
 - **Provider limits beyond concurrency.** The cap counts attempts. Quota windows reported by provider accounts are not read, and the in-process Jait backend reports none.
 - **Tests that agents weaken, beyond what the plan protects.** Command gates come from the approved plan, so an agent cannot swap them, and `resources.protects` makes named tests untouchable. The engine still cannot tell a weakened test from a fixed one by itself, so a test inside a writer's `writes` that the plan did not protect can be edited or removed. Deletions are listed in the scope evidence. Files that change which tests run, such as a test runner's config, are protected only when the plan lists them. Review changed tests in the integration branch.

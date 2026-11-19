@@ -8,6 +8,7 @@ import type { OrchestrationAttemptView, OrchestrationRunView, OrchestrationTaskV
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { submitConsentDecision } from '@/components/consent/action-card'
 import { agentsApi } from '@/lib/agents-api'
 import {
   buildDecisions,
@@ -67,11 +68,12 @@ export interface PlanRunDetailProps {
   onShowAttempts: (taskId: string) => void
   onCancel: () => void
   onResume: () => void
+  onDecideApproval: (requestId: string, decision: 'approve' | 'reject') => void
 }
 
 /** One run in full. Pure, so the rules it shows can be rendered and checked without the gateway. */
 export function PlanRunDetail({
-  run, drafts, attempts, busy, onDraftChange, onShowAttempts, onCancel, onResume,
+  run, drafts, attempts, busy, onDraftChange, onShowAttempts, onCancel, onResume, onDecideApproval,
 }: PlanRunDetailProps) {
   const progress = runProgress(run)
   const interrupted = interruptedTaskIds(run)
@@ -88,21 +90,24 @@ export function PlanRunDetail({
 
       {run.error && <p className="text-destructive">{run.error}</p>}
 
-      <p className="text-muted-foreground">
-        Consent prompts for this run appear in its worker session, <code>{run.workerSessionId}</code>, not in the chat that started it.
-      </p>
-
       {run.pendingApprovals.length > 0 && (
         <div className="space-y-1 rounded border p-2">
           <p className="font-medium">Waiting for approval ({run.pendingApprovals.length})</p>
-          <ul className="space-y-0.5">
+          <ul className="space-y-1">
             {run.pendingApprovals.map((approval) => (
-              <li key={approval.id}>
-                <span className="font-mono">{approval.toolName}</span>: {approval.summary}
+              <li key={approval.id} className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1">
+                  <span className="font-mono">{approval.toolName}</span>: {approval.summary}
+                </span>
+                <Button size="sm" className="h-6 text-xs" disabled={busy} onClick={() => onDecideApproval(approval.id, 'approve')}>Approve</Button>
+                <Button size="sm" variant="outline" className="h-6 text-xs" disabled={busy} onClick={() => onDecideApproval(approval.id, 'reject')}>Refuse</Button>
               </li>
             ))}
           </ul>
-          <p className="text-muted-foreground">Answer these in the worker session, or they time out.</p>
+          <p className="text-muted-foreground">
+            Answer worker prompts here or from the notification. They do not appear in the chat that started the run.
+            Approve lets the call run, Refuse stops it, and an unanswered prompt times out as a refusal.
+          </p>
         </div>
       )}
 
@@ -308,6 +313,21 @@ export function PlanRunPanel({ planId }: { planId: string }) {
     }
   }
 
+  const decideApproval = async (requestId: string, decision: 'approve' | 'reject') => {
+    if (!selected) return
+    setBusy(true)
+    setError(null)
+    try {
+      const recorded = await submitConsentDecision(requestId, decision, () => undefined, decision === 'reject' ? 'Refused from the plan run' : undefined)
+      if (!recorded) setError('The gateway did not record that decision. The prompt may already be answered or timed out.')
+      setSelected(await agentsApi.getPlanRun(selected.id))
+    } catch (err) {
+      setError(messageOf(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const showAttempts = async (taskId: string) => {
     if (!selected) return
     try {
@@ -369,6 +389,7 @@ export function PlanRunPanel({ planId }: { planId: string }) {
           onShowAttempts={(taskId) => void showAttempts(taskId)}
           onCancel={() => void cancelRun()}
           onResume={() => void resumeRun()}
+          onDecideApproval={(requestId, decision) => void decideApproval(requestId, decision)}
         />
       )}
     </section>
