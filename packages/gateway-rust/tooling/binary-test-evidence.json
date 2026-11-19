@@ -2024,6 +2024,56 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/threads/:id/send",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/approve",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/steer",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/stop",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_and_interrupt_match_the_node_contract_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/interrupt",
+      "tests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_and_interrupt_match_the_node_contract_through_the_binary"
+        }
+      ]
+    },
+    {
       "method": "DELETE",
       "path": "/api/projects/archived",
       "tests": [

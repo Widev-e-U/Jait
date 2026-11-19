@@ -9,13 +9,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "httpTotal": 448,
   "missing": 40,
   "mounted-fail-closed": 104,
-  "native-tested": 215,
-  "native-untested": 82,
+  "native-tested": 220,
+  "native-untested": 77,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 233,
+  "nativeTested": 238,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 43.96,
+  "nativeTestedPct": 44.91,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,8 +26,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 215,
-    "native-untested": 82,
+    "native-tested": 220,
+    "native-untested": 77,
     "missing": 151
   },
   "wsRustStatus": {
@@ -459,14 +459,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/terminals/:id/resize` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | POST | `/api/terminals/:id/write` | native-tested | native-tested | `tests/binary_terminals_routes.rs::terminal_routes_through_the_binary` | routes/terminals.ts |
 | POST | `/api/threads` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
-| POST | `/api/threads/:id/approve` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/approve` | native-tested | native-tested | `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/create-pr` | missing | missing |  | routes/threads.ts |
-| POST | `/api/threads/:id/interrupt` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/interrupt` | native-tested | native-tested | `tests/binary_thread_turns.rs::thread_stop_and_interrupt_match_the_node_contract_through_the_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/resume` | native-tested | native-tested | `tests/binary_thread_routes.rs::halt_interrupts_running_acp_thread_through_binary` | routes/threads.ts |
-| POST | `/api/threads/:id/send` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/send` | native-tested | native-tested | `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary` | routes/threads.ts |
 | POST | `/api/threads/:id/start` | native-tested | native-tested | `tests/binary_thread_routes.rs::halt_interrupts_running_acp_thread_through_binary` | routes/threads.ts |
-| POST | `/api/threads/:id/steer` | native-untested | native-untested |  | routes/threads.ts |
-| POST | `/api/threads/:id/stop` | native-untested | native-untested |  | routes/threads.ts |
+| POST | `/api/threads/:id/steer` | native-tested | native-tested | `tests/binary_thread_turns.rs::thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary` | routes/threads.ts |
+| POST | `/api/threads/:id/stop` | native-tested | native-tested | `tests/binary_thread_turns.rs::thread_stop_and_interrupt_match_the_node_contract_through_the_binary` | routes/threads.ts |
 | POST | `/api/tools/execute` | native-tested | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/terminals.ts |
 | POST | `/api/trust/levels/:actionType/reset` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | POST | `/api/update/apply` | native-untested | native-untested |  | routes/update.ts |

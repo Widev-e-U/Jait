@@ -3,13 +3,13 @@
     "httpTotal": 448,
     "missing": 40,
     "mounted-fail-closed": 104,
-    "native-tested": 215,
-    "native-untested": 82,
+    "native-tested": 220,
+    "native-untested": 77,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
-    "nativeTested": 233,
+    "nativeTested": 238,
     "nativeTestedDenominator": 530,
-    "nativeTestedPct": 43.96,
+    "nativeTestedPct": 44.91,
     "wsTotal": 74,
     "wsInbound": 38,
     "wsOutboundCandidates": 36,
@@ -20,8 +20,8 @@
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
-      "native-tested": 215,
-      "native-untested": 82,
+      "native-tested": 220,
+      "native-untested": 77,
       "missing": 151
     },
     "wsRustStatus": {
@@ -6030,11 +6030,16 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6053,11 +6058,16 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/threads.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_and_interrupt_match_the_node_contract_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6082,11 +6092,16 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_turn_waits_for_consent_and_completes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6111,11 +6126,16 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6123,11 +6143,16 @@
       "nodeFiles": [
         "routes/threads.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/threads.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "thread_stop_and_interrupt_match_the_node_contract_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",

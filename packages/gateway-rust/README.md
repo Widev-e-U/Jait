@@ -1,5 +1,39 @@
 # Native Rust gateway
 
+## Thread turns through the composed binary — 2026-11-19
+
+`tests/binary_thread_turns.rs` drives the thread turn routes through the composed binary. The owner's OpenAI-compatible
+model asks for a consent-gated `file_write`, so each turn waits for a decision before it changes anything. Three tests
+pass 3 of 3 in a focused run.
+
+- `thread_turn_waits_for_consent_and_completes_through_the_binary` covers `send`, which answers 409 `A turn is already in
+  progress` while the turn waits. It covers `approve`, which answers 400 for an empty body, 404 for an unknown thread,
+  and 409 `Thread approval is not supported by this provider` for a native turn, as Node refuses the built-in provider.
+  The decision goes through `POST /api/consent/{id}/approve`, and the owner's WebSocket receives `consent.required` and
+  `consent.resolved`. The test then checks the completed turn and a follow-up `send` on the same session.
+- `thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary` covers `steer` during a consent wait. The old
+  turn stops, the new turn answers the steered message, no consent request stays open, and approving the steered-away
+  request cannot write the file.
+- `thread_stop_and_interrupt_match_the_node_contract_through_the_binary` covers `interrupt` on a native thread (409
+  `Thread has no active session`, as in Node), `stop` for an anonymous caller (401) and an unknown thread (404), and
+  `stop` on a native thread (200 `{"ok":true}`, status `interrupted`).
+
+Each thread test registers its root as an owner project first, because the file tools act only inside an owned project.
+The chat file tool overwrites existing files only (`ScopedFileRoot::write_existing`). The test therefore seeds
+`thread-note.txt`, and a new file would fail with `Cannot write file: No such file or directory`. Node's file tool has
+not been compared, so this is not a parity claim.
+
+Open parity questions, not changed in this batch:
+- `stop_thread` and `set_thread_status` write only the database. A native turn that is still running is not cancelled
+  by `stop`, and neither handler broadcasts a thread status event. Node's `stop` marks a native thread interrupted and
+  broadcasts the status (`broadcastThreadStatus`). Whether a WebSocket client sees a status change from a native turn
+  was not checked, and neither was whether Node cancels the in-flight native turn.
+- `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
+  in `binary_thread_routes.rs`.
+
+Inventory: 238 of 530 native-tested (44.91%). HTTP has 220 native-tested, 77 native-untested and 151 missing. WebSocket
+has 18 of 74, and background services have 0 of 8.
+
 ## Git local routes through the composed binary, and a patch-diff fix — 2026-11-19
 
 `tests/binary_git_routes.rs` (`git_routes_operate_on_owned_repositories_through_the_binary`) drives twelve local git
