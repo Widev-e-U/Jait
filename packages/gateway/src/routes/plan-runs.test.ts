@@ -224,6 +224,56 @@ describe("gateway workflow composition", () => {
     }
   });
 
+  it("turns an attempt left running by a restart into interrupted work when the gateway boots", async () => {
+    const database = await openDatabase(":memory:");
+    migrateDatabase(database.sqlite);
+    const repoService = new RepositoryService(database.db);
+    const planService = new PlanService(database.db);
+    const repo = repoService.create({ userId: owner, name: "repo", localPath: import.meta.dirname });
+    const plan = planService.create({ userId: owner, repoId: repo.id, title: "Plan", tasks: [{
+      ...task,
+      resources: {},
+      verification: [{ id: "file", label: "Fixture exists", check: { kind: "artifact", path: "plan-runs.test.ts" } }],
+    }] });
+    // The worker never answers, so the attempt is still running when the first gateway goes down.
+    const hangingFetch = vi.fn(() => new Promise<Response>(() => undefined));
+    const userService = {
+      findById: (id: string) => id === owner ? { id } : undefined,
+      getSettings: () => ({
+        chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
+        apiKeys: { OPENAI_API_KEY: "fixture-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
+      }),
+    } as unknown as UserService;
+    const deps = { db: database.db, repoService, planService, userService, toolRegistry: new ToolRegistry() };
+    vi.stubGlobal("fetch", hangingFetch);
+    let first: Awaited<ReturnType<typeof createServer>> | undefined;
+    let second: Awaited<ReturnType<typeof createServer>> | undefined;
+    try {
+      first = await createServer(config, deps);
+      const headers = await auth(owner);
+      const start = await first.inject({ method: "POST", url: `/api/plans/${plan.id}/runs`, headers, payload: {} });
+      expect(start.statusCode, start.body).toBe(201);
+      const runUrl = `/api/plan-runs/${start.json().run.id}`;
+      const attemptsUrl = `${runUrl}/tasks/${task.id}/attempts`;
+      await expect.poll(async () => (await first!.inject({ url: attemptsUrl, headers })).json().attempts[0]?.state).toBe("running");
+      // A second gateway boots on the same database, as it does after a restart.
+      second = await createServer(config, deps);
+      const view = await second.inject({ url: runUrl, headers });
+      expect(view.json().run).toMatchObject({ status: "interrupted", paused: true });
+      expect(view.json().run.tasks).toMatchObject([{ taskId: task.id, state: "interrupted" }]);
+      const history = await second.inject({ url: attemptsUrl, headers });
+      expect(history.json().attempts).toMatchObject([{ attemptNo: 1, state: "interrupted", finishedAt: expect.any(String) }]);
+      // Nothing re-runs on its own: the model is still called once, and resuming needs an operator decision.
+      expect((await second.inject({ method: "POST", url: `${runUrl}/resume`, headers, payload: {} })).statusCode).toBe(409);
+      expect(hangingFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      await second?.close();
+      await first?.close();
+      vi.unstubAllGlobals();
+      database.sqlite.close();
+    }
+  });
+
   it("offers a writing task only the file tools for its worktree, and runs it there", async () => {
     const stateDir = await mkdtemp(join(tmpdir(), "jait-state-"));
     const repoDir = await mkdtemp(join(tmpdir(), "jait-repo-"));
