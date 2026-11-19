@@ -7,9 +7,9 @@
     "native-untested": 66,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 65.6,
-    "nativeTested": 249,
+    "nativeTested": 260,
     "nativeTestedDenominator": 607,
-    "nativeTestedPct": 41.02,
+    "nativeTestedPct": 42.83,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
@@ -25,8 +25,8 @@
       "missing": 154
     },
     "wsRustStatus": {
-      "native-tested": 21,
-      "native-untested": 53,
+      "native-tested": 32,
+      "native-untested": 42,
       "missing": 77
     },
     "serviceRustStatus": {
@@ -6982,9 +6982,14 @@
       "type": "agent.halted",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "agent_control_reports_unavailable_stop_and_isolates_owners"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "alarm.schedule",
@@ -7062,9 +7067,14 @@
       "type": "chat.created",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "chat.deleted",
@@ -7102,9 +7112,14 @@
       "type": "chat.updated",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "session_events_reach_only_the_owner_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "consent.pending-snapshot",
@@ -7371,25 +7386,40 @@
       "type": "plan.created",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "plan.deleted",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "plan.updated",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "preview.session",
@@ -7411,33 +7441,61 @@
       "type": "project.created",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "project.deleted",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        },
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "permanent_archive_deletion_is_atomic_and_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "project.restored",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "project.updated",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery"
+        },
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "provider.op-request",
@@ -7467,9 +7525,14 @@
       "type": "repo.updated",
       "direction": "server-to-client-candidate",
       "rustReference": true,
-      "status": "native-untested",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "failed_project_assignment_does_not_reconcile_repository"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "scheduler.executed",

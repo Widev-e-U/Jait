@@ -50,8 +50,8 @@ Open parity questions, not changed in this batch:
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 249 of 607 native-tested (41.02%). HTTP has 228 native-tested, 66 native-untested and 154 missing. WebSocket
-has 21 of 151 (53 native-untested, 77 missing), and background services have 0 of 8, all missing.
+Inventory: 260 of 607 native-tested (42.83%). HTTP has 228 native-tested, 66 native-untested and 154 missing. WebSocket
+has 32 of 151 (42 native-untested, 77 missing), and background services have 0 of 8, all missing.
 
 Changes since the WebSocket checkpoint (243 of 607, 40.03%):
 - `POST /api/consent/:id/approve-all` is driven by `consent_approve_all_resolves_the_pending_request_through_the_binary`
@@ -86,6 +86,13 @@ The web, API-client, CLI and desktop WebSocket handlers add no literal that no N
 `clientOnly` entry exists. The CLI and the desktop host contain no WebSocket code. The Rust gateway has no voice socket;
 its `native-untested` status for `status`, `transcript`, `tool_call` and `audio` is a lexical match on those quoted words
 elsewhere in the Rust sources, not a voice implementation.
+
+Eleven server frames are native-tested because a binary test reads each one off the socket and checks its payload:
+`agent.halted` (`binary_misc_routes.rs`), `chat.created`, `project.created`, `project.updated`, `project.deleted`,
+`project.restored` and `repo.updated` (`binary_project_repository_assignment.rs`), `chat.updated`
+(`binary_state_consent.rs`), and `plan.created`, `plan.updated` and `plan.deleted` (`binary_plans_routes.rs`). Where a test
+has a second owner, that owner receives nothing. Not counted: JSON fixtures in `provider_contract.rs`, which never reach a
+socket, and `terminal.output`, which appears only nested inside `surface.connected` frames.
 
 ## Built-in provider catalogue through the composed binary — 2026-11-19
 

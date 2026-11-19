@@ -13,9 +13,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "native-untested": 66,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 65.6,
-  "nativeTested": 249,
+  "nativeTested": 260,
   "nativeTestedDenominator": 607,
-  "nativeTestedPct": 41.02,
+  "nativeTestedPct": 42.83,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
@@ -31,8 +31,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
     "missing": 154
   },
   "wsRustStatus": {
-    "native-tested": 21,
-    "native-untested": 53,
+    "native-tested": 32,
+    "native-untested": 42,
     "missing": 77
   },
   "serviceRustStatus": {
@@ -819,7 +819,7 @@ Client-to-server candidates come from the case arms of the Node hub and of the v
 - client-to-server-candidate: `tool.op-output` — missing — no binary test
 - client-to-server-candidate: `tool.op-response` — missing — no binary test
 - client-to-server-candidate: `ui.state` — missing — no binary test
-- server-to-client-candidate: `agent.halted` — native-untested — no binary test
+- server-to-client-candidate: `agent.halted` — native-tested — `tests/binary_misc_routes.rs::agent_control_reports_unavailable_stop_and_isolates_owners`
 - server-to-client-candidate: `alarm.schedule` — native-untested — no binary test
 - server-to-client-candidate: `attention.cleared` — native-untested — no binary test
 - server-to-client-candidate: `attention.raised` — native-untested — no binary test
@@ -829,12 +829,12 @@ Client-to-server candidates come from the case arms of the Node hub and of the v
 - server-to-client-candidate: `browser.updated` — missing — no binary test
 - server-to-client-candidate: `chat.archived` — missing — no binary test
 - server-to-client-candidate: `chat.completed` — native-untested — no binary test
-- server-to-client-candidate: `chat.created` — native-untested — no binary test
+- server-to-client-candidate: `chat.created` — native-tested — `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped`
 - server-to-client-candidate: `chat.deleted` — missing — no binary test
 - server-to-client-candidate: `chat.moved` — native-untested — no binary test
 - server-to-client-candidate: `chat.notification-read` — native-untested — no binary test
 - server-to-client-candidate: `chat.restored` — missing — no binary test
-- server-to-client-candidate: `chat.updated` — native-untested — no binary test
+- server-to-client-candidate: `chat.updated` — native-tested — `tests/binary_state_consent.rs::session_events_reach_only_the_owner_through_the_binary`
 - server-to-client-candidate: `consent.pending-snapshot` — native-tested — `tests/binary_ws_messages.rs::subscribe_and_resource_messages_are_scoped_through_the_binary`
 - server-to-client-candidate: `consent.required` — native-tested — `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary`, `tests/binary_thread_turns.rs::thread_steer_replaces_a_turn_waiting_for_consent_through_the_binary`, `tests/binary_thread_turns.rs::thread_stop_during_consent_broadcasts_interrupted_and_a_stale_approval_cannot_write`, `tests/binary_thread_turns.rs::thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary`
 - server-to-client-candidate: `consent.resolved` — native-tested — `tests/binary_thread_turns.rs::thread_turn_waits_for_consent_and_completes_through_the_binary`
@@ -863,19 +863,19 @@ Client-to-server candidates come from the case arms of the Node hub and of the v
 - server-to-client-candidate: `notification` — native-untested — no binary test
 - server-to-client-candidate: `notification.cleared` — missing — no binary test
 - server-to-client-candidate: `notification.snapshot` — missing — no binary test
-- server-to-client-candidate: `plan.created` — native-untested — no binary test
-- server-to-client-candidate: `plan.deleted` — native-untested — no binary test
-- server-to-client-candidate: `plan.updated` — native-untested — no binary test
+- server-to-client-candidate: `plan.created` — native-tested — `tests/binary_plans_routes.rs::plan_routes_through_the_binary`
+- server-to-client-candidate: `plan.deleted` — native-tested — `tests/binary_plans_routes.rs::plan_routes_through_the_binary`
+- server-to-client-candidate: `plan.updated` — native-tested — `tests/binary_plans_routes.rs::plan_routes_through_the_binary`
 - server-to-client-candidate: `preview.session` — missing — no binary test
 - server-to-client-candidate: `project.archived` — missing — no binary test
-- server-to-client-candidate: `project.created` — native-untested — no binary test
-- server-to-client-candidate: `project.deleted` — native-untested — no binary test
-- server-to-client-candidate: `project.restored` — native-untested — no binary test
-- server-to-client-candidate: `project.updated` — native-untested — no binary test
+- server-to-client-candidate: `project.created` — native-tested — `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped`
+- server-to-client-candidate: `project.deleted` — native-tested — `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped`, `tests/binary_project_repository_assignment.rs::permanent_archive_deletion_is_atomic_and_owner_scoped`
+- server-to-client-candidate: `project.restored` — native-tested — `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped`
+- server-to-client-candidate: `project.updated` — native-tested — `tests/binary_project_repository_assignment.rs::assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery`, `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped`
 - server-to-client-candidate: `provider.op-request` — missing — no binary test
 - server-to-client-candidate: `repo.created` — native-untested — no binary test
 - server-to-client-candidate: `repo.deleted` — native-untested — no binary test
-- server-to-client-candidate: `repo.updated` — native-untested — no binary test
+- server-to-client-candidate: `repo.updated` — native-tested — `tests/binary_project_repository_assignment.rs::failed_project_assignment_does_not_reconcile_repository`
 - server-to-client-candidate: `scheduler.executed` — missing — no binary test
 - server-to-client-candidate: `screen-share:answer` — missing — no binary test
 - server-to-client-candidate: `screen-share:control-handoff` — missing — no binary test

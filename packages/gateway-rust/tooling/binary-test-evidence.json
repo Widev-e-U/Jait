@@ -2540,6 +2540,124 @@
           "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
         }
       ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "agent.halted",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "agent_control_reports_unavailable_stop_and_isolates_owners"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "chat.created",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "chat.updated",
+      "tests": [
+        {
+          "file": "tests/binary_state_consent.rs",
+          "name": "session_events_reach_only_the_owner_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "plan.created",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "plan.updated",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "plan.deleted",
+      "tests": [
+        {
+          "file": "tests/binary_plans_routes.rs",
+          "name": "plan_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "project.created",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "project.updated",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery"
+        },
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "project.deleted",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        },
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "permanent_archive_deletion_is_atomic_and_owner_scoped"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "project.restored",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "project_created_events_follow_commit_and_are_owner_scoped"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "repo.updated",
+      "tests": [
+        {
+          "file": "tests/binary_project_repository_assignment.rs",
+          "name": "failed_project_assignment_does_not_reconcile_repository"
+        }
+      ]
     }
   ]
 }
