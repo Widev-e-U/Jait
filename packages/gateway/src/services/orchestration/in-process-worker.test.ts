@@ -52,6 +52,15 @@ describe("in-process workflow worker", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("fails the attempt when the provider rejects the request, instead of reading an empty reply as a report", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: { message: "Incorrect API key provided", code: "invalid_api_key" } }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    )));
+    const { worker } = setup();
+    await expect(worker.run(request)).rejects.toThrow("produced an empty answer");
+  });
+
   it("refuses workspace claims and ACP before contacting a provider", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

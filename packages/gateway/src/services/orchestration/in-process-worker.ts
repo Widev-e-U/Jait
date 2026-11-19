@@ -75,6 +75,12 @@ export function createInProcessWorkflowWorker(
       if (!result.ok || typeof data?.content !== "string") {
         throw new Error("in-process workflow worker did not return a completed answer");
       }
+      // A rejected model request ends the sub-agent loop with an empty answer and no
+      // error result. An empty reply is never a report, so fail the attempt here
+      // instead of letting report validation read it as an invalid report.
+      if (data.content.trim() === "") {
+        throw new Error("in-process workflow worker produced an empty answer; the model request failed or returned nothing");
+      }
       return { text: data.content };
     },
   };
