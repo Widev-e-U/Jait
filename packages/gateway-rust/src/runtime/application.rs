@@ -280,21 +280,35 @@ impl crate::routes::filesystem::FilesystemNodes for GatewayFilesystemNodes {
         })
     }
 }
-fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -> FilesystemRoutes {
+/// The gateway's own hostname, as the filesystem and node routes advertise it.
+fn gateway_hostname() -> String {
     let mut buffer = [0u8; 256];
     // SAFETY: the buffer is valid for its length and gethostname NUL-terminates within it.
-    let hostname = unsafe {
+    unsafe {
         libc::gethostname(buffer.as_mut_ptr().cast(), buffer.len() - 1);
         std::ffi::CStr::from_ptr(buffer.as_ptr().cast())
             .to_string_lossy()
             .into_owned()
-    };
+    }
+}
+
+/// The gateway's node platform, mapped the way the filesystem routes map it.
+fn gateway_node_platform() -> crate::services::node_state_manager::NodePlatform {
+    use crate::services::node_state_manager::NodePlatform;
+    match std::env::consts::OS {
+        "windows" => NodePlatform::Windows,
+        "macos" => NodePlatform::Macos,
+        _ => NodePlatform::Linux,
+    }
+}
+
+fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -> FilesystemRoutes {
     let environment = BrowseEnvironment {
         home: std::env::var_os("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| project_root.to_path_buf()),
         cwd: project_root.to_path_buf(),
-        hostname,
+        hostname: gateway_hostname(),
         platform: match std::env::consts::OS {
             "windows" => "win32",
             "macos" => "darwin",
@@ -1001,6 +1015,16 @@ impl Application {
         config.authorizer = Some(Arc::new(
             crate::runtime::terminal_ws::ComposedWsAuthorizer::new(self.terminals.clone()),
         ));
+        // Node grants run on this runtime's own database, like the HTTP node routes, so an
+        // embedder cannot substitute its own permission store.
+        let runtime = tokio::runtime::Handle::try_current()
+            .map_err(|_| "websocket hub requires a tokio runtime")?;
+        config.nodes = Some(Arc::new(crate::runtime::node_ws::ComposedNodes::new(
+            self.auth.worker(),
+            runtime,
+            &gateway_hostname(),
+            gateway_node_platform(),
+        )));
         let hub = Arc::new(crate::ws::WsHub::new(config));
         crate::runtime::terminal_ws::spawn_output_pump(self.terminals.clone(), &hub);
         let transport = crate::runtime::ws_transport::WsTransport::new(hub, max_connections);

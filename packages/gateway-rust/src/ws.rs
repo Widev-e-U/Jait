@@ -924,6 +924,10 @@ pub struct WsHubConfig {
     /// Drives attached terminals for `terminal.input` / `terminal.resize`. When unset the
     /// messages are ignored.
     pub terminals: Option<Arc<dyn WsTerminalControl>>,
+    /// Serves `nodes.list` / `nodes.get` / `nodes.update-permissions` / `nodes.forget`. When
+    /// unset the reads are ignored and the two mutations are denied, as the reference does
+    /// without `canAccessNode`.
+    pub nodes: Option<Arc<dyn WsNodeControl>>,
 }
 
 /// Terminal input over the socket. Implementations must refuse terminals the user does
@@ -945,6 +949,28 @@ pub trait WsConsentControl: Send + Sync {
         approve: bool,
         reason: Option<String>,
     ) -> Result<bool, String>;
+}
+
+/// What `nodes.forget` found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeForget {
+    Forgotten,
+    /// The node is connected; it has to disconnect before it can be forgotten.
+    Online,
+    NotFound,
+}
+
+/// Node capability grants over the socket: `nodes.list`, `nodes.get`, `nodes.update-permissions`
+/// and `nodes.forget`. Every method blocks; call off the runtime.
+pub trait WsNodeControl: Send + Sync {
+    /// Mirrors the reference `canAccessNode`: the gateway belongs to its owner, any other node to
+    /// the owner of its credential. A failed lookup denies.
+    fn can_access(&self, user: &str, node_id: &str) -> bool;
+    /// Persisted nodes with their grants, overlaid with the live registry, in the reference order.
+    fn snapshot(&self) -> Result<Vec<Value>, String>;
+    /// Persists grants. The caller has already rejected unknown capabilities.
+    fn update_permissions(&self, node_id: &str, grants: &Map<String, Value>) -> Result<(), String>;
+    fn forget(&self, node_id: &str) -> Result<NodeForget, String>;
 }
 
 impl std::fmt::Debug for WsHubConfig {
@@ -978,6 +1004,7 @@ impl Default for WsHubConfig {
             session_authority: None,
             consent: None,
             terminals: None,
+            nodes: None,
         }
     }
 }
@@ -2682,6 +2709,9 @@ async fn handle_message(
                 }
             }
         }
+        "nodes.list" | "nodes.get" | "nodes.update-permissions" | "nodes.forget" => {
+            handle_node_message(hub, client_id, kind, &parsed, &payload).await;
+        }
         "resource.unsubscribe" => {
             // Reference handling is bookkeeping only: it sends no acknowledgement.
             if let Some(key) = subscription_key(&payload) {
@@ -2701,6 +2731,170 @@ async fn handle_message(
         }
     }
     Ok(Disposition::Continue)
+}
+
+/// `nodes.list`, `nodes.get`, `nodes.update-permissions` and `nodes.forget`, mirroring the reference
+/// cases and the `canAccessNode` gate that runs ahead of the two mutations. Replies carry the
+/// socket's bound session, like every other reference reply; a granted change is broadcast to every
+/// user socket as `nodes.permissions`.
+async fn handle_node_message(
+    hub: &Arc<WsHub>,
+    client_id: &str,
+    kind: &str,
+    parsed: &Value,
+    payload: &Value,
+) {
+    let bound = hub.session_binding(client_id);
+    let session = Some(bound.as_deref().unwrap_or(""));
+    let fail = |code: &str, message: &str| {
+        let _ = hub.send_to_client(client_id, error_envelope(session, code, message));
+    };
+    let user = {
+        let inner = hub.inner.lock().expect("hub state");
+        inner
+            .clients
+            .get(client_id)
+            .filter(|client| WsHub::credential_current(client))
+            .and_then(|client| client.user_id.clone())
+    };
+    let nodes = hub.config.nodes.clone();
+    // The reference reads `(msg.payload ?? msg)` for the access gate and for the grants, and
+    // `msg.payload` alone for `nodes.get` and the body of `nodes.forget`.
+    let payload_or_message = if payload.is_null() { parsed } else { payload };
+
+    if matches!(kind, "nodes.update-permissions" | "nodes.forget") {
+        let id = payload_or_message
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned);
+        let allowed = match (&nodes, user, id) {
+            (Some(nodes), Some(user), Some(id)) => {
+                let nodes = nodes.clone();
+                tokio::task::spawn_blocking(move || nodes.can_access(&user, &id))
+                    .await
+                    .unwrap_or(false)
+            }
+            _ => false,
+        };
+        if !allowed {
+            fail("NODE_FORBIDDEN", ACCESS_REQUIRED);
+            return;
+        }
+    }
+    let Some(nodes) = nodes else { return };
+    let snapshot = {
+        let nodes = nodes.clone();
+        move || {
+            let nodes = nodes.clone();
+            async move { tokio::task::spawn_blocking(move || nodes.snapshot()).await }
+        }
+    };
+    let permissions =
+        |nodes: Vec<Value>| envelope("nodes.permissions", session, json!({ "nodes": nodes }));
+    let node_id = |value: &Value| {
+        value
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+    };
+
+    match kind {
+        "nodes.list" => match snapshot().await {
+            Ok(Ok(nodes)) => {
+                let _ = hub.send_to_client(client_id, permissions(nodes));
+            }
+            _ => fail("NODES_UNAVAILABLE", "Node registry unavailable"),
+        },
+        "nodes.get" => {
+            let Some(id) = node_id(payload) else {
+                fail("BAD_REQUEST", "nodes.get requires nodeId");
+                return;
+            };
+            match snapshot().await {
+                Ok(Ok(nodes)) => {
+                    let found: Vec<Value> = nodes
+                        .into_iter()
+                        .filter(|node| node.get("id").and_then(Value::as_str) == Some(id.as_str()))
+                        .take(1)
+                        .collect();
+                    let _ = hub.send_to_client(client_id, permissions(found));
+                }
+                _ => fail("NODES_UNAVAILABLE", "Node registry unavailable"),
+            }
+        }
+        "nodes.update-permissions" => {
+            let Some(id) = node_id(payload_or_message) else {
+                fail(
+                    "BAD_REQUEST",
+                    "nodes.update-permissions requires nodeId and grants",
+                );
+                return;
+            };
+            // `typeof grants === "object"` admits arrays, whose keys are their indices.
+            let grants: Map<String, Value> = match payload_or_message.get("grants") {
+                Some(Value::Object(map)) => map.clone(),
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| (index.to_string(), value.clone()))
+                    .collect(),
+                _ => {
+                    fail(
+                        "BAD_REQUEST",
+                        "nodes.update-permissions requires nodeId and grants",
+                    );
+                    return;
+                }
+            };
+            // Reject unknown capabilities instead of silently persisting typos.
+            if let Some(invalid) = grants
+                .keys()
+                .find(|key| crate::services::node_permissions::NodeCapability::parse(key).is_none())
+            {
+                fail("BAD_REQUEST", &format!("Unknown capability: {invalid}"));
+                return;
+            }
+            let updated = {
+                let nodes = nodes.clone();
+                tokio::task::spawn_blocking(move || nodes.update_permissions(&id, &grants)).await
+            };
+            if !matches!(updated, Ok(Ok(()))) {
+                fail("NODES_UNAVAILABLE", "Node registry unavailable");
+                return;
+            }
+            broadcast_node_permissions(hub, snapshot().await);
+        }
+        _ => {
+            let Some(id) = node_id(payload) else {
+                fail("BAD_REQUEST", "nodes.forget requires nodeId");
+                return;
+            };
+            let forgotten = {
+                let nodes = nodes.clone();
+                tokio::task::spawn_blocking(move || nodes.forget(&id)).await
+            };
+            match forgotten {
+                Ok(Ok(NodeForget::Online)) => {
+                    fail("NODE_ONLINE", "Disconnect this node before forgetting it");
+                }
+                Ok(Ok(NodeForget::NotFound)) => fail("NOT_FOUND", "Node not found"),
+                Ok(Ok(NodeForget::Forgotten)) => broadcast_node_permissions(hub, snapshot().await),
+                _ => fail("NODES_UNAVAILABLE", "Node registry unavailable"),
+            }
+        }
+    }
+}
+
+/// Mirror of `broadcastNodePermissions`: the current snapshot to every user socket.
+fn broadcast_node_permissions(
+    hub: &Arc<WsHub>,
+    snapshot: Result<Result<Vec<Value>, String>, tokio::task::JoinError>,
+) {
+    if let Ok(Ok(nodes)) = snapshot {
+        hub.broadcast_all("nodes.permissions", json!({ "nodes": nodes }));
+    }
 }
 
 impl WsControlPlane for WsHub {

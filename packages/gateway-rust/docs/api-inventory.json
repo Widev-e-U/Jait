@@ -7,14 +7,14 @@
     "native-untested": 99,
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 66.3,
-    "nativeTested": 211,
+    "nativeTested": 216,
     "nativeTestedDenominator": 530,
-    "nativeTestedPct": 39.81,
+    "nativeTestedPct": 40.75,
     "wsTotal": 74,
     "wsInbound": 38,
     "wsOutboundCandidates": 36,
-    "wsWithoutDirectionalRustReference": 65,
-    "clientPathCandidates": 253,
+    "wsWithoutDirectionalRustReference": 61,
+    "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
     "backgroundServices": 8,
@@ -25,9 +25,9 @@
       "missing": 151
     },
     "wsRustStatus": {
-      "native-tested": 13,
+      "native-tested": 18,
       "native-untested": 0,
-      "missing": 61
+      "missing": 56
     },
     "serviceRustStatus": {
       "native-tested": 0,
@@ -6508,34 +6508,54 @@
     {
       "type": "nodes.forget",
       "direction": "client-to-server-candidate",
-      "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "nodes.get",
       "direction": "client-to-server-candidate",
-      "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "nodes.list",
       "direction": "client-to-server-candidate",
-      "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "nodes.update-permissions",
       "direction": "client-to-server-candidate",
-      "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "notification.read",
@@ -6882,9 +6902,14 @@
       "type": "nodes.permissions",
       "direction": "server-to-client-candidate",
       "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "notification",
@@ -8163,6 +8188,56 @@
       ]
     },
     {
+      "path": "/api/plan-runs",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/plan-runs"
+      ]
+    },
+    {
+      "path": "/api/plan-runs/{}",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/plan-runs/:runId"
+      ]
+    },
+    {
+      "path": "/api/plan-runs/{}/cancel",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plan-runs/:runId/cancel"
+      ]
+    },
+    {
+      "path": "/api/plan-runs/{}/resume",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plan-runs/:runId/resume"
+      ]
+    },
+    {
+      "path": "/api/plan-runs/{}/tasks/{}/attempts",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "GET /api/plan-runs/:runId/tasks/:taskId/attempts"
+      ]
+    },
+    {
       "path": "/api/plans/{}",
       "files": [
         "apps/web/src/lib/agents-api.ts"
@@ -8182,6 +8257,16 @@
       "serverPathReference": true,
       "serverRoutes": [
         "POST /api/plans/:id/generate"
+      ]
+    },
+    {
+      "path": "/api/plans/{}/runs",
+      "files": [
+        "apps/web/src/lib/agents-api.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/plans/:id/runs"
       ]
     },
     {

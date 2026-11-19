@@ -2136,6 +2136,56 @@
           "name": "consent_decisions_over_ws_are_owner_scoped_through_the_binary"
         }
       ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "nodes.list",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "nodes.get",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "nodes.update-permissions",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "client-to-server-candidate",
+      "type": "nodes.forget",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
+    },
+    {
+      "direction": "server-to-client-candidate",
+      "type": "nodes.permissions",
+      "tests": [
+        {
+          "file": "tests/binary_ws_messages.rs",
+          "name": "node_grants_over_ws_are_owner_scoped_through_the_binary"
+        }
+      ]
     }
   ]
 }

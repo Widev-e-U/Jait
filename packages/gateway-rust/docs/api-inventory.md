@@ -13,14 +13,14 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "native-untested": 99,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 211,
+  "nativeTested": 216,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 39.81,
+  "nativeTestedPct": 40.75,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
-  "wsWithoutDirectionalRustReference": 65,
-  "clientPathCandidates": 253,
+  "wsWithoutDirectionalRustReference": 61,
+  "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
   "backgroundServices": 8,
@@ -31,9 +31,9 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
     "missing": 151
   },
   "wsRustStatus": {
-    "native-tested": 13,
+    "native-tested": 18,
     "native-untested": 0,
-    "missing": 61
+    "missing": 56
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -604,8 +604,14 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/network/topology` — GET /api/network/topology — apps/web/src/components/network/network-panel.tsx
 - `/api/persona-agents` — GET /api/persona-agents — apps/web/src/lib/agents-api.ts
 - `/api/persona-agents/{}` — DELETE /api/persona-agents/:id, PUT /api/persona-agents/:id — apps/web/src/lib/agents-api.ts
+- `/api/plan-runs` — GET /api/plan-runs — apps/web/src/lib/agents-api.ts
+- `/api/plan-runs/{}` — GET /api/plan-runs/:runId — apps/web/src/lib/agents-api.ts
+- `/api/plan-runs/{}/cancel` — POST /api/plan-runs/:runId/cancel — apps/web/src/lib/agents-api.ts
+- `/api/plan-runs/{}/resume` — POST /api/plan-runs/:runId/resume — apps/web/src/lib/agents-api.ts
+- `/api/plan-runs/{}/tasks/{}/attempts` — GET /api/plan-runs/:runId/tasks/:taskId/attempts — apps/web/src/lib/agents-api.ts
 - `/api/plans/{}` — DELETE /api/plans/:id, GET /api/plans/:id, PATCH /api/plans/:id — apps/web/src/lib/agents-api.ts
 - `/api/plans/{}/generate` — POST /api/plans/:id/generate — apps/web/src/lib/agents-api.ts
+- `/api/plans/{}/runs` — POST /api/plans/:id/runs — apps/web/src/lib/agents-api.ts
 - `/api/plans/{}/start` — POST /api/plans/:id/start — apps/web/src/lib/agents-api.ts
 - `/api/plans/{}/tasks/{}/start` — POST /api/plans/:id/tasks/:taskId/start — apps/web/src/lib/agents-api.ts
 - `/api/plugins` — GET /api/plugins — apps/web/src/components/settings/ExtensionSettings.tsx
@@ -781,10 +787,10 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - client-to-server-candidate: `messenger.result` — missing — no binary test
 - client-to-server-candidate: `node.hello` — missing — no binary test
 - client-to-server-candidate: `node.update-response` — missing — no binary test
-- client-to-server-candidate: `nodes.forget` — missing — no binary test
-- client-to-server-candidate: `nodes.get` — missing — no binary test
-- client-to-server-candidate: `nodes.list` — missing — no binary test
-- client-to-server-candidate: `nodes.update-permissions` — missing — no binary test
+- client-to-server-candidate: `nodes.forget` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `nodes.get` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `nodes.list` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
+- client-to-server-candidate: `nodes.update-permissions` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
 - client-to-server-candidate: `notification.read` — missing — no binary test
 - client-to-server-candidate: `provider.event` — missing — no binary test
 - client-to-server-candidate: `provider.op-response` — missing — no binary test
@@ -822,7 +828,7 @@ Client-to-server candidates come from all case arms in the Node hub; server-to-c
 - server-to-client-candidate: `node.registry` — missing — no binary test
 - server-to-client-candidate: `node.update-request` — missing — no binary test
 - server-to-client-candidate: `node.updated` — missing — no binary test
-- server-to-client-candidate: `nodes.permissions` — missing — no binary test
+- server-to-client-candidate: `nodes.permissions` — native-tested — `tests/binary_ws_messages.rs::node_grants_over_ws_are_owner_scoped_through_the_binary`
 - server-to-client-candidate: `notification` — missing — no binary test
 - server-to-client-candidate: `notification.cleared` — missing — no binary test
 - server-to-client-candidate: `notification.snapshot` — missing — no binary test

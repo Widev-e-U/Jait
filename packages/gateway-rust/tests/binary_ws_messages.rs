@@ -546,3 +546,128 @@ async fn consent_decisions_over_ws_are_owner_scoped_through_the_binary() {
     );
     assert!(!consent_still_pending(&client, &gateway.base, &owner, &consent_id).await);
 }
+
+/// The gateway node's capability grants over the socket follow the reference rules. An account
+/// that does not own the gateway is refused before anything persists; the owner's grant is
+/// broadcast and read back; unknown capabilities are rejected; and the connected gateway cannot
+/// be forgotten.
+#[tokio::test]
+async fn node_grants_over_ws_are_owner_scoped_through_the_binary() {
+    let gateway = Gateway::start();
+    let client = http_client();
+    let owner = register(&client, &gateway.base, "owner", None).await;
+    let other = register_invited(&client, &gateway.base, &owner).await;
+    let mut owner_ws = WsClient::connect(&gateway.base, &owner).await;
+    let mut other_ws = WsClient::connect(&gateway.base, &other).await;
+    let entry = |message: &Value| {
+        message["payload"]["nodes"]
+            .as_array()
+            .and_then(|nodes| nodes.iter().find(|node| node["id"] == "gateway").cloned())
+    };
+
+    // The live gateway is listed with deny-by-default grants.
+    owner_ws.send(json!({"type": "nodes.list"})).await;
+    let listed = owner_ws
+        .until("nodes.permissions", WAIT)
+        .await
+        .expect("node snapshot");
+    let gateway_node = entry(&listed).expect("the gateway node is listed");
+    assert_eq!(gateway_node["lifecycle"], "ready", "{gateway_node}");
+    assert_eq!(
+        gateway_node["permissions"]["filesystem"], false,
+        "{gateway_node}"
+    );
+
+    // Another account cannot change the gateway's grants, and nothing persists.
+    other_ws
+        .send(json!({
+            "type": "nodes.update-permissions",
+            "payload": {"nodeId": "gateway", "grants": {"filesystem": true}},
+        }))
+        .await;
+    let refused = other_ws
+        .until("error", WAIT)
+        .await
+        .expect("a foreign grant is refused");
+    assert_eq!(refused["payload"]["code"], "NODE_FORBIDDEN", "{refused}");
+    assert_eq!(
+        refused["payload"]["message"], "Authentication or access required",
+        "{refused}"
+    );
+
+    // The owner's grant is broadcast to its socket and reads back through nodes.get.
+    owner_ws
+        .send(json!({
+            "type": "nodes.update-permissions",
+            "payload": {"nodeId": "gateway", "grants": {"filesystem": true, "terminal": 0}},
+        }))
+        .await;
+    let broadcast = owner_ws
+        .until_where(WAIT, |message| {
+            message["type"] == "nodes.permissions"
+                && entry(message).is_some_and(|node| node["permissions"]["filesystem"] == true)
+        })
+        .await
+        .expect("the owner's grant is broadcast");
+    assert_eq!(
+        entry(&broadcast).unwrap()["permissions"]["terminal"],
+        false,
+        "{broadcast}"
+    );
+    owner_ws
+        .send(json!({"type": "nodes.get", "payload": {"nodeId": "gateway"}}))
+        .await;
+    let fetched = owner_ws
+        .until("nodes.permissions", WAIT)
+        .await
+        .expect("node read");
+    assert_eq!(
+        fetched["payload"]["nodes"].as_array().map(Vec::len),
+        Some(1),
+        "{fetched}"
+    );
+    assert_eq!(
+        entry(&fetched).unwrap()["permissions"]["filesystem"],
+        true,
+        "{fetched}"
+    );
+
+    // An unknown capability is rejected instead of being persisted.
+    owner_ws
+        .send(json!({
+            "type": "nodes.update-permissions",
+            "payload": {"nodeId": "gateway", "grants": {"telepathy": true}},
+        }))
+        .await;
+    let invalid = owner_ws
+        .until("error", WAIT)
+        .await
+        .expect("an unknown capability is refused");
+    assert_eq!(invalid["payload"]["code"], "BAD_REQUEST", "{invalid}");
+    assert_eq!(
+        invalid["payload"]["message"], "Unknown capability: telepathy",
+        "{invalid}"
+    );
+
+    // The connected gateway cannot be forgotten, and an account that does not manage it cannot
+    // forget it either.
+    owner_ws
+        .send(json!({"type": "nodes.forget", "payload": {"nodeId": "gateway"}}))
+        .await;
+    let online = owner_ws
+        .until("error", WAIT)
+        .await
+        .expect("forgetting a connected node is refused");
+    assert_eq!(online["payload"]["code"], "NODE_ONLINE", "{online}");
+    other_ws
+        .send(json!({"type": "nodes.forget", "payload": {"nodeId": "gateway"}}))
+        .await;
+    let forbidden = other_ws
+        .until("error", WAIT)
+        .await
+        .expect("a foreign forget is refused");
+    assert_eq!(
+        forbidden["payload"]["code"], "NODE_FORBIDDEN",
+        "{forbidden}"
+    );
+}

@@ -1,5 +1,51 @@
 # Native Rust gateway
 
+## WebSocket node grants, test-only race fixes and build note — 2026-11-19
+
+The composed runtime now serves `nodes.list`, `nodes.get`, `nodes.update-permissions` and `nodes.forget` over
+the WebSocket. Before this change the hub ignored the reads and denied both mutations, because no control was
+supplied. `Application::mount_websocket` installs `ComposedNodes` (`runtime/node_ws.rs`) on the same auth worker
+the HTTP routes use, so an embedder cannot substitute the permission store. The gateway node is listed with
+deny-by-default grants as `Gateway (<hostname>)`. It belongs to the first account's owner, and any other node
+belongs to the owner of its credential. A denial sends the reference's fixed `Authentication or access required`
+message with code `NODE_FORBIDDEN`. Unknown capabilities are rejected with `BAD_REQUEST` before anything persists.
+A connected node cannot be forgotten (`NODE_ONLINE`). A successful update or forget is broadcast as
+`nodes.permissions` to every authenticated socket, except paired-node sockets.
+
+Evidence on the final snapshot: `node_grants_over_ws_are_owner_scoped_through_the_binary` and the other three tests
+in `tests/binary_ws_messages.rs` passed 4 of 4. `runtime::node_ws` passed 3 of 3. `cargo fmt --check` and
+`cargo clippy --all-targets -- -D warnings` were clean. The full `cargo test --no-fail-fast` passed every target:
+lib 2598 passed, 0 failed, 4 ignored, and 71 test-result blocks with no failures, including doc tests.
+
+Two races in tests were fixed. No production behaviour changed.
+
+- `ws_user_authority::tests::node_resolution_timeout_and_database_failure_deny`: a cancelled job still occupied the
+  single mailbox slot, so the next database job could be refused as busy. The test now waits for the mailbox to
+  drain. Under full CPU load it failed 5 of 180 runs before the fix and 0 of 180 after.
+- `packaging::package_desktop::tests::packaging_probe_cleans_descendant_holding_stdout` and
+  `packaging_runtime_probe_stops_hung_process`: each executed a script the test had just written. A sibling test's
+  `fork` can still hold that file open for writing, so exec fails with `ETXTBSY`. The tests now retry only that error,
+  for at most two seconds. The first test failed once in a full run before the fix. After the fix, eight sequential
+  runs of the packaging module passed, and so did the full suite. I did not reproduce it under load after the fix,
+  so this evidence is weaker than the authority test's.
+
+`tooling/binary-test-evidence.json` gained five WS mappings: `nodes.list`, `nodes.get`, `nodes.update-permissions`,
+`nodes.forget`, and the server-to-client `nodes.permissions`. `nativeTested` went from 211 of 530 (39.81%) to
+216 of 530 (40.75%). HTTP is 198 of 448 native-tested and WS is 18 of 74. The eight background services still have
+no mapping mechanism, so they stay missing. The 314 entries not yet native-tested are 250 HTTP (99 native-untested,
+151 missing), 56 WS missing and 8 services missing.
+
+Limits: there is still no WebSocket node transport. The registry holds only the gateway node, so remote nodes never
+connect. `GatewayFilesystemNodes`, which serves the HTTP filesystem node list, is a separate holder rather than this
+registry. The Rust `broadcast` mirrors the Node `broadcastNodePermissions`; the two do not share state.
+
+Build note: the full `cargo test` with the default two-job cap put two test-binary compiles in one 6 GiB terminal
+scope. Their combined resident memory approached that limit, and the run throttled for minutes (about 297k
+`memory.high` events) before it was stopped. With `CARGO_BUILD_JOBS=1` the full suite completed, and the throttle
+count rose only into the thousands. Run the full suite with `CARGO_BUILD_JOBS=1`. The in-crate tests also write logs
+under `packages/gateway-rust/.jait/artifacts/`, which the root `.gitignore` does not cover, because its `.jait/*`
+pattern is anchored at the repository root. Keep that directory out of commits.
+
 ## WebSocket consent decisions, evidence ledger and build note — 2026-11-18
 
 The composed runtime now mounts WebSocket `consent.approve` / `consent.reject`, replacing the earlier

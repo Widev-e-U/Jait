@@ -1101,6 +1101,25 @@ mod tests {
     }
     use super::*;
 
+    /// Probes a script this process has just written. A sibling test that forks at that moment can
+    /// still hold the script open for writing, and exec fails with `ETXTBSY` until that child execs.
+    /// Only that error is retried, and only for a bounded time.
+    #[cfg(unix)]
+    fn probe_fresh_script(binary: &Path) -> Result<RuntimeIdentity, PackageError> {
+        let start = Instant::now();
+        loop {
+            match probe_runtime(binary) {
+                Err(PackageError::Io { source, .. })
+                    if source.raw_os_error() == Some(libc::ETXTBSY)
+                        && start.elapsed() < Duration::from_secs(2) =>
+                {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                result => return result,
+            }
+        }
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn packaging_probe_cleans_descendant_holding_stdout() {
@@ -1114,7 +1133,7 @@ mod tests {
         fs::write(&binary, format!("#!/bin/sh\n(sleep 1; touch '{}') &\nprintf '%s' '{{\"release\":\"node\",\"version\":\"22.0.0\"}}'\n", marker.display())).unwrap();
         fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
         let start = Instant::now();
-        assert_eq!(probe_runtime(&binary).unwrap().version, "22.0.0");
+        assert_eq!(probe_fresh_script(&binary).unwrap().version, "22.0.0");
         assert!(start.elapsed() < Duration::from_secs(4));
         thread::sleep(Duration::from_millis(1300));
         assert!(!marker.exists(), "descendant survived probe cleanup");
@@ -1133,7 +1152,7 @@ mod tests {
         fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
         let start = Instant::now();
         assert!(matches!(
-            probe_runtime(&binary),
+            probe_fresh_script(&binary),
             Err(PackageError::LimitExceeded { .. })
         ));
         assert!(start.elapsed() < Duration::from_secs(10));

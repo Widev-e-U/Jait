@@ -165,6 +165,19 @@ mod tests {
         db.shutdown().await.unwrap();
     }
 
+    /// A job cancelled by its caller stays in the bounded mailbox until the worker thread pops it,
+    /// and the worker pops it only after the running job has responded. Wait for the mailbox to
+    /// drain before the next database job, or that job is refused as busy.
+    async fn wait_for_mailbox_drain(db: &DatabaseWorker) {
+        for _ in 0..1_000 {
+            if db.queued_jobs() == 0 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        panic!("worker mailbox did not drain the cancelled job");
+    }
+
     #[tokio::test]
     async fn node_resolution_timeout_and_database_failure_deny() {
         let db = worker(true);
@@ -191,6 +204,7 @@ mod tests {
         assert!(short.resolve_node(&token).await.is_none());
         release_tx.send(()).unwrap();
         blocking.await.unwrap().unwrap();
+        wait_for_mailbox_drain(&db).await;
         let authority = WsUserAuthority::new(db.clone(), Duration::from_secs(2));
         assert!(authority.resolve_node(&token).await.is_none());
         db.run(|db| {
