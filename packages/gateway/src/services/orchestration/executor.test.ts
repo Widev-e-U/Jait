@@ -1,7 +1,13 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { VerificationGate } from "@jait/shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
 import type { SqliteDatabase } from "../../db/sqlite-shim.js";
+import { PlanService } from "../plans.js";
+import type { RepositoryService } from "../repositories.js";
+import { createWorkflowVerifier } from "./command-verifier.js";
 import {
   buildTaskPrompt,
   extractReport,
@@ -171,6 +177,42 @@ describe("SubAgentTaskExecutor", () => {
   });
 });
 
+/** Owned, gateway-local repository whose root is the test directory, which the artifact gate requires. */
+function repositoryAt(dir: string): Pick<RepositoryService, "getById"> {
+  return {
+    getById: (id: string) => (id === "repo-1" ? { id, userId: USER, localPath: dir, deviceId: null } : undefined),
+  } as unknown as Pick<RepositoryService, "getById">;
+}
+
+/** Writers and readers work directly in the test directory, so artifact gates check real files. */
+function workspaceAt(dir: string) {
+  return {
+    ...inertWorkspaces,
+    prepareRead: async () => ({ path: dir, branch: "inert" }),
+    prepareWrite: async () => ({ path: dir, branch: "inert" }),
+  };
+}
+
+/** A stored plan with one approved writer whose only check is an artifact in its repository. */
+function writerPlanId(db: JaitDB): string {
+  return new PlanService(db).create({
+    repoId: "repo-1",
+    userId: USER,
+    title: "Research note",
+    tasks: [
+      {
+        id: "A",
+        title: "Write the report",
+        description: "Write out/result.txt.",
+        status: "approved",
+        dependsOn: [],
+        resources: { writes: ["out"] },
+        verification: [gate()],
+      },
+    ],
+  }).id;
+}
+
 describe("SubAgentTaskExecutor inside the orchestrator", () => {
   let sqlite: SqliteDatabase;
   let db: JaitDB;
@@ -243,5 +285,107 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
     const view = service.getRun(USER, run.id);
     expect(view.status).toBe("interrupted");
     expect(view.tasks[0]?.lastError).toContain("no sub-agent runner is bound");
+  });
+
+  it("hands a dependent the predecessor's validated report as redacted data in its prompt", async () => {
+    const prompts = new Map<string, string>();
+    const runner: SubAgentRunner = {
+      run: async (request) => {
+        prompts.set(request.taskId, request.prompt);
+        const first = request.taskId === "A";
+        return {
+          text: JSON.stringify({
+            taskId: request.taskId,
+            attemptId: request.attemptId,
+            status: "completed",
+            summary: first ? "wrote out/a.txt, token=abc123secret" : "used A",
+            changedFiles: first ? ["out/a.txt"] : [],
+            artifacts: [],
+            followUps: [],
+          }),
+        };
+      },
+    };
+    const service = new OrchestrationService({
+      db,
+      executor: new SubAgentTaskExecutor(runner),
+      verifier: passingVerifier,
+      workspaces: inertWorkspaces,
+    });
+    const run = service.createRun(USER, {
+      title: "dependency context",
+      tasks: [task, { ...task, id: "B", title: "Report", dependsOn: ["A"] }],
+    });
+    await service.settle();
+    expect(service.getRun(USER, run.id).status).toBe("passed");
+    const dependent = prompts.get("B") ?? "";
+    expect(dependent).toContain('"taskId":"A"');
+    expect(dependent).toContain('"summary":"wrote out/a.txt, token=[redacted]"');
+    expect(dependent).toContain('"changedFiles":["out/a.txt"]');
+    expect(dependent).not.toContain("abc123secret");
+  });
+
+  it("checks a non-coding writer's artifact on disk in its repository and passes it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "jait-artifact-"));
+    try {
+      const service = new OrchestrationService({
+        db,
+        executor: new SubAgentTaskExecutor({
+          run: async (request) => {
+            await mkdir(join(dir, "out"), { recursive: true });
+            await writeFile(join(dir, "out", "result.txt"), "findings\n");
+            return {
+              text: JSON.stringify({
+                taskId: request.taskId,
+                attemptId: request.attemptId,
+                status: "completed",
+                summary: "wrote the findings",
+                changedFiles: ["out/result.txt"],
+                artifacts: [],
+                followUps: [],
+              }),
+            };
+          },
+        }),
+        verifier: createWorkflowVerifier({ repositories: repositoryAt(dir), toolExecutor: undefined }),
+        workspaces: workspaceAt(dir),
+      });
+      const run = service.createRun(USER, { planId: writerPlanId(db) });
+      await service.settle();
+      expect(service.getRun(USER, run.id).status).toBe("passed");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("never passes a non-coding writer on its report alone when the artifact is missing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "jait-artifact-"));
+    try {
+      const service = new OrchestrationService({
+        db,
+        executor: new SubAgentTaskExecutor({
+          run: async (request) => ({
+            text: JSON.stringify({
+              taskId: request.taskId,
+              attemptId: request.attemptId,
+              status: "completed",
+              summary: "wrote the findings",
+              changedFiles: ["out/result.txt"],
+              artifacts: [],
+              followUps: [],
+            }),
+          }),
+        }),
+        verifier: createWorkflowVerifier({ repositories: repositoryAt(dir), toolExecutor: undefined }),
+        workspaces: workspaceAt(dir),
+      });
+      const run = service.createRun(USER, { planId: writerPlanId(db) });
+      await service.settle();
+      const view = service.getRun(USER, run.id);
+      expect(view.status).toBe("failed");
+      expect(view.tasks[0]?.lastError).toContain("verification failed: output exists");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
