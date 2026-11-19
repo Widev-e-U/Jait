@@ -51,10 +51,10 @@ fn resolve(base: &Path, target: &Path) -> PathBuf {
     }
     out
 }
+/// True when `path` is not below `root`. It compares components, so a name such as `..notes.md`
+/// is an ordinary file rather than a parent reference.
 fn escapes(root: &Path, path: &Path) -> bool {
-    path.strip_prefix(root)
-        .map(|p| p.to_string_lossy().starts_with(".."))
-        .unwrap_or(true)
+    path.strip_prefix(root).is_err()
 }
 pub struct PathGuard {
     root: PathBuf,
@@ -150,5 +150,28 @@ impl PathGuard {
             self.validate(&self.root.join(inside).to_string_lossy())?;
         }
         Ok(norm)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PathGuard;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn denied_names_and_outside_paths_are_refused_but_dotdot_names_are_ordinary() {
+        let guard = PathGuard::new(Path::new("/srv/project"), &[], false).unwrap();
+        assert!(guard.validate(".aws/credentials").is_err());
+        assert!(guard.validate(".ssh").is_err());
+        assert!(guard.validate("../secret").is_err());
+        assert!(guard.validate("/etc/passwd").is_err());
+        assert_eq!(
+            guard.validate("..notes.md").unwrap(),
+            PathBuf::from("/srv/project/..notes.md")
+        );
+        assert_eq!(
+            guard.validate("docs/.aws-notes.md").unwrap(),
+            PathBuf::from("/srv/project/docs/.aws-notes.md")
+        );
     }
 }

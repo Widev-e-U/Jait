@@ -1,6 +1,6 @@
-//! Linux directory-anchored file operations for future authorized tool adapters.
-//! This module does not grant authority or provide consent, denied-path policy,
-//! auditing, backups, or lifecycle. It is not connected to the gateway.
+//! Linux directory-anchored file operations for the chat file tools.
+//! This module does not grant authority, provide consent, or apply the denied-path policy:
+//! callers run `PathGuard` first. It does no auditing, backups, or lifecycle.
 //! Directory relocation by an untrusted concurrent actor is not prevented. Callers
 //! must establish directory isolation separately before enabling writes.
 //! Replacement uses a fresh inode and preserves only basic permission bits, not
@@ -43,6 +43,11 @@ mod linux {
             Ok(Self { root })
         }
         fn open_file(&self, path: &Path, flags: i32, mode: u64) -> io::Result<File> {
+            Self::open_beneath(&self.root, path, flags, mode)
+        }
+        /// Opens `path` beneath `directory`, which the kernel resolves: no `..` escape, no
+        /// symlink and no magic link is followed.
+        fn open_beneath(directory: &File, path: &Path, flags: i32, mode: u64) -> io::Result<File> {
             if path.as_os_str().is_empty()
                 || !path.components().all(|c| matches!(c, Component::Normal(_)))
             {
@@ -58,12 +63,12 @@ mod linux {
                 mode,
                 resolve: RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS,
             };
-            // SAFETY: root is a live directory descriptor, path is NUL terminated,
+            // SAFETY: directory is a live directory descriptor, path is NUL terminated,
             // and how points to a correctly sized open_how for this syscall.
             let fd = unsafe {
                 libc::syscall(
                     libc::SYS_openat2,
-                    self.root.as_raw_fd(),
+                    directory.as_raw_fd(),
                     path.as_ptr(),
                     &how,
                     std::mem::size_of::<OpenHow>(),
@@ -184,6 +189,101 @@ mod linux {
             }
             result
         }
+        /// Creates or replaces the file at `path`. A missing file is created, with any missing
+        /// parent directories, beneath the root; an existing file is replaced as `write_existing`
+        /// does. Creation uses `O_EXCL | O_NOFOLLOW`, so a symlink or file already at the name is
+        /// never followed or overwritten by this path.
+        pub fn write_file(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+            match self.write_existing(path, data) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => self.create(path, data),
+                result => result,
+            }
+        }
+        fn create(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+            if path.as_os_str().is_empty()
+                || !path.components().all(|c| matches!(c, Component::Normal(_)))
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "expected a relative file path",
+                ));
+            }
+            let name = path
+                .file_name()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing file name"))?;
+            let parent = match path.parent() {
+                Some(parent) if !parent.as_os_str().is_empty() => self.ensure_directory(parent)?,
+                _ => self.root.try_clone()?,
+            };
+            let name = CString::new(name.as_bytes())
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "null byte in path"))?;
+            // SAFETY: parent is a live directory descriptor and name is NUL terminated. O_EXCL with
+            // O_NOFOLLOW never opens an existing entry and never follows a symlink at the name.
+            let fd = unsafe {
+                libc::openat(
+                    parent.as_raw_fd(),
+                    name.as_ptr(),
+                    libc::O_WRONLY
+                        | libc::O_CREAT
+                        | libc::O_EXCL
+                        | libc::O_NOFOLLOW
+                        | libc::O_CLOEXEC,
+                    0o666,
+                )
+            };
+            if fd < 0 {
+                let error = io::Error::last_os_error();
+                // Created after the existence check: replace it through the checked path.
+                return if error.kind() == io::ErrorKind::AlreadyExists {
+                    self.write_existing(path, data)
+                } else {
+                    Err(error)
+                };
+            }
+            // SAFETY: a successful openat returns a new descriptor owned by this function.
+            let mut file = unsafe { File::from_raw_fd(fd) };
+            let result = file.write_all(data);
+            drop(file);
+            if result.is_err() {
+                // SAFETY: `name` is the entry this call created, relative to `parent`.
+                unsafe {
+                    libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0);
+                }
+            }
+            result
+        }
+        /// Opens `path` as a directory beneath the root, creating each missing component. Each
+        /// component is opened with the same no-symlink resolution, so a symlink planted in the
+        /// path is refused rather than followed.
+        fn ensure_directory(&self, path: &Path) -> io::Result<File> {
+            let mut current = self.root.try_clone()?;
+            for component in path.components() {
+                let Component::Normal(name) = component else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "expected a relative file path",
+                    ));
+                };
+                let c_name = CString::new(name.as_bytes()).map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "null byte in path")
+                })?;
+                // SAFETY: current is a live directory descriptor and c_name is NUL terminated.
+                let made = unsafe { libc::mkdirat(current.as_raw_fd(), c_name.as_ptr(), 0o777) };
+                if made < 0 {
+                    let error = io::Error::last_os_error();
+                    if error.kind() != io::ErrorKind::AlreadyExists {
+                        return Err(error);
+                    }
+                }
+                current = Self::open_beneath(
+                    &current,
+                    Path::new(name),
+                    libc::O_RDONLY | libc::O_DIRECTORY,
+                    0,
+                )?;
+            }
+            Ok(current)
+        }
     }
 }
 #[cfg(target_os = "linux")]
@@ -251,6 +351,60 @@ mod tests {
             assert!(scope.read(Path::new(path)).is_err(), "{path}");
         }
         assert_eq!(fs::read(base.join("outside")).unwrap(), b"safe");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn write_file_creates_missing_parents_and_replaces_existing_files() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/scoped-file")
+            .join(uuid::Uuid::new_v4().to_string());
+        let root = base.join("project");
+        fs::create_dir_all(&root).unwrap();
+        let scope = ScopedFileRoot::open(&root).unwrap();
+        scope
+            .write_file(Path::new("notes/deep/new.md"), b"created")
+            .unwrap();
+        assert_eq!(
+            fs::read(root.join("notes/deep/new.md")).unwrap(),
+            b"created"
+        );
+        scope
+            .write_file(Path::new("notes/deep/new.md"), b"replaced")
+            .unwrap();
+        assert_eq!(
+            fs::read(root.join("notes/deep/new.md")).unwrap(),
+            b"replaced"
+        );
+        scope.write_file(Path::new("top.txt"), b"top").unwrap();
+        assert_eq!(fs::read(root.join("top.txt")).unwrap(), b"top");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn write_file_never_creates_through_symlinks_or_outside_the_root() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/scoped-file")
+            .join(uuid::Uuid::new_v4().to_string());
+        let root = base.join("project");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(base.join("outside")).unwrap();
+        symlink(base.join("outside"), root.join("escape")).unwrap();
+        symlink(base.join("outside/victim"), root.join("dangling")).unwrap();
+        let scope = ScopedFileRoot::open(&root).unwrap();
+        for path in [
+            "escape/new.txt",
+            "escape/deeper/new.txt",
+            "dangling",
+            "../created.txt",
+            "/tmp/created.txt",
+        ] {
+            assert!(scope.write_file(Path::new(path), b"bad").is_err(), "{path}");
+        }
+        assert!(!base.join("outside/new.txt").exists());
+        assert!(!base.join("outside/deeper").exists());
+        assert!(!base.join("outside/victim").exists());
+        assert!(!base.join("created.txt").exists());
         fs::remove_dir_all(base).unwrap();
     }
 }

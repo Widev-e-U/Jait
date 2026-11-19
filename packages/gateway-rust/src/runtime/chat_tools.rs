@@ -1,10 +1,12 @@
 //! Project file tools for the settings chat.
 //!
 //! `file.read` and `file.write` run on a registry owned by a dedicated thread (the registry is
-//! `Rc`-based) behind `ConsentAwareExecutor`. Both go through `ScopedFileRoot` (openat2 beneath the
-//! project root, no symlinks), so the model cannot leave the project. `file.read` needs no consent;
-//! `file.write` replaces an existing file only and `terminal.run` runs a one-shot command in the
-//! project root; both wait for approval on the shared `ConsentManager` (served at /api/consent).
+//! `Rc`-based) behind `ConsentAwareExecutor`. Every path first passes `PathGuard` (the reference
+//! escape and denied-name policy), then goes through `ScopedFileRoot` (openat2 beneath the project
+//! root, no symlinks), so the model cannot leave the project or reach denied entries such as
+//! `.ssh`. `file.read` needs no consent; `file.write` creates or replaces a file, creating missing
+//! parent directories, and `terminal.run` runs a one-shot command in the project root; both wait
+//! for approval on the shared `ConsentManager` (served at /api/consent).
 //! `file.list` needs no consent; `file.patch` replaces the first match in an existing file and
 //! waits for approval like `file.write`. Persistent-terminal tools are not mounted.
 use super::chat_turn::TurnTool;
@@ -14,6 +16,7 @@ use crate::{
         consent_executor::{ConsentAwareExecutor, ConsentExecutorOptions, ToolDelegate, ToolTrust},
         consent_manager::ConsentManager,
         contracts::Risk,
+        path_guard::PathGuard,
         tool_permissions::{ConsentLevel, ToolPermission},
     },
     tools::{
@@ -51,16 +54,18 @@ impl ToolTrust for NoTrust {
 
 type Ctx = RegistryContext<RegistryAuthority>;
 
+/// Applies the reference path policy (escape, null-byte and denied-name checks) and returns the
+/// path relative to the project root. `ScopedFileRoot` then anchors that path in the kernel.
 fn relative(root: &Path, requested: &str) -> Result<PathBuf, HostError> {
-    let requested = Path::new(requested.trim());
-    let relative = if requested.is_absolute() {
-        requested
-            .strip_prefix(root)
-            .map_err(|_| HostError::Error("Path is outside the project".into()))?
-    } else {
-        requested
-    };
-    Ok(relative.to_path_buf())
+    let guard = PathGuard::new(root, &[], false)
+        .map_err(|e| HostError::Error(format!("Cannot resolve project root: {e}")))?;
+    let target = guard
+        .validate(requested.trim())
+        .map_err(|e| HostError::Error(e.to_string()))?;
+    target
+        .strip_prefix(guard.project_root())
+        .map(Path::to_path_buf)
+        .map_err(|_| HostError::Error("Path is outside the project".into()))
 }
 
 fn host_port() -> HostPort<Ctx> {
@@ -88,7 +93,7 @@ fn host_port() -> HostPort<Ctx> {
                     let content = args["content"].as_str().unwrap_or_default().to_owned();
                     tokio::task::spawn_blocking(move || {
                         crate::security::scoped_file::ScopedFileRoot::open(&root)
-                            .and_then(|r| r.write_existing(&path, content.as_bytes()))
+                            .and_then(|r| r.write_file(&path, content.as_bytes()))
                             .map_err(|e| HostError::Error(format!("Cannot write file: {e}")))?;
                         Ok(Value::Null)
                     })
@@ -529,7 +534,7 @@ pub fn project_tools_with_policy(
                     "file.write",
                     ConsentLevel::Once,
                     Risk::Medium,
-                    "Replace the contents of an existing file inside the project",
+                    "Create or overwrite a file inside the project",
                 ),
             ]),
             session_approvals: Default::default(),
@@ -709,6 +714,106 @@ mod terminal_cancellation_tests {
         // Wait past the command's own sleep: a surviving shell or child would create `finished`.
         tokio::time::sleep(Duration::from_secs(5).saturating_sub(started.elapsed())).await;
         assert!(!root.join("finished").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod path_policy_tests {
+    use super::*;
+    use crate::security::consent_executor::{
+        ExecuteOptions, ExecutionOrigin, RuntimeMode, ToolExecutionContext,
+    };
+
+    fn execution_context(root: PathBuf) -> ToolExecutionContext {
+        ToolExecutionContext {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            action_id: "action".into(),
+            project_root: root,
+            origin: ExecutionOrigin::Agent,
+            runtime_mode: RuntimeMode::Guarded,
+            cancellation: Default::default(),
+            on_output: None,
+        }
+    }
+
+    #[test]
+    fn chat_paths_pass_the_reference_policy_before_scoped_access() {
+        let root = PathBuf::from("/srv/project");
+        assert_eq!(
+            relative(&root, "notes/a.md").unwrap(),
+            PathBuf::from("notes/a.md")
+        );
+        // A name that merely starts with `..` is an ordinary file, not a parent reference.
+        assert_eq!(
+            relative(&root, "..notes.md").unwrap(),
+            PathBuf::from("..notes.md")
+        );
+        assert_eq!(
+            relative(&root, "/srv/project/src/lib.rs").unwrap(),
+            PathBuf::from("src/lib.rs")
+        );
+        assert_eq!(relative(&root, ".").unwrap(), PathBuf::new());
+        for refused in [
+            ".ssh/id_rsa",
+            "docs/../.aws/credentials",
+            "/etc/passwd",
+            "../secret",
+            "/srv/other/x",
+        ] {
+            assert!(relative(&root, refused).is_err(), "{refused}");
+        }
+    }
+
+    #[tokio::test]
+    async fn chat_file_tools_deny_secret_paths_and_create_files_after_consent() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/chat-file-policy-tests")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(root.join(".ssh")).unwrap();
+        std::fs::write(root.join(".ssh/id_rsa"), "PRIVATE KEY\n").unwrap();
+        let consent = ConsentManager::default();
+        consent.enable_approve_all_for_session("session").unwrap();
+        let (_tools, executor) = project_tools("owner", "session", consent).unwrap();
+        let context = execution_context(root.clone());
+
+        // file.read needs no consent, so the denial is the only thing standing between the
+        // model and the key. The denied result must not carry the file's contents.
+        let read = executor
+            .execute(
+                "file.read",
+                &json!({"path": "docs/../.ssh/id_rsa"}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!read.ok, "{}", read.message);
+        assert!(read.message.contains("denied"), "{}", read.message);
+        assert!(!read.message.contains("PRIVATE KEY"), "{}", read.message);
+        assert!(
+            !read
+                .data
+                .as_ref()
+                .is_some_and(|data| data.to_string().contains("PRIVATE KEY"))
+        );
+
+        // file.write creates a missing file and its missing parent directories.
+        let created = executor
+            .execute(
+                "file.write",
+                &json!({"path": "notes/new.md", "content": "created\n"}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+            .unwrap();
+        assert!(created.ok, "{}", created.message);
+        assert_eq!(
+            std::fs::read_to_string(root.join("notes/new.md")).unwrap(),
+            "created\n"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 }

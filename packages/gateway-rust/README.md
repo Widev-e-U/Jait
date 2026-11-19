@@ -19,9 +19,16 @@ pass 3 of 3 in a focused run.
   `stop` on a native thread (200 `{"ok":true}`, status `interrupted`).
 
 Each thread test registers its root as an owner project first, because the file tools act only inside an owned project.
-The chat file tool overwrites existing files only (`ScopedFileRoot::write_existing`). The test therefore seeds
-`thread-note.txt`, and a new file would fail with `Cannot write file: No such file or directory`. Node's file tool has
-not been compared, so this is not a parity claim.
+The chat file tools first pass `PathGuard` (the reference escape and denied-name policy, including `.ssh`, `.gnupg`,
+`.aws` and `.azure` at the project root), then `ScopedFileRoot`. `file.write` creates a missing file and its parent
+directories beneath the root, or replaces an existing file, and it never follows a symlink, so a planted link cannot
+redirect a create. `thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary` covers an approved create
+in a directory that did not exist, and a `file.read` of `.ssh/id_rsa` that completes without consent and returns only
+the denial. Differences from Node's `file.write`, which are not claimed as parity: Node follows a symlink whose target
+stays inside the project, and Rust refuses every symlink in the path; Node keeps a backup for undo, and Rust does not.
+Node's escape check is a string prefix (`rel.startsWith("..")`), so it refuses a file such as `..notes.md`; Rust
+compares path components after normalization, so that name is an ordinary file and `../x` is still refused. The
+denied-name check matches only at the project root, as in Node, so `docs/.aws/` is not refused.
 
 Open parity questions, not changed in this batch:
 - `stop_thread` and `set_thread_status` write only the database. A native turn that is still running is not cancelled

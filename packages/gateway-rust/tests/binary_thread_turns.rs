@@ -26,7 +26,7 @@ impl Gateway {
             .join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory).unwrap();
         let directory = directory.canonicalize().unwrap();
-        // The chat file tool overwrites existing files only, so the note exists before any turn.
+        // The approved write in the consent test replaces this note.
         std::fs::write(directory.join("thread-note.txt"), "original\n").unwrap();
         let mut child = Command::new(env!("CARGO_BIN_EXE_jait-gateway"))
             .env_clear()
@@ -114,6 +114,14 @@ impl Model {
                 content if content.contains("follow up please") => {
                     text_event("Follow-up answered.")
                 }
+                content if content.contains("create the report") => tool_call_for(
+                    "call_2",
+                    "file_write",
+                    json!({"path": "notes/report.md", "content": "report from thread\n"}),
+                ),
+                content if content.contains("read the key") => {
+                    tool_call_for("call_3", "file_read", json!({"path": ".ssh/id_rsa"}))
+                }
                 _ => text_event("Unexpected request."),
             }
         };
@@ -127,8 +135,17 @@ fn text_event(text: &str) -> Value {
 
 /// Asks for the consent-gated `file_write` tool on `thread-note.txt`.
 fn tool_call_event() -> Value {
-    let arguments = json!({"path": "thread-note.txt", "content": "from thread\n"}).to_string();
-    json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"file_write","arguments":arguments}}]},"finish_reason":"tool_calls"}]})
+    tool_call_for(
+        "call_1",
+        "file_write",
+        json!({"path": "thread-note.txt", "content": "from thread\n"}),
+    )
+}
+
+/// Streams one tool call with the given id, tool name and arguments.
+fn tool_call_for(id: &str, name: &str, arguments: Value) -> Value {
+    let arguments = arguments.to_string();
+    json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":id,"type":"function","function":{"name":name,"arguments":arguments}}]},"finish_reason":"tool_calls"}]})
 }
 
 /// Serves the fake model on an ephemeral port and returns its `/v1` base URL.
@@ -622,4 +639,75 @@ async fn thread_stop_and_interrupt_match_the_node_contract_through_the_binary() 
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["ok"], true, "{body}");
     wait_for_status(&client, &base, &token, &thread, "interrupted").await;
+}
+
+/// File tools in a native thread: an approved write creates a file in a directory that does not
+/// exist yet, and a read of a denied secret path completes without consent and never returns the
+/// file's contents to the model.
+#[tokio::test]
+async fn thread_file_tools_create_files_and_refuse_secret_paths_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    std::fs::create_dir_all(gateway.directory.join(".ssh")).unwrap();
+    std::fs::write(gateway.directory.join(".ssh/id_rsa"), "PRIVATE KEY\n").unwrap();
+    let client = client();
+    let base = gateway.base.clone();
+    let token = register(&client, &base).await;
+    configure_model(&client, &base, &token, &model_base).await;
+    let (thread, _session) = new_thread(&client, &base, &token, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &token).await;
+
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/threads/{thread}/start"),
+        json!({"message": "create the report"}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let required = ws
+        .until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    assert_eq!(required["payload"]["toolName"], "file.write", "{required}");
+    let consent_id = required["payload"]["id"].as_str().unwrap().to_owned();
+    assert!(
+        !gateway.directory.join("notes").exists(),
+        "the create must wait for consent"
+    );
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/consent/{consent_id}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    wait_for_status(&client, &base, &token, &thread, "completed").await;
+    assert_eq!(
+        std::fs::read_to_string(gateway.directory.join("notes/report.md")).unwrap(),
+        "report from thread\n",
+        "the approved create did not run; tool results: {}",
+        model.tool_results()
+    );
+
+    // file.read needs no consent, so this turn completes without a prompt. The denial must reach
+    // the model, and the key's contents must not.
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &token,
+        &format!("/api/threads/{thread}/send"),
+        json!({"message": "read the key"}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    wait_for_status(&client, &base, &token, &thread, "completed").await;
+    let results = model.tool_results().to_string();
+    assert!(results.contains("denied"), "{results}");
+    assert!(!results.contains("PRIVATE KEY"), "{results}");
+    model_task.abort();
 }
