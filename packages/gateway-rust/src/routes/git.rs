@@ -1923,10 +1923,12 @@ async fn diff(State(state): State<GitRoutes>, request: Request) -> Response {
     };
 
     let result = git_task(move || {
+        // `git_environment` sets `diff.external` to an empty value, which git would run as a
+        // program, so patch output opts out of external diff drivers explicitly.
         let patch = if has_head(&cwd) {
-            git_exec(&cwd, &["diff", "--no-color", "HEAD"])?
+            git_exec(&cwd, &["diff", "--no-color", "--no-ext-diff", "HEAD"])?
         } else {
-            git_exec(&cwd, &["diff", "--no-color"])?
+            git_exec(&cwd, &["diff", "--no-color", "--no-ext-diff"])?
         };
         let files = changed_paths(&cwd);
         let has_changes = !files.is_empty() || !patch.trim().is_empty();

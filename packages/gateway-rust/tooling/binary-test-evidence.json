@@ -1796,6 +1796,120 @@
         {
           "file": "tests/binary_repos.rs",
           "name": "stage_option_like_filename_does_not_stage_other_files"
+        },
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/status",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/branches",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/identity",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/init",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/checkout",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/create-branch",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/diff",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/diff-stats",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/file-diffs",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/discard",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/unstage",
+      "tests": [
+        {
+          "file": "tests/binary_git_routes.rs",
+          "name": "git_routes_operate_on_owned_repositories_through_the_binary"
         }
       ]
     },

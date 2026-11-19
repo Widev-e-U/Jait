@@ -275,6 +275,7 @@ pub(crate) fn git_environment(
             parent.to_string_lossy().into_owned(),
         );
     }
+    // Patch output must pass `--no-ext-diff`: git would run an empty `diff.external` as a program.
     let config = [
         ("core.hooksPath", "/dev/null"),
         ("core.fsmonitor", "false"),

@@ -1,5 +1,43 @@
 # Native Rust gateway
 
+## Git local routes through the composed binary, and a patch-diff fix — 2026-11-19
+
+`tests/binary_git_routes.rs` (`git_routes_operate_on_owned_repositories_through_the_binary`) drives twelve local git
+routes through the composed binary: `status`, `branches`, `identity`, `init`, `checkout`, `create-branch`, `diff`,
+`diff-stats`, `file-diffs`, `stage`, `unstage` and `discard`. It passed 1 of 1 in a focused run. Each repository is
+registered as an owner project first, because `/api/git/*` runs only on the exact root of an active project the caller
+owns. A `cwd` outside those roots gets 403 `Git root is not one of your projects`. The test also covers the anonymous
+401, the missing-`cwd` and one-sided identity 400s, and a between-refs diff against a base branch.
+
+Defect fixed. `POST /api/git/diff` returned 500 `cannot run : No such file or directory` for every patch diff in the
+composed binary. `runtime/git_mount.rs` sets `diff.external` to an empty value, and git runs an empty value as a program.
+Both patch diffs in `routes/git.rs` now pass `--no-ext-diff`. The empty value stays, so any future patch call without the
+flag fails closed.
+
+Discard. Tracked files are restored with `git checkout --`. An untracked file needs `git clean -f --`. `clean` is not on
+the allow-list (`permitted`), so discarding an untracked file returns 500 with a `not authorized` error and leaves the
+file in place. The test asserts this policy. Two limits remain. Allowing `git clean -f -- <paths>` inside owned roots is
+an owner decision that has not been made. Discard is also not atomic: in a mixed request the tracked files are restored
+before the untracked refusal, so the 500 comes after part of the change has happened. The mixed case is read from the
+handler (`discard` in `routes/git.rs`) and is not covered by the test.
+
+File diffs. Blob reads drop one terminal `\r?\n`, as `trimCommandOutput` does in the reference's `services/git.ts`. The
+Rust batch parser and the per-object fallback do the same, and working-tree content is not trimmed. So a changed file can
+show a newline difference at the end of the file. This matches the reference, and the test asserts it. The composed
+runtime refuses `cat-file --batch` because `cat-file` is not on the allow-list, so file diffs use the per-object
+`git show` fallback, which returns the same content.
+
+Correction. The note in `6de8f85d` said the git routes only check that the caller is signed in, and that the reference
+does the same. That was wrong for the composed runtime, which confines `/api/git/*` as described above. I did not check
+the Node route when I wrote it, so that comparison is withdrawn. This section replaces the note.
+
+Not covered by this test: `fetch`, `pull`, `sync` (network consent), `create-worktree`, `remove-worktree`, `gh-status`,
+`gh-auth`, `forge-status`, `forge-auth`, `pr-checks`, `forge-pr-checks`, `generate-commit-message`, `run-commit-flow` and
+`run-stacked-action`. They remain native-untested or missing.
+
+Inventory: `nativeTested` is 232 of 530 (43.77%), up from 221 (41.70%). HTTP is 214 of 448 native-tested, with 83
+native-untested and 151 missing. WebSocket is 18 of 74 native-tested, and the 8 background services are still missing.
+
 ## Session titles, a Chat Completions fix and four route tests — 2026-11-19
 
 `POST /api/sessions/:id/generate-title` now generates titles. `SessionRuntimeAdapter::title` (`runtime/application.rs`)
@@ -38,11 +76,6 @@ Focused runs before the completion fix: `binary_calendar_routes` 1 of 1, `binary
 
 Inventory: `nativeTested` is 221 of 530 (41.70%), up from 216 (40.75%). HTTP is 203 of 448 native-tested, with 94
 native-untested and 151 missing. WebSocket is 18 of 74 native-tested, and the 8 background services are still missing.
-
-Known limit, not changed: the git routes (`/api/git/*`) take `cwd` from the request body and check only that the caller
-is signed in. The reference does the same. Any signed-in account can therefore run git operations in any directory the
-gateway can reach, including `discard`. Confining `cwd` to the caller's owned project roots would change behaviour, so
-it is a product and security decision for the owner, not a port fix.
 
 ## WebSocket node grants, test-only race fixes and build note — 2026-11-19
 

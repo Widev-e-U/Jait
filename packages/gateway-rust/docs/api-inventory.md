@@ -9,13 +9,13 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "httpTotal": 448,
   "missing": 40,
   "mounted-fail-closed": 104,
-  "native-tested": 203,
-  "native-untested": 94,
+  "native-tested": 214,
+  "native-untested": 83,
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 66.3,
-  "nativeTested": 221,
+  "nativeTested": 232,
   "nativeTestedDenominator": 530,
-  "nativeTestedPct": 41.7,
+  "nativeTestedPct": 43.77,
   "wsTotal": 74,
   "wsInbound": 38,
   "wsOutboundCandidates": 36,
@@ -26,8 +26,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 203,
-    "native-untested": 94,
+    "native-tested": 214,
+    "native-untested": 83,
     "missing": 151
   },
   "wsRustStatus": {
@@ -307,32 +307,32 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/email/messages/:id/delete` | missing | mounted-fail-closed |  | routes/email.ts |
 | POST | `/api/email/messages/:id/tag` | missing | mounted-fail-closed |  | routes/email.ts |
 | POST | `/api/email/send` | missing | mounted-fail-closed |  | routes/email.ts |
-| POST | `/api/git/branches` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/checkout` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/create-branch` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/branches` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/checkout` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/create-branch` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/create-worktree` | missing | mounted-fail-closed |  | routes/git.ts |
-| POST | `/api/git/diff` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/diff-stats` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/discard` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/diff` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/diff-stats` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/discard` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/fetch` | missing | mounted-fail-closed |  | routes/git.ts |
-| POST | `/api/git/file-diffs` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/file-diffs` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/forge-auth` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/forge-pr-checks` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/forge-status` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/generate-commit-message` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/gh-auth` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/gh-status` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/identity` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/init` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/identity` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/init` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/pr-checks` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/pull` | missing | mounted-fail-closed |  | routes/git.ts |
 | POST | `/api/git/remove-worktree` | missing | mounted-fail-closed |  | routes/git.ts |
 | POST | `/api/git/run-commit-flow` | missing | missing |  | routes/git.ts |
 | POST | `/api/git/run-stacked-action` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/stage` | native-tested | native-tested | `tests/binary_repos.rs::stage_option_like_filename_does_not_stage_other_files` | routes/git.ts |
-| POST | `/api/git/status` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/stage` | native-tested | native-tested | `tests/binary_repos.rs::stage_option_like_filename_does_not_stage_other_files`, `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/git/status` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/sync` | native-untested | native-untested |  | routes/git.ts |
-| POST | `/api/git/unstage` | native-untested | native-untested |  | routes/git.ts |
+| POST | `/api/git/unstage` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/jobs` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/jobs/:id/trigger` | native-untested | native-untested |  | routes/jobs.ts |
 | POST | `/api/maintenance/run` | missing | mounted-fail-closed |  | routes/maintenance.ts |
