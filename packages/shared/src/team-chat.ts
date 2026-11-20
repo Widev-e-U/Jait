@@ -62,6 +62,25 @@ export interface TeamDelivery {
   status: "queued" | "running" | "completed" | "delivered" | "failed" | "blocked" | "interrupted" | "cancelled";
   error: string | null;
 }
+const TEAM_DELIVERY_RANK = { sent: 1, received: 2, read: 3 } as const;
+/**
+ * Delivery state of a user's team message, using the shared indicator scale:
+ * queued = sent, running/delivered = received by the agent, completed = read
+ * (the agent has processed it). Any failed recipient fails the whole message;
+ * otherwise the slowest recipient decides.
+ */
+export function teamMessageDeliveryState(
+  deliveries: ReadonlyArray<Pick<TeamDelivery, "status">>,
+): "sent" | "received" | "read" | "failed" {
+  if (deliveries.length === 0) return "sent";
+  let lowest: keyof typeof TEAM_DELIVERY_RANK = "read";
+  for (const { status } of deliveries) {
+    if (status === "failed" || status === "blocked" || status === "interrupted" || status === "cancelled") return "failed";
+    const state = status === "completed" ? "read" : status === "queued" ? "sent" : "received";
+    if (TEAM_DELIVERY_RANK[state] < TEAM_DELIVERY_RANK[lowest]) lowest = state;
+  }
+  return lowest;
+}
 export interface TeamWorkContext {
   roomId: string;
   agentId: string;
