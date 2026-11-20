@@ -1201,6 +1201,190 @@ async fn patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twic
     model_task.abort();
 }
 
+/// A web send that waits in the queue keeps the model, effort and display segments the user chose. The
+/// drained turn sends them to the provider, and a retry of the delivered send starts nothing.
+#[tokio::test]
+async fn queued_web_send_replays_its_choices_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &owner).await;
+    let segments = json!([{"type": "text", "text": "follow up please"}]);
+
+    let first = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({"sessionId": session, "content": "start the note"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 200);
+    let required = ws
+        .until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    let consent_id = required["payload"]["id"].as_str().unwrap().to_owned();
+
+    // The web's body for a send that arrives during the turn: its queue entry id and its choices.
+    let queued = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({
+            "content": "follow up please",
+            "sessionId": session,
+            "clientMessageId": "user-queued1",
+            "queuedMessageId": "q-web-1",
+            "mode": "agent",
+            "provider": "jait",
+            "runtimeMode": "supervised",
+            "reasoningEffort": "high",
+            "model": "turn-model",
+            "displaySegments": segments,
+        }))
+        .send()
+        .await
+        .unwrap();
+    let status = queued.status().as_u16();
+    let events = stream_events(&queued.text().await.unwrap());
+    assert_eq!(status, 202, "{events:?}");
+    assert_eq!(events[0]["type"], "queued", "{events:?}");
+    assert_eq!(events[0]["message"]["id"], "q-web-1", "{events:?}");
+    let state = session_state(&client, &base, &owner, &session).await;
+    assert_eq!(state["queued_messages"][0]["id"], "q-web-1", "{state}");
+    assert_eq!(
+        state["queued_messages"][0]["model"], "turn-model",
+        "{state}"
+    );
+    assert_eq!(
+        state["queued_messages"][0]["reasoningEffort"], "high",
+        "{state}"
+    );
+    assert_eq!(
+        state["queued_messages"][0]["displaySegments"], segments,
+        "{state}"
+    );
+
+    // Approving the consent finishes the first turn, and the queued send runs with its choices.
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &owner,
+        &format!("/api/consent/{consent_id}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    wait_for_message(&client, &base, &owner, &session, "Follow-up answered.").await;
+    wait_for_empty_queue(&client, &base, &owner, &session).await;
+    let requests = model.requests.lock().unwrap().clone();
+    let drained: Vec<&Value> = requests
+        .iter()
+        .filter(|body| {
+            body["messages"]
+                .as_array()
+                .and_then(|messages| messages.last())
+                .is_some_and(|last| last["content"] == "follow up please")
+        })
+        .collect();
+    assert_eq!(drained.len(), 1, "{requests:?}");
+    assert_eq!(drained[0]["model"], "turn-model", "{requests:?}");
+    assert_eq!(drained[0]["reasoning_effort"], "high", "{requests:?}");
+    let messages = session_messages(&client, &base, &owner, &session).await;
+    assert_eq!(
+        find_message(&messages, "user", "follow up please")["segments"],
+        segments,
+        "{messages}"
+    );
+
+    // A retry of the delivered send is answered as already consumed, and no second run starts.
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({
+                "content": "follow up please",
+                "sessionId": session,
+                "queuedMessageId": "q-web-1",
+            })),
+    )
+    .await;
+    assert_eq!(status, 202, "{body}");
+    assert_eq!(
+        body,
+        json!({"ok": true, "skipped": "queue-already-consumed", "queuedMessageId": "q-web-1"})
+    );
+    assert_eq!(model.requests.lock().unwrap().len(), requests.len());
+    model_task.abort();
+}
+
+/// Stop-and-send through the binary: the owner stops the running turn and selects a queued message.
+/// The selected message runs before the one that was queued ahead of it.
+#[tokio::test]
+async fn stop_and_send_runs_the_selected_queued_message_next_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &owner).await;
+
+    let first = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({"sessionId": session, "content": "start the note"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 200);
+    ws.until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    for (content, id) in [
+        ("the earlier one", "q-earlier"),
+        ("follow up please", "q-selected"),
+    ] {
+        let queued = client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({"sessionId": session, "content": content, "queuedMessageId": id}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(queued.status(), 202);
+        queued.text().await.unwrap();
+    }
+
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/sessions/{session}/cancel"))
+            .bearer_auth(&owner)
+            .json(&json!({"queuedMessageId": "q-selected"})),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body, json!({"ok": true, "cancelled": true}));
+    wait_for_message(&client, &base, &owner, &session, "Follow-up answered.").await;
+    wait_for_message(&client, &base, &owner, &session, "Unexpected request.").await;
+    wait_for_empty_queue(&client, &base, &owner, &session).await;
+    let messages = session_messages(&client, &base, &owner, &session).await;
+    let selected = messages
+        .find("follow up please")
+        .expect("the selected message ran");
+    let earlier = messages
+        .find("the earlier one")
+        .expect("the earlier message ran after it");
+    assert!(selected < earlier, "{messages}");
+    model_task.abort();
+}
+
 /// The first message of a transcript whose `role` and `content` match, or `null`.
 fn find_message(messages: &str, role: &str, content: &str) -> Value {
     let body: Value = serde_json::from_str(messages).unwrap();

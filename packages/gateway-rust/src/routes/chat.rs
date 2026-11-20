@@ -531,7 +531,7 @@ impl Drop for TurnLease {
         self.routes.wake_queue_waiters(waiters);
     }
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ChatBody {
     #[serde(rename = "sessionId", alias = "session_id")]
@@ -546,6 +546,10 @@ struct ChatBody {
     selection: TurnSelection,
     #[serde(skip)]
     display_segments: Option<String>,
+    // The queue entry this send was taken from. `parse_chat_request` sets it from the body's
+    // `queuedMessageId`. A queue drain carries none, because its entry is already consumed.
+    #[serde(skip)]
+    queued_message_id: Option<String>,
 }
 fn client_message_id(input: &ChatBody) -> Option<String> {
     let id = input.client_message_id.as_ref()?.as_str()?;
@@ -641,7 +645,6 @@ async fn local_turn_session(
 // stay here until the native turn can apply them.
 const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
     "personaAgentId",
-    "queuedMessageId",
     "responseStyle",
     "attachments",
     "_queuedDrain",
@@ -671,18 +674,27 @@ fn parse_chat_request(mut value: Value) -> Result<ChatBody, Box<Response>> {
             }),
         )));
     }
-    let (selection, display_segments) = chat_selection(&mut value)?;
+    let choices = chat_selection(&mut value)?;
     let mut body: ChatBody = serde_json::from_value(value).map_err(|_| invalid_chat_request())?;
-    body.selection = selection;
-    body.display_segments = display_segments;
+    body.selection = choices.selection;
+    body.display_segments = choices.display_segments;
+    body.queued_message_id = choices.queued_message_id;
     Ok(body)
+}
+
+/// The web options one send carries, read out of the body before it is deserialized.
+#[derive(Default)]
+struct WebChoices {
+    selection: TurnSelection,
+    display_segments: Option<String>,
+    queued_message_id: Option<String>,
 }
 
 /// Reads the web options out of the body. A malformed value is refused rather than replaced with a
 /// default, because a silent default would run a provider, model or posture the user did not ask for.
-fn chat_selection(value: &mut Value) -> Result<(TurnSelection, Option<String>), Box<Response>> {
+fn chat_selection(value: &mut Value) -> Result<WebChoices, Box<Response>> {
     let Some(object) = value.as_object_mut() else {
-        return Ok((TurnSelection::default(), None));
+        return Ok(WebChoices::default());
     };
     // `null` means the same as an omitted key for every option read here.
     let mut take = |key: &str| object.remove(key).filter(|v| !v.is_null());
@@ -728,14 +740,22 @@ fn chat_selection(value: &mut Value) -> Result<(TurnSelection, Option<String>), 
         Some(_) => return Err(invalid_chat_request()),
     };
     let display_segments = display_segments(take("displaySegments"))?;
-    Ok((
-        TurnSelection {
+    let queued_message_id = option_text(take("queuedMessageId"))?;
+    if queued_message_id
+        .as_deref()
+        .is_some_and(|id| id.len() > 128 || id.chars().any(char::is_control))
+    {
+        return Err(invalid_chat_request());
+    }
+    Ok(WebChoices {
+        selection: TurnSelection {
             provider,
             model,
             reasoning_effort,
         },
         display_segments,
-    ))
+        queued_message_id,
+    })
 }
 
 fn option_text(value: Option<Value>) -> Result<Option<String>, Box<Response>> {
@@ -803,6 +823,15 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     if let Err(error) = owned_session(&state, &user.id, &input.session_id).await {
         return *error;
     }
+    // A queued send whose entry already ran is answered before anything else. It neither starts a
+    // turn nor joins the queue again, so a client that retries a delivered message gets no duplicate.
+    if let Some(id) = input.queued_message_id.clone() {
+        match state.queue_id_consumed(&input.session_id, &id).await {
+            Ok(false) => {}
+            Ok(true) => return skipped_queued_send(&id),
+            Err(()) => return auth::internal_error(),
+        }
+    }
     let client_id = client_message_id(&input);
     if let Some(id) = client_id.clone() {
         let taken = state
@@ -829,13 +858,37 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         // A send during a chat turn joins the session's queue, as Node's does. A thread turn or a
         // device change still refuses with CHAT_BUSY.
         Err(AdmitError::Busy { chat_turn: true }) => {
-            return state
-                .queue_send(&user.id, &input.session_id, &input.content)
-                .await;
+            return state.queue_send(&user.id, &input).await;
         }
         Err(error) => return error.response(),
     };
-    start_turn(&state, user, input, lease).await
+    start_turn(&state, user, input, lease, Admission::Direct).await
+}
+
+/// How a turn was admitted. A direct send is checked against the queue and claims its entry before
+/// it runs. A queue drain has already taken its entry out of the queue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Admission {
+    Direct,
+    Drained,
+}
+
+/// What a direct send did to the queue when it claimed its place to run.
+enum Claim {
+    /// The send's queue id already ran, so no turn starts.
+    Consumed,
+    /// The send may run. The queue is returned when the claim changed it.
+    Claimed(Option<Vec<Value>>),
+}
+
+/// What a send that arrived during a turn did with the queue.
+enum Queueing {
+    Consumed,
+    Joined {
+        entry: Value,
+        queue: Vec<Value>,
+        created: bool,
+    },
 }
 
 /// Runs an admitted chat turn and returns its event stream. Dropping the stream does not stop the
@@ -845,6 +898,7 @@ async fn start_turn(
     user: AuthUser,
     input: ChatBody,
     lease: TurnLease,
+    admission: Admission,
 ) -> Response {
     let client_id = client_message_id(&input);
     let owner = user.id.clone();
@@ -916,6 +970,27 @@ async fn start_turn(
         .is_err()
     {
         return response(503, json!({"error":"CHAT_ADMISSION_UNAVAILABLE"}));
+    }
+    // The claim is the last check before the turn starts, so a refused send keeps its queue entry.
+    if admission == Admission::Direct {
+        match state
+            .claim_send(
+                &input.session_id,
+                input.queued_message_id.as_deref(),
+                &input.content,
+            )
+            .await
+        {
+            Ok(Claim::Claimed(queue)) => {
+                if let Some(queue) = queue {
+                    state.publish_queue(&owner, &input.session_id, &queue);
+                }
+            }
+            Ok(Claim::Consumed) => {
+                return skipped_queued_send(input.queued_message_id.as_deref().unwrap_or_default());
+            }
+            Err(()) => return auth::internal_error(),
+        }
     }
     // Keep the previous failure visible if preparation or capacity checks fail.
     state.events.clear_failure(&input.session_id);
@@ -1006,39 +1081,196 @@ async fn start_turn(
 }
 impl ChatRoutes {
     /// Keeps a send that arrived during a chat turn in the session's queue, and answers it the way
-    /// Node does: an event stream with a `queued` event and `done`, status 202. A send with the same
-    /// text as a queued entry joins that entry.
-    async fn queue_send(&self, owner: &str, session: &str, content: &str) -> Response {
-        let (session_db, content_db) = (session.to_owned(), content.to_owned());
+    /// Node does: an event stream with a `queued` event and `done`, status 202. A send that names an
+    /// entry joins that entry, and so does a send with the same text as a queued entry.
+    async fn queue_send(&self, owner: &str, input: &ChatBody) -> Response {
+        let session_db = input.session_id.clone();
+        let content_db = input.content.clone();
+        let queued_db = input.queued_message_id.clone();
+        let selection = input.selection.clone();
+        let segments = input
+            .display_segments
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Value>(text).ok());
         let stored = self
             .auth
             .with_database(move |db| {
                 let (stored, consumed) = chat_queue::read(db, &session_db)?;
                 // An entry whose id already ran is neither joined nor counted as waiting.
+                if queued_db
+                    .as_deref()
+                    .is_some_and(|id| consumed.iter().any(|known| known == id))
+                {
+                    return Ok(Queueing::Consumed);
+                }
                 let mut queue = chat_queue::without_consumed(stored, &consumed);
                 let existing = queue
                     .iter()
-                    .find(|entry| chat_queue::same_text(entry, &content_db))
+                    .find(|entry| {
+                        queued_db
+                            .as_deref()
+                            .is_some_and(|id| chat_queue::id_of(entry) == Some(id))
+                    })
+                    .or_else(|| {
+                        queue
+                            .iter()
+                            .find(|entry| chat_queue::same_text(entry, &content_db))
+                    })
                     .cloned();
-                if let Some(existing) = existing {
-                    return Ok((existing, queue, false));
+                if let Some(entry) = existing {
+                    return Ok(Queueing::Joined {
+                        entry,
+                        queue,
+                        created: false,
+                    });
                 }
-                let entry = chat_queue::new_entry(&content_db);
+                let entry = chat_queue::new_entry(
+                    queued_db.as_deref(),
+                    &content_db,
+                    &selection,
+                    segments.as_ref(),
+                );
                 queue.push(entry.clone());
                 chat_queue::store(db, &session_db, &queue, &consumed)?;
-                Ok((entry, queue, true))
+                Ok(Queueing::Joined {
+                    entry,
+                    queue,
+                    created: true,
+                })
             })
             .await;
-        let (entry, queue, created) = match stored {
-            Ok(stored) => stored,
-            Err(_) => return auth::internal_error(),
-        };
-        if created {
-            self.publish_queue(owner, session, &queue);
+        match stored {
+            Ok(Queueing::Consumed) => {
+                skipped_queued_send(input.queued_message_id.as_deref().unwrap_or_default())
+            }
+            Ok(Queueing::Joined {
+                entry,
+                queue,
+                created,
+            }) => {
+                if created {
+                    self.publish_queue(owner, &input.session_id, &queue);
+                }
+                // The turn may have ended while this write was in flight; the queue must not wait for it.
+                self.drain_queued_soon(owner, &input.session_id);
+                queued_stream(&input.session_id, &entry, queue.len())
+            }
+            Err(_) => auth::internal_error(),
         }
-        // The turn may have ended while this write was in flight; the queue must not wait for it.
-        self.drain_queued_soon(owner, session);
-        queued_stream(session, &entry, queue.len())
+    }
+
+    /// Whether the session's queue has already consumed this id.
+    async fn queue_id_consumed(&self, session: &str, id: &str) -> Result<bool, ()> {
+        let (session_db, id_db) = (session.to_owned(), id.to_owned());
+        self.auth
+            .with_database(move |db| {
+                let consumed = chat_queue::consumed(db, &session_db)?;
+                Ok(consumed.contains(&id_db))
+            })
+            .await
+            .map_err(|_| ())
+    }
+
+    /// Claims a direct send's place in the queue. An id that already ran is not run again. Otherwise
+    /// the id and every queued entry with the same text are consumed, as Node's send does, in one
+    /// state write.
+    async fn claim_send(
+        &self,
+        session: &str,
+        queued: Option<&str>,
+        content: &str,
+    ) -> Result<Claim, ()> {
+        let (session_db, queued_db, content_db) = (
+            session.to_owned(),
+            queued.map(str::to_owned),
+            content.to_owned(),
+        );
+        self.auth
+            .with_database(move |db| {
+                let (stored, mut consumed) = chat_queue::read(db, &session_db)?;
+                if queued_db
+                    .as_deref()
+                    .is_some_and(|id| consumed.iter().any(|known| known == id))
+                {
+                    return Ok(Claim::Consumed);
+                }
+                let mut kept = Vec::new();
+                for entry in chat_queue::without_consumed(stored.clone(), &consumed) {
+                    if chat_queue::same_text(&entry, &content_db) {
+                        if let Some(id) = chat_queue::id_of(&entry) {
+                            chat_queue::remember(&mut consumed, id);
+                        }
+                    } else {
+                        kept.push(entry);
+                    }
+                }
+                if let Some(id) = queued_db.as_deref() {
+                    chat_queue::remember(&mut consumed, id);
+                }
+                let kept = chat_queue::without_consumed(kept, &consumed);
+                let changed = kept != stored;
+                if changed || queued_db.is_some() {
+                    chat_queue::store(db, &session_db, &kept, &consumed)?;
+                }
+                Ok(Claim::Claimed(changed.then_some(kept)))
+            })
+            .await
+            .map_err(|_| ())
+    }
+
+    /// Stop-and-send: moves a queued entry to the head of the queue and releases its hold. Only an
+    /// entry still waiting in the queue can be selected, and only while a turn is running to stop.
+    async fn select_queued_now(
+        &self,
+        owner: &str,
+        session: &str,
+        id: &str,
+    ) -> Result<(), Box<Response>> {
+        let running = self
+            .active
+            .turns
+            .lock()
+            .unwrap()
+            .get(session)
+            .is_some_and(|turn| turn.owner == owner && !turn.cancellation.is_cancelled());
+        if !running {
+            return Err(Box::new(response(
+                409,
+                json!({"error":"CONFLICT","details":"No active turn to stop"}),
+            )));
+        }
+        let (session_db, id_db) = (session.to_owned(), id.to_owned());
+        let moved = self
+            .auth
+            .with_database(move |db| {
+                let (stored, consumed) = chat_queue::read(db, &session_db)?;
+                let mut queue = chat_queue::without_consumed(stored, &consumed);
+                let Some(position) = queue
+                    .iter()
+                    .position(|entry| chat_queue::id_of(entry) == Some(id_db.as_str()))
+                else {
+                    return Ok(None);
+                };
+                let mut selected = queue.remove(position);
+                if let Some(fields) = selected.as_object_mut() {
+                    fields.insert("held".to_owned(), Value::Bool(false));
+                }
+                queue.insert(0, selected);
+                chat_queue::store(db, &session_db, &queue, &consumed)?;
+                Ok(Some(queue))
+            })
+            .await;
+        match moved {
+            Ok(Some(queue)) => {
+                self.publish_queue(owner, session, &queue);
+                Ok(())
+            }
+            Ok(None) => Err(Box::new(response(
+                404,
+                json!({"error":"NOT_FOUND","details":"Queued message not found"}),
+            ))),
+            Err(_) => Err(Box::new(auth::internal_error())),
+        }
     }
 
     /// Starts the next queued message once the session is idle. Each queue write and each turn end
@@ -1092,12 +1324,14 @@ impl ChatRoutes {
                     }
                     return Ok(None);
                 };
-                // Unsupported uploads must remain queued rather than be silently dropped.
-                if head.get("held") == Some(&Value::Bool(true))
-                    || chat_queue::has_attachments(&head)
-                {
+                // A held entry, or one whose options this binary cannot honor, stays queued rather
+                // than being dropped or run as something else.
+                if head.get("held") == Some(&Value::Bool(true)) {
                     return Ok(None);
                 }
+                let Some(input) = queued_request(&session_db, &head) else {
+                    return Ok(None);
+                };
                 queue.remove(0);
                 if let Some(id) = chat_queue::id_of(&head) {
                     chat_queue::remember(&mut consumed, id);
@@ -1107,14 +1341,14 @@ impl ChatRoutes {
                     id: user.id,
                     username: user.username,
                 };
-                Ok(Some((user, head, queue)))
+                Ok(Some((user, head, input, queue)))
             })
             .await;
         let next = match next {
             Ok(next) => next,
             Err(_) => return,
         };
-        let Some((user, entry, rest)) = next else {
+        let Some((user, entry, input, rest)) = next else {
             drop(lease);
             // A write that landed while this drain held the session would otherwise wait for a turn
             // end that never comes. Look again now that the session is free.
@@ -1124,19 +1358,7 @@ impl ChatRoutes {
             return;
         };
         self.publish_queue(owner, session, &rest);
-        let content = entry
-            .get("content")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
-        let input = ChatBody {
-            session_id: session.to_owned(),
-            content,
-            client_message_id: None,
-            selection: TurnSelection::default(),
-            display_segments: None,
-        };
-        let started = start_turn(self, user, input, lease).await;
+        let started = start_turn(self, user, input, lease, Admission::Drained).await;
         if !started.status().is_success() {
             // The turn did not start (for example, the configured provider is unavailable), so the
             // message stays queued for the next turn end or queue write.
@@ -1161,7 +1383,7 @@ impl ChatRoutes {
                 }
                 Ok(queue.first().is_some_and(|head| {
                     head.get("held") != Some(&Value::Bool(true))
-                        && !chat_queue::has_attachments(head)
+                        && queued_request(&session_db, head).is_some()
                 }))
             })
             .await
@@ -1210,6 +1432,50 @@ impl ChatRoutes {
             json!({"key": chat_queue::QUEUE_KEY, "value": value}),
         );
     }
+}
+
+/// The options a queue entry carries, under the names a send uses.
+const QUEUED_OPTIONS: &[&str] = &[
+    "provider",
+    "model",
+    "reasoningEffort",
+    "displaySegments",
+    "mode",
+    "runtimeMode",
+    "responseStyle",
+    "personaAgentId",
+    "attachments",
+];
+
+/// The request a queue entry replays. The queue is also written by the client, so an entry goes
+/// through the validation a send gets. An option this binary cannot honor keeps the entry queued,
+/// rather than running it as something else.
+fn queued_request(session: &str, entry: &Value) -> Option<ChatBody> {
+    let content = entry.get("content")?.as_str()?;
+    if content.trim().is_empty() || content.len() > 32 * 1024 {
+        return None;
+    }
+    let mut value = json!({"sessionId": session, "content": content});
+    for key in QUEUED_OPTIONS {
+        let Some(option) = entry.get(*key).filter(|option| !option.is_null()) else {
+            continue;
+        };
+        // An empty list is the same as no list, and the normal response style is the default.
+        let empty = option.as_array().is_some_and(Vec::is_empty);
+        if empty || (*key == "responseStyle" && option.as_str() == Some("normal")) {
+            continue;
+        }
+        value[*key] = option.clone();
+    }
+    parse_chat_request(value).ok()
+}
+
+/// The answer to a queued send whose entry already ran: accepted, with no turn and no queue change.
+fn skipped_queued_send(id: &str) -> Response {
+    response(
+        202,
+        json!({"ok":true,"skipped":"queue-already-consumed","queuedMessageId":id}),
+    )
 }
 
 /// The 202 answer to a send that joined the queue: a `queued` event, then `done`.
@@ -2123,17 +2389,15 @@ async fn cancel_request(
         Ok(value) => value,
         Err(error) => return *error,
     };
-    let session = match path_session {
-        Some(session)
-            if value.is_null() || value.as_object().is_some_and(|object| object.is_empty()) =>
-        {
-            session
-        }
+    let (session, send_now) = match path_session {
+        Some(session) => match send_now_target(&value) {
+            Ok(target) => (session, target),
+            Err(error) => return *error,
+        },
         None => match serde_json::from_value::<CancelBody>(value) {
-            Ok(body) => body.session_id,
+            Ok(body) => (body.session_id, None),
             Err(_) => return response(400, json!({"error":"INVALID_CANCEL_REQUEST"})),
         },
-        _ => return response(400, json!({"error":"INVALID_CANCEL_REQUEST"})),
     };
     if !valid_session(&session) {
         return response(400, json!({"error":"INVALID_CANCEL_REQUEST"}));
@@ -2141,16 +2405,46 @@ async fn cancel_request(
     if let Err(error) = owned_session(&state, &user.id, &session).await {
         return *error;
     }
-    let active = state.active.turns.lock().unwrap();
-    let cancelled = active
-        .get(&session)
-        .filter(|turn| turn.owner == user.id)
-        .map(|turn| {
-            turn.cancellation.cancel();
-            true
-        })
-        .unwrap_or(false);
+    // A stop-and-send first moves the selected entry to the head of the queue. The turn's end then
+    // drains the queue, so that entry runs next.
+    if let Some(id) = &send_now
+        && let Err(error) = state.select_queued_now(&user.id, &session, id).await
+    {
+        return *error;
+    }
+    let cancelled = {
+        let active = state.active.turns.lock().unwrap();
+        active
+            .get(&session)
+            .filter(|turn| turn.owner == user.id)
+            .map(|turn| {
+                turn.cancellation.cancel();
+                true
+            })
+            .unwrap_or(false)
+    };
+    // The entry moved, but no turn was left to end and drain it.
+    if send_now.is_some() && !cancelled {
+        state.drain_queued_soon(&user.id, &session);
+    }
     response(200, json!({"ok":true,"cancelled":cancelled}))
+}
+
+/// What a path cancel may carry. Node reads only `queuedMessageId`: when it is present it must be a
+/// non-empty string, and it names the entry to send next. Any other body is an ordinary cancel.
+fn send_now_target(value: &Value) -> Result<Option<String>, Box<Response>> {
+    let Some(id) = value
+        .as_object()
+        .and_then(|object| object.get("queuedMessageId"))
+    else {
+        return Ok(None);
+    };
+    match id.as_str() {
+        Some(id) if !id.trim().is_empty() => Ok(Some(id.to_owned())),
+        _ => Err(Box::new(validation(
+            "queuedMessageId must be a non-empty string",
+        ))),
+    }
 }
 /// List live turns only while their sessions remain active and owned by the caller.
 async fn streaming_sessions(

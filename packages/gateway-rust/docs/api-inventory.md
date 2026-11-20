@@ -291,7 +291,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/channels/:id/pair` | missing | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/channels/:id/start` | missing | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/channels/:id/stop` | missing | mounted-fail-closed |  | routes/channels.ts |
-| POST | `/api/chat` | native-tested | native-tested | `tests/binary_agent_tool_policy.rs::reenabled_tool_is_advertised_and_executed_in_new_chat`, `tests/binary_thread_turns.rs::web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`, `tests/binary_thread_turns.rs::refused_web_choices_start_no_turn_through_the_binary`, `tests/binary_thread_turns.rs::web_shaped_acp_turn_runs_the_registered_provider_through_the_binary` | routes/chat.ts |
+| POST | `/api/chat` | native-tested | native-tested | `tests/binary_agent_tool_policy.rs::reenabled_tool_is_advertised_and_executed_in_new_chat`, `tests/binary_thread_turns.rs::web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`, `tests/binary_thread_turns.rs::refused_web_choices_start_no_turn_through_the_binary`, `tests/binary_thread_turns.rs::web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`, `tests/binary_thread_turns.rs::queued_web_send_replays_its_choices_through_the_binary` | routes/chat.ts |
 | POST | `/api/chat/prewarm` | native-untested | native-untested |  | routes/chat.ts |
 | POST | `/api/code-graph/graphrag/prepare` | native-untested | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/index` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
@@ -439,7 +439,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/sessions` | native-tested | native-tested | `tests/binary_tool_policy.rs::direct_execution_tracks_live_disabled_tool_settings` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/approve` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/archive` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
-| POST | `/api/sessions/:sessionId/cancel` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/cancel` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary`, `tests/binary_thread_turns.rs::stop_and_send_runs_the_selected_queued_message_next_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/fork` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/generate-title` | native-tested | native-tested | `tests/binary_session_routes.rs::generate_title_uses_the_owners_provider_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/loop` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |

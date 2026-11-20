@@ -64,6 +64,7 @@ impl TurnProvider for TestProvider {
 struct TestFactory {
     provider: Arc<TestProvider>,
     calls: AtomicUsize,
+    selections: Mutex<Vec<super::TurnSelection>>,
 }
 impl ChatFactory for TestFactory {
     fn prepare(
@@ -75,6 +76,7 @@ impl ChatFactory for TestFactory {
         assert_eq!(user.id, "owner");
         assert_eq!(session.user_id.as_deref(), Some("owner"));
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.selections.lock().unwrap().push(selection.clone());
         // Like the settings factory, a choice this fixture cannot honor is refused, not replaced.
         if selection.provider.is_some() {
             return Box::pin(async {
@@ -151,6 +153,7 @@ impl Fixture {
                 retained: Mutex::new(None),
             }),
             calls: AtomicUsize::new(0),
+            selections: Mutex::new(Vec::new()),
         });
         let routes = ChatRoutes::new(
             auth.clone(),
@@ -373,7 +376,6 @@ async fn web_options_are_explicitly_rejected_before_preparation() {
     let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
     for (option, value) in [
         ("personaAgentId", json!("agent")),
-        ("queuedMessageId", json!("queue")),
         ("responseStyle", json!("concise")),
         ("attachments", json!([])),
         ("_queuedDrain", json!(true)),
@@ -874,6 +876,327 @@ async fn a_send_never_joins_a_queued_entry_that_already_ran() {
         .unwrap();
     assert_eq!(rerun["cancelled"], true);
     fixture.finish().await;
+}
+#[tokio::test]
+async fn queued_message_ids_are_validated_before_preparation() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    for id in [json!(5), json!("x".repeat(129)), json!("bad\nid")] {
+        let response = fixture
+            .post("/api/chat")
+            .json(&json!({"sessionId":"session","content":"hi","queuedMessageId":id}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400);
+        assert_eq!(
+            response.json::<Value>().await.unwrap()["error"],
+            "INVALID_CHAT_REQUEST"
+        );
+    }
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    assert!(fixture.events().await.is_empty());
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn a_queued_send_keeps_its_id_and_choices_and_the_drain_replays_them() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    let mut first = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    first.chunk().await.unwrap().unwrap();
+    let queued = fixture
+        .post("/api/chat")
+        .json(&json!({
+            "sessionId":"session",
+            "content":"again",
+            "queuedMessageId":"q-web-1",
+            "model":"configured-model",
+            "reasoningEffort":"medium",
+            "displaySegments":[{"type":"text","text":"again"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(queued.status(), 202);
+    let event = frames(&queued.text().await.unwrap())
+        .into_iter()
+        .find(|event| event["type"] == "queued")
+        .unwrap();
+    assert_eq!(event["message"]["id"], "q-web-1");
+    assert_eq!(event["message"]["model"], "configured-model");
+    assert_eq!(event["message"]["reasoningEffort"], "medium");
+    assert_eq!(
+        event["message"]["displaySegments"],
+        json!([{"type":"text","text":"again"}])
+    );
+    // Ending the paused turn drains the queue. The drained turn runs with the choices the entry kept.
+    let cancelled: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cancelled["cancelled"], true);
+    wait_for_running_turn(&fixture, "again").await;
+    let selections = fixture.factory.selections.lock().unwrap().clone();
+    assert_eq!(selections.len(), 2);
+    assert_eq!(
+        selections[1],
+        TurnSelection {
+            provider: None,
+            model: Some("configured-model".into()),
+            reasoning_effort: Some("medium".into()),
+        }
+    );
+    // A retry of the delivered send is answered as consumed. No second turn starts.
+    let retry = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"again","queuedMessageId":"q-web-1"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(retry.status(), 202);
+    assert_eq!(
+        retry.json::<Value>().await.unwrap(),
+        json!({"ok":true,"skipped":"queue-already-consumed","queuedMessageId":"q-web-1"})
+    );
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 2);
+    let rerun: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(rerun["cancelled"], true);
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn a_direct_send_claims_its_queue_entry_and_a_stale_snapshot_cannot_resend() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    fixture
+        .auth
+        .with_database(|db| {
+            Ok(chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"q-held","content":"later","held":true})],
+                &[],
+            )?)
+        })
+        .await
+        .unwrap();
+    let sent = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"later","queuedMessageId":"q-held"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(sent.status(), 200);
+    assert!(
+        frames(&sent.text().await.unwrap())
+            .iter()
+            .any(|event| event["type"] == "done")
+    );
+    let (queue, consumed) = fixture
+        .auth
+        .with_database(|db| Ok(chat_queue::read(db, "session")?))
+        .await
+        .unwrap();
+    assert!(queue.is_empty());
+    assert_eq!(consumed, ["q-held".to_owned()]);
+    // A stale client snapshot brings the entry back. Its id is consumed, so the drain drops it.
+    fixture
+        .auth
+        .with_database(move |db| {
+            Ok(chat_queue::store(
+                db,
+                "session",
+                &[json!({"id":"q-held","content":"later","held":true})],
+                &consumed,
+            )?)
+        })
+        .await
+        .unwrap();
+    fixture.routes.drain_queued("owner", "session").await;
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 1);
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn claiming_a_send_consumes_its_id_and_same_text_entries_once() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    fixture
+        .auth
+        .with_database(|db| {
+            Ok(chat_queue::store(
+                db,
+                "session",
+                &[
+                    json!({"id":"q-a","content":"same"}),
+                    json!({"id":"q-b","content":"other"}),
+                ],
+                &[],
+            )?)
+        })
+        .await
+        .unwrap();
+    let first = fixture
+        .routes
+        .claim_send("session", Some("q-x"), "same")
+        .await
+        .unwrap();
+    assert!(
+        matches!(first, Claim::Claimed(Some(queue)) if queue == vec![json!({"id":"q-b","content":"other"})])
+    );
+    let again = fixture
+        .routes
+        .claim_send("session", Some("q-x"), "anything")
+        .await
+        .unwrap();
+    assert!(matches!(again, Claim::Consumed));
+    let (queue, consumed) = fixture
+        .auth
+        .with_database(|db| Ok(chat_queue::read(db, "session")?))
+        .await
+        .unwrap();
+    assert_eq!(queue, vec![json!({"id":"q-b","content":"other"})]);
+    assert_eq!(consumed, ["q-a".to_owned(), "q-x".to_owned()]);
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn a_queued_entry_whose_choice_is_refused_stays_queued() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    let entry = json!({"id":"q-bad","content":"needs another provider","provider":"unknown-agent"});
+    let stored = vec![entry.clone()];
+    fixture
+        .auth
+        .with_database(move |db| Ok(chat_queue::store(db, "session", &stored, &[])?))
+        .await
+        .unwrap();
+    fixture.routes.drain_queued("owner", "session").await;
+    // The factory refused the choice, so no turn started and the entry is where it was.
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 1);
+    let (queue, consumed) = fixture
+        .auth
+        .with_database(|db| Ok(chat_queue::read(db, "session")?))
+        .await
+        .unwrap();
+    assert_eq!(queue, vec![entry]);
+    assert!(consumed.is_empty());
+    assert!(fixture.events().await.is_empty());
+    fixture.finish().await;
+}
+#[tokio::test]
+async fn stop_and_send_moves_the_selected_entry_to_the_front_and_runs_it_next() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    // Nothing is running yet, so there is no turn to stop for a send.
+    let idle = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({"queuedMessageId":"q-b"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(idle.status(), 409);
+    let mut first = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    first.chunk().await.unwrap().unwrap();
+    fixture
+        .auth
+        .with_database(|db| {
+            Ok(chat_queue::store(
+                db,
+                "session",
+                &[
+                    json!({"id":"q-a","content":"first in line"}),
+                    json!({"id":"q-b","content":"selected","held":true}),
+                ],
+                &[],
+            )?)
+        })
+        .await
+        .unwrap();
+    let missing = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({"queuedMessageId":"q-gone"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let malformed = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({"queuedMessageId":5}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed.status(), 400);
+    let sent: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({"queuedMessageId":"q-b"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(sent, json!({"ok":true,"cancelled":true}));
+    wait_for_running_turn(&fixture, "selected").await;
+    assert!(
+        !fixture.events().await.iter().any(
+            |event| matches!(event, TurnEvent::User { content } if content == "first in line")
+        )
+    );
+    let (queue, _) = fixture
+        .auth
+        .with_database(|db| Ok(chat_queue::read(db, "session")?))
+        .await
+        .unwrap();
+    assert_eq!(queue, vec![json!({"id":"q-a","content":"first in line"})]);
+    let stopped: Value = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(stopped["cancelled"], true);
+    fixture.finish().await;
+}
+#[test]
+fn a_path_cancel_reads_only_the_queued_message_id_as_node_does() {
+    assert_eq!(send_now_target(&json!(null)).ok().flatten(), None);
+    assert_eq!(send_now_target(&json!({})).ok().flatten(), None);
+    assert_eq!(
+        send_now_target(&json!({"reason": "stop"})).ok().flatten(),
+        None
+    );
+    assert_eq!(
+        send_now_target(&json!({"queuedMessageId": "q-1", "extra": true}))
+            .ok()
+            .flatten(),
+        Some("q-1".to_owned())
+    );
+    for refused in [
+        json!({"queuedMessageId": ""}),
+        json!({"queuedMessageId": "   "}),
+        json!({"queuedMessageId": null}),
+        json!({"queuedMessageId": 7}),
+    ] {
+        assert!(send_now_target(&refused).is_err(), "{refused}");
+    }
 }
 #[tokio::test]
 async fn terminal_write_failure_is_visible_without_a_durable_id() {

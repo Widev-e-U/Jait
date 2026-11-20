@@ -24,9 +24,9 @@ owner's own configuration, and refuses any choice it cannot honor. It never subs
   user message's `segments`, the field the Node gateway uses. Storage is in `rust_chat_user_segments`.
 - `mode`: `agent` only. Any other mode returns `UNSUPPORTED_CHAT_OPTION` with `option: "mode"`.
 
-Still refused with `UNSUPPORTED_CHAT_OPTION`: `personaAgentId`, `responseStyle`, `attachments`,
-`queuedMessageId`, and the internal `_` keys. A refused option starts no turn, and the model receives
-no request.
+Still refused with `UNSUPPORTED_CHAT_OPTION`: `personaAgentId`, `responseStyle`, `attachments`, and the
+internal `_` keys. A refused option starts no turn, and the model receives no request. `queuedMessageId`
+is accepted; see the queue section below.
 
 Evidence: `chat_tests::web_options_are_validated_before_preparation` and
 `chat_tests::web_options_are_explicitly_rejected_before_preparation` (lib, `src/routes/chat_tests.rs`).
@@ -56,7 +56,7 @@ in production (see "Not mapped" below).
 
 Mapped as native-tested: `POST /api/jobs/:id/trigger`.
 
-## Queued chat messages through the composed binary — 2026-11-19
+## Queued chat messages through the composed binary — 2026-11-20
 
 A chat send that arrives while a chat turn runs is kept in the session's `queued_messages` state and answered as Node
 answers it: status 202, with an event stream of a `queued` event (the entry and `queue_length`) and `done`. A send whose
@@ -67,10 +67,28 @@ head entry starts as a new turn. The entry leaves the queue, and its id joins th
 A stale snapshot that names a consumed id has that entry dropped, so an entry never runs twice. A held head entry blocks
 the queue. If the new turn does not start (for example, its provider is not configured), the entry returns to the head.
 
-Code: `routes/chat_queue.rs` (parsing that follows Node's `parseQueuedChatMessages`, consumed ids, state storage);
-`routes/chat.rs` (`try_admit` and `AdmitError`, which lets only a running chat turn queue a send, while a thread turn or a
-device change still answers 409 `CHAT_BUSY`; `start_turn`; `queue_send`; `drain_queued_soon`, `drain_queued`,
-`restore_queued`, `publish_queue`); `routes/sessions.rs` (the PATCH trigger, through `SessionRuntime::drain_queued_chat`,
+Identity and choices (2026-11-20):
+- A send may carry `queuedMessageId`, the client's id for its queue entry. A send whose id is already consumed answers
+  202 `{"ok":true,"skipped":"queue-already-consumed","queuedMessageId":id}` before admission and starts nothing, as Node
+  does: Node makes the same check before its busy branch, and returns the same body.
+- A queue entry keeps the choices its send carried: `provider`, `model`, `reasoningEffort` and `displaySegments`. The
+  drain replays the entry through the same validation a send gets. An entry whose options this binary cannot honor (for
+  example `runtimeMode: "full-access"`, a `responseStyle` other than `normal`, `personaAgentId` or `attachments`) stays
+  queued, as a held entry does, and is not run with other settings.
+- A direct send claims its place only after every check that can refuse it. Its `queuedMessageId` is consumed, and the
+  queued entries with the same text and no attachments leave the queue, in one state write. A send refused before that
+  point keeps its entry. Node makes this claim after request validation, too.
+- Stop-and-send: `POST /api/sessions/:id/cancel` with `{"queuedMessageId": id}` moves that entry to the head of the queue
+  and clears its hold, then cancels the running turn. The turn's end drains the queue, so the selected entry runs next.
+  Errors follow Node: 400 `VALIDATION_ERROR` when the value is not a string or is blank, 409 `CONFLICT` when the session
+  has no running turn, and 404 `NOT_FOUND` for an entry that is not queued or was consumed. A body without
+  `queuedMessageId` is an ordinary cancel, and the answer is `{"ok":true,"cancelled":bool}`, as before.
+
+Code: `routes/chat_queue.rs` (parsing that follows Node's `parseQueuedChatMessages`, consumed ids, the stored choices of a
+new entry, state storage); `routes/chat.rs` (`try_admit` and `AdmitError`, which lets only a running chat turn queue a
+send, while a thread turn or a device change still answers 409 `CHAT_BUSY`; `start_turn` and its `Admission` mode;
+`queue_send`; `claim_send`; `select_queued_now`; `drain_queued_soon`, `drain_queued`, `restore_queued`, `publish_queue`;
+`cancel_request` and `send_now_target`); `routes/sessions.rs` (the PATCH trigger, through `SessionRuntime::drain_queued_chat`,
 which runs only after an owner-scoped write succeeds); `runtime/application.rs` (the adapter and the session-event sink on
 the WebSocket hub).
 
@@ -78,11 +96,19 @@ Tests: `busy_chat_send_queues_and_the_finished_turn_starts_it_through_the_binary
 a turn at consent, sends a second message (202, `queue_length` 1), repeats its text (still one entry), approves the
 consent, and checks that the queued message runs as its own turn, that the model receives it, that `queued_messages` is
 cleared, and that the owner's socket receives both `ui.state-sync` frames.
+`queued_web_send_replays_its_choices_through_the_binary` queues a web-shaped send with its id, model, effort and display
+segments. It checks that the drained turn sends the model and effort to the provider and keeps the segments on the user
+message, and that a retry of the same id answers `queue-already-consumed` with no new model request.
+`stop_and_send_runs_the_selected_queued_message_next_through_the_binary` queues two messages behind a turn held at consent,
+cancels with the second id, and checks that the selected message runs before the earlier one.
 `patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` covers the PATCH trigger and the stale snapshot:
-the model receives one request, and a second write of the same entry sends nothing. Four unit tests in `chat_queue.rs`
-cover parsing, text matching, consumed-id filtering and the id limit.
+the model receives one request, and a second write of the same entry sends nothing. Five unit tests in `chat_queue.rs`
+cover parsing, text matching, consumed-id filtering, the id limit and the stored choices of a new entry. In `chat_tests.rs`,
+unit tests cover the id validation before preparation, the claim, the replay, the refused-choice hold, the stop-and-send
+order and the cancel body (`send_now_target`).
 
-Mapped as native-tested: `PATCH /api/sessions/:id/state` and the WebSocket `ui.state-sync` server frame.
+Mapped as native-tested: `PATCH /api/sessions/:id/state` and the WebSocket `ui.state-sync` server frame. `POST /api/chat`
+and `POST /api/sessions/:sessionId/cancel` cite these binary tests in `tooling/binary-test-evidence.json`.
 
 ## Thread turns through the composed binary — 2026-11-19
 
@@ -131,17 +157,17 @@ Open parity questions, not changed in this batch:
 - A `start` or `send` that reads the thread before a stop and admits its turn after it can still start a running turn.
   `mark_interrupted` documents that starts must be serialized with stops, and the Rust path does not do that yet.
 - `stop` on a thread with a provider session still answers 409, because this gateway has no provider session control.
-- Queued chat sends are native (see the queue section above). Still open, not ported: `POST /api/sessions/:id/cancel`
-  with `queuedMessageId`, the "send now" action. Node moves that entry to the front, clears its hold and cancels the
-  running turn, while the Rust route answers 400 `INVALID_CANCEL_REQUEST` to any non-empty body. Also open: a send that
-  carries `queuedMessageId` (Rust answers 400 `UNSUPPORTED_CHAT_OPTION`, and Node's `queue-already-consumed` answer is
-  missing); Node's removal of a queued entry with the same text when that text is sent directly; and the inbound
-  WebSocket `ui.state-sync` write in `packages/gateway/src/index.ts`, which Rust does not read. If a thread turn holds the
-  session when a chat turn ends, the head entry waits for the next queue write or PATCH.
-- A web-UI send that includes `provider`, `model`, `mode`, `runtimeMode`, `responseStyle`, `reasoningEffort`,
-  `attachments`, `displaySegments` or `personaAgentId` is refused with 400 `UNSUPPORTED_CHAT_OPTION`. The Rust turn takes
-  its provider and model from the owner's saved settings (`runtime/chat_settings.rs`), so a web-UI chat with a chosen
-  provider is not served yet. This is the next blocker for criterion 2, a full chat turn from the web UI.
+- Queued chat sends are native (see the queue section above). Still open: the inbound WebSocket `ui.state-sync` write in
+  `packages/gateway/src/index.ts`, which Rust does not read. A drain that finds the session held by a thread turn or a
+  device change registers as a waiter, and releasing that hold drains the queue (`try_admit_inner`,
+  `wake_queue_waiters`). No test exercises that path yet.
+- Web-UI choices (the section at the top of this file covers the ones served). `responseStyle`, `attachments` and
+  `personaAgentId` are refused with 400 `UNSUPPORTED_CHAT_OPTION`. An ACP provider refuses a non-empty `model` or a
+  non-null `reasoningEffort` with `CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER`, because the gateway does not yet send those
+  options to ACP agents. `runtimeMode: "full-access"` is refused with `RUNTIME_MODE_UNSUPPORTED`. The web client sends its
+  runtime mode with each message (`apps/web/src/hooks/useChat.ts:1891`) and defaults to full-access
+  (`apps/web/src/App.tsx:353`), so a fresh web send fails until the posture decision is made. These are the open blockers
+  for criterion 3, a full chat turn from the web UI.
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 

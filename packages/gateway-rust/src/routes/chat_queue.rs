@@ -2,6 +2,7 @@
 //! `queued_messages` state, and the next turn start picks it up. The consumed-id record keeps a
 //! stale client snapshot from bringing back an entry that already ran. The reference is the
 //! queue code in `packages/gateway/src/routes/chat.ts` (`parseQueuedChatMessages`, consumed ids).
+use super::chat::TurnSelection;
 use crate::{services::json_state::SessionStateService, text::js_trim};
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
@@ -93,16 +94,44 @@ pub(crate) fn forget(consumed: &mut Vec<String>, id: &str) {
     consumed.retain(|known| known != id);
 }
 
-/// A new queue entry with Node's fields that this gateway uses: `id`, `content`, `queuedAt`.
-pub(crate) fn new_entry(content: &str) -> Value {
+/// A new queue entry. It keeps the id the client named, if any, so a later send or drain can
+/// recognize it, and otherwise gets a gateway id. The choices the send carried are stored with it,
+/// so the drain replays the turn the user asked for.
+pub(crate) fn new_entry(
+    id: Option<&str>,
+    content: &str,
+    selection: &TurnSelection,
+    display_segments: Option<&Value>,
+) -> Value {
     let queued_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_millis() as u64);
-    json!({
-        "id": format!("q-{}", uuid::Uuid::new_v4()),
-        "content": content,
-        "queuedAt": queued_at,
-    })
+    let mut entry = Map::new();
+    entry.insert(
+        "id".into(),
+        json!(id.map_or_else(|| format!("q-{}", uuid::Uuid::new_v4()), str::to_owned)),
+    );
+    entry.insert("content".into(), json!(content));
+    entry.insert("queuedAt".into(), json!(queued_at));
+    if let Some(provider) = &selection.provider {
+        entry.insert("provider".into(), json!(provider));
+    }
+    if let Some(model) = &selection.model {
+        entry.insert("model".into(), json!(model));
+    }
+    if let Some(effort) = &selection.reasoning_effort {
+        entry.insert("reasoningEffort".into(), json!(effort));
+    }
+    if let Some(segments) = display_segments {
+        entry.insert("displaySegments".into(), segments.clone());
+    }
+    Value::Object(entry)
+}
+
+/// The consumed ids of a session, read on the database worker.
+pub(crate) fn consumed(db: &rusqlite::Connection, session: &str) -> rusqlite::Result<Vec<String>> {
+    let state = SessionStateService::new(db).get(session, Some(&[CONSUMED_KEY.to_owned()]))?;
+    Ok(consumed_ids(state.get(CONSUMED_KEY)))
 }
 
 /// The validated queue and the consumed ids of a session, read on the database worker.
@@ -191,5 +220,25 @@ mod tests {
         remember(&mut consumed, "50");
         assert_eq!(consumed.last().map(String::as_str), Some("50"));
         assert_eq!(consumed.len(), 100);
+    }
+
+    #[test]
+    fn a_new_entry_keeps_the_client_id_and_the_choices_it_was_sent_with() {
+        let selection = TurnSelection {
+            provider: None,
+            model: Some("configured-model".into()),
+            reasoning_effort: Some("medium".into()),
+        };
+        let segments = json!([{"type": "text", "text": "again"}]);
+        let entry = new_entry(Some("q-client"), "again", &selection, Some(&segments));
+        assert_eq!(entry["id"], "q-client");
+        assert_eq!(entry["model"], "configured-model");
+        assert_eq!(entry["reasoningEffort"], "medium");
+        assert_eq!(entry["displaySegments"], segments);
+        assert!(entry.get("provider").is_none());
+        let generated = new_entry(None, "again", &TurnSelection::default(), None);
+        assert!(id_of(&generated).is_some_and(|id| id.starts_with("q-")));
+        assert!(generated.get("model").is_none());
+        assert!(generated.get("displaySegments").is_none());
     }
 }

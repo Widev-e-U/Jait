@@ -3746,6 +3746,10 @@
         {
           "file": "tests/binary_thread_turns.rs",
           "name": "web_shaped_acp_turn_runs_the_registered_provider_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "queued_web_send_replays_its_choices_through_the_binary"
         }
       ],
       "rustStatus": "native-tested"
@@ -5815,6 +5819,10 @@
         {
           "file": "tests/binary_session_routes.rs",
           "name": "session_sub_routes_are_owned_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "stop_and_send_runs_the_selected_queued_message_next_through_the_binary"
         }
       ],
       "rustStatus": "native-tested"
