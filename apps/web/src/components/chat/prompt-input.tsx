@@ -952,7 +952,7 @@ const COMPOSER_SEND_META: Record<ComposerSendAction, Omit<ComposerSendOption, 'i
 }
 
 /**
- * Send button for a streaming session: the primary action (queue by default)
+ * Send button for a streaming session: the primary action (steer by default)
  * plus a caret that opens the remaining send options, e.g. steer.
  */
 function ComposerSendSplitButton({

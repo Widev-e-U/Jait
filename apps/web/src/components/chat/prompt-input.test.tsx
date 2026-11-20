@@ -10,7 +10,7 @@ const baseProps = {
 }
 
 describe('PromptInput send button while streaming', () => {
-  it('defaults to queue and hides the other actions behind the caret menu', () => {
+  it('defaults to steer and hides the other actions behind the caret menu', () => {
     const markup = renderToStaticMarkup(
       <PromptInput
         {...baseProps}
@@ -22,12 +22,12 @@ describe('PromptInput send button while streaming', () => {
     )
 
     // One primary button for the default action plus a caret for the rest.
-    expect(markup).toContain('aria-label="Add to queue (Enter)"')
+    expect(markup).toContain('aria-label="Steer the running agent (Enter)"')
     expect(markup).toContain('aria-label="More send options"')
-    expect(markup).not.toContain('aria-label="Steer the running agent (Enter)"')
+    expect(markup).not.toContain('aria-label="Add to queue (Enter)"')
     expect(markup).not.toContain('aria-label="Ask in parallel"')
     // Labels come from tooltips, not native title attributes.
-    expect(markup).not.toContain('title="Add to queue (Enter)"')
+    expect(markup).not.toContain('title="Steer the running agent (Enter)"')
     expect(markup).not.toContain('title="More send options"')
   })
 

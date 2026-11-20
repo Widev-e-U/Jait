@@ -138,7 +138,7 @@ function ParallelChatPanelImpl({
   onClose,
   composerControlRow,
   showDivider = true,
-  defaultStreamingAction = 'queue',
+  defaultStreamingAction = 'steer',
 }: ParallelChatPanelProps) {
   const {
     messages,

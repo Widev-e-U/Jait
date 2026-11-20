@@ -51,7 +51,7 @@ const EMPTY_SETTINGS: UserSettings = {
   theme: 'system',
   api_keys: {},
   stt_provider: 'whisper',
-  chat_streaming_action: 'queue',
+  chat_streaming_action: 'steer',
   chat_provider: 'jait',
   jait_backend: 'openai',
   recent_models: [],

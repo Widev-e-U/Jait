@@ -13,10 +13,10 @@ describe('resolvePromptSubmitAction', () => {
     expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'thread', hasQueueHandler: true, hasSteerHandler: false })).toBe('submit')
   })
 
-  it('queues by default while streaming with a session target', () => {
-    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true })).toBe('queue')
-    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'swarm', hasQueueHandler: true, hasSteerHandler: true })).toBe('queue')
-    expect(resolvePromptSubmitAction({ isLoading: true, hasQueueHandler: true, hasSteerHandler: true })).toBe('queue')
+  it('steers by default while streaming with a session target', () => {
+    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true })).toBe('steer')
+    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'swarm', hasQueueHandler: true, hasSteerHandler: true })).toBe('steer')
+    expect(resolvePromptSubmitAction({ isLoading: true, hasQueueHandler: true, hasSteerHandler: true })).toBe('steer')
   })
 
   it('queues when streaming without a steer handler (legacy semantics preserved)', () => {
@@ -34,8 +34,8 @@ describe('resolvePromptSubmitAction', () => {
     expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true, hasThreadHandler: true, defaultAction: 'thread' })).toBe('thread')
   })
 
-  it('falls back to queue, then steer, when the configured default has no handler', () => {
-    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true, defaultAction: 'thread' })).toBe('queue')
+  it('falls back to steer, then queue, when the configured default has no handler', () => {
+    expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true, defaultAction: 'thread' })).toBe('steer')
     expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: false, defaultAction: 'thread' })).toBe('queue')
     expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: true, hasSteerHandler: true, defaultAction: 'queue' })).toBe('queue')
     expect(resolvePromptSubmitAction({ isLoading: true, sendTarget: 'agent', hasQueueHandler: false, hasSteerHandler: true, defaultAction: 'queue' })).toBe('steer')

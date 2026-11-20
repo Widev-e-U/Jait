@@ -10,7 +10,7 @@ export type DefaultStreamingAction = 'steer' | 'queue' | 'thread'
  * - not loading → submit a new message
  * - thread target → submit (threads keep their existing behavior)
  * - streaming → honor the configured default action when a handler exists for it
- * - fallback → queue if possible (the composer's primary action), then steer
+ * - fallback → steer if possible (the composer's primary action), then queue
  */
 export function resolvePromptSubmitAction(input: {
   isLoading?: boolean
@@ -29,10 +29,10 @@ export function resolvePromptSubmitAction(input: {
     queue: Boolean(input.hasQueueHandler),
     thread: Boolean(input.hasThreadHandler),
   }
-  const preferred = input.defaultAction ?? 'queue'
+  const preferred = input.defaultAction ?? 'steer'
   if (hasHandler[preferred]) return preferred
-  if (input.hasQueueHandler) return 'queue'
   if (input.hasSteerHandler) return 'steer'
+  if (input.hasQueueHandler) return 'queue'
   return 'submit'
 }
 
