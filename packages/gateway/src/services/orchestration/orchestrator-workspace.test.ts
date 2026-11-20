@@ -131,7 +131,8 @@ describe("plan runs over real worktrees", () => {
     db = opened.db;
     migrateDatabase(sqlite);
     commands = [];
-  });
+  // Real git commands and all 79 migrations run here; the default hook timeout is too tight under parallel load.
+  }, 60_000);
 
   afterEach(async () => {
     sqlite.close();
