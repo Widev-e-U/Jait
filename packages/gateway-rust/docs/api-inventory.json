@@ -3749,6 +3749,14 @@
         },
         {
           "file": "tests/binary_thread_turns.rs",
+          "name": "acp_turn_fails_when_the_agent_refuses_the_model"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "acp_turn_fails_when_the_agent_offers_no_effort"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
           "name": "queued_web_send_replays_its_choices_through_the_binary"
         }
       ],

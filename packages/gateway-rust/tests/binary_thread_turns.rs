@@ -1456,59 +1456,140 @@ async fn web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments() 
     model_task.abort();
 }
 
-/// A fake ACP agent: it answers the handshake and session creation, and streams one reply per prompt.
-const FAKE_ACP_AGENT: &str = r#"while IFS= read -r line; do id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p'); case "$line" in *'"method":"initialize"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1}}\n' "$id";; *'"method":"session/new"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"agent"}}\n' "$id";; *'"method":"session/prompt"'*) printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agent","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ACP answered."}}}}\n'; printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id";; esac; done"#;
+/// A fake ACP agent. It appends every request it receives to `acp-requests.log` in its working
+/// directory, which is the session's project directory. `$2` is `none` for an agent that offers no
+/// reasoning effort option. Any other value advertises a model option and an effort option, and the
+/// model `rejected-model` is refused with a JSON-RPC error. It answers the handshake, the session,
+/// and the option requests, and streams one reply per prompt.
+const FAKE_ACP_AGENT: &str = r#"
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$1"
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1}}\n' "$id" ;;
+    *'"method":"session/new"'*)
+      if [ "$2" = none ]; then
+        printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"agent"}}\n' "$id"
+      else
+        printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"agent","configOptions":[{"id":"model","name":"Model","type":"select","category":"model","currentValue":"agent-default","options":[{"value":"agent-default","name":"Agent default"},{"value":"agent-model","name":"Agent model"}]},{"id":"effort","name":"Effort","type":"select","category":"thought_level","currentValue":"low","options":[{"value":"low","name":"Low"},{"value":"high","name":"High"}]}]}}\n' "$id"
+      fi ;;
+    *'"method":"session/set_config_option"'*)
+      case "$line" in
+        *'"value":"rejected-model"'*) printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32602,"message":"model not available"}}\n' "$id" ;;
+        *) printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id" ;;
+      esac ;;
+    *'"method":"session/prompt"'*)
+      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agent","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ACP answered."}}}}\n'
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id" ;;
+  esac
+done
+"#;
 
-/// A chat turn on an ACP provider the operator defined runs through the binary. The provider is
-/// chosen by its id, its reply reaches the transcript, and a model from the client is refused.
-#[tokio::test]
-async fn web_shaped_acp_turn_runs_the_registered_provider_through_the_binary() {
-    let providers = json!([{
+/// The ACP provider the operator defined for these tests. The agent offers an effort option only in
+/// `advertised` mode.
+fn fake_acp_providers(mode: &str) -> Value {
+    json!([{
         "id": "fake-acp",
         "name": "Fake ACP",
         "command": "/bin/sh",
-        "args": ["-c", FAKE_ACP_AGENT],
+        "args": ["-c", FAKE_ACP_AGENT, "fake-acp", "acp-requests.log", mode],
         "providerType": "fake-acp",
-    }]);
-    let gateway = Gateway::start_with(&[("JAIT_ACP_PROVIDERS", providers.to_string())]);
+    }])
+}
+
+/// The requests the fake agent received, in order, from its request log.
+fn acp_requests(directory: &std::path::Path) -> Vec<Value> {
+    std::fs::read_to_string(directory.join("acp-requests.log"))
+        .unwrap_or_default()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+/// The method of each request, in order.
+fn acp_methods(requests: &[Value]) -> Vec<&str> {
+    requests
+        .iter()
+        .filter_map(|request| request["method"].as_str())
+        .collect()
+}
+
+/// Each option the agent was asked to set, as `configId=value`, in the order it was asked.
+fn acp_choices(requests: &[Value]) -> Vec<String> {
+    requests
+        .iter()
+        .filter(|request| request["method"] == "session/set_config_option")
+        .map(|request| {
+            format!(
+                "{}={}",
+                request["params"]["configId"].as_str().unwrap_or_default(),
+                request["params"]["value"].as_str().unwrap_or_default()
+            )
+        })
+        .collect()
+}
+
+/// Sends one web-shaped turn on the fake ACP provider with the given choices, and returns its status
+/// and streamed events.
+async fn acp_turn(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    session: &str,
+    content: &str,
+    client_message_id: &str,
+    choices: Value,
+) -> (u16, Vec<Value>) {
+    let mut body = json!({
+        "content": content,
+        "sessionId": session,
+        "clientMessageId": client_message_id,
+        "mode": "agent",
+        "provider": "fake-acp",
+        "runtimeMode": "supervised",
+        "reasoningEffort": null,
+        "displaySegments": [{"type": "text", "text": content}],
+    });
+    body.as_object_mut()
+        .unwrap()
+        .extend(choices.as_object().unwrap().clone());
+    let response = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
+    (status, stream_events(&response.text().await.unwrap()))
+}
+
+/// A chat turn on an ACP provider the operator defined runs through the binary. The provider is
+/// chosen by its id, and the model and effort the user picked reach the agent before the prompt, in
+/// that order. A turn with no choice sends no option, and a replayed message id is refused.
+#[tokio::test]
+async fn web_shaped_acp_turn_runs_the_registered_provider_through_the_binary() {
+    let gateway = Gateway::start_with(&[(
+        "JAIT_ACP_PROVIDERS",
+        fake_acp_providers("advertised").to_string(),
+    )]);
     let client = client();
     let base = gateway.base.clone();
     let owner = register(&client, &base).await;
     let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
 
-    // An ACP agent chooses its own model, which this gateway does not send yet, so a model is refused.
-    let (status, body) = send_json(
-        client
-            .post(format!("{base}/api/chat"))
-            .bearer_auth(&owner)
-            .json(&json!({"content": "hi", "sessionId": session, "provider": "fake-acp", "model": "x"})),
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "hello agent",
+        "user-acpturn01",
+        json!({"model": "agent-model", "reasoningEffort": "high"}),
     )
     .await;
-    assert_eq!(status, 400, "{body}");
-    assert_eq!(
-        body["error"], "CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER",
-        "{body}"
-    );
-
-    let segments = json!([{"type": "text", "text": "hello agent"}]);
-    let response = client
-        .post(format!("{base}/api/chat"))
-        .bearer_auth(&owner)
-        .json(&json!({
-            "content": "hello agent",
-            "sessionId": session,
-            "clientMessageId": "user-acpturn01",
-            "mode": "agent",
-            "provider": "fake-acp",
-            "runtimeMode": "supervised",
-            "reasoningEffort": null,
-            "displaySegments": segments,
-        }))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let events = stream_events(&response.text().await.unwrap());
+    assert_eq!(status, 200);
     assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
     assert!(
         events
@@ -1516,10 +1597,57 @@ async fn web_shaped_acp_turn_runs_the_registered_provider_through_the_binary() {
             .any(|event| event.to_string().contains("ACP answered.")),
         "{events:?}"
     );
+    let requests = acp_requests(&gateway.directory);
+    assert_eq!(
+        acp_methods(&requests),
+        [
+            "initialize",
+            "session/new",
+            "session/set_config_option",
+            "session/set_config_option",
+            "session/prompt",
+        ],
+        "{requests:?}"
+    );
+    assert_eq!(acp_choices(&requests), ["model=agent-model", "effort=high"]);
     let messages = session_messages(&client, &base, &owner, &session).await;
     let user = find_message(&messages, "user", "hello agent");
-    assert_eq!(user["segments"], segments, "{messages}");
+    assert_eq!(
+        user["segments"],
+        json!([{"type": "text", "text": "hello agent"}]),
+        "{messages}"
+    );
     assert!(messages.contains("ACP answered."), "{messages}");
+
+    // A turn with no model or effort chosen sends no option request.
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "plain turn",
+        "user-acpturn02",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+    let requests = acp_requests(&gateway.directory);
+    assert_eq!(
+        acp_choices(&requests),
+        ["model=agent-model", "effort=high"],
+        "{requests:?}"
+    );
+    assert_eq!(
+        acp_methods(&requests)
+            .iter()
+            .filter(|method| **method == "session/prompt")
+            .count(),
+        2,
+        "{requests:?}"
+    );
+
+    // The client's message id is refused on replay rather than stored twice.
     let (status, body) = send_json(
         client
             .post(format!("{base}/api/chat"))
@@ -1529,6 +1657,102 @@ async fn web_shaped_acp_turn_runs_the_registered_provider_through_the_binary() {
     .await;
     assert_eq!(status, 409, "{body}");
     assert_eq!(body["error"], "MESSAGE_ID_ALREADY_EXISTS", "{body}");
+}
+
+/// An agent that refuses the model the user chose fails that turn with a fixed message. The effort
+/// is never sent after the refusal, no prompt runs, and the session still runs a turn with no choice.
+#[tokio::test]
+async fn acp_turn_fails_when_the_agent_refuses_the_model() {
+    let gateway = Gateway::start_with(&[(
+        "JAIT_ACP_PROVIDERS",
+        fake_acp_providers("advertised").to_string(),
+    )]);
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "refused model",
+        "user-acprefuse1",
+        json!({"model": "rejected-model", "reasoningEffort": "high"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let terminal = events.last().unwrap();
+    assert_eq!(terminal["type"], "error", "{events:?}");
+    assert_eq!(
+        terminal["message"], "The ACP agent did not accept the selected model.",
+        "{events:?}"
+    );
+    let requests = acp_requests(&gateway.directory);
+    assert_eq!(
+        acp_choices(&requests),
+        ["model=rejected-model"],
+        "{requests:?}"
+    );
+    assert!(
+        !acp_methods(&requests).contains(&"session/prompt"),
+        "{requests:?}"
+    );
+
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "after the refusal",
+        "user-acprefuse2",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+    let requests = acp_requests(&gateway.directory);
+    assert!(
+        acp_methods(&requests).contains(&"session/prompt"),
+        "{requests:?}"
+    );
+}
+
+/// An agent that offers no reasoning effort option cannot honor the effort the user chose, so the
+/// turn fails with a fixed message before any option or prompt is sent.
+#[tokio::test]
+async fn acp_turn_fails_when_the_agent_offers_no_effort() {
+    let gateway =
+        Gateway::start_with(&[("JAIT_ACP_PROVIDERS", fake_acp_providers("none").to_string())]);
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "needs an effort",
+        "user-acpnoeffort1",
+        json!({"reasoningEffort": "high"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    let terminal = events.last().unwrap();
+    assert_eq!(terminal["type"], "error", "{events:?}");
+    assert_eq!(
+        terminal["message"], "The ACP agent does not offer the selected reasoning effort.",
+        "{events:?}"
+    );
+    let requests = acp_requests(&gateway.directory);
+    assert!(acp_choices(&requests).is_empty(), "{requests:?}");
+    assert!(
+        !acp_methods(&requests).contains(&"session/prompt"),
+        "{requests:?}"
+    );
 }
 
 /// Choices the owner cannot honor are refused before a turn starts: nothing reaches the model and

@@ -1971,6 +1971,7 @@ fn public_error(error: &SessionTurnError) -> &'static str {
             "Chat turn reached its execution limit"
         }
         SessionTurnError::Turn(TurnError::HistoryLimit) => "Chat history limit reached",
+        SessionTurnError::Turn(TurnError::SettingRejected(message)) => message,
         _ => "Chat turn could not complete",
     }
 }

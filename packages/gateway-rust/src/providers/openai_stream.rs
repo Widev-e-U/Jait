@@ -44,9 +44,15 @@ pub struct ParsedStream {
 }
 #[derive(Debug)]
 pub enum StreamFailure {
-    Http { status: u16, message: String },
+    Http {
+        status: u16,
+        message: String,
+    },
     Cancelled,
     Other(String),
+    /// The provider refused a session setting the user chose. The text is fixed and written for the
+    /// user, so no provider output reaches the client through it.
+    SettingRejected(&'static str),
 }
 pub struct OpenAiHttp {
     client: reqwest::Client,

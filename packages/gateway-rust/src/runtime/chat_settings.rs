@@ -109,6 +109,7 @@ impl SettingsChatFactory {
         user: &AuthUser,
         session: &SessionRecord,
         config: AcpProviderConfig,
+        selection: &TurnSelection,
         disabled_tools: HashSet<String>,
     ) -> Result<PreparedChat, PrepareError> {
         let cwd = session
@@ -145,6 +146,8 @@ impl SettingsChatFactory {
                 cwd,
                 consent: self.consent.clone(),
                 session_id: session.id.clone(),
+                model: selection.model.clone(),
+                reasoning_effort: selection.reasoning_effort.clone(),
             }),
             tools: executor,
         })
@@ -174,21 +177,14 @@ impl SettingsChatFactory {
         if adapter.check_availability().await.is_err() {
             return Err(PrepareError::refused(409, "PROVIDER_UNAVAILABLE"));
         }
-        reject_acp_choices(selection)?;
-        self.acp_turn(user, session, definition.config.clone(), disabled_tools)
+        self.acp_turn(
+            user,
+            session,
+            definition.config.clone(),
+            selection,
+            disabled_tools,
+        )
     }
-}
-
-/// ACP agents choose their own model and reasoning effort, and this gateway does not send either
-/// option to them yet. Refuse them explicitly instead of accepting a choice that would be ignored.
-fn reject_acp_choices(selection: &TurnSelection) -> Result<(), PrepareError> {
-    if selection.model.is_some() || selection.reasoning_effort.is_some() {
-        return Err(PrepareError::refused(
-            400,
-            "CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER",
-        ));
-    }
-    Ok(())
 }
 
 struct Model {
@@ -240,12 +236,11 @@ impl ChatFactory for SettingsChatFactory {
                     .await;
             }
             if api_keys.get("JAIT_CHAT_PROVIDER").map(String::as_str) == Some("acp") {
-                reject_acp_choices(&selection)?;
                 let config = self
                     .acp
                     .clone()
                     .ok_or("ACP chat is not enabled by the gateway operator")?;
-                return self.acp_turn(&user, &session, config, disabled_tools);
+                return self.acp_turn(&user, &session, config, &selection, disabled_tools);
             }
             // A model the user picked for this turn replaces the saved one, and is refused when this
             // owner's backend cannot serve it.

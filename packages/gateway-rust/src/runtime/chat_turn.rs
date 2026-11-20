@@ -193,6 +193,8 @@ pub enum TurnError {
     InvalidToolCalls,
     EventConsumer,
     Provider(String),
+    /// The provider refused a setting the user chose. The text is fixed and safe to show.
+    SettingRejected(&'static str),
     Persistence(String),
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -289,6 +291,9 @@ impl TurnCoordinator<'_> {
                             TurnError::Provider(format!("HTTP {status}: {message}"))
                         }
                         Ok(Err(StreamFailure::Other(message))) => TurnError::Provider(message),
+                        Ok(Err(StreamFailure::SettingRejected(message))) => {
+                            TurnError::SettingRejected(message)
+                        }
                         Ok(Ok(_)) => unreachable!(),
                     });
                 }

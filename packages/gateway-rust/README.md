@@ -14,9 +14,11 @@ owner's own configuration, and refuses any choice it cannot honor. It never subs
 - `provider`: absent or `jait` is the native path. Any other id must be an ACP agent the operator
   defined in `JAIT_ACP_PROVIDERS` (or the built-in defaults), visible to the owner and available now.
   Otherwise `PROVIDER_NOT_CONFIGURED` (400) or `PROVIDER_UNAVAILABLE` (409). A request cannot supply a
-  command. ACP agents choose their own model and effort, and the gateway does not send those options
-  yet, so a non-empty `model` or a non-null `reasoningEffort` for an ACP provider returns
-  `CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER`.
+  command. For an ACP provider, a `model` is set on the agent's session with `session/set_config_option`
+  (config id `model`), and a `reasoningEffort` on the agent's advertised thought-level option. Both are
+  set after the session is created and before the prompt, as Node does. An agent that refuses either
+  choice, or advertises no effort option, fails the turn with a fixed message and sends no prompt.
+  Nothing is substituted.
 - `runtimeMode`: `supervised` is accepted. It is the native guarded posture, in which tool writes ask
   for consent. `full-access` returns `RUNTIME_MODE_UNSUPPORTED`, because the native turn never runs
   without consent. Any other value returns `INVALID_CHAT_REQUEST`.
@@ -32,9 +34,34 @@ Evidence: `chat_tests::web_options_are_validated_before_preparation` and
 `chat_tests::web_options_are_explicitly_rejected_before_preparation` (lib, `src/routes/chat_tests.rs`).
 In `tests/binary_thread_turns.rs`:
 `web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`,
-`refused_web_choices_start_no_turn_through_the_binary` and
-`web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`, which runs a fake ACP agent
-through `JAIT_ACP_PROVIDERS`.
+`refused_web_choices_start_no_turn_through_the_binary`,
+`web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`,
+`acp_turn_fails_when_the_agent_refuses_the_model` and
+`acp_turn_fails_when_the_agent_offers_no_effort`. The last three run a fake ACP agent through
+`JAIT_ACP_PROVIDERS`.
+
+## ACP provider choices through the composed binary — 2026-11-20
+
+A web turn on a registered ACP provider sends its model and effort to the agent after `session/new` and
+before the prompt, inside the turn's 60-second setup. The model goes first, with config id `model`. The effort
+goes second, to the agent's advertised thought-level option, found as the Node gateway finds it. A turn with
+no choice sends no option request.
+
+The choice is strict. If the agent refuses the model or the effort, or advertises no effort option, the turn
+fails with a fixed message: `The ACP agent did not accept the selected model.`, `The ACP agent did not accept
+the selected reasoning effort.`, or `The ACP agent does not offer the selected reasoning effort.` The agent is
+shut down and no prompt is sent. The Node gateway logs the same refusals as activity events and continues the
+turn without the setting. This binary does not, so a reply cannot silently run on a model or effort the user did
+not get. This policy differs from Node and is pending the user's review.
+
+Evidence: the three tests named above in `tests/binary_thread_turns.rs`, which assert the order the agent receives
+its requests and the fixed messages. Unit tests in `src/runtime/chat_acp.rs` cover the request order, the
+no-choice case and the unoffered effort. `reasoning_effort_config_follows_nodes_rule` in
+`src/providers/acp_provider.rs` covers the lookup.
+
+Not covered: a real agent (Claude Code or Codex) advertising a thought-level option. The fake agent is the only
+one tested. The consent round trip for an agent's permission request is covered by
+`acp_chat_turn_routes_agent_permission_through_consent` in `tests/application_mounts.rs`, which sends no choice.
 
 ## Scheduled job triggers through the composed binary — 2026-11-20
 
@@ -162,9 +189,8 @@ Open parity questions, not changed in this batch:
   device change registers as a waiter, and releasing that hold drains the queue (`try_admit_inner`,
   `wake_queue_waiters`). No test exercises that path yet.
 - Web-UI choices (the section at the top of this file covers the ones served). `responseStyle`, `attachments` and
-  `personaAgentId` are refused with 400 `UNSUPPORTED_CHAT_OPTION`. An ACP provider refuses a non-empty `model` or a
-  non-null `reasoningEffort` with `CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER`, because the gateway does not yet send those
-  options to ACP agents. `runtimeMode: "full-access"` is refused with `RUNTIME_MODE_UNSUPPORTED`. The web client sends its
+  `personaAgentId` are refused with 400 `UNSUPPORTED_CHAT_OPTION`. `runtimeMode: "full-access"` is refused with
+  `RUNTIME_MODE_UNSUPPORTED`. The web client sends its
   runtime mode with each message (`apps/web/src/hooks/useChat.ts:1891`) and defaults to full-access
   (`apps/web/src/App.tsx:353`), so a fresh web send fails until the posture decision is made. These are the open blockers
   for criterion 3, a full chat turn from the web UI.

@@ -593,6 +593,7 @@ pub fn failure_message(failure: &StreamFailure) -> String {
             format!("Request failed ({status}): {message}")
         }
         StreamFailure::Other(message) => message.clone(),
+        StreamFailure::SettingRejected(message) => (*message).to_string(),
     }
 }
 

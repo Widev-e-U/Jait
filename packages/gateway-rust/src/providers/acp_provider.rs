@@ -865,25 +865,43 @@ pub fn read_acp_session_failure(meta: &Value) -> Option<String> {
 pub const CODEX_CAPACITY_ERROR: &str =
     "Selected model is at capacity. Please try a different model.";
 
-/// Port of `findReasoningEffortConfig`: the session config option whose id
-/// identifies a reasoning-effort setting.
+/// Port of `findReasoningEffortConfig`. The first select option in the `thought_level` category, or
+/// with an effort id, names the setting. It must offer at least one non-empty value, as in Node,
+/// and its `id` is the `configId` the agent expects. Only the first match is considered.
 pub fn find_reasoning_effort_config(config_options: &Value) -> Option<String> {
-    let Value::Array(options) = config_options else {
+    let option = config_options.as_array()?.iter().find(|option| {
+        option.get("type").and_then(Value::as_str) == Some("select")
+            && (option.get("category").and_then(Value::as_str) == Some("thought_level")
+                || matches!(
+                    option.get("id").and_then(Value::as_str),
+                    Some("reasoning_effort" | "reasoningEffort" | "effort" | "thought_level")
+                ))
+    })?;
+    if !has_select_value(option) {
         return None;
-    };
-    for option in options {
-        let Some(config_id) = option.get("configId").and_then(Value::as_str) else {
-            continue;
-        };
-        let lowered = config_id.to_lowercase();
-        if lowered.contains("reasoning_effort")
-            || lowered.contains("reasoning-effort")
-            || lowered == "effort"
-        {
-            return Some(config_id.to_string());
-        }
     }
-    None
+    option.get("id").and_then(Value::as_str).map(str::to_owned)
+}
+
+/// Whether a select option offers at least one non-empty value, looking inside option groups.
+fn has_select_value(option: &Value) -> bool {
+    let usable = |entry: &Value| {
+        entry
+            .get("value")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+    };
+    option
+        .get("options")
+        .and_then(Value::as_array)
+        .is_some_and(|entries| {
+            entries.iter().any(
+                |entry| match entry.get("options").and_then(Value::as_array) {
+                    Some(group) => group.iter().any(usable),
+                    None => usable(entry),
+                },
+            )
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -4251,16 +4269,43 @@ mod tests {
     }
 
     #[test]
-    fn reasoning_effort_config_lookup() {
+    fn reasoning_effort_config_follows_nodes_rule() {
+        // The option's id is the configId the agent expects, so it comes back unchanged.
         assert_eq!(
             find_reasoning_effort_config(&json!([
-                { "configId": "model" },
-                { "configId": "reasoning_effort" },
+                {"type": "select", "id": "model", "category": "model",
+                 "options": [{"value": "a", "name": "A"}]},
+                {"type": "select", "id": "reasoning_effort",
+                 "options": [{"value": "high", "name": "High"}]},
             ])),
             Some("reasoning_effort".to_string())
         );
+        // The thought-level category counts whatever its id is, and grouped values count too.
         assert_eq!(
-            find_reasoning_effort_config(&json!([{ "configId": "model" }])),
+            find_reasoning_effort_config(&json!([{
+                "type": "select", "id": "thinking", "category": "thought_level",
+                "options": [{"group": "g", "name": "G",
+                             "options": [{"value": "low", "name": "Low"}]}],
+            }])),
+            Some("thinking".to_string())
+        );
+        // Only select options count, and the old `configId` key does not name an option.
+        assert_eq!(
+            find_reasoning_effort_config(&json!([
+                {"type": "boolean", "id": "effort", "currentValue": true},
+                {"configId": "reasoning_effort", "options": [{"value": "high", "name": "High"}]},
+            ])),
+            None
+        );
+        // The first match decides, as in Node: an effort option with no usable value is not one.
+        assert_eq!(
+            find_reasoning_effort_config(&json!([{
+                "type": "select", "id": "effort", "options": [{"value": "  ", "name": "Blank"}],
+            }])),
+            None
+        );
+        assert_eq!(
+            find_reasoning_effort_config(&json!([{"type": "select", "id": "model"}])),
             None
         );
         assert_eq!(find_reasoning_effort_config(&Value::Null), None);
