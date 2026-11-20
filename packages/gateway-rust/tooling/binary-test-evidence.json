@@ -2434,6 +2434,56 @@
           "name": "team_rooms_enforce_thread_ownership_and_persist_messages"
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/browser/screenshot",
+      "tests": [
+        {
+          "file": "tests/browser_screenshot_mounts.rs",
+          "name": "screenshot_is_auth_gated_project_scoped_and_image_only"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/dev-file/:encodedPath",
+      "tests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/dev-file/:encodedPath/*",
+      "tests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/preview/:previewToken/file/:encodedPath",
+      "tests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/preview/:previewToken/file/:encodedPath/*",
+      "tests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ]
     }
   ],
   "ws": [

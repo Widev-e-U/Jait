@@ -280,8 +280,9 @@ for (const f of walk(rustSrc, ['.rs'])) {
       else if (text[i] === ')') depth--;
     }
     const body = text.slice(re.lastIndex, i);
-    for (const mm of body.matchAll(/\b(get|post|put|patch|delete)\s*\(/g)) {
-      const key = `${mm[1].toUpperCase()} ${norm(path)}`;
+    // axum's any() serves every method, so it is ALL, the same as Fastify's app.all().
+    for (const mm of body.matchAll(/\b(get|post|put|patch|delete|any)\s*\(/g)) {
+      const key = `${mm[1] === 'any' ? 'ALL' : mm[1].toUpperCase()} ${norm(path)}`;
       rustRoutes.add(key);
       setRustFile(key, relative(rustSrc, f));
     }

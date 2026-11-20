@@ -48,7 +48,8 @@ test('inventory includes all-method proxy routes and typed registrations', () =>
   ]) {
     const route = inventory.http.find((entry) => entry.method === 'ALL' && entry.path === path);
     assert.ok(route, `missing all-method route ${path}`);
-    assert.notEqual(route.status, 'native-tested');
+    // The Rust side serves these through axum any(), which the scan reads as ALL; production refuses every proxied request.
+    assert.equal(route.status, 'mounted-fail-closed', path);
   }
   for (const [method, path] of [
     ['PATCH', '/api/plugins/:id/config'],

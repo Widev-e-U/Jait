@@ -7,31 +7,31 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 ```json
 {
   "httpTotal": 449,
-  "missing": 39,
-  "mounted-fail-closed": 108,
-  "native-tested": 237,
-  "native-untested": 58,
+  "mounted-fail-closed": 112,
+  "native-tested": 242,
+  "missing": 34,
+  "native-untested": 54,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 65.7,
-  "nativeTested": 270,
+  "nativeRouteReferencePct": 65.9,
+  "nativeTested": 275,
   "nativeTestedDenominator": 621,
-  "nativeTestedPct": 43.48,
+  "nativeTestedPct": 44.28,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
   "wsWithoutDirectionalRustReference": 76,
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
-  "rustOnlyRoutes": 12,
+  "rustOnlyRoutes": 18,
   "clientRequestCalls": 382,
   "clientNonLiteralRequestCalls": 70,
   "clientReviewedRequestSites": 67,
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
-    "native-tested": 237,
-    "native-untested": 58,
-    "missing": 154
+    "native-tested": 242,
+    "native-untested": 54,
+    "missing": 153
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -48,10 +48,10 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 
 | Method | Path | Rust status | Detail | Binary tests | Node source |
 |---|---|---|---|---|---|
-| ALL | `/api/dev-proxy/:port` | missing | missing |  | server.ts |
-| ALL | `/api/dev-proxy/:port/*` | missing | missing |  | server.ts |
-| ALL | `/preview/:previewToken/proxy/:port` | missing | missing |  | server.ts |
-| ALL | `/preview/:previewToken/proxy/:port/*` | missing | missing |  | server.ts |
+| ALL | `/api/dev-proxy/:port` | missing | mounted-fail-closed |  | server.ts |
+| ALL | `/api/dev-proxy/:port/*` | missing | mounted-fail-closed |  | server.ts |
+| ALL | `/preview/:previewToken/proxy/:port` | missing | mounted-fail-closed |  | server.ts |
+| ALL | `/preview/:previewToken/proxy/:port/*` | missing | mounted-fail-closed |  | server.ts |
 | DELETE | `/api/agents/:agentId/github-app` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | DELETE | `/api/assistants/profiles/:id` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | DELETE | `/api/auth/settings/archive` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
@@ -93,7 +93,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/auth/settings` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/auth/settings/env-status` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
 | GET | `/api/auth/settings/tools` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
-| GET | `/api/browser/screenshot` | native-untested | native-untested |  | server.ts |
+| GET | `/api/browser/screenshot` | native-tested | native-tested | `tests/browser_screenshot_mounts.rs::screenshot_is_auth_gated_project_scoped_and_image_only` | server.ts |
 | GET | `/api/calendar/accounts` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/calendars` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
 | GET | `/api/calendar/config` | native-tested | native-tested | `tests/binary_calendar_routes.rs::calendar_routes_through_the_binary` | routes/calendar.ts |
@@ -111,8 +111,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/consent/pending/:sessionId` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/pending/:sessionId/approve-all` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
 | GET | `/api/consent/policy` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/consent.ts |
-| GET | `/api/dev-file/:encodedPath` | native-untested | native-untested |  | server.ts |
-| GET | `/api/dev-file/:encodedPath/*` | native-untested | native-untested |  | server.ts |
+| GET | `/api/dev-file/:encodedPath` | native-tested | native-tested | `tests/preview_file_mounts.rs::dev_file_and_preview_file_are_scoped_to_owned_projects` | server.ts |
+| GET | `/api/dev-file/:encodedPath/*` | native-tested | native-tested | `tests/preview_file_mounts.rs::dev_file_and_preview_file_are_scoped_to_owned_projects` | server.ts |
 | GET | `/api/email/accounts` | missing | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/email/config` | missing | mounted-fail-closed |  | routes/email.ts |
 | GET | `/api/email/connect/:provider` | missing | mounted-fail-closed |  | routes/email.ts |
@@ -251,8 +251,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/mcp` | missing | mounted-fail-closed |  | routes/mcp-server.ts |
 | GET | `/mcp/sse` | missing | mounted-fail-closed |  | routes/mcp-server.ts |
 | GET | `/preview/:previewToken/devtools/:grantId/*` | missing | mounted-fail-closed |  | routes/browser-devtools.ts |
-| GET | `/preview/:previewToken/file/:encodedPath` | native-untested | native-untested |  | server.ts |
-| GET | `/preview/:previewToken/file/:encodedPath/*` | native-untested | native-untested |  | server.ts |
+| GET | `/preview/:previewToken/file/:encodedPath` | native-tested | native-tested | `tests/preview_file_mounts.rs::dev_file_and_preview_file_are_scoped_to_owned_projects` | server.ts |
+| GET | `/preview/:previewToken/file/:encodedPath/*` | native-tested | native-tested | `tests/preview_file_mounts.rs::dev_file_and_preview_file_are_scoped_to_owned_projects` | server.ts |
 | GET | `/preview/:previewToken/live/:port/focus` | missing | mounted-fail-closed |  | server.ts |
 | PATCH | `/api/assistants/profiles/:id` | native-tested | native-tested | `tests/binary_assistant_profiles.rs::assistant_profiles_are_persistent_and_owner_scoped`, `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/assistant-profiles.ts |
 | PATCH | `/api/auth/settings` | native-tested | native-tested | `tests/binary_auth.rs::binary_authentication_and_invitation_enforce_ownership` | routes/auth.ts |
@@ -495,7 +495,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | ANY | `/api/dev-file` | missing | missing |  |  |
 | ANY | `/api/dev-proxy` | missing | missing |  |  |
 | ANY | `/api/git` | missing | missing |  |  |
-| ANY | `/api/project` | missing | missing |  |  |
+| ALL | `/api/project` | native-untested | native-untested |  |  |
 | ANY | `/api/security/findings` | missing | missing |  |  |
 
 ## Background services (reviewed)

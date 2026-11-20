@@ -1,31 +1,31 @@
 {
   "summary": {
     "httpTotal": 449,
-    "missing": 39,
-    "mounted-fail-closed": 108,
-    "native-tested": 237,
-    "native-untested": 58,
+    "mounted-fail-closed": 112,
+    "native-tested": 242,
+    "missing": 34,
+    "native-untested": 54,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 65.7,
-    "nativeTested": 270,
+    "nativeRouteReferencePct": 65.9,
+    "nativeTested": 275,
     "nativeTestedDenominator": 621,
-    "nativeTestedPct": 43.48,
+    "nativeTestedPct": 44.28,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
     "wsWithoutDirectionalRustReference": 76,
     "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
-    "rustOnlyRoutes": 12,
+    "rustOnlyRoutes": 18,
     "clientRequestCalls": 382,
     "clientNonLiteralRequestCalls": 70,
     "clientReviewedRequestSites": 67,
     "backgroundServices": 21,
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
-      "native-tested": 237,
-      "native-untested": 58,
-      "missing": 154
+      "native-tested": 242,
+      "native-untested": 54,
+      "missing": 153
     },
     "wsRustStatus": {
       "native-tested": 33,
@@ -45,8 +45,9 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "missing",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
+      "rustFile": "routes/preview_proxy.rs",
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -56,8 +57,9 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "missing",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
+      "rustFile": "routes/preview_proxy.rs",
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -67,8 +69,9 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "missing",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
+      "rustFile": "routes/preview_proxy.rs",
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -78,8 +81,9 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "missing",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
+      "rustFile": "routes/preview_proxy.rs",
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -715,11 +719,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/browser_screenshot.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/browser_screenshot_mounts.rs",
+          "name": "screenshot_is_auth_gated_project_scoped_and_image_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1005,11 +1014,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -1017,11 +1031,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3086,11 +3105,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3098,11 +3122,16 @@
       "nodeFiles": [
         "server.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/preview_file.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/preview_file_mounts.rs",
+          "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -6623,17 +6652,18 @@
       "rustStatus": "missing"
     },
     {
-      "method": "ANY",
+      "method": "ALL",
       "path": "/api/project",
       "clientOnly": true,
       "nodeFiles": [],
       "clientFiles": [
         "apps/web/src/components/project/project-panel.tsx"
       ],
-      "status": "missing",
+      "status": "native-untested",
       "testPathReference": true,
+      "rustFile": "routes/project.rs",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "method": "ANY",
@@ -11564,6 +11594,12 @@
     }
   ],
   "rustOnly": [
+    "ALL /api/project",
+    "ALL /api/project/{}",
+    "ALL /api/projects",
+    "ALL /api/projects/{}",
+    "ALL /api/sessions/{}/state",
+    "ALL /api/sessions/{}/{}",
     "DELETE /api/plugins/scan",
     "GET /api/consent/pending/approve",
     "GET /api/consent/pending/approve-all",
