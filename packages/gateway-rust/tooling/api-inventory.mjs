@@ -6,19 +6,10 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { clientPathCandidates, clientRouteShape, clientShapeMatchesRoute, normalizeClientPath } from './client-inventory.mjs';
 import { applyBinaryEvidence } from './binary-test-evidence.mjs';
+import { broadcastHelperLiterals, objectTypeValues, parseTs, switchArms, websocketCandidates } from './ws-inventory.mjs';
 
-// These lexical matches are candidates only; they do not establish behavior or parity.
-export function websocketCandidates(nodeSource, rustSource) {
-  const values = (text, pattern) => new Set(Array.from(text.matchAll(pattern), (match) => match[1]));
-  const inbound = values(nodeSource, /\bcase\s+["']([a-z][\w.:-]*)["']\s*:/g);
-  const outbound = values(nodeSource, /\btype\s*:\s*["'`]([a-z][\w.:-]*)["'`]/g);
-  const rustInbound = rustInboundArms(rustSource);
-  const rustOutbound = values(rustSource, /["']type["']\s*:\s*["']([a-z][\w.:-]*)["']/g);
-  return [
-    ...[...inbound].map((type) => ({ type, direction: 'client-to-server-candidate', rustReference: rustInbound.has(type) })),
-    ...[...outbound].map((type) => ({ type, direction: 'server-to-client-candidate', rustReference: rustOutbound.has(type) })),
-  ].sort((a, b) => a.direction.localeCompare(b.direction) || a.type.localeCompare(b.type));
-}
+// Candidates only; they do not establish behavior or parity. The Node hub's WebSocket candidates are read by
+// ws-inventory.mjs with the TypeScript compiler API, so this module imports them rather than keeping a second copy.
 
 // Server-to-client WS types. Every gateway source is scanned, so frames sent outside ws.ts count, but only dotted
 // names are read from the other sources; that keeps schema fields such as `type: "object"` out of the inventory.
@@ -33,15 +24,40 @@ const WS_UPSTREAM_TYPES = new Set([
   'conversation.item.create', 'input_audio_buffer.append', 'input_audio_buffer.clear', 'input_audio_buffer.commit',
   'response.cancel', 'response.create', 'session.update',
 ]);
+// Dynamic `type` values inside a send path are reviewed here by file and expression, with the reason. A send path is a
+// call that sends, broadcasts or relays the frame (ws.send, this.send, broadcastToUser, relay*). Any other dynamic value
+// in a send path throws, so a new unreviewed frame type cannot silently drop out of the inventory.
+const REVIEWED_DYNAMIC_FRAMES = new Map([
+  [
+    'ws.ts|msg.type',
+    'relayToDevice and relayShareSignal forward the frame type they receive; each caller builds that frame with a literal type, which the object-literal scan reads, and the relayed screen-share arms come from relayedWsTypes',
+  ],
+  [
+    'tools/project-message-tool.ts|type',
+    'broadcast helper parameter; its call sites pass literal types, read by broadcastHelperLiterals (chat.moved)',
+  ],
+]);
+const SEND_PATH = /\b(send\w*|broadcast\w*|relay\w*)\b/i;
+const FRAME_TYPE = /^[a-z][\w.:-]*$/;
+const DOTTED_FRAME = /^[a-z][\w-]*\.[\w.:-]*$/;
+
 export function nodeWsOutboundTypes(allFiles, wsSource = '') {
   const files = allFiles.filter((file) => !WS_UPSTREAM_SOURCES.has(file.path));
-  const types = new Set(Array.from(wsSource.matchAll(/\btype\s*:\s*["'`]([a-z][\w.:-]*)["'`]/g), (match) => match[1]));
+  const wsLiterals = objectTypeValues(parseTs('ws.ts', wsSource)).literals.map((literal) => literal.value);
+  const types = new Set(wsLiterals.filter((value) => FRAME_TYPE.test(value)));
   const templates = [];
-  for (const { text } of files) {
-    for (const match of text.matchAll(/\btype\s*:\s*["'`]([a-z][\w-]*\.[\w.:-]*)["'`]/g)) types.add(match[1]);
-    for (const match of text.matchAll(/\btype\s*:\s*`([a-z][\w-]*)\.\$\{(\w+)\}`/g)) {
-      templates.push({ prefix: match[1], variable: match[2], text });
+  for (const { path, text } of files) {
+    const sf = parseTs(path, text);
+    const found = objectTypeValues(sf);
+    for (const { value } of found.literals) if (DOTTED_FRAME.test(value)) types.add(value);
+    for (const { prefix, variable } of found.templates) templates.push({ prefix, variable, text });
+    for (const { text: expression, calls } of found.dynamic) {
+      if (!calls.some((call) => SEND_PATH.test(call))) continue;
+      if (!REVIEWED_DYNAMIC_FRAMES.has(`${path}|${expression}`)) {
+        throw new Error(`unreviewed WebSocket frame type "${expression}" in ${path} (sent by ${calls.join(' < ')})`);
+      }
     }
+    for (const { value } of broadcastHelperLiterals(sf)) if (DOTTED_FRAME.test(value)) types.add(value);
   }
   for (const { prefix, variable, text } of templates) {
     const union = new RegExp(String.raw`\b${variable}\s*:\s*((?:"[a-z]+"\s*\|\s*)*"[a-z]+")(?=\s*[,)])`, 'g');
@@ -122,12 +138,7 @@ export function voiceSocketFrames(text) {
 // A screen-share signal is relayed rather than built: its case arm calls this.relayShareSignal(..., msg), which forwards
 // the same type to the other peers, so that type is also a server-to-client frame. Only the call form counts.
 export function relayedWsTypes(wsSource) {
-  const cases = [...wsSource.matchAll(/\bcase\s+["']([a-z][\w.:-]*)["']\s*:/g)];
-  return new Set(
-    cases
-      .filter((m, i) => /this\.relayShareSignal\(/.test(wsSource.slice(m.index, cases[i + 1]?.index ?? wsSource.length)))
-      .map((m) => m[1]),
-  );
+  return new Set(switchArms(parseTs('ws.ts', wsSource), 'msg.type').relayed);
 }
 
 // Client WebSocket literals, read from the web, API-client, CLI and desktop sources. A file counts only when it opens or
@@ -519,7 +530,7 @@ if (process.argv.includes('--write')) {
     '',
     'rustStatus is the parity value: native-tested (a reviewed black-box test is mapped and exists), native-untested (a Rust router or handler reference exists but no mapped test), or missing (no verified native implementation: unmounted, fail-closed, incomplete, or absent). Detail keeps the source status. Mounted-incomplete routes serve a subset but lack production collaborators; mounted-fail-closed routes refuse the unavailable effect. Neither counts as native.',
     '',
-    'HTTP routes, WS messages and background services are heuristic candidates, not a complete parity inventory: the WS and service lists are lexical and can miss entries. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.',
+    'HTTP routes and background services are heuristic candidates, not a complete parity inventory. WS messages from the Node hub and gateway sources are read with the TypeScript compiler API, dynamic frame types in send paths must be reviewed, and client-side WS literals and services stay lexical, so those lists can still miss entries. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.',
     '',
     '```json',
     JSON.stringify(summary, null, 2),
@@ -543,7 +554,7 @@ if (process.argv.includes('--write')) {
     '',
     '## WS message candidates (heuristic)',
     '',
-    'Client-to-server candidates come from the case arms of the Node hub and of the voice-assistant socket. Server-to-client candidates come from literal frame types in every Node gateway source, the voice-assistant frames and the screen-share relays, which forward the type they receive. clientOnly candidates are literals that a web, API-client, CLI or desktop WebSocket handler reads or sends and that no Node source has in that direction. Both lists can include unrelated switches or objects, and dynamic types are omitted. A Rust reference is only a lexical match: a client-to-server reference is a handler arm in the Rust hub, and a server-to-client reference is the quoted type name anywhere in the Rust sources, so an unrelated quoted word (for example the voice-assistant frame "status") can match. It does not establish mounting, behavior, coverage, or parity.',
+    'Client-to-server candidates come from the string arms of the Node hub switch on msg.type and of the voice-assistant socket. Server-to-client candidates come from the literal `type` values of object literals in every Node gateway source (read as an AST), literal types passed to broadcast helpers, the voice-assistant frames and the screen-share relays, which forward the type they receive. clientOnly candidates are literals that a web, API-client, CLI or desktop WebSocket handler reads or sends and that no Node source has in that direction. Both lists can include unrelated switches or objects, and dynamic types are omitted. A Rust reference is only a lexical match: a client-to-server reference is a handler arm in the Rust hub, and a server-to-client reference is the quoted type name anywhere in the Rust sources, so an unrelated quoted word (for example the voice-assistant frame "status") can match. It does not establish mounting, behavior, coverage, or parity.',
     '',
     ...wsEntries.map((w) => `- ${w.direction}: \`${w.type}\` — ${w.rustStatus} — ${w.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ') || 'no binary test'}${w.clientOnly ? ' — clientOnly' : ''}`),
     '',
