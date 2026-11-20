@@ -9157,46 +9157,46 @@
     },
     {
       "path": "packages/gateway/src/providers/acp-provider.ts",
-      "fingerprint": "e66eaa4c85fe3120",
+      "fingerprint": "3cc4450acf34d785",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
-        "packages/gateway/src/providers/acp-provider.ts#bridge:39906",
-        "packages/gateway/src/providers/acp-provider.ts#bridge:62739",
-        "packages/gateway/src/providers/acp-provider.ts#config:18797",
-        "packages/gateway/src/providers/acp-provider.ts#config:32455",
-        "packages/gateway/src/providers/acp-provider.ts#config:35190",
-        "packages/gateway/src/providers/acp-provider.ts#config:69588",
-        "packages/gateway/src/providers/acp-provider.ts#config:69727",
-        "packages/gateway/src/providers/acp-provider.ts#config:69758",
-        "packages/gateway/src/providers/acp-provider.ts#config:69823",
-        "packages/gateway/src/providers/acp-provider.ts#config:69847",
-        "packages/gateway/src/providers/acp-provider.ts#config:84388",
-        "packages/gateway/src/providers/acp-provider.ts#config:85095",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:245",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:318",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:362",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:407",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:540",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:613",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:648",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:703",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:753",
-        "packages/gateway/src/providers/acp-provider.ts#dependency:795",
-        "packages/gateway/src/providers/acp-provider.ts#platform:2466",
-        "packages/gateway/src/providers/acp-provider.ts#platform:40027",
-        "packages/gateway/src/providers/acp-provider.ts#platform:64659"
+        "packages/gateway/src/providers/acp-provider.ts#bridge:39933",
+        "packages/gateway/src/providers/acp-provider.ts#bridge:62994",
+        "packages/gateway/src/providers/acp-provider.ts#config:18824",
+        "packages/gateway/src/providers/acp-provider.ts#config:32482",
+        "packages/gateway/src/providers/acp-provider.ts#config:35217",
+        "packages/gateway/src/providers/acp-provider.ts#config:69843",
+        "packages/gateway/src/providers/acp-provider.ts#config:69982",
+        "packages/gateway/src/providers/acp-provider.ts#config:70013",
+        "packages/gateway/src/providers/acp-provider.ts#config:70078",
+        "packages/gateway/src/providers/acp-provider.ts#config:70102",
+        "packages/gateway/src/providers/acp-provider.ts#config:84643",
+        "packages/gateway/src/providers/acp-provider.ts#config:85350",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:272",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:345",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:389",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:434",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:567",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:640",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:675",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:730",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:780",
+        "packages/gateway/src/providers/acp-provider.ts#dependency:822",
+        "packages/gateway/src/providers/acp-provider.ts#platform:2493",
+        "packages/gateway/src/providers/acp-provider.ts#platform:40054",
+        "packages/gateway/src/providers/acp-provider.ts#platform:64914"
       ],
-      "claims_fingerprint": "4c87086d28dbdd94",
+      "claims_fingerprint": "2f80c8aae6552b87",
       "claims": [
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#bridge:39906",
+          "id": "packages/gateway/src/providers/acp-provider.ts#bridge:39933",
           "kind": "bridge",
           "name": "<dynamic executable>",
-          "start": 39906,
-          "end": 40138,
+          "start": 39933,
+          "end": 40165,
           "fingerprint": "cbe3fdad5a965368",
           "details": {
             "expression": "this.config.command"
@@ -9206,11 +9206,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#bridge:62739",
+          "id": "packages/gateway/src/providers/acp-provider.ts#bridge:62994",
           "kind": "bridge",
           "name": "<dynamic executable>",
-          "start": 62739,
-          "end": 62931,
+          "start": 62994,
+          "end": 63186,
           "fingerprint": "cec1a8657ef21cda",
           "details": {
             "expression": "this.config.command"
@@ -9220,11 +9220,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:18797",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:18824",
           "kind": "config",
           "name": "CODEX_CONFIG",
-          "start": 18797,
-          "end": 18821,
+          "start": 18824,
+          "end": 18848,
           "fingerprint": "393d780cd2e422d5",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9234,11 +9234,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:32455",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:32482",
           "kind": "config",
           "name": "JAIT_CODEX_LOGIN_COMMAND",
-          "start": 32455,
-          "end": 32491,
+          "start": 32482,
+          "end": 32518,
           "fingerprint": "0a67037f46685f27",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9248,11 +9248,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:35190",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:35217",
           "kind": "config",
           "name": "<dynamic>",
-          "start": 35190,
-          "end": 35207,
+          "start": 35217,
+          "end": 35234,
           "fingerprint": "1c8f77673c6efd3a",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9262,11 +9262,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:69588",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:69843",
           "kind": "config",
           "name": "CODEX_HOME",
-          "start": 69588,
-          "end": 69610,
+          "start": 69843,
+          "end": 69865,
           "fingerprint": "84d750c4214d947c",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9276,11 +9276,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:69727",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:69982",
           "kind": "config",
           "name": "USERPROFILE",
-          "start": 69727,
-          "end": 69750,
+          "start": 69982,
+          "end": 70005,
           "fingerprint": "eeb8d9a17f5f0869",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9290,11 +9290,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:69758",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:70013",
           "kind": "config",
           "name": "USERPROFILE",
-          "start": 69758,
-          "end": 69781,
+          "start": 70013,
+          "end": 70036,
           "fingerprint": "eeb8d9a17f5f0869",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9304,11 +9304,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:69823",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:70078",
           "kind": "config",
           "name": "HOME",
-          "start": 69823,
-          "end": 69839,
+          "start": 70078,
+          "end": 70094,
           "fingerprint": "ba63bad4d9bf7424",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9318,11 +9318,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:69847",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:70102",
           "kind": "config",
           "name": "HOME",
-          "start": 69847,
-          "end": 69863,
+          "start": 70102,
+          "end": 70118,
           "fingerprint": "ba63bad4d9bf7424",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9332,11 +9332,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:84388",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:84643",
           "kind": "config",
           "name": "CODEX_CONFIG",
-          "start": 84388,
-          "end": 84412,
+          "start": 84643,
+          "end": 84667,
           "fingerprint": "393d780cd2e422d5",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9346,11 +9346,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#config:85095",
+          "id": "packages/gateway/src/providers/acp-provider.ts#config:85350",
           "kind": "config",
           "name": "JAIT_ACP_PROVIDERS",
-          "start": 85095,
-          "end": 85125,
+          "start": 85350,
+          "end": 85380,
           "fingerprint": "0b48e70b560eff7d",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -9360,11 +9360,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:245",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:272",
           "kind": "dependency",
           "name": "node:child_process",
-          "start": 245,
-          "end": 317,
+          "start": 272,
+          "end": 344,
           "fingerprint": "6a662be23d88589a",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9374,11 +9374,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:318",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:345",
           "kind": "dependency",
           "name": "node:events",
-          "start": 318,
-          "end": 361,
+          "start": 345,
+          "end": 388,
           "fingerprint": "22e33aec20db874c",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9388,11 +9388,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:362",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:389",
           "kind": "dependency",
           "name": "node:module",
-          "start": 362,
-          "end": 406,
+          "start": 389,
+          "end": 433,
           "fingerprint": "80fe6a96f41b6e8a",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9402,11 +9402,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:407",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:434",
           "kind": "dependency",
           "name": "node:util",
-          "start": 407,
-          "end": 445,
+          "start": 434,
+          "end": 472,
           "fingerprint": "ab1eee2df06bdb81",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9416,11 +9416,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:540",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:567",
           "kind": "dependency",
           "name": "node:fs",
-          "start": 540,
-          "end": 612,
+          "start": 567,
+          "end": 639,
           "fingerprint": "ae2fbd7275f0bb52",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9430,11 +9430,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:613",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:640",
           "kind": "dependency",
           "name": "node:os",
-          "start": 613,
-          "end": 647,
+          "start": 640,
+          "end": 674,
           "fingerprint": "f34ee19c8a0c4955",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9444,11 +9444,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:648",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:675",
           "kind": "dependency",
           "name": "node:path",
-          "start": 648,
-          "end": 702,
+          "start": 675,
+          "end": 729,
           "fingerprint": "55e76d6d71732263",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9458,11 +9458,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:703",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:730",
           "kind": "dependency",
           "name": "node:stream",
-          "start": 703,
-          "end": 752,
+          "start": 730,
+          "end": 779,
           "fingerprint": "b60e3a1c1b6fdac3",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9472,11 +9472,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:753",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:780",
           "kind": "dependency",
           "name": "node:url",
-          "start": 753,
-          "end": 794,
+          "start": 780,
+          "end": 821,
           "fingerprint": "8f9b60524a99a497",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9486,11 +9486,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:795",
+          "id": "packages/gateway/src/providers/acp-provider.ts#dependency:822",
           "kind": "dependency",
           "name": "@agentclientprotocol/sdk",
-          "start": 795,
-          "end": 1427,
+          "start": 822,
+          "end": 1454,
           "fingerprint": "3f6199c483698486",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -9500,11 +9500,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#platform:2466",
+          "id": "packages/gateway/src/providers/acp-provider.ts#platform:2493",
           "kind": "platform",
           "name": "win32",
-          "start": 2466,
-          "end": 2473,
+          "start": 2493,
+          "end": 2500,
           "fingerprint": "2ff1776a53ead0f2",
           "details": {
             "resolution": "source branch candidate; support and CI evidence pending"
@@ -9514,11 +9514,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#platform:40027",
+          "id": "packages/gateway/src/providers/acp-provider.ts#platform:40054",
           "kind": "platform",
           "name": "win32",
-          "start": 40027,
-          "end": 40034,
+          "start": 40054,
+          "end": 40061,
           "fingerprint": "2ff1776a53ead0f2",
           "details": {
             "resolution": "source branch candidate; support and CI evidence pending"
@@ -9528,11 +9528,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/providers/acp-provider.ts#platform:64659",
+          "id": "packages/gateway/src/providers/acp-provider.ts#platform:64914",
           "kind": "platform",
           "name": "win32",
-          "start": 64659,
-          "end": 64666,
+          "start": 64914,
+          "end": 64921,
           "fingerprint": "2ff1776a53ead0f2",
           "details": {
             "resolution": "source branch candidate; support and CI evidence pending"
@@ -9803,7 +9803,7 @@
     },
     {
       "path": "packages/gateway/src/providers/contracts.ts",
-      "fingerprint": "6249854e0a4ce8f8",
+      "fingerprint": "5ba0d4a796d34089",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -10580,16 +10580,17 @@
     },
     {
       "path": "packages/gateway/src/providers/session-process.ts",
-      "fingerprint": "239edcafea337126",
+      "fingerprint": "ea9138637e5e7c42",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
         "packages/gateway/src/providers/session-process.ts#dependency:0",
+        "packages/gateway/src/providers/session-process.ts#platform:1602",
         "packages/gateway/src/providers/session-process.ts#platform:285"
       ],
-      "claims_fingerprint": "237822b60d472ddb",
+      "claims_fingerprint": "3abeef61972e605b",
       "claims": [
         {
           "id": "packages/gateway/src/providers/session-process.ts#dependency:0",
@@ -10600,6 +10601,20 @@
           "fingerprint": "d8a9d503ab53b336",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/providers/session-process.ts#platform:1602",
+          "kind": "platform",
+          "name": "win32",
+          "start": 1602,
+          "end": 1609,
+          "fingerprint": "2ff1776a53ead0f2",
+          "details": {
+            "resolution": "source branch candidate; support and CI evidence pending"
           },
           "status": "pending",
           "required_test_ids": [],
@@ -29667,7 +29682,7 @@
     },
     {
       "path": "packages/gateway/src/services/messenger-service.ts",
-      "fingerprint": "b1a42e9e33f6fcaf",
+      "fingerprint": "166df135c2f7bbfd",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -29677,9 +29692,9 @@
         "packages/gateway/src/services/messenger-service.ts#dependency:241",
         "packages/gateway/src/services/messenger-service.ts#dependency:478",
         "packages/gateway/src/services/messenger-service.ts#dependency:98",
-        "packages/gateway/src/services/messenger-service.ts#sse_event:53339"
+        "packages/gateway/src/services/messenger-service.ts#sse_event:53599"
       ],
-      "claims_fingerprint": "76cd49788bc8f5a0",
+      "claims_fingerprint": "5934c14a48e19bd4",
       "claims": [
         {
           "id": "packages/gateway/src/services/messenger-service.ts#dependency:0",
@@ -29714,8 +29729,8 @@
           "kind": "dependency",
           "name": "@jait/shared",
           "start": 478,
-          "end": 737,
-          "fingerprint": "43e17731ea4a5a53",
+          "end": 763,
+          "fingerprint": "73d9fb88c30ce2ad",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
           },
@@ -29738,11 +29753,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/services/messenger-service.ts#sse_event:53339",
+          "id": "packages/gateway/src/services/messenger-service.ts#sse_event:53599",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 53339,
-          "end": 53382,
+          "start": 53599,
+          "end": 53642,
           "fingerprint": "383e54e5d8c124fd",
           "details": {
             "expression": "id"
@@ -30320,7 +30335,7 @@
     },
     {
       "path": "packages/gateway/src/services/orchestration/acp-worker.ts",
-      "fingerprint": "ba06be3dadd7e53a",
+      "fingerprint": "802b84bcc4a9f8d1",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -34691,7 +34706,7 @@
     },
     {
       "path": "packages/gateway/src/tools/agent-acp-runner.ts",
-      "fingerprint": "81eb4b2840759633",
+      "fingerprint": "d1fb022ee30c70d0",
       "migration_owner": "R06-execution",
       "status": "pending",
       "required_test_ids": [],
@@ -48690,7 +48705,7 @@
     },
     {
       "path": "packages/shared/src/messenger.ts",
-      "fingerprint": "dec1d24146bfc70c",
+      "fingerprint": "e52fb92c88c81aa4",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -48706,11 +48721,12 @@
         "packages/shared/src/messenger.ts#schema:2503",
         "packages/shared/src/messenger.ts#schema:2654",
         "packages/shared/src/messenger.ts#schema:2963",
-        "packages/shared/src/messenger.ts#schema:4446",
-        "packages/shared/src/messenger.ts#schema:4518",
-        "packages/shared/src/messenger.ts#schema:6024"
+        "packages/shared/src/messenger.ts#schema:4214",
+        "packages/shared/src/messenger.ts#schema:5618",
+        "packages/shared/src/messenger.ts#schema:5690",
+        "packages/shared/src/messenger.ts#schema:7417"
       ],
-      "claims_fingerprint": "d662d11cbe6256db",
+      "claims_fingerprint": "53d0d608b4d9ee97",
       "claims": [
         {
           "id": "packages/shared/src/messenger.ts#dependency:0",
@@ -48862,11 +48878,26 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/messenger.ts#schema:4446",
+          "id": "packages/shared/src/messenger.ts#schema:4214",
+          "kind": "schema",
+          "name": "DeliveryState",
+          "start": 4214,
+          "end": 4293,
+          "fingerprint": "f2d38027b05b1749",
+          "details": {
+            "representation": "TypeScript contract declaration, not JSON Schema",
+            "definition": "export type DeliveryState = 'sending' | 'sent' | 'received' | 'read' | 'failed'"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/shared/src/messenger.ts#schema:5618",
           "kind": "schema",
           "name": "MessengerRoomKind",
-          "start": 4446,
-          "end": 4516,
+          "start": 5618,
+          "end": 5688,
           "fingerprint": "060e3d10954ae560",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
@@ -48877,26 +48908,26 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/messenger.ts#schema:4518",
+          "id": "packages/shared/src/messenger.ts#schema:5690",
           "kind": "schema",
           "name": "MessengerRoom",
-          "start": 4518,
-          "end": 6022,
-          "fingerprint": "097d77a017c0c7ad",
+          "start": 5690,
+          "end": 7415,
+          "fingerprint": "47667ae9b8eddd34",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
-            "definition": "export interface MessengerRoom {\n  id: string\n  name: string\n  service: string\n  network: string\n  unread: number\n  markedUnread?: boolean\n  /** Reactions from other people on the user's own messages; a rise means someone just reacted. */\n  reactionsToMe?: number\n  /** Newest reaction to one of the user's messages: the emoji, that message's text and the room's newest message id. */\n  latestReaction?: { emoji: string; messageBody: string; latestEventId?: string }\n  /** Hidden from the chat list; synced through Matrix room account data. */\n  hidden?: boolean\n  membership: string\n  encrypted: boolean\n  timestamp: number\n  preview: string\n  /** Event ID of the latest message, for notification deduplication. */\n  latestEventId?: string\n  /** Sender of the latest message, for notification display. */\n  latestSender?: string\n  /** Avatar of the latest message sender (`mxc://`). */\n  latestSenderAvatarUrl?: string\n  /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */\n  status?: boolean\n  /** Structural shape of the room. Absent means a plain chat. */\n  kind?: MessengerRoomKind\n  /** Team/workspace this room belongs to (Slack workspace, Teams team, Discord guild). */\n  team?: string\n  /** Room topic, surfaced on channel headers. */\n  topic?: string\n  /** Room avatar, or the counterpart's avatar for direct chats (`mxc://`). */\n  avatarUrl?: string\n  /** Set for direct conversations with exactly one other participant. */\n  peer?: MessengerRoomPeer\n}"
+            "definition": "export interface MessengerRoom {\n  id: string\n  name: string\n  service: string\n  network: string\n  unread: number\n  markedUnread?: boolean\n  /** Reactions from other people on the user's own messages; a rise means someone just reacted. */\n  reactionsToMe?: number\n  /** Newest reaction to one of the user's messages: the emoji, that message's text and the room's newest message id. */\n  latestReaction?: { emoji: string; messageBody: string; latestEventId?: string }\n  /** Hidden from the chat list; synced through Matrix room account data. */\n  hidden?: boolean\n  membership: string\n  encrypted: boolean\n  timestamp: number\n  preview: string\n  /** Event ID of the latest message, for notification deduplication. */\n  latestEventId?: string\n  /** Sender of the latest message, for notification display. */\n  latestSender?: string\n  /** Avatar of the latest message sender (`mxc://`). */\n  latestSenderAvatarUrl?: string\n  /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */\n  status?: boolean\n  /** Structural shape of the room. Absent means a plain chat. */\n  kind?: MessengerRoomKind\n  /** Team/workspace this room belongs to (Slack workspace, Teams team, Discord guild). */\n  team?: string\n  /** Room topic, surfaced on channel headers. */\n  topic?: string\n  /** Room avatar, or the counterpart's avatar for direct chats (`mxc://`). */\n  avatarUrl?: string\n  /** Set for direct conversations with exactly one other participant. */\n  peer?: MessengerRoomPeer\n  /** Delivery state of the room's newest message when the user sent it; absent when someone else did. */\n  latestDelivery?: DeliveryState\n  /** Names of other people currently typing in this room. */\n  typing?: string[]\n}"
           },
           "status": "pending",
           "required_test_ids": [],
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/messenger.ts#schema:6024",
+          "id": "packages/shared/src/messenger.ts#schema:7417",
           "kind": "schema",
           "name": "MessengerSnapshot",
-          "start": 6024,
-          "end": 6663,
+          "start": 7417,
+          "end": 8056,
           "fingerprint": "412a4a0490e561ab",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
@@ -49894,7 +49925,7 @@
     },
     {
       "path": "packages/shared/src/team-chat.ts",
-      "fingerprint": "42b2442cc41999ff",
+      "fingerprint": "2748fb48f3e9c3bc",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -49904,12 +49935,12 @@
         "packages/shared/src/team-chat.ts#schema:1039",
         "packages/shared/src/team-chat.ts#schema:133",
         "packages/shared/src/team-chat.ts#schema:1617",
-        "packages/shared/src/team-chat.ts#schema:2004",
+        "packages/shared/src/team-chat.ts#schema:2973",
         "packages/shared/src/team-chat.ts#schema:321",
         "packages/shared/src/team-chat.ts#schema:497",
         "packages/shared/src/team-chat.ts#schema:775"
       ],
-      "claims_fingerprint": "59b699e7545e35cc",
+      "claims_fingerprint": "e5c6a666341607af",
       "claims": [
         {
           "id": "packages/shared/src/team-chat.ts#schema:0",
@@ -49972,11 +50003,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/team-chat.ts#schema:2004",
+          "id": "packages/shared/src/team-chat.ts#schema:2973",
           "kind": "schema",
           "name": "TeamWorkContext",
-          "start": 2004,
-          "end": 2120,
+          "start": 2973,
+          "end": 3089,
           "fingerprint": "268d58b9b5aef366",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
