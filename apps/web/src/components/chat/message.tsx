@@ -7,7 +7,7 @@ import { AttachmentList, collectAttachments } from './attachment-list'
 import { MessageAgentActivity } from './message-agent-activity'
 import { UserMessageImages, UserMessageImageReference } from './user-message-images'
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
-import { ArrowRight, BookOpen, Brain, Check, CheckCheck, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
 import {
   Message as AIMessage,
@@ -63,6 +63,15 @@ import {
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { DeliveryIndicator, useSteppedDeliveryState, type DeliveryState } from './delivery-indicator'
+
+const AGENT_DELIVERY_LABELS: Record<DeliveryState, string> = {
+  sending: 'Pending delivery',
+  sent: 'Accepted by Jait',
+  received: 'Received by the agent',
+  read: 'Read by the agent',
+  failed: 'Could not be sent',
+}
 
 interface MessageProps {
   /** Personal-message metadata; uses the same bubbles/actions with literal text and no AI controls. */
@@ -86,11 +95,11 @@ interface MessageProps {
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
   steered?: boolean
   /**
-   * Delivery state of a freshly sent or edited user turn: `sending` shows a
-   * single check in the bottom-right corner; `sent` keeps a double check visible.
-   * Absent for ordinary history rows.
+   * Delivery state of a freshly sent or edited user turn: `sending` (clock),
+   * `sent` (one check), `received` (two grey checks, the turn started) and `read`
+   * (two blue checks, the agent began answering). Absent for ordinary history rows.
    */
-  sendState?: 'sending' | 'sent'
+  sendState?: 'sending' | 'sent' | 'received' | 'read'
   contextFlow?: LlmContextFlow
   /** Lightweight badge: a contextFlow payload exists on the server (lazy-loaded). */
   hasContextFlow?: boolean
@@ -230,6 +239,8 @@ function MessageInner({
   onOpenMemorySource,
   onMemoryFeedback,
 }: MessageProps) {
+  // Each real step (sent, received, read) stays visible briefly, even when the provider is instant.
+  const shownSendState = useSteppedDeliveryState(sendState ?? 'read')
   const provider = (persona?.providerId as ProviderId | undefined) ?? requestedProvider
   const isUser = role === 'user'
   const confirm = useConfirmDialog()
@@ -683,21 +694,17 @@ function MessageInner({
   ]
 
   // Keep delivery updates out of the bubble layout.
-  const showSendStatus = isUser && (sendState === 'sending' || sendState === 'sent')
+  const showSendStatus = isUser && !!sendState
   const compactMobileActions = isMobile && isUser && !messenger
   const mobileStatusRow = compactMobileActions && canCopyMessage && messageActionItems.length > 0
-  const sendStatus = showSendStatus ? (
-    <TooltipHint content={sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}>
-      <span
-        className="pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-        aria-live="polite"
-        data-testid="user-message-send-status"
-        data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
-      >
-        {sendState === 'sent' ? <CheckCheck aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4 translate-x-[1.33px]" />}
-        <span className="sr-only">{sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}</span>
-      </span>
-    </TooltipHint>
+  const sendStatus = showSendStatus && shownSendState ? (
+    <DeliveryIndicator
+      state={shownSendState}
+      label={AGENT_DELIVERY_LABELS[shownSendState]}
+      testId="user-message-send-status"
+      className="pointer-events-none h-4 w-4"
+      iconClassName="h-4 w-4"
+    />
   ) : null
 
 

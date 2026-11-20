@@ -27,6 +27,7 @@ import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { DeliveryIndicator } from '@/components/chat/delivery-indicator'
 import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { MessengerFilterBar, MessengerHeaderBar, type ChatFilter } from './messenger-services-bar'
 import { hasServiceLogo, ServiceLogo } from './service-logo'
@@ -66,6 +67,13 @@ function providerTooltip(room: MessengerRoom) {
   return room.service.toLowerCase() === 'teams' && room.network ? `${room.service} (${room.network})` : room.service
 }
 
+const LIST_DELIVERY_LABELS = {
+  sending: 'Sending',
+  sent: 'Sent',
+  received: 'Delivered',
+  read: 'Read',
+  failed: 'Not sent',
+} as const
 const LIST_MIN = 240
 const LIST_MAX = 520
 
@@ -245,7 +253,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
               </span>
             </TooltipHint>
           </span>
-          <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{item.preview}</span>
+          {item.typing?.length
+            ? <span role="status" className="mt-0.5 block truncate text-xs leading-4 font-medium text-primary">{item.peer || item.typing.length === 1 && item.typing[0] === item.name ? 'typing' : item.typing.length === 1 ? `${item.typing[0]} is typing` : `${item.typing.length} people are typing`}<span aria-hidden="true">...</span></span>
+            : <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
+              {item.latestDelivery && <DeliveryIndicator state={item.latestDelivery} label={LIST_DELIVERY_LABELS[item.latestDelivery]} tooltip={false} />}
+              <span className="block min-w-0 truncate">{item.preview}</span>
+            </span>}
         </span>
         {(item.unread > 0 || item.markedUnread) && <span aria-label={item.unread > 0 ? `${item.unread} unread messages` : 'Unread'} className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-none text-primary-foreground">{item.unread > 99 ? '99+' : item.unread || '•'}</span>}
       </button>

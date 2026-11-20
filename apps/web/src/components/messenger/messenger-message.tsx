@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { MessageReadStatus } from '@/components/chat/message-read-status'
+import { DeliveryIndicator } from '@/components/chat/delivery-indicator'
 import { MAX_ATTACHMENT_BYTES, type MessengerMessage, type MessengerPresence } from '@/lib/messenger/model'
 import { isStandaloneEmoji, isStandaloneImage } from '@/lib/messenger/standalone'
 import { EmojiPickerDialog, QUICK_REACTIONS } from './messenger-emoji-picker'
@@ -176,12 +177,15 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   const { store } = useMessenger()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(message.body)
+  /** Bubble width when editing began; the edit box keeps it so the message doesn't resize. */
+  const [editWidth, setEditWidth] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  const bubbleFrame = useRef<HTMLDivElement>(null)
   const longPress = useRef<number | null>(null)
   const held = useRef(false)
   const replyingFromMenu = useRef(false)
@@ -214,6 +218,11 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       + (groupStart ? (message.own ? ' rounded-tr-sm' : ' rounded-tl-sm') : '')
       + (groupEnd ? (message.own ? ' rounded-br-sm' : ' rounded-bl-sm') : '')
   const react = (emoji: string) => { if (store.react) void run(() => store.react!(roomId, message.id, emoji)) }
+  const startEditing = () => {
+    setEditWidth(bubbleFrame.current?.getBoundingClientRect().width ?? null)
+    setText(message.body)
+    setEditing(true)
+  }
 
   const clearLongPress = () => {
     if (longPress.current !== null) { window.clearTimeout(longPress.current); longPress.current = null }
@@ -259,6 +268,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         : <span aria-hidden className="block h-9 w-9" />}
     </div>}
     <div
+      ref={bubbleFrame}
       onPointerEnter={event => {
         if (!isMobile || event.pointerType !== 'mouse' || unavailable || editing) return
         const bounds = event.currentTarget.getBoundingClientRect()
@@ -310,8 +320,8 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         clearLongPress()
         setPosition({ x: event.clientX, y: event.clientY })
       }}
-      style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out' }}
-      className={'relative min-w-0 [touch-action:pan-y] ' + (imageTile ? 'w-full max-w-full' : wide
+      style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out', width: editing && editWidth ? editWidth : undefined }}
+      className={'relative [touch-action:pan-y] ' + (editing ? 'min-w-44 ' : 'min-w-0 ') + (imageTile ? 'w-full max-w-full' : wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
       <div
@@ -340,9 +350,9 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           <span className="line-clamp-2 break-words text-xs leading-4 text-muted-foreground">{message.replyTo.body || 'Attachment'}</span>
         </button>}
         {editing ? <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (text.trim()) void run(async () => { await store.edit!(roomId, message.id, text); setEditing(false) }) }}>
-          <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full min-w-40 resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
+          <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
-        </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.body}</MessageText></p>}
+        </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.linkedBody ?? message.body}</MessageText></p>}
         {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} tile={imageTile} {...(onOpenImage ? { onOpen: onOpenImage } : {})} />}
         <div className={standaloneImage
           ? 'absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] leading-4 text-white shadow-sm'
@@ -350,7 +360,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           {message.edited && <span>Edited</span>}
           {message.pending && <span>Sending…</span>}{message.failed && <span className="text-destructive">Not sent</span>}
           <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
-          {message.own && !message.pending && !message.failed && <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />}
+          {message.own && (message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />)}
           <DropdownMenu><DropdownMenuTrigger asChild>
             <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
           </DropdownMenuTrigger>
@@ -358,7 +368,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
               {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => { replyingFromMenu.current = true; onReply(message) }}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => setForwardOpen(true)}><Forward className="mr-2 h-4 w-4" />Forward</DropdownMenuItem>
               {store.react && <DropdownMenuItem onSelect={() => setPickerOpen(true)}><Smile className="mr-2 h-4 w-4" />React…</DropdownMenuItem>}
-              {store.edit && message.own && !message.attachment && <DropdownMenuItem onSelect={() => { setText(message.body); setEditing(true) }}>Edit message</DropdownMenuItem>}
+              {store.edit && message.own && !message.attachment && <DropdownMenuItem onSelect={startEditing}>Edit message</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -404,7 +414,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           {onReply && !message.own && <button type="button" className="rounded px-3 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { setPosition(null); onReply(message) }}>Reply</button>}
           <button type="button" className="rounded px-3 py-1.5 text-left text-sm hover:bg-muted" onClick={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</button>
           <button type="button" className="rounded px-3 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { setPosition(null); setForwardOpen(true) }}>Forward</button>
-          {store.edit && message.own && !message.attachment && <button type="button" className="rounded px-3 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { setPosition(null); setText(message.body); setEditing(true) }}>Edit message</button>}
+          {store.edit && message.own && !message.attachment && <button type="button" className="rounded px-3 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { setPosition(null); startEditing() }}>Edit message</button>}
         </>}
       />}
       <EmojiPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} onSelect={react} />

@@ -1,15 +1,15 @@
-import { Check, CheckCheck, Clock, TriangleAlert } from 'lucide-react'
+import { CheckCheck } from 'lucide-react'
+import { DeliveryIndicator } from './delivery-indicator'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { uniqueReaders, type MessengerReadReceipt } from '@/lib/messenger/model'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 export function MessageReadStatus({ readers: rawReaders, inline = false, bridgeStatus }: { readers: MessengerReadReceipt[]; inline?: boolean; bridgeStatus?: 'pending' | 'sent' | 'delivered' | 'failed' }) {
   const readers = uniqueReaders(rawReaders)
-  if (!readers.length && inline && bridgeStatus === 'failed') return <TooltipHint content="The bridge could not send this message."><span role="img" aria-label="Bridge send failed" className="inline-flex text-destructive"><TriangleAlert className="h-3.5 w-3.5" aria-hidden="true" /></span></TooltipHint>
-  if (!readers.length && inline && bridgeStatus === 'pending') return <TooltipHint content="The bridge is still processing this message."><span role="img" aria-label="Bridge processing" className="inline-flex"><Clock className="h-3.5 w-3.5" aria-hidden="true" /></span></TooltipHint>
-  if (!readers.length && inline && bridgeStatus === 'delivered') return <TooltipHint content="The bridge reported delivery to a recipient."><span role="img" aria-label="Delivered" className="inline-flex text-gray-400"><CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /></span></TooltipHint>
-  if (!readers.length && inline && bridgeStatus === 'sent') return <TooltipHint content="The bridge sent this message to the service; recipient delivery is unknown."><span role="img" aria-label="Sent to service" className="inline-flex text-gray-400"><Check className="h-3.5 w-3.5" aria-hidden="true" /></span></TooltipHint>
-  if (!readers.length && inline) return <TooltipHint content="Sent; no public read receipt received."><span role="img" aria-label="Sent" className="inline-flex text-gray-400"><Check className="h-3.5 w-3.5" aria-hidden="true" /></span></TooltipHint>
+  if (!readers.length && inline && bridgeStatus === 'failed') return <DeliveryIndicator state="failed" label="Bridge send failed" />
+  if (!readers.length && inline && bridgeStatus === 'pending') return <DeliveryIndicator state="sending" label="Bridge processing" />
+  if (!readers.length && inline && bridgeStatus === 'delivered') return <DeliveryIndicator state="received" label="Delivered" />
+  if (!readers.length && inline) return <DeliveryIndicator state="sent" label="Sent" />
   if (!readers.length) return <TooltipHint content="Accepted by Matrix. No public read receipt received."><span className={(inline ? 'whitespace-nowrap' : 'block pt-1 text-right') + ' text-2xs text-muted-foreground'}>Sent</span></TooltipHint>
   return <Popover>
     <PopoverTrigger asChild>

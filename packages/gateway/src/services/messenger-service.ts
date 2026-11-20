@@ -34,6 +34,7 @@ import {
   type MessengerMessage,
   type MessengerPresence,
   type MessengerToolResponse,
+  messengerDeliveryState,
 } from '@jait/shared';
 import type { MessengerHistory } from './messenger-history.js';
 import { getStateDirectory } from '../state-directory.js';
@@ -485,9 +486,11 @@ class Connection {
     const unread = this.unreadCount(room);
     const reactionsToMe = this.reactionsToMe(room);
     const latestReaction = reactionsToMe ? this.latestReaction(room) : undefined;
+    const typing = this.typingNames(room.summary.id);
     const base: MessengerRoom = {
       ...room.summary,
       unread: room.summary.markedUnread ? Math.max(unread, 1) : unread,
+      ...(typing.length ? { typing } : {}),
       reactionsToMe,
       ...(latestReaction ? { latestReaction } : {}),
     };
@@ -1108,6 +1111,8 @@ class Connection {
         room.summary.latestSender = latest?.sender;
         room.summary.latestSenderAvatarUrl = latest?.senderAvatarUrl;
         room.summary.latestEventId = latest?.id;
+        if (latest?.own) room.summary.latestDelivery = messengerDeliveryState(latest);
+        else delete room.summary.latestDelivery;
         room.summary.preview =
           latest?.body ??
           (membership === 'invite' ? 'Invitation' : 'No messages yet');
@@ -1619,10 +1624,9 @@ export class MessengerService {
         ) as Saved;
         if (saved.owner !== owner) throw new Error('Owner mismatch');
         if (saved.ownPresence && ['online', 'unavailable', 'offline'].includes(saved.ownPresence.state) && typeof saved.ownPresence.keep === 'boolean') c.ownPresence = saved.ownPresence;
-        // Assistant access is an opt-in for the current run: it resets at gateway
-        // restart (contract: messenger.encrypted-shared-device-restart; Rust port
-        // does not restore it either). The saved value is intentionally ignored.
-        c.assistantAccess = false;
+        // Assistant access is the user's explicit opt-in and persists across
+        // gateway restarts/updates. It is still cleared on disconnect.
+        c.assistantAccess = saved.assistantAccess === true;
         await c.start(saved.session);
       } catch {
         if (!c.session) {

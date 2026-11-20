@@ -35,7 +35,7 @@ import {
   type SessionEventSubscription,
   type SessionEventSubscriptionState,
 } from '@/lib/session-event-subscription'
-import { providerTypeFromId, type ResponseStyle } from '@jait/shared'
+import { deliveryAdvances, providerTypeFromId, type ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
   parseUserMessageSegments,
@@ -459,10 +459,11 @@ export interface ChatMessage {
   optimistic?: boolean
   /**
    * Delivery state of a locally inserted user message: `sending` until the
-   * turn is accepted (or the restart round-trip lands), `sent` afterwards.
+   * turn is accepted (or the restart round-trip lands), `sent` afterwards,
+   * `received` once the turn starts and `read` once the agent begins answering.
    * Absent on rows restored from history — those are settled by definition.
    */
-  sendState?: 'sending' | 'sent'
+  sendState?: 'sending' | 'sent' | 'received' | 'read'
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
   steered?: boolean
   /** Clean display text for user messages (without appended file contents) */
@@ -1043,9 +1044,25 @@ export function useChat(
     // target every token would be dropped and the answer would only appear on
     // the next reload.
     let turnPersona: ChatPersona | undefined
+    /** Move the newest user bubble that is still in flight forward; never backwards. */
+    const advanceSendState = (to: 'received' | 'read') => {
+      setState(prev => {
+        for (let i = prev.messages.length - 1; i >= 0; i -= 1) {
+          const m = prev.messages[i]!
+          if (m.role !== 'user' || !m.sendState) continue
+          if (!deliveryAdvances(m.sendState, to)) return prev
+          const messages = prev.messages.slice()
+          messages[i] = { ...m, sendState: to }
+          return { ...prev, messages }
+        }
+        return prev
+      })
+    }
+
     const ensureStreamingAssistant = (): string | null => {
       if (assistantId) return assistantId
       if (!isCurrent()) return null
+      advanceSendState('read')
       const adopted = consumePendingPlaceholder()
       if (adopted) {
         assistantId = adopted
@@ -1071,6 +1088,7 @@ export function useChat(
       pendingContextFlow = undefined
       pendingUpdates = null
       setState(prev => ({ ...prev, isLoading: true, error: null, hitMaxRounds: false }))
+      advanceSendState('received')
       setTodoList([])
     }
 

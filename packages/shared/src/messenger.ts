@@ -76,6 +76,8 @@ export interface MessengerMessage {
   /** Matrix media URL for the sender’s profile photo. */
   senderAvatarUrl?: string
   body: string
+  /** `body` rebuilt with Markdown links when the sender's rich text carried link targets. */
+  linkedBody?: string
   timestamp: number
   own: boolean
   encrypted: boolean
@@ -97,6 +99,30 @@ export interface MessengerMessage {
     size?: number
     file?: Record<string, unknown>
   }
+}
+
+/**
+ * The single delivery indicator used across Jait (messenger chats, the chat list
+ * and LLM chats): one check = sent, two grey checks = received, two blue = read.
+ */
+export type DeliveryState = 'sending' | 'sent' | 'received' | 'read' | 'failed'
+
+const DELIVERY_RANK: Record<DeliveryState, number> = { failed: -1, sending: 0, sent: 1, received: 2, read: 3 }
+
+/** Whether `next` is further along than `current`; a failure never advances. */
+export function deliveryAdvances(current: DeliveryState | undefined, next: DeliveryState): boolean {
+  if (next === 'failed') return false
+  return current === undefined || DELIVERY_RANK[next] > DELIVERY_RANK[current]
+}
+
+/** Delivery state of one of the user's own messenger messages. */
+export function messengerDeliveryState(message: Pick<MessengerMessage, 'pending' | 'failed' | 'readBy' | 'bridgeStatus'>): DeliveryState {
+  if (message.failed || message.bridgeStatus === 'failed') return 'failed'
+  if (message.pending) return 'sending'
+  if (message.readBy?.length) return 'read'
+  if (message.bridgeStatus === 'delivered') return 'received'
+  if (message.bridgeStatus === 'pending') return 'sending'
+  return 'sent'
 }
 
 /** Detect the pseudo-room used by the WhatsApp bridge for status updates. */
@@ -142,6 +168,10 @@ export interface MessengerRoom {
   avatarUrl?: string
   /** Set for direct conversations with exactly one other participant. */
   peer?: MessengerRoomPeer
+  /** Delivery state of the room's newest message when the user sent it; absent when someone else did. */
+  latestDelivery?: DeliveryState
+  /** Names of other people currently typing in this room. */
+  typing?: string[]
 }
 
 export interface MessengerSnapshot {
