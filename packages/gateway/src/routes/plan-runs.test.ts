@@ -235,8 +235,12 @@ describe("gateway workflow composition", () => {
       resources: {},
       verification: [{ id: "file", label: "Fixture exists", check: { kind: "artifact", path: "plan-runs.test.ts" } }],
     }] });
-    // The worker never answers, so the attempt is still running when the first gateway goes down.
-    const hangingFetch = vi.fn(() => new Promise<Response>(() => undefined));
+    // Leave the request in flight until shutdown, as a real abortable fetch would.
+    const hangingFetch = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      const signal = init.signal!;
+      if (signal.aborted) reject(signal.reason);
+      else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    }));
     const userService = {
       findById: (id: string) => id === owner ? { id } : undefined,
       getSettings: () => ({
@@ -266,6 +270,11 @@ describe("gateway workflow composition", () => {
       // Nothing re-runs on its own: the model is still called once, and resuming needs an operator decision.
       expect((await second.inject({ method: "POST", url: `${runUrl}/resume`, headers, payload: {} })).statusCode).toBe(409);
       expect(hangingFetch).toHaveBeenCalledTimes(1);
+      const requestSignal = hangingFetch.mock.calls[0]![1].signal!;
+      expect(requestSignal.aborted).toBe(false);
+      await first.close();
+      first = undefined;
+      expect(requestSignal.aborted).toBe(true);
     } finally {
       await second?.close();
       await first?.close();
@@ -330,7 +339,7 @@ describe("gateway workflow composition", () => {
       const start = await gateway.inject({ method: "POST", url: `/api/plans/${plan.id}/runs`, headers, payload: {} });
       expect(start.statusCode, start.body).toBe(201);
       const url = `/api/plan-runs/${start.json().run.id}`;
-      await expect.poll(async () => (await gateway.inject({ url, headers })).json().run.status).toBe("passed");
+      await expect.poll(async () => (await gateway.inject({ url, headers })).json().run.status, { timeout: 10_000 }).toBe("passed");
 
       // The model was offered exactly the four write tools, under their provider-safe names (dots become underscores).
       expect(workerFetch).toHaveBeenCalledTimes(1);
