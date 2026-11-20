@@ -1164,11 +1164,11 @@ export class AcpProvider implements CliProviderAdapter {
       piProvisionCleanup,
     };
     this.sessions.set(sessionId, state);
-    if (this.providerType === "codex") {
-      cliSessionIdle.watch(sessionId, options.threadId,
-        () => !!state.promptInFlight || state.approvals.size > 0,
-        () => this.stopSession(sessionId));
-    }
+    // Every ACP adapter (codex, claude-code, opencode, ...) holds a live child
+    // process group; without an idle lease they accumulate until the box thrashes.
+    cliSessionIdle.watch(sessionId, options.threadId,
+      () => !!state.promptInFlight || state.approvals.size > 0,
+      () => this.stopSession(sessionId));
     this.emitEvent({ type: "session.started", sessionId });
     return session;
   }
