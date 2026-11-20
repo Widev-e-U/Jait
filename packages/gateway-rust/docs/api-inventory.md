@@ -14,8 +14,8 @@ HTTP routes and background services are heuristic candidates, not a complete par
   "mounted-incomplete": 7,
   "nativeRouteReferencePct": 65.8,
   "nativeTested": 270,
-  "nativeTestedDenominator": 607,
-  "nativeTestedPct": 44.48,
+  "nativeTestedDenominator": 620,
+  "nativeTestedPct": 43.55,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
@@ -23,8 +23,8 @@ HTTP routes and background services are heuristic candidates, not a complete par
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
-  "backgroundServices": 8,
-  "backgroundServicesMissing": 8,
+  "backgroundServices": 21,
+  "backgroundServicesMissing": 21,
   "httpRustStatus": {
     "native-tested": 237,
     "native-untested": 58,
@@ -38,7 +38,7 @@ HTTP routes and background services are heuristic candidates, not a complete par
   "serviceRustStatus": {
     "native-tested": 0,
     "native-untested": 0,
-    "missing": 8
+    "missing": 21
   }
 }
 ```
@@ -494,18 +494,50 @@ HTTP routes and background services are heuristic candidates, not a complete par
 | ANY | `/api/project` | missing | missing |  |  |
 | ANY | `/api/security/findings` | missing | missing |  |  |
 
-## Background services (heuristic)
+## Background services (reviewed)
 
-Services started from the Node composition root. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.
+Every background site in the Node gateway source is listed in tooling/services-inventory.mjs: the composition-root starts in index.ts and server.ts, each setInterval, each self re-arming timer and each literal loop. A site that is per request or per tool call is listed under reviewed timers, not as a service. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.
 
-- `scheduler` — missing; Rust keyword hint present
-- `threadReviewSync` — missing; Rust keyword hint present
-- `databaseRetention` — missing; Rust keyword hint present
-- `diskJanitor` — missing; Rust keyword hint present
-- `primaryLink` — missing; Rust keyword hint present
-- `terminalReaper` — missing; Rust keyword hint present
-- `browserReaper` — missing; Rust keyword hint present
-- `wsHub` — missing; Rust keyword hint present
+- `primaryLink` (service) — missing; Rust keyword hint present; Node: index.ts:177 primaryLink.start, index.ts:1589 primaryLink.start
+- `threadRestartRecovery` (boot-task) — missing; Rust keyword hint present; Node: index.ts:211 threadService.queueRestartRecovery
+- `emailInboxRefresh` (service) — missing; Rust keyword hint present; Node: index.ts:230 emailService.startInboxRefresh, services/email/service.ts:73 setInterval
+- `projectWatcher` (service) — missing; Rust keyword hint present; Node: index.ts:379 projectWatcher.watch
+- `scheduler` (service) — missing; Rust keyword hint present; Node: index.ts:876 scheduler.start, scheduler/service.ts:280 setInterval
+- `threadReviewSync` (service) — missing; Rust keyword hint present; Node: index.ts:877 threadReviewSync.start, services/thread-review-sync.ts:37 setInterval
+- `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1540 ws.start, ws.ts:272 setInterval
+- `databaseRetention` (service) — missing; Rust keyword hint present; Node: index.ts:1562 databaseRetention.start, services/database-retention.ts:623 setTimeout
+- `diskJanitor` (service) — missing; Rust keyword hint present; Node: index.ts:1563 diskJanitor.start, services/disk-janitor.ts:291 setTimeout
+- `sandboxMaintenance` (service) — missing; Rust keyword hint absent; Node: index.ts:1567 jaitProvider.startSandboxMaintenance, providers/jait-provider.ts:194 setInterval
+- `channelAutoStart` (service) — missing; Rust keyword hint present; Node: index.ts:1577 channelManager.startEnabled
+- `terminalReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1594 setInterval
+- `browserReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1659 setInterval
+- `cliSessionIdleReaper` (service) — missing; Rust keyword hint present; Node: providers/session-idle.ts:33 setInterval
+- `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
+- `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
+- `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:857 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1446 setInterval
+- `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
+- `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
+
+## Reviewed timers and loops (not services)
+
+- `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
+- `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4445 setInterval, routes/chat.ts:6524 setInterval, routes/chat.ts:6636 setInterval, routes/chat.ts:6716 setInterval — SSE keepalive and heartbeat on one chat stream
+- `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
+- `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
+- `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution
+- `index.ts|listenWithRetryOnConflict` — index.ts:153 for (;;) — startup bind retry, bounded by maxWaitMs
+- `routes/threads.ts|registerThreadRoutes.drainQueuedThreadMessages` — routes/threads.ts:494 while (true) — drains one session queue until it is empty
+- `services/email/connection.ts|discoverMailSettings` — services/email/connection.ts:65 while (true) — reads one HTTP response body
+- `services/git-forge.ts|GitHubForge.prFileDiffsViaApi` — services/git-forge.ts:366 while (true) — pages through one pull request request
+- `services/git.ts|mapWithConcurrency` — services/git.ts:175 for (;;) — worker loop bounded by the item list
+- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:192 while (true) — reads one HTTP response body
+- `services/preview-runner.ts|detectPackageManager` — services/preview-runner.ts:38 while (true) — walks up to the filesystem root
+- `services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage` — services/subscription-usage-fetchers.ts:84 while (true) — reads one HTTP response body
+- `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1424 while (true) — parses one provider stream
+- `tools/agent-loop.ts|parseOpenAIStream` — tools/agent-loop.ts:1847 while (true) — parses one provider stream
 
 ## Client path candidates (heuristic)
 

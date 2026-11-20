@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { clientPathCandidates, clientRouteShape, clientShapeMatchesRoute, normalizeClientPath } from './client-inventory.mjs';
 import { applyBinaryEvidence } from './binary-test-evidence.mjs';
 import { broadcastHelperLiterals, objectTypeValues, parseTs, switchArms, websocketCandidates } from './ws-inventory.mjs';
+import { backgroundInventory } from './services-inventory.mjs';
 
 // Candidates only; they do not establish behavior or parity. The Node hub's WebSocket candidates are read by
 // ws-inventory.mjs with the TypeScript compiler API, so this module imports them rather than keeping a second copy.
@@ -473,28 +474,20 @@ const summary = {
   clientOnlyRoutes: clientOnlyEntries.length,
   rustOnlyRoutes: extraRust.length,
 };
-// Background services started from packages/gateway/src/index.ts. Rust status is a lexical
-// check for the Rust module/keyword; it never implies a tested or wired-in service.
-const SERVICE_SPECS = [
-  ['scheduler', /scheduler\.start\(/, /scheduler/i],
-  ['threadReviewSync', /threadReviewSync\.start\(/, /thread_review_sync|review_sync/i],
-  ['databaseRetention', /databaseRetention\.start\(/, /retention/i],
-  ['diskJanitor', /diskJanitor\.start\(/, /janitor/i],
-  ['primaryLink', /primaryLink\.start\(/, /primary_link/i],
-  ['terminalReaper', /terminalReaperInterval\s*=\s*setInterval/, /reaper|idle_reap/i],
-  ['browserReaper', /browserReaperInterval\s*=\s*setInterval/, /browser.*reap|reap.*browser/i],
-  ['wsHub', /ws\.start\(/, /ws_hub|WsHub/],
-];
-const indexSrc = readFileSync(join(nodeSrc, 'index.ts'), 'utf8');
+// Background services of the Node gateway, from tooling/services-inventory.mjs. Every composition-root start and every
+// timer or loop site is reviewed there, so an unlisted one throws. A keyword hit in Rust source is only a hint.
 const rustAll = walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n');
-// A keyword hit in Rust source is only a hint. A service is native only once the composed binary starts it
-// and a reviewed binary test covers it; no such evidence is recorded yet, so every service is missing.
-const services = SERVICE_SPECS.map(([name, nodeRe, rustRe]) => ({
-  name,
-  nodeStart: nodeRe.test(indexSrc),
-  rustKeywordHint: rustRe.test(rustAll),
+const background = backgroundInventory(wsNodeFiles);
+// A service is native only once the composed binary starts it and a reviewed binary test covers it; no such
+// evidence is recorded yet, so every service is missing.
+const services = background.services.map((service) => ({
+  name: service.name,
+  kind: service.kind,
+  nodeSites: service.nodeSites,
+  rustKeywordHint: service.hint.test(rustAll),
   rustStatus: 'missing',
 }));
+const reviewedTimers = background.excluded;
 const rustStatusCounts = (items) => {
   const out = { 'native-tested': 0, 'native-untested': 0, missing: 0 };
   for (const item of items) out[item.rustStatus] += 1;
@@ -509,7 +502,7 @@ summary.serviceRustStatus = rustStatusCounts(services);
 summary.nativeTested += summary.serviceRustStatus['native-tested'];
 summary.nativeTestedDenominator = entries.length + wsEntries.length + services.length;
 summary.nativeTestedPct = +((100 * summary.nativeTested) / summary.nativeTestedDenominator).toFixed(2);
-const result = { summary, http: entries, ws: wsEntries, services, clientCandidates, rustOnly: extraRust };
+const result = { summary, http: entries, ws: wsEntries, services, reviewedTimers, clientCandidates, rustOnly: extraRust };
 const json = JSON.stringify(result, null, 2) + '\n';
 if (process.argv.includes('--check')) {
   const committedPath = join(here, '..', 'docs', 'api-inventory.json');
@@ -540,11 +533,15 @@ if (process.argv.includes('--write')) {
     '|---|---|---|---|---|---|',
     ...entries.map((e) => `| ${e.method} | \`${e.path}\` | ${e.rustStatus} | ${e.status} | ${e.binaryTests.map((t) => `\`${t.file}::${t.name}\``).join(', ')} | ${e.nodeFiles.join(', ')} |`),
     '',
-    '## Background services (heuristic)',
+    '## Background services (reviewed)',
     '',
-    'Services started from the Node composition root. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.',
+    'Every background site in the Node gateway source is listed in tooling/services-inventory.mjs: the composition-root starts in index.ts and server.ts, each setInterval, each self re-arming timer and each literal loop. A site that is per request or per tool call is listed under reviewed timers, not as a service. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.',
     '',
-    ...services.map((s) => `- \`${s.name}\` — ${s.rustStatus}; Rust keyword hint ${s.rustKeywordHint ? 'present' : 'absent'}${s.nodeStart ? '' : '; Node start pattern not found'}`),
+    ...services.map((s) => `- \`${s.name}\` (${s.kind}) — ${s.rustStatus}; Rust keyword hint ${s.rustKeywordHint ? 'present' : 'absent'}; Node: ${s.nodeSites.join(', ')}`),
+    '',
+    '## Reviewed timers and loops (not services)',
+    '',
+    ...reviewedTimers.map((t) => `- \`${t.key}\` — ${t.sites.join(', ')} — ${t.reason}`),
     '',
     '## Client path candidates (heuristic)',
     '',

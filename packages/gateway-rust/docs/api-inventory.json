@@ -8,8 +8,8 @@
     "mounted-incomplete": 7,
     "nativeRouteReferencePct": 65.8,
     "nativeTested": 270,
-    "nativeTestedDenominator": 607,
-    "nativeTestedPct": 44.48,
+    "nativeTestedDenominator": 620,
+    "nativeTestedPct": 43.55,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
@@ -17,8 +17,8 @@
     "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
-    "backgroundServices": 8,
-    "backgroundServicesMissing": 8,
+    "backgroundServices": 21,
+    "backgroundServicesMissing": 21,
     "httpRustStatus": {
       "native-tested": 237,
       "native-untested": 58,
@@ -32,7 +32,7 @@
     "serviceRustStatus": {
       "native-tested": 0,
       "native-untested": 0,
-      "missing": 8
+      "missing": 21
     }
   },
   "http": [
@@ -8031,52 +8031,319 @@
   ],
   "services": [
     {
+      "name": "primaryLink",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:177 primaryLink.start",
+        "index.ts:1589 primaryLink.start"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "threadRestartRecovery",
+      "kind": "boot-task",
+      "nodeSites": [
+        "index.ts:211 threadService.queueRestartRecovery"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "emailInboxRefresh",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:230 emailService.startInboxRefresh",
+        "services/email/service.ts:73 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "projectWatcher",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:379 projectWatcher.watch"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
       "name": "scheduler",
-      "nodeStart": true,
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:876 scheduler.start",
+        "scheduler/service.ts:280 setInterval"
+      ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
     },
     {
       "name": "threadReviewSync",
-      "nodeStart": true,
-      "rustKeywordHint": true,
-      "rustStatus": "missing"
-    },
-    {
-      "name": "databaseRetention",
-      "nodeStart": true,
-      "rustKeywordHint": true,
-      "rustStatus": "missing"
-    },
-    {
-      "name": "diskJanitor",
-      "nodeStart": true,
-      "rustKeywordHint": true,
-      "rustStatus": "missing"
-    },
-    {
-      "name": "primaryLink",
-      "nodeStart": true,
-      "rustKeywordHint": true,
-      "rustStatus": "missing"
-    },
-    {
-      "name": "terminalReaper",
-      "nodeStart": true,
-      "rustKeywordHint": true,
-      "rustStatus": "missing"
-    },
-    {
-      "name": "browserReaper",
-      "nodeStart": true,
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:877 threadReviewSync.start",
+        "services/thread-review-sync.ts:37 setInterval"
+      ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
     },
     {
       "name": "wsHub",
-      "nodeStart": true,
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1540 ws.start",
+        "ws.ts:272 setInterval"
+      ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
+    },
+    {
+      "name": "databaseRetention",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1562 databaseRetention.start",
+        "services/database-retention.ts:623 setTimeout"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "diskJanitor",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1563 diskJanitor.start",
+        "services/disk-janitor.ts:291 setTimeout"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "sandboxMaintenance",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1567 jaitProvider.startSandboxMaintenance",
+        "providers/jait-provider.ts:194 setInterval"
+      ],
+      "rustKeywordHint": false,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "channelAutoStart",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1577 channelManager.startEnabled"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "terminalReaper",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1594 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "browserReaper",
+      "kind": "service",
+      "nodeSites": [
+        "index.ts:1659 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "cliSessionIdleReaper",
+      "kind": "service",
+      "nodeSites": [
+        "providers/session-idle.ts:33 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "browserDevtoolsGrantCleanup",
+      "kind": "service",
+      "nodeSites": [
+        "routes/browser-devtools.ts:36 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "threadRecoverySweep",
+      "kind": "service",
+      "nodeSites": [
+        "routes/threads.ts:297 setInterval"
+      ],
+      "rustKeywordHint": false,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "teamsReauthFlowPoll",
+      "kind": "flow-poll",
+      "nodeSites": [
+        "services/bridge-reauth.ts:104 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "messengerConnection",
+      "kind": "service",
+      "nodeSites": [
+        "services/messenger-service.ts:857 setTimeout"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "messengerPresence",
+      "kind": "service",
+      "nodeSites": [
+        "services/messenger-service.ts:1446 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "orchestratorStandby",
+      "kind": "service",
+      "nodeSites": [
+        "services/orchestration/orchestrator.ts:624 setInterval"
+      ],
+      "rustKeywordHint": false,
+      "rustStatus": "missing"
+    },
+    {
+      "name": "providerUpdateChecks",
+      "kind": "service",
+      "nodeSites": [
+        "services/provider-updates.ts:93 setInterval"
+      ],
+      "rustKeywordHint": true,
+      "rustStatus": "missing"
+    }
+  ],
+  "reviewedTimers": [
+    {
+      "key": "channels/telegram/connector.ts|TelegramConnector.startTyping",
+      "sites": [
+        "channels/telegram/connector.ts:578 setInterval"
+      ],
+      "reason": "typing indicator while one chat reply is pending"
+    },
+    {
+      "key": "routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade",
+      "sites": [
+        "routes/browser-devtools.ts:133 setInterval"
+      ],
+      "reason": "validity check on one devtools transport, cleared with that transport"
+    },
+    {
+      "key": "routes/chat.ts|registerChatRoutes",
+      "sites": [
+        "routes/chat.ts:4445 setInterval",
+        "routes/chat.ts:6524 setInterval",
+        "routes/chat.ts:6636 setInterval",
+        "routes/chat.ts:6716 setInterval"
+      ],
+      "reason": "SSE keepalive and heartbeat on one chat stream"
+    },
+    {
+      "key": "routes/mcp-server.ts|registerMcpRoutes",
+      "sites": [
+        "routes/mcp-server.ts:501 setInterval",
+        "routes/mcp-server.ts:622 setInterval"
+      ],
+      "reason": "keepalive on one MCP connection"
+    },
+    {
+      "key": "tools/browser-handoff.ts|createBrowserHandoffTool.wait",
+      "sites": [
+        "tools/browser-handoff.ts:25 setInterval"
+      ],
+      "reason": "poll inside one browser handoff tool call"
+    },
+    {
+      "key": "tools/terminal-tools.ts|executeInTerminal",
+      "sites": [
+        "tools/terminal-tools.ts:1029 setInterval"
+      ],
+      "reason": "poll inside one terminal tool execution"
+    },
+    {
+      "key": "index.ts|listenWithRetryOnConflict",
+      "sites": [
+        "index.ts:153 for (;;)"
+      ],
+      "reason": "startup bind retry, bounded by maxWaitMs"
+    },
+    {
+      "key": "routes/threads.ts|registerThreadRoutes.drainQueuedThreadMessages",
+      "sites": [
+        "routes/threads.ts:494 while (true)"
+      ],
+      "reason": "drains one session queue until it is empty"
+    },
+    {
+      "key": "services/email/connection.ts|discoverMailSettings",
+      "sites": [
+        "services/email/connection.ts:65 while (true)"
+      ],
+      "reason": "reads one HTTP response body"
+    },
+    {
+      "key": "services/git-forge.ts|GitHubForge.prFileDiffsViaApi",
+      "sites": [
+        "services/git-forge.ts:366 while (true)"
+      ],
+      "reason": "pages through one pull request request"
+    },
+    {
+      "key": "services/git.ts|mapWithConcurrency",
+      "sites": [
+        "services/git.ts:175 for (;;)"
+      ],
+      "reason": "worker loop bounded by the item list"
+    },
+    {
+      "key": "services/messenger-service.ts|SafeMatrixClient.doRequest",
+      "sites": [
+        "services/messenger-service.ts:192 while (true)"
+      ],
+      "reason": "reads one HTTP response body"
+    },
+    {
+      "key": "services/preview-runner.ts|detectPackageManager",
+      "sites": [
+        "services/preview-runner.ts:38 while (true)"
+      ],
+      "reason": "walks up to the filesystem root"
+    },
+    {
+      "key": "services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage",
+      "sites": [
+        "services/subscription-usage-fetchers.ts:84 while (true)"
+      ],
+      "reason": "reads one HTTP response body"
+    },
+    {
+      "key": "tools/agent-loop.ts|parseOllamaStream",
+      "sites": [
+        "tools/agent-loop.ts:1424 while (true)"
+      ],
+      "reason": "parses one provider stream"
+    },
+    {
+      "key": "tools/agent-loop.ts|parseOpenAIStream",
+      "sites": [
+        "tools/agent-loop.ts:1847 while (true)"
+      ],
+      "reason": "parses one provider stream"
     }
   ],
   "clientCandidates": [
