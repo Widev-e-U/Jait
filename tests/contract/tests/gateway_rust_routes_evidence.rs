@@ -3206,7 +3206,9 @@ mod git {
 
 mod chat {
     use super::*;
-    use jait_gateway::routes::chat::{ChatFactory, ChatRoutes, PreparedChat};
+    use jait_gateway::routes::chat::{
+        ChatFactory, ChatRoutes, PrepareError, PreparedChat, TurnSelection,
+    };
     use jait_gateway::runtime::chat_sessions::SessionTurnManager;
     use jait_gateway::security::http_auth::AuthUser;
     use jait_gateway::services::sessions::SessionRecord;
@@ -3222,8 +3224,9 @@ mod chat {
             &self,
             _user: AuthUser,
             _session: SessionRecord,
-        ) -> futures_util::future::BoxFuture<'_, Result<PreparedChat, String>> {
-            Box::pin(async { Err("no provider is configured for this server".to_owned()) })
+            _selection: TurnSelection,
+        ) -> futures_util::future::BoxFuture<'_, Result<PreparedChat, PrepareError>> {
+            Box::pin(async { Err(PrepareError::Unavailable) })
         }
     }
 
