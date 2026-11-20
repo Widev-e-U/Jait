@@ -4,10 +4,11 @@
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { clientPathCandidates, clientRouteShape, clientShapeMatchesRoute, normalizeClientPath } from './client-inventory.mjs';
+import { clientPathCandidates, clientRequestSites, clientRouteShape, clientShapeMatchesRoute, normalizeClientPath, reviewClientRequests } from './client-inventory.mjs';
 import { applyBinaryEvidence } from './binary-test-evidence.mjs';
 import { broadcastHelperLiterals, objectTypeValues, parseTs, switchArms, websocketCandidates } from './ws-inventory.mjs';
 import { backgroundInventory } from './services-inventory.mjs';
+import { gatewayRoutes } from './routes-inventory.mjs';
 
 // Candidates only; they do not establish behavior or parity. The Node hub's WebSocket candidates are read by
 // ws-inventory.mjs with the TypeScript compiler API, so this module imports them rather than keeping a second copy.
@@ -216,18 +217,15 @@ const norm = (p) =>
   p.replace(/\/+$/, '').replace(/:([A-Za-z_]\w*)\??/g, '{}').replace(/\{[^}/]*\}/g, '{}').replace(/\*+/g, '{}') || '/';
 
 // --- Node routes (Fastify) ---
+// Every non-test gateway source, read once. The route, registration and service scans all use this list.
+const nodeSources = walk(nodeSrc, ['.ts']).map((f) => ({ path: relative(nodeSrc, f), text: readFileSync(f, 'utf8') }));
+// tooling/routes-inventory.mjs reads each route call and registration with the TypeScript compiler API. It throws on any
+// call or registration that its reviewed tables do not list, so every route below comes from reviewed sites.
 const nodeRoutes = new Map();
-const nodeRe = new RegExp(
-  String.raw`\b(?:app|server|fastify|router|instance)\.(get|post|put|patch|delete|all)(?:<[^()]*?>)?\(\s*([\"'\`])(/[^\"'\`]*)\2`,
-  'g',
-);
-for (const f of walk(nodeSrc, ['.ts'])) {
-  const text = readFileSync(f, 'utf8');
-  for (const m of text.matchAll(nodeRe)) {
-    const key = `${m[1].toUpperCase()} ${norm(m[3])}`;
-    if (!nodeRoutes.has(key)) nodeRoutes.set(key, { method: m[1].toUpperCase(), path: m[3], files: [] });
-    nodeRoutes.get(key).files.push(relative(nodeSrc, f));
-  }
+for (const route of gatewayRoutes(nodeSources)) {
+  const key = `${route.method} ${norm(route.path)}`;
+  if (!nodeRoutes.has(key)) nodeRoutes.set(key, { method: route.method, path: route.path, files: [] });
+  nodeRoutes.get(key).files.push(...route.files);
 }
 
 // Modules whose routers the production composition root (runtime/application.rs, Gateway
@@ -360,7 +358,6 @@ function isTested(path) {
 // --- WS message candidates. Client-to-server types come from the ws.ts switch; server-to-client types come from
 // every gateway source, with templated `${event}` frames expanded from reviewed evidence. This is still lexical,
 // so a missing entry is possible; native status still needs a mapped binary test.
-const wsNodeFiles = walk(nodeSrc, ['.ts']).map((f) => ({ path: relative(nodeSrc, f), text: readFileSync(f, 'utf8') }));
 // Client-side WebSocket sources: each root that exists, without test files.
 const wsClientFiles = WS_CLIENT_ROOTS.flatMap((root) => {
   const dir = join(pkgs, '..', root);
@@ -371,7 +368,7 @@ const wsClientFiles = WS_CLIENT_ROOTS.flatMap((root) => {
 });
 const wsEntries = websocketInventory(
   readFileSync(join(nodeSrc, 'ws.ts'), 'utf8'),
-  wsNodeFiles,
+  nodeSources,
   {
     ws: readFileSync(join(rustSrc, 'ws.rs'), 'utf8'),
     all: walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n'),
@@ -407,22 +404,28 @@ const nodeEntries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare
   rustFile: rustRoutes.has(key) ? rustFile.get(key) : undefined,
 }));
 // Client-side lexical references complement the server scan. They include comments and
-// partial expressions, do not identify HTTP methods, and require manual review.
+// partial expressions, do not identify HTTP methods, and require manual review. Request calls are read with the
+// TypeScript compiler API, and each non-literal request path must be reviewed in tooling/client-inventory.mjs.
 const repo = join(pkgs, '..');
 const clientFiles = new Map();
+const requestSites = [];
 for (const root of ['apps/web/src', 'apps/desktop/src', 'apps/desktop/src-tauri/src', 'packages/cli/src', 'packages/api-client/src']) {
   const directory = join(repo, root);
   if (!existsSync(directory)) continue;
   for (const file of walk(directory, ['.ts', '.tsx', '.rs'])) {
     if (/\.(test|spec)\.[^.]+$/.test(file)) continue;
-    for (const path of clientPathCandidates(readFileSync(file, 'utf8'))) {
+    const text = readFileSync(file, 'utf8');
+    for (const path of clientPathCandidates(text)) {
       const shape = clientRouteShape(path);
       if (!shape.startsWith('/api/')) continue;
       if (!clientFiles.has(shape)) clientFiles.set(shape, new Set());
       clientFiles.get(shape).add(relative(repo, file));
     }
+    if (/\.tsx?$/.test(file)) requestSites.push(...clientRequestSites(relative(repo, file), text));
   }
 }
+const clientRequests = reviewClientRequests(requestSites);
+const nonLiteralRequestCalls = requestSites.filter((site) => !site.literal).length;
 // Each client route shape is one inventory row. A shape the Node gateway registers references that route;
 // any other shape is a client-only row, counted as missing unless a Rust route has the same shape.
 const clientCandidates = [...clientFiles.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([shape, files]) => {
@@ -473,11 +476,14 @@ const summary = {
   clientPathCandidates: clientCandidates.length,
   clientOnlyRoutes: clientOnlyEntries.length,
   rustOnlyRoutes: extraRust.length,
+  clientRequestCalls: requestSites.length,
+  clientNonLiteralRequestCalls: nonLiteralRequestCalls,
+  clientReviewedRequestSites: clientRequests.length,
 };
 // Background services of the Node gateway, from tooling/services-inventory.mjs. Every composition-root start and every
 // timer or loop site is reviewed there, so an unlisted one throws. A keyword hit in Rust source is only a hint.
 const rustAll = walk(rustSrc, ['.rs']).map((f) => readFileSync(f, 'utf8')).join('\n');
-const background = backgroundInventory(wsNodeFiles);
+const background = backgroundInventory(nodeSources);
 // A service is native only once the composed binary starts it and a reviewed binary test covers it; no such
 // evidence is recorded yet, so every service is missing.
 const services = background.services.map((service) => ({
@@ -502,7 +508,7 @@ summary.serviceRustStatus = rustStatusCounts(services);
 summary.nativeTested += summary.serviceRustStatus['native-tested'];
 summary.nativeTestedDenominator = entries.length + wsEntries.length + services.length;
 summary.nativeTestedPct = +((100 * summary.nativeTested) / summary.nativeTestedDenominator).toFixed(2);
-const result = { summary, http: entries, ws: wsEntries, services, reviewedTimers, clientCandidates, rustOnly: extraRust };
+const result = { summary, http: entries, ws: wsEntries, services, reviewedTimers, clientCandidates, clientRequestReviews: clientRequests, rustOnly: extraRust };
 const json = JSON.stringify(result, null, 2) + '\n';
 if (process.argv.includes('--check')) {
   const committedPath = join(here, '..', 'docs', 'api-inventory.json');
@@ -523,7 +529,7 @@ if (process.argv.includes('--write')) {
     '',
     'rustStatus is the parity value: native-tested (a reviewed black-box test is mapped and exists), native-untested (a Rust router or handler reference exists but no mapped test), or missing (no verified native implementation: unmounted, fail-closed, incomplete, or absent). Detail keeps the source status. Mounted-incomplete routes serve a subset but lack production collaborators; mounted-fail-closed routes refuse the unavailable effect. Neither counts as native.',
     '',
-    'HTTP routes and background services are heuristic candidates, not a complete parity inventory. WS messages from the Node hub and gateway sources are read with the TypeScript compiler API, dynamic frame types in send paths must be reviewed, and client-side WS literals and services stay lexical, so those lists can still miss entries. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.',
+    'HTTP routes are read with the TypeScript compiler API from every Node gateway source (tooling/routes-inventory.mjs). Every route call and registration must be listed in its reviewed tables, so an unlisted one fails generation; prefixes come from register calls and mounts, and a computed path must expand from literal evidence in its file. Background services are read the same way (tooling/services-inventory.mjs). Rust routes are still a lexical scan of axum .route calls, so a Rust status is a lead until the composed binary serves the route and a mapped black-box test covers it. Client paths are lexical; every request call whose path is not literal /api text in the web, CLI, desktop and API-client sources is reviewed in tooling/client-inventory.mjs. WS messages are read with the TypeScript compiler API (tooling/ws-inventory.mjs), and their client side is lexical. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.',
     '',
     '```json',
     JSON.stringify(summary, null, 2),
@@ -548,6 +554,12 @@ if (process.argv.includes('--write')) {
     'Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. Shapes are normalized (glued query suffixes and trailing punctuation dropped). A shape that matches a Node route references it; any other shape has its own row in the HTTP table with an empty Node source. A matching path does not identify a method or establish parity. Dynamic constructions that are not literal may still be omitted.',
     '',
     ...clientCandidates.map((candidate) => `- \`${candidate.path}\` — ${candidate.serverPathReference ? candidate.serverRoutes.join(', ') : 'client-only row (see HTTP table)'} — ${candidate.files.join(', ')}`),
+    '',
+    '## Client request reviews (non-literal request paths)',
+    '',
+    'Each request call (fetch, apiFetch, request, this.request, getJson) whose path is not a literal containing /api is listed here with the place its path is built. Reviewed in tooling/client-inventory.mjs; the table must match the source exactly.',
+    '',
+    ...clientRequests.map((entry) => `- \`${entry.key}\` (${entry.count}) — ${entry.reason}`),
     '',
     '## WS message candidates (heuristic)',
     '',

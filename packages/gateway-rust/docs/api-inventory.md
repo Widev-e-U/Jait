@@ -2,33 +2,36 @@
 
 rustStatus is the parity value: native-tested (a reviewed black-box test is mapped and exists), native-untested (a Rust router or handler reference exists but no mapped test), or missing (no verified native implementation: unmounted, fail-closed, incomplete, or absent). Detail keeps the source status. Mounted-incomplete routes serve a subset but lack production collaborators; mounted-fail-closed routes refuse the unavailable effect. Neither counts as native.
 
-HTTP routes and background services are heuristic candidates, not a complete parity inventory. WS messages from the Node hub and gateway sources are read with the TypeScript compiler API, dynamic frame types in send paths must be reviewed, and client-side WS literals and services stay lexical, so those lists can still miss entries. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.
+HTTP routes are read with the TypeScript compiler API from every Node gateway source (tooling/routes-inventory.mjs). Every route call and registration must be listed in its reviewed tables, so an unlisted one fails generation; prefixes come from register calls and mounts, and a computed path must expand from literal evidence in its file. Background services are read the same way (tooling/services-inventory.mjs). Rust routes are still a lexical scan of axum .route calls, so a Rust status is a lead until the composed binary serves the route and a mapped black-box test covers it. Client paths are lexical; every request call whose path is not literal /api text in the web, CLI, desktop and API-client sources is reviewed in tooling/client-inventory.mjs. WS messages are read with the TypeScript compiler API (tooling/ws-inventory.mjs), and their client side is lexical. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.
 
 ```json
 {
-  "httpTotal": 448,
+  "httpTotal": 449,
   "missing": 39,
-  "mounted-fail-closed": 107,
+  "mounted-fail-closed": 108,
   "native-tested": 237,
   "native-untested": 58,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 65.8,
+  "nativeRouteReferencePct": 65.7,
   "nativeTested": 270,
-  "nativeTestedDenominator": 620,
-  "nativeTestedPct": 43.55,
+  "nativeTestedDenominator": 621,
+  "nativeTestedPct": 43.48,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
   "wsWithoutDirectionalRustReference": 76,
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
-  "rustOnlyRoutes": 13,
+  "rustOnlyRoutes": 12,
+  "clientRequestCalls": 382,
+  "clientNonLiteralRequestCalls": 70,
+  "clientReviewedRequestSites": 67,
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
     "native-tested": 237,
     "native-untested": 58,
-    "missing": 153
+    "missing": 154
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -333,6 +336,7 @@ HTTP routes and background services are heuristic candidates, not a complete par
 | POST | `/api/git/status` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/git/sync` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/unstage` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
+| POST | `/api/github/apps/webhook` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | POST | `/api/jobs` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/jobs/:id/trigger` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/maintenance/run` | missing | mounted-fail-closed |  | routes/maintenance.ts |
@@ -515,8 +519,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:857 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1446 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:860 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1451 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
@@ -533,7 +537,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `services/email/connection.ts|discoverMailSettings` — services/email/connection.ts:65 while (true) — reads one HTTP response body
 - `services/git-forge.ts|GitHubForge.prFileDiffsViaApi` — services/git-forge.ts:366 while (true) — pages through one pull request request
 - `services/git.ts|mapWithConcurrency` — services/git.ts:175 for (;;) — worker loop bounded by the item list
-- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:192 while (true) — reads one HTTP response body
+- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:193 while (true) — reads one HTTP response body
 - `services/preview-runner.ts|detectPackageManager` — services/preview-runner.ts:38 while (true) — walks up to the filesystem root
 - `services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage` — services/subscription-usage-fetchers.ts:84 while (true) — reads one HTTP response body
 - `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1424 while (true) — parses one provider stream
@@ -802,6 +806,78 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/user-questions/requests/{}/submit` — POST /api/user-questions/requests/:id/submit — apps/web/src/components/prompts/input-prompts.tsx
 - `/api/voice/transcribe-audio` — POST /api/voice/transcribe-audio — apps/web/src/hooks/useVoiceRecording.ts
 - `/api/voice/wake-candidate` — POST /api/voice/wake-candidate — apps/web/src/hooks/useWakeWord.ts
+
+## Client request reviews (non-literal request paths)
+
+Each request call (fetch, apiFetch, request, this.request, getJson) whose path is not a literal containing /api is listed here with the place its path is built. Reviewed in tooling/client-inventory.mjs; the table must match the source exactly.
+
+- `apps/web/src/App.tsx|App` (1) — health probe of the configured gateway (${getApiUrl()}/health)
+- `apps/web/src/components/consent/action-card.tsx|consentFetch` (1) — helper; the url it receives is ${GATEWAY}/api/consent/pending[/id] built in the caller
+- `apps/web/src/components/messenger/teams-connection-card.tsx|TeamsConnectionCard` (1) — REAUTH_URL, the constant '/api/messenger/bridge-reauth/teams' in this file
+- `apps/web/src/components/network/network-panel.tsx|NodeDetail` (1) — health probe of a node's own gateway address (/health), outside the local /api
+- `apps/web/src/components/network/service-checks.tsx|ServiceChecks.api` (1) — helper; callers pass literal /api/security paths in this file
+- `apps/web/src/components/onboarding/DesktopGatewaySetup.tsx|DesktopGatewaySetup.apply` (1) — health probe of the remote gateway the user entered (/health)
+- `apps/web/src/components/project/folder-picker-dialog.tsx|FolderPickerDialog` (2) — url is ${API_URL}/api/filesystem/browse or /roots, built in the same function
+- `apps/web/src/components/project/project-panel.tsx|(top level)` (1) — url is ${API_URL}/api/project/search, built in the same callback
+- `apps/web/src/components/project/project-panel.tsx|fetchRemoteDirEntries` (1) — url is ${API_URL}/api/project/list, built in the same function
+- `apps/web/src/components/project/project-panel.tsx|remoteReadBackup` (1) — url is ${API_URL}/api/project/backup, built in the same function
+- `apps/web/src/components/project/project-panel.tsx|remoteReadFile.read` (1) — url is ${API_URL}/api/project/read, built in the same function
+- `apps/web/src/components/project/project-panel.tsx|remoteStatFile` (1) — url is ${API_URL}/api/project/stat, built in the same function
+- `apps/web/src/hooks/useGatewayConnection.ts|useGatewayConnection` (1) — health probe of the gateway URL the user entered (/health)
+- `apps/web/src/hooks/useGatewayImage.ts|useGatewayImage` (1) — source is the caller's image URL; only the gateway's /api/browser/screenshot path is fetched with auth
+- `apps/web/src/hooks/useGatewayReachable.ts|useGatewayReachable` (1) — health probe (${getApiUrl()}/health)
+- `apps/web/src/hooks/useModelInfo.ts|useModelInfo` (1) — health probe (${getApiUrl()}/health)
+- `apps/web/src/hooks/useProjects.ts|useProjects` (1) — url is ${API_URL}/api/projects/{id}/sessions or ${API_URL}/api/sessions, both literal here
+- `apps/web/src/hooks/useUpdateChecker.ts|useUpdateChecker` (1) — health probe (${apiUrl}/health)
+- `apps/web/src/lib/agent-control-api.ts|request` (1) — helper; callers pass literal /api/agent-control paths in this file
+- `apps/web/src/lib/agents-api.ts|AgentsApi.attachAgentGithubAppInstallation` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus a suffix
+- `apps/web/src/lib/agents-api.ts|AgentsApi.disconnectAgentGithubApp` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file
+- `apps/web/src/lib/agents-api.ts|AgentsApi.getAgentGithubApp` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file
+- `apps/web/src/lib/agents-api.ts|AgentsApi.getGithubIntake` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /intake
+- `apps/web/src/lib/agents-api.ts|AgentsApi.saveAgentGithubAppManual` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /manual
+- `apps/web/src/lib/agents-api.ts|AgentsApi.saveGithubIntake` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /intake
+- `apps/web/src/lib/agents-api.ts|AgentsApi.startAgentGithubAppInstallation` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /installation-url
+- `apps/web/src/lib/agents-api.ts|AgentsApi.startAgentGithubAppSetup` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /setup
+- `apps/web/src/lib/agents-api.ts|AgentsApi.testAgentGithubApp` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /test
+- `apps/web/src/lib/agents-api.ts|AgentsApi.verifyAgentGithubApp` (1) — githubAppPath builds ${API_URL}/api/agents/{id}/github-app in this file, plus /verify
+- `apps/web/src/lib/api-fetch.ts|apiFetch` (1) — wrapper; adds auth only to gateway /api/ URLs and forwards the caller's input
+- `apps/web/src/lib/chat-prewarm.ts|prewarmChatSession` (1) — request from the builder in this file: ${apiUrl}/api/chat/prewarm
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.action` (1) — request() suffix '/command' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.attachmentBlob` (1) — request() suffix '/media' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.avatarBlob` (1) — request() suffix '/media' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.connect` (1) — request() empty suffix: the /api/messenger root
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.disconnect` (1) — request() empty suffix: the /api/messenger root
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.prefetchRecent` (1) — request() query suffix '?roomId=' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.refreshRemote` (1) — request() query suffix under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.refreshSearch` (1) — request() suffix '/search?query=' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.remove` (1) — request() suffix '/command' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.request` (1) — helper; joins getApiUrl() + '/api/messenger' + path in this file
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.restoreKeys` (1) — request() suffix '/keys' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.send` (1) — request() suffix '/command' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.sendAttachment` (1) — request() suffix '/command' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.setHidden` (1) — request() suffix '/command' under /api/messenger
+- `apps/web/src/lib/messenger/store.ts|MessengerStore.avatarBlob` (1) — Matrix homeserver media URL from mxcUrlToHttp; not a gateway route
+- `apps/web/src/lib/messenger/store.ts|MessengerStore.fetchAttachmentBlob` (1) — Matrix homeserver attachment URL; not a gateway route
+- `apps/web/src/lib/pull-requests-api.ts|comment` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|diff` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|get` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|list` (1) — repoPath with a query suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|merge` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|request` (1) — helper; callers pass repoPath paths built in this file
+- `apps/web/src/lib/pull-requests-api.ts|resolveConflicts` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|review` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/pull-requests-api.ts|update` (1) — repoPath suffix; repoPath builds /api/repos/{id}/pull-requests in this file
+- `apps/web/src/lib/team-chat-api.ts|(top level)` (2) — '/api/team-rooms/' + id, with a query or /messages suffix, in the same expression
+- `apps/web/src/lib/team-chat-api.ts|request` (1) — helper; callers pass literal /api/team-rooms paths in this file
+- `apps/web/src/lib/terminal-snapshot.ts|loadTerminalSnapshot` (1) — getApiUrl() + '/api/terminals' in the same expression
+- `apps/web/src/lib/usage-summary-store.ts|refreshUsageSummary` (2) — local request(mode) builds ${getApiUrl()}/api/provider-usage/summary?refresh=mode in this file
+- `apps/web/src/lib/version-watchdog.ts|currentBuildStamp` (1) — the web origin's own root document for the build stamp; not a gateway route
+- `packages/api-client/src/client.ts|JaitClient.assessmentRequest` (1) — helper; callers pass literal /api/security paths in this file
+- `packages/api-client/src/client.ts|JaitClient.health` (1) — health probe (${baseUrl}/health)
+- `packages/cli/src/commands/resources.ts|runCronList` (1) — GET ${baseUrl}/jobs from the gateway root; the Node gateway serves no /jobs route (see the report)
+- `packages/cli/src/commands/resources.ts|runSurfacesList` (1) — GET ${baseUrl}/surfaces from the gateway root; the Node gateway serves no /surfaces route (see the report)
+- `packages/cli/src/lib/doctor.ts|checkPort` (1) — health probe of the local gateway port (/health)
+- `packages/cli/src/lib/http.ts|getJson` (1) — helper; callers in resources.ts build the URL, and this file's fetch(url) is the only send
 
 ## WS message candidates (heuristic)
 

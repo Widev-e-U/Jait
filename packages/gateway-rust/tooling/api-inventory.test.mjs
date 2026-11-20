@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { websocketCandidates } from './api-inventory.mjs';
+import { websocketCandidates } from './ws-inventory.mjs';
 import { applyBinaryEvidence } from './binary-test-evidence.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -151,4 +151,15 @@ test('mobile and reminder routes expose missing composed collaborators', () => {
     ['POST', '/api/reminders'],
     ['GET', '/api/mobile/discovery'],
   ]) assert.match(status(method, path), /^native-(?:un)?tested$/, `${method} ${path}`);
+});
+
+test('the scoped webhook comes from the AST route scan, and every non-literal client request is reviewed in the inventory', () => {
+  const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
+  const webhook = inventory.http.find((entry) => entry.method === 'POST' && entry.path === '/api/github/apps/webhook');
+  assert.deepEqual(webhook.nodeFiles, ['routes/agent-github-apps.ts'], 'the regex scan missed the route on the scoped child');
+  const reviewedCalls = inventory.clientRequestReviews.reduce((sum, entry) => sum + entry.count, 0);
+  assert.equal(inventory.summary.clientNonLiteralRequestCalls, reviewedCalls);
+  assert.equal(inventory.summary.clientReviewedRequestSites, inventory.clientRequestReviews.length);
+  assert.ok(inventory.clientRequestReviews.some((entry) => entry.key === 'packages/cli/src/commands/resources.ts|runSurfacesList'));
+  assert.match(readFileSync(join(here, '..', 'docs', 'api-inventory.md'), 'utf8'), /## Client request reviews \(non-literal request paths\)/);
 });
