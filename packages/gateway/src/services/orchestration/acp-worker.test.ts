@@ -92,7 +92,7 @@ class FakeAcpProvider implements CliProviderAdapter {
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
     this.started.push(options);
-    return { id: `sess-${this.started.length}`, providerId: this.id, threadId: options.threadId, status: "running" };
+    return { id: `sess-${this.started.length}`, providerId: this.id, threadId: options.threadId, status: "running", runtimeMode: options.mode };
   }
 
   async sendTurn(sessionId: string, message: string): Promise<void> {

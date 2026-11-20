@@ -35,6 +35,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,

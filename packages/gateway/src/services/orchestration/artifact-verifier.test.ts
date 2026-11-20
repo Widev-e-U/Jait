@@ -19,7 +19,7 @@ describe("artifact verification", () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -34,7 +34,7 @@ describe("artifact verification", () => {
 
   function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }

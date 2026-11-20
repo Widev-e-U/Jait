@@ -8,13 +8,13 @@ import { createInProcessWorkflowWorker } from "./in-process-worker.js";
 const request: SubAgentRunRequest = {
   userId: "workflow-owner", runId: "run", taskId: "task", attemptId: "attempt",
   prompt: "Summarize the supplied dependency result.", timeoutMs: 1000,
-  claims: { reads: [], writes: [] }, signal: new AbortController().signal,
+  claims: { reads: [], writes: [] }, worker: { kind: "jait" }, workspace: null, signal: new AbortController().signal,
 };
 
 function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) {
   const execute = vi.fn();
   const registry = new ToolRegistry();
-  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: {}, execute });
+  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: { type: "object", properties: {} }, execute });
   const settings = {
     chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
     apiKeys: { OPENAI_API_KEY: "owner-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
