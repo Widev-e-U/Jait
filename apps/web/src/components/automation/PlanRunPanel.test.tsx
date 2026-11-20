@@ -111,6 +111,20 @@ describe('PlanRunDetail', () => {
     expect(html).toContain('do not appear in the chat that started the run')
   })
 
+  it('shows Git-observed scope evidence even if the worker omitted changed files', () => {
+    const html = textOf(render({
+      run: run({ status: 'passed', tasks: [task({ taskId: 'W', state: 'passed' })] }),
+      attempts: { W: [{
+        id: 'attempt-1', attemptNo: 1, state: 'passed', agentRef: null, worktreeRef: null,
+        error: null, startedAt: '2026-11-18T10:00:00.000Z', finishedAt: '2026-11-18T10:01:00.000Z', result: null,
+        verification: [{ gateId: 'system:scope', label: 'scope', required: true, passed: true, detail: '1 changed file(s) inside scope; changed: tests/example.test.ts' }],
+      }] },
+    }))
+
+    expect(html).toContain('system:scope passed')
+    expect(html).toContain('changed: tests/example.test.ts')
+  })
+
   it('offers no resume or cancel for a finished run, and no decisions', () => {
     const html = textOf(render({
       run: run({ status: 'passed', finishedAt: '2026-11-18T10:09:00.000Z', tasks: [task({ taskId: 'A', state: 'passed' })] }),

@@ -207,6 +207,9 @@ function TaskRow({
                   {' · '}{attempt.verification.map((outcome) => `${outcome.gateId} ${outcome.passed ? 'passed' : 'failed'}`).join(', ')}
                 </span>
               )}
+              {attempt.verification?.filter((outcome) => outcome.gateId === 'system:scope').map((outcome) => (
+                <p key={outcome.gateId} className="break-words text-muted-foreground">{outcome.detail}</p>
+              ))}
               {attempt.error && <span className="text-destructive"> · {attempt.error}</span>}
             </li>
           ))}
