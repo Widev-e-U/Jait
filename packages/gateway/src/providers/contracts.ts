@@ -153,9 +153,11 @@ export interface CliProviderAdapter {
   respondToApproval(sessionId: string, requestId: string, approved: boolean): Promise<void>;
 
   /**
-   * Stop a session and kill the provider process.
+   * Stop a session and kill the provider process. With `awaitExit`, the promise
+   * settles only once the process and its descendants are gone. Providers that
+   * cannot wait may ignore the option.
    */
-  stopSession(sessionId: string): Promise<void>;
+  stopSession(sessionId: string, options?: { awaitExit?: boolean }): Promise<void>;
 
   /** Whether a retained local process still exists (idle sessions may expire). */
   hasSession?(sessionId: string): boolean;

@@ -3,8 +3,9 @@
  * (Claude Code, Codex, ...) inside the task's isolated worktree, in supervised
  * mode only. Each tool approval the agent asks for becomes a consent request on
  * the run's workflow session, so the owner decides it there. A stopped attempt
- * denies its pending requests at once. The scope and integration gates still
- * check what the agent changed.
+ * denies its pending requests at once, and settles only once the agent's process
+ * group is gone, so a stopped agent cannot write after its claims are released.
+ * The scope and integration gates still check what the agent changed.
  *
  * Only a finished turn is an answer. A timeout, a stop or a failed start leaves
  * the outcome unknown, so the attempt is interrupted and nothing re-runs on its own.
@@ -55,6 +56,7 @@ export function createAcpWorkflowWorker(options: AcpWorkerOptions): SubAgentRunn
         projectRoot: workspace.path,
         runtimeMode: "supervised",
         jaitMcpTools: false,
+        awaitProcessExit: true,
         prompt: request.prompt,
         abortSignal: signal,
         timeoutMs: request.timeoutMs,

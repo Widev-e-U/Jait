@@ -158,6 +158,12 @@ export interface AcpSpecialistTurnOptions {
    * timeout, so callers that pass `runtimeMode: "supervised"` must supply one.
    */
   onApprovalRequired?: (request: { tool: string; args: unknown; requestId: string }) => Promise<boolean>;
+  /**
+   * Workflow workers set this, so the turn settles only once the agent's process
+   * group is gone, not when the stop signal was sent. Ordinary chats keep the
+   * prompt stop.
+   */
+  awaitProcessExit?: boolean;
 }
 
 function resolveRuntimeMode(provider: CliProviderAdapter, requested?: string): RuntimeMode {
@@ -333,7 +339,8 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
     clearTimeout(timeoutHandle);
     unsubscribe();
     try {
-      await provider.stopSession(session.id);
+      if (opts.awaitProcessExit) await provider.stopSession(session.id, { awaitExit: true });
+      else await provider.stopSession(session.id);
     } catch { /* best effort cleanup */ }
   }
 

@@ -1,7 +1,7 @@
 import { compactProviderContext, type ProviderContextState } from "./context-control.js";
 import { parseAcpUsage } from "./usage.js";
 import { cliSessionIdle } from "./session-idle.js";
-import { stopSessionProcess } from "./session-process.js";
+import { stopSessionProcess, stopSessionProcessAndWait } from "./session-process.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
@@ -1339,7 +1339,7 @@ export class AcpProvider implements CliProviderAdapter {
     return this.sessions.has(sessionId);
   }
 
-  async stopSession(sessionId: string): Promise<void> {
+  async stopSession(sessionId: string, options: { awaitExit?: boolean } = {}): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (!state) return;
     cliSessionIdle.forget(sessionId);
@@ -1351,7 +1351,8 @@ export class AcpProvider implements CliProviderAdapter {
       state.connection.closeSession?.({ sessionId: state.acpSessionId }) ?? Promise.resolve(),
       2_000,
     ).catch(() => {});
-    stopSessionProcess(state.child);
+    if (options.awaitExit) await stopSessionProcessAndWait(state.child);
+    else stopSessionProcess(state.child);
     state.piProvisionCleanup?.();
     this.emitEvent({ type: "session.completed", sessionId });
   }

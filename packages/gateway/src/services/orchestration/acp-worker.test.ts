@@ -63,6 +63,8 @@ interface FakeOptions {
   onAllowed?: (workingDirectory: string) => void;
   /** The agent's final answer, built from the prompt it was sent. */
   reply?: (prompt: string) => string;
+  /** Holds the session's stop until released, as a process that has not exited yet would. */
+  stopGate?: Promise<void>;
 }
 
 /** A CliProviderAdapter double that streams events, asks for approvals and records what it was told. */
@@ -72,6 +74,7 @@ class FakeAcpProvider implements CliProviderAdapter {
   readonly emitter = new EventEmitter();
   readonly started: StartSessionOptions[] = [];
   readonly stopped: string[] = [];
+  readonly stopOptions: Array<{ awaitExit?: boolean } | undefined> = [];
   readonly answers: Array<{ requestId: string; approved: boolean }> = [];
   private resolveApproval: ((approved: boolean) => void) | undefined;
 
@@ -126,8 +129,10 @@ class FakeAcpProvider implements CliProviderAdapter {
 
   async interruptTurn(): Promise<void> {}
 
-  async stopSession(sessionId: string): Promise<void> {
+  async stopSession(sessionId: string, options?: { awaitExit?: boolean }): Promise<void> {
     this.stopped.push(sessionId);
+    this.stopOptions.push(options);
+    await this.options.stopGate;
   }
 
   onEvent(handler: (event: ProviderEvent) => void): () => void {
@@ -247,6 +252,28 @@ describe("ACP workflow worker", () => {
     expect(consentManager.listPending(workflowSessionId("run-1"))).toEqual([]);
     await until(() => provider.answers.length === 1);
     expect(provider.answers).toEqual([{ requestId: "req-1", approved: false }]);
+  });
+
+  it("settles only once the agent's process is gone, not when the stop is sent", async () => {
+    let releaseExit: () => void = () => {};
+    const exited = new Promise<void>((resolve) => {
+      releaseExit = resolve;
+    });
+    const { provider, worker } = setupWorker({ behavior: "hang", stopGate: exited });
+    const controller = new AbortController();
+    let settled = false;
+    const run = worker.run(requestFor({ signal: controller.signal })).finally(() => {
+      settled = true;
+    });
+
+    controller.abort();
+    await until(() => provider.stopped.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+
+    releaseExit();
+    await expect(run).rejects.toThrow();
+    expect(provider.stopOptions).toEqual([{ awaitExit: true }]);
   });
 });
 
