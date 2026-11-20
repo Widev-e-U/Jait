@@ -41,6 +41,11 @@ pub fn response_style(style: &str) -> Option<&'static str> {
 pub fn is_response_style(style: &str) -> bool {
     ["normal", "simple", "caveman", "caveman-ultra"].contains(&style)
 }
+/// The `<responseStyle>` block for a style. The default style has no block.
+pub fn response_style_block(style: Option<&str>) -> Option<String> {
+    let text = response_style(style?)?;
+    Some(format!("<responseStyle>\n{text}\n</responseStyle>"))
+}
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelEndpoint {
@@ -291,11 +296,8 @@ impl PromptRegistry {
                 }
                 append(&mut prompt, "\n</projectArchitecture>");
             }
-            if let Some(style) = ctx.response_style.as_deref().and_then(response_style) {
-                append(
-                    &mut prompt,
-                    &format!("\n\n<responseStyle>\n{style}\n</responseStyle>"),
-                );
+            if let Some(block) = response_style_block(ctx.response_style.as_deref()) {
+                append(&mut prompt, &format!("\n\n{block}"));
             }
         }
         for (needle, tag, key) in [

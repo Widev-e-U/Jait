@@ -122,6 +122,9 @@ pub(crate) fn new_entry(
     if let Some(effort) = &selection.reasoning_effort {
         entry.insert("reasoningEffort".into(), json!(effort));
     }
+    if let Some(style) = &selection.response_style {
+        entry.insert("responseStyle".into(), json!(style));
+    }
     if let Some(segments) = display_segments {
         entry.insert("displaySegments".into(), segments.clone());
     }
@@ -228,12 +231,14 @@ mod tests {
             provider: None,
             model: Some("configured-model".into()),
             reasoning_effort: Some("medium".into()),
+            response_style: Some("caveman".into()),
         };
         let segments = json!([{"type": "text", "text": "again"}]);
         let entry = new_entry(Some("q-client"), "again", &selection, Some(&segments));
         assert_eq!(entry["id"], "q-client");
         assert_eq!(entry["model"], "configured-model");
         assert_eq!(entry["reasoningEffort"], "medium");
+        assert_eq!(entry["responseStyle"], "caveman");
         assert_eq!(entry["displaySegments"], segments);
         assert!(entry.get("provider").is_none());
         let generated = new_entry(None, "again", &TurnSelection::default(), None);

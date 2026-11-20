@@ -376,7 +376,6 @@ async fn web_options_are_explicitly_rejected_before_preparation() {
     let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
     for (option, value) in [
         ("personaAgentId", json!("agent")),
-        ("responseStyle", json!("concise")),
         ("attachments", json!([])),
         ("_queuedDrain", json!(true)),
         ("_queuedMessageId", json!("queue")),
@@ -439,6 +438,11 @@ async fn web_options_are_validated_before_preparation() {
         (
             "runtimeMode",
             json!(1),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "responseStyle",
+            json!("concise"),
             json!({"error":"INVALID_CHAT_REQUEST"}),
         ),
         (
@@ -897,6 +901,18 @@ async fn queued_message_ids_are_validated_before_preparation() {
     assert!(fixture.events().await.is_empty());
     fixture.finish().await;
 }
+/// The drain replays a queue entry only with options this binary honors. A known style replays with
+/// that style, `normal` is no style, and an unknown style leaves the entry queued.
+#[test]
+fn a_queued_entry_replays_a_known_style_and_keeps_an_unknown_one_queued() {
+    let entry = |style: &str| json!({"content": "later", "responseStyle": style});
+    let replay = queued_request("session", &entry("caveman")).expect("a known style replays");
+    assert_eq!(replay.selection.response_style.as_deref(), Some("caveman"));
+    let plain = queued_request("session", &entry("normal")).expect("normal replays");
+    assert_eq!(plain.selection.response_style, None);
+    assert!(queued_request("session", &entry("concise")).is_none());
+}
+
 #[tokio::test]
 async fn a_queued_send_keeps_its_id_and_choices_and_the_drain_replays_them() {
     let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
@@ -915,6 +931,7 @@ async fn a_queued_send_keeps_its_id_and_choices_and_the_drain_replays_them() {
             "queuedMessageId":"q-web-1",
             "model":"configured-model",
             "reasoningEffort":"medium",
+            "responseStyle":"caveman",
             "displaySegments":[{"type":"text","text":"again"}]
         }))
         .send()
@@ -928,6 +945,7 @@ async fn a_queued_send_keeps_its_id_and_choices_and_the_drain_replays_them() {
     assert_eq!(event["message"]["id"], "q-web-1");
     assert_eq!(event["message"]["model"], "configured-model");
     assert_eq!(event["message"]["reasoningEffort"], "medium");
+    assert_eq!(event["message"]["responseStyle"], "caveman");
     assert_eq!(
         event["message"]["displaySegments"],
         json!([{"type":"text","text":"again"}])
@@ -952,6 +970,7 @@ async fn a_queued_send_keeps_its_id_and_choices_and_the_drain_replays_them() {
             provider: None,
             model: Some("configured-model".into()),
             reasoning_effort: Some("medium".into()),
+            response_style: Some("caveman".into()),
         }
     );
     // A retry of the delivered send is answered as consumed. No second turn starts.

@@ -36,6 +36,8 @@ pub struct AcpModel {
     pub model: Option<String>,
     /// The reasoning effort the user chose, set on the agent's advertised effort option.
     pub reasoning_effort: Option<String>,
+    /// The response style the user chose. Its block leads the prompt text, as Node's CLI path does.
+    pub response_style: Option<String>,
 }
 
 /// Public text for a choice the agent refuses or does not offer. The turn shows it as its error, so
@@ -146,6 +148,16 @@ fn transcript(body: &Value) -> String {
     text
 }
 
+/// The prompt text for a turn: the transcript, led by the response style block when the user chose
+/// a style. The agent sees the style on every turn, because each turn starts a new session.
+fn prompt_text(body: &Value, response_style: Option<&str>) -> String {
+    let text = transcript(body);
+    match crate::prompts::response_style_block(response_style) {
+        Some(block) => format!("{block}\n\n{text}"),
+        None => text,
+    }
+}
+
 impl TurnProvider for AcpModel {
     fn stream<'a>(
         &'a self,
@@ -230,7 +242,7 @@ impl TurnProvider for AcpModel {
                 self.session_id.clone(),
                 acp_session,
                 turn_id,
-                json!([{"type": "text", "text": transcript(&body)}]),
+                json!([{"type": "text", "text": prompt_text(&body, self.response_style.as_deref())}]),
                 cancellation.clone(),
             )
             .map_err(failure)?;
@@ -401,6 +413,7 @@ mod tests {
             session_id: "gateway".into(),
             model: None,
             reasoning_effort: None,
+            response_style: None,
         };
         let entered = Arc::new(tokio::sync::Semaphore::new(0));
         let signal = entered.clone();
@@ -492,5 +505,25 @@ mod tests {
         );
         // A model alone is still sent: the agent, not the gateway, decides whether it accepts it.
         assert_eq!(option_requests(Some("a"), None, &created).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_response_style_leads_the_prompt_and_the_default_adds_nothing() {
+        let body = json!({"messages": [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "second"},
+        ]});
+        let plain = prompt_text(&body, None);
+        assert_eq!(
+            plain,
+            "Conversation so far:\nuser: first\nassistant: answer\n\nCurrent request:\nsecond"
+        );
+        let simple = prompt_text(&body, Some("simple"));
+        let style = crate::prompts::response_style("simple").unwrap();
+        assert_eq!(
+            simple,
+            format!("<responseStyle>\n{style}\n</responseStyle>\n\n{plain}")
+        );
     }
 }

@@ -2,7 +2,8 @@
 //!
 //! Credentials come only from the user's stored `api_keys` (never from the environment or the
 //! request), and the model is exactly the one the user selected: a turn without a selected model
-//! fails instead of falling back to a backend default. Only `file.read` and consent-gated `file.write` are mounted (see chat_tools).
+//! fails instead of falling back to a backend default. The turn mounts the project tools in chat_tools
+//! (file read, list and patch, and one-shot terminal commands); writes and commands wait for consent.
 //!
 //! A request may name a model, an effort or a registered provider. Each choice is checked against
 //! this owner's configuration, and a choice that cannot be honored is refused, never replaced.
@@ -34,6 +35,14 @@ use std::{
 };
 
 const PROMPT: &str = "You are Jait, a coding and security workbench assistant. Be concise, distinguish observations from assumptions, and never claim tools ran without evidence.";
+
+/// The system prompt for a turn: the base prompt, then the response style the user chose.
+fn system_prompt(response_style: Option<&str>) -> String {
+    match crate::prompts::response_style_block(response_style) {
+        Some(block) => format!("{PROMPT}\n\n{block}"),
+        None => PROMPT.to_owned(),
+    }
+}
 
 pub struct SettingsChatFactory {
     auth: AuthState,
@@ -148,6 +157,7 @@ impl SettingsChatFactory {
                 session_id: session.id.clone(),
                 model: selection.model.clone(),
                 reasoning_effort: selection.reasoning_effort.clone(),
+                response_style: selection.response_style.clone(),
             }),
             tools: executor,
         })
@@ -190,6 +200,8 @@ impl SettingsChatFactory {
 struct Model {
     http: OpenAiHttp,
     reasoning_effort: Option<String>,
+    /// The turn's system prompt, which carries the response style the user chose.
+    system: String,
 }
 impl TurnProvider for Model {
     fn stream<'a>(
@@ -203,7 +215,7 @@ impl TurnProvider for Model {
                 .get_mut("messages")
                 .and_then(Value::as_array_mut)
                 .ok_or_else(|| StreamFailure::Other("Invalid model request".into()))?;
-            messages.insert(0, json!({"role":"system","content":PROMPT}));
+            messages.insert(0, json!({"role":"system","content":self.system}));
             // Sent only when the user chose a level, as the Node gateway does.
             if let Some(effort) = &self.reasoning_effort {
                 body["reasoning_effort"] = json!(effort);
@@ -293,9 +305,28 @@ impl ChatFactory for SettingsChatFactory {
                     reasoning_effort: (resolved.backend != JaitBackend::Ollama)
                         .then(|| selection.reasoning_effort.clone())
                         .flatten(),
+                    system: system_prompt(selection.response_style.as_deref()),
                 }),
                 tools: executor,
             })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PROMPT, system_prompt};
+
+    #[test]
+    fn the_response_style_follows_the_base_prompt() {
+        assert_eq!(system_prompt(None), PROMPT);
+        let caveman = system_prompt(Some("caveman"));
+        assert!(
+            caveman.starts_with(&format!(
+                "{PROMPT}\n\n<responseStyle>\nWrite in concise caveman style."
+            )),
+            "{caveman}"
+        );
+        assert!(caveman.ends_with("\n</responseStyle>"), "{caveman}");
     }
 }

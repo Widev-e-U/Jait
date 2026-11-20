@@ -66,6 +66,8 @@ pub struct TurnSelection {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub reasoning_effort: Option<String>,
+    /// A non-default response style (`simple`, `caveman` or `caveman-ultra`). `None` is `normal`.
+    pub response_style: Option<String>,
 }
 /// Why a turn cannot start. `Refused` is a choice the server will not honor, and its status and
 /// code go back to the client unchanged. `Unavailable` is the generic configuration failure.
@@ -641,11 +643,10 @@ async fn local_turn_session(
 }
 // These fields carry semantics the native turn does not implement yet. Reject their presence,
 // including null or empty values: omission can select a server default while an explicit value can
-// express provider or security intent. Persona, attachment, queue-drain and response-style options
-// stay here until the native turn can apply them.
+// express provider or security intent. Persona, attachment and queue-drain options stay here until
+// the native turn can apply them.
 const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
     "personaAgentId",
-    "responseStyle",
     "attachments",
     "_queuedDrain",
     "_queuedMessageId",
@@ -739,6 +740,15 @@ fn chat_selection(value: &mut Value) -> Result<WebChoices, Box<Response>> {
         Some(effort) if valid_reasoning_effort(&effort) => Some(effort),
         Some(_) => return Err(invalid_chat_request()),
     };
+    // A style the server does not know is refused, not replaced with `normal`. `normal` is the
+    // default, so it is carried as no style.
+    let response_style = match take("responseStyle") {
+        None => None,
+        Some(Value::String(style)) if crate::prompts::is_response_style(&style) => {
+            (style != "normal").then_some(style)
+        }
+        Some(_) => return Err(invalid_chat_request()),
+    };
     let display_segments = display_segments(take("displaySegments"))?;
     let queued_message_id = option_text(take("queuedMessageId"))?;
     if queued_message_id
@@ -752,6 +762,7 @@ fn chat_selection(value: &mut Value) -> Result<WebChoices, Box<Response>> {
             provider,
             model,
             reasoning_effort,
+            response_style,
         },
         display_segments,
         queued_message_id,

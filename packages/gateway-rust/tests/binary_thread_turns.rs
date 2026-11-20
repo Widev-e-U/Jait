@@ -1456,6 +1456,112 @@ async fn web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments() 
     model_task.abort();
 }
 
+/// A web-shaped turn that picks a response style reaches the provider's system message, with the
+/// style block after the base prompt. A style the server does not know is refused by the route
+/// before any turn starts, so the provider is not called again.
+#[tokio::test]
+async fn web_shaped_response_style_reaches_the_provider_system_message() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let style = jait_gateway::prompts::response_style("caveman").unwrap();
+
+    let response = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({
+            "content": "explain briefly",
+            "sessionId": session,
+            "clientMessageId": "user-style0001",
+            "mode": "agent",
+            "provider": "jait",
+            "runtimeMode": "supervised",
+            "responseStyle": "caveman",
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let events = stream_events(&response.text().await.unwrap());
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    let block = format!("<responseStyle>\n{style}\n</responseStyle>");
+    let system: Vec<&str> = requests[0]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|message| message["role"] == "system")
+        .filter_map(|message| message["content"].as_str())
+        .collect();
+    assert!(
+        system.iter().any(|content| content.ends_with(&block)),
+        "{requests:?}"
+    );
+
+    // An unknown style is refused by the route before any turn starts.
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({
+                "content": "again",
+                "sessionId": session,
+                "clientMessageId": "user-style0002",
+                "provider": "jait",
+                "responseStyle": "concise",
+            })),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["error"], "INVALID_CHAT_REQUEST", "{body}");
+    assert_eq!(model.requests.lock().unwrap().len(), 1);
+    model_task.abort();
+}
+
+/// A web-shaped ACP turn that picks a response style leads its prompt with the style block, so the
+/// agent sees the style on the turn. No option is chosen, so the agent is asked for none.
+#[tokio::test]
+async fn web_shaped_response_style_leads_the_acp_prompt() {
+    let gateway =
+        Gateway::start_with(&[("JAIT_ACP_PROVIDERS", fake_acp_providers("none").to_string())]);
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let style = jait_gateway::prompts::response_style("simple").unwrap();
+
+    let (status, events) = acp_turn(
+        &client,
+        &base,
+        &owner,
+        &session,
+        "hello agent",
+        "user-acpstyle1",
+        json!({"responseStyle": "simple"}),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+    let requests = acp_requests(&gateway.directory);
+    let prompt = requests
+        .iter()
+        .find(|request| request["method"] == "session/prompt")
+        .unwrap_or_else(|| panic!("{requests:?}"));
+    let text = prompt["params"]["prompt"][0]["text"].as_str().unwrap();
+    assert!(
+        text.starts_with(&format!("<responseStyle>\n{style}\n</responseStyle>\n\n")),
+        "{text}"
+    );
+    assert!(text.ends_with("hello agent"), "{text}");
+}
+
 /// A fake ACP agent. It appends every request it receives to `acp-requests.log` in its working
 /// directory, which is the session's project directory. `$2` is `none` for an agent that offers no
 /// reasoning effort option. Any other value advertises a model option and an effort option, and the

@@ -81,6 +81,13 @@ impl TurnProvider for ConfiguredModel {
         })
     }
 }
+/// The system prompt for a turn: the base prompt, then the response style the user chose.
+fn turn_prompt(base: &str, response_style: Option<&str>) -> String {
+    match crate::prompts::response_style_block(response_style) {
+        Some(block) => format!("{base}\n\n{block}"),
+        None => base.to_owned(),
+    }
+}
 struct NoTools;
 impl TurnTools for NoTools {
     fn execute<'a>(
@@ -122,7 +129,7 @@ impl ChatFactory for ChatConfiguration {
             }
             let provider = ConfiguredModel {
                 http: OpenAiHttp::configured(&self.base_url, &self.api_key, &session.id)?,
-                prompt: self.prompt.clone(),
+                prompt: turn_prompt(&self.prompt, selection.response_style.as_deref()),
             };
             Ok(PreparedChat {
                 config: TurnConfig {
@@ -187,5 +194,14 @@ mod tests {
         .err()
         .unwrap();
         assert!(!error.to_string().contains("private"));
+    }
+    #[test]
+    fn the_response_style_follows_the_migration_prompt() {
+        assert_eq!(turn_prompt("base", None), "base");
+        let simple = crate::prompts::response_style("simple").unwrap();
+        assert_eq!(
+            turn_prompt("base", Some("simple")),
+            format!("base\n\n<responseStyle>\n{simple}\n</responseStyle>")
+        );
     }
 }

@@ -26,9 +26,14 @@ owner's own configuration, and refuses any choice it cannot honor. It never subs
   user message's `segments`, the field the Node gateway uses. Storage is in `rust_chat_user_segments`.
 - `mode`: `agent` only. Any other mode returns `UNSUPPORTED_CHAT_OPTION` with `option: "mode"`.
 
-Still refused with `UNSUPPORTED_CHAT_OPTION`: `personaAgentId`, `responseStyle`, `attachments`, and the
-internal `_` keys. A refused option starts no turn, and the model receives no request. `queuedMessageId`
-is accepted; see the queue section below.
+`responseStyle` is `normal` (the default, which adds nothing), `simple`, `caveman` or `caveman-ultra`. On an
+OpenAI-compatible turn the style's `<responseStyle>` block follows the system prompt. On an ACP turn it leads
+the transcript, so the agent sees it on every turn. Any other value returns `INVALID_CHAT_REQUEST`, and nothing
+is substituted.
+
+Still refused with `UNSUPPORTED_CHAT_OPTION`: `personaAgentId`, `attachments`, and the internal `_` keys. A
+refused option starts no turn, and the model receives no request. `queuedMessageId` is accepted; see the queue
+section below.
 
 Evidence: `chat_tests::web_options_are_validated_before_preparation` and
 `chat_tests::web_options_are_explicitly_rejected_before_preparation` (lib, `src/routes/chat_tests.rs`).
@@ -36,6 +41,8 @@ In `tests/binary_thread_turns.rs`:
 `web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`,
 `refused_web_choices_start_no_turn_through_the_binary`,
 `web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`,
+`web_shaped_response_style_reaches_the_provider_system_message`,
+`web_shaped_response_style_leads_the_acp_prompt`,
 `acp_turn_fails_when_the_agent_refuses_the_model` and
 `acp_turn_fails_when_the_agent_offers_no_effort`. The last three run a fake ACP agent through
 `JAIT_ACP_PROVIDERS`.
@@ -98,9 +105,9 @@ Identity and choices (2026-11-20):
 - A send may carry `queuedMessageId`, the client's id for its queue entry. A send whose id is already consumed answers
   202 `{"ok":true,"skipped":"queue-already-consumed","queuedMessageId":id}` before admission and starts nothing, as Node
   does: Node makes the same check before its busy branch, and returns the same body.
-- A queue entry keeps the choices its send carried: `provider`, `model`, `reasoningEffort` and `displaySegments`. The
+- A queue entry keeps the choices its send carried: `provider`, `model`, `reasoningEffort`, `responseStyle` and `displaySegments`. The
   drain replays the entry through the same validation a send gets. An entry whose options this binary cannot honor (for
-  example `runtimeMode: "full-access"`, a `responseStyle` other than `normal`, `personaAgentId` or `attachments`) stays
+  example `runtimeMode: "full-access"`, `personaAgentId` or `attachments`) stays
   queued, as a held entry does, and is not run with other settings.
 - A direct send claims its place only after every check that can refuse it. Its `queuedMessageId` is consumed, and the
   queued entries with the same text and no attachments leave the queue, in one state write. A send refused before that
@@ -188,7 +195,7 @@ Open parity questions, not changed in this batch:
   `packages/gateway/src/index.ts`, which Rust does not read. A drain that finds the session held by a thread turn or a
   device change registers as a waiter, and releasing that hold drains the queue (`try_admit_inner`,
   `wake_queue_waiters`). No test exercises that path yet.
-- Web-UI choices (the section at the top of this file covers the ones served). `responseStyle`, `attachments` and
+- Web-UI choices (the section at the top of this file covers the ones served). `attachments` and
   `personaAgentId` are refused with 400 `UNSUPPORTED_CHAT_OPTION`. `runtimeMode: "full-access"` is refused with
   `RUNTIME_MODE_UNSUPPORTED`. The web client sends its
   runtime mode with each message (`apps/web/src/hooks/useChat.ts:1891`) and defaults to full-access
